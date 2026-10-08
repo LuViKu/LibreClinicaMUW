@@ -103,48 +103,10 @@ function submitform(){
     }
 }
 
-function submitXform(){
-    var crfName = document.getElementById('crfName');
-    var versionName = document.getElementById('versionName');
-    var versionDescription = document.getElementById('versionDescription');
-    var revisionNotes = document.getElementById('revisionNotes');
-    var xformText = document.getElementById('xformText');
-
-    if (crfName && crfName.value =='' ) {
-        alert('<fmt:message key="xform_upload_crfName" bundle="${resword}"/>');
-        return false;
-    } else if (versionName.value =='' ){
-        alert('<fmt:message key="xform_upload_version" bundle="${resword}"/>');
-        return false;
-	} else if (versionDescription.value =='' ){
-        alert('<fmt:message key="xform_upload_version_description" bundle="${resword}"/>');
-        return false;
-    } else if (revisionNotes.value =='' ){
-        alert('<fmt:message key="xform_upload_version_revision_notes" bundle="${resword}"/>');
-        return false;
-	} else if (xformText.value =='' ){
-	    alert('<fmt:message key="xform_upload_xform_contents" bundle="${resword}"/>');
-	    return false;
-	}
-}
-
-function toggleSectionDisplay(showDivId,hideDivId){
-    document.getElementById(hideDivId).setAttribute("class","crf-upload-div-hidden");
-    document.getElementById(showDivId).setAttribute("class","crf-upload-div");
-}
-
 //-->
 </script>
 
 
-<c:if test="${xformEnabled == 'true'}">
- <table cellpadding="0" cellspacing="0">
-   <tr>
-     <td class="normal_tab"><a href="javascript:toggleSectionDisplay('xlsUpload','xformUpload')"><b><fmt:message key="xls_file_upload" bundle="${resword}"/></b></a></td>
-     <td class="normal_tab"><a href="javascript:toggleSectionDisplay('xformUpload','xlsUpload')"><b><fmt:message key="xform_file_upload" bundle="${resword}"/></b></a></td>
-   </tr>
- </table>
-</c:if>
 <div id="xlsUpload" class="crf-upload-div">
 <form action="CreateCRFVersion?action=confirm&crfId=<c:out value="${version.crfId}"/>&name=<c:out value="${version.name}"/>" method="post" ENCTYPE="multipart/form-data">
 <div style="width: 800px">
@@ -186,67 +148,6 @@ function toggleSectionDisplay(showDivId,hideDivId){
 </form>
 
 </div>
-
-<c:if test="${xformEnabled == 'true'}">
-<div id="xformUpload" class="crf-upload-div-hidden">
-  <form id="xformSubmit" action="CreateXformCRFVersion?action=confirm&crfId=<c:out value="${version.crfId}"/>&name=<c:out value="${version.name}"/>" method="post" ENCTYPE="multipart/form-data">
-    <div style="width: 800px">
-    <div class="box_T"><div class="box_L"><div class="box_R"><div class="box_B"><div class="box_TL"><div class="box_TR"><div class="box_BL"><div class="box_BR">
-
-<div class="textbox_center">
-        <table border="0" cellpadding="0" cellspacing="0">
-        <c:if test="${empty CrfId}">
-          <tr>
-            <td class="formlabel"><fmt:message key="CRF_name" bundle="${resword}"/>:</td>
-            <td><input type="text" id="crfName" name="crfName"/></td>
-          </tr>
-          </c:if>
-         <tr>
-            <td class="formlabel"><fmt:message key="version_name" bundle="${resword}"/>:</td>
-            <td><input type="text" id="versionName" name="versionName"/></td>
-          </tr>
-         <tr>
-            <td class="formlabel"><fmt:message key="crf_version_description" bundle="${resword}"/>:</td>
-            <td><input type="text" id="versionDescription" name="versionDescription"/></td>
-          </tr>
-         <tr>
-            <td class="formlabel"><fmt:message key="revision_notes" bundle="${resword}"/>:</td>
-            <td><input type="text" id="revisionNotes" name="revisionNotes"/></td>
-          </tr>
-        </table>
-</div>
-        <div class="crf-upload-padded-div"><textarea class="crf-upload-padded-div" id="xformText" name="xformText" rows="40" cols="60"></textarea></div>
-        <br>
-        <div class="crf-upload-padded-div"><fmt:message key="xform_upload_media_instruction" bundle="${resword}"/></div>
-        <br>
-        <div class="textbox_center">
-        <table border="0" cellpadding="0" cellspacing="0">
-          <tr>
-            <td class="formlabel"><fmt:message key="upload_media_files" bundle="${resword}"/>:</td>
-            <td><div><input type="file" name="media_file" id="xform_media_file_path" multiple></div>
-            <br><jsp:include page="../showMessage.jsp"><jsp:param name="key" value="excel_file"/></jsp:include></td>
-          </tr>
-        </table>
-        </div>
-        <input type="hidden" name="crfId" value="<c:out value="${version.crfId}"/>">
-  
-    </div></div></div></div></div></div></div></div>
-    </div>
-
-    <br clear="all">
-    <table border="0" cellpadding="0" cellspacing="0">
-      <tr>
-        <td>
-          <input type="submit" onclick="return submitXform()" value="<fmt:message key="submit" bundle="${resword}"/>" class="button_medium">
-        </td>
-        <td>
-          <input type="button" onclick="confirmExit('ListCRF?module=<c:out value="${module}"/>')" name="exit" value="<fmt:message key="exit" bundle="${resword}"/>   "class="button_medium"/>
-        </td>
-      </tr>
-    </table>
-    </form>
-</div>
-</c:if>
 
 <c:choose>
   <c:when test="${userBean.sysAdmin && module=='admin'}">

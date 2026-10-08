@@ -20,7 +20,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateCRFVersio
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobExportServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobImportServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateUserAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateXformCRFVersionServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteCRFVersionServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteEventCRFServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteStudyUserRoleServlet;
@@ -88,7 +87,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ContactServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.EnterpriseServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.LogoutServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestPasswordServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ResetPasswordServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.UpdateProfileServlet;
@@ -197,7 +195,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ListStudySubje
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ListStudySubjectsSubmitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.MarkEventCRFCompleteServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.MatchPasswordServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ParticipantFormServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.RemoveRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.RestoreRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.RunRuleServlet;
@@ -216,7 +213,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleAssign
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetAuditServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.techadmin.TechAdminServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.view.form.FormServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -360,9 +356,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg35 = ctx.addServlet("CreateUserAccountServlet", CreateUserAccountServlet.class);
             reg35.addMapping("/CreateUserAccount");
 
-            ServletRegistration.Dynamic reg36 = ctx.addServlet("CreateXformCRFVersionServlet", CreateXformCRFVersionServlet.class);
-            reg36.addMapping("/CreateXformCRFVersion");
-
             ServletRegistration.Dynamic reg37 = ctx.addServlet("DefineStudyEventServlet", DefineStudyEventServlet.class);
             reg37.addMapping("/DefineStudyEvent");
 
@@ -437,9 +430,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg61 = ctx.addServlet("FindSubjectsDataServlet", FindSubjectsDataServlet.class);
             reg61.addMapping("/FindSubjectsData");
-
-            ServletRegistration.Dynamic reg62 = ctx.addServlet("FormServlet", FormServlet.class);
-            reg62.addMapping("/form");
 
             ServletRegistration.Dynamic reg63 = ctx.addServlet("ImportCRFDataServlet", ImportCRFDataServlet.class);
             reg63.addMapping("/ImportCRFData");
@@ -537,9 +527,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg94 = ctx.addServlet("MatchPasswordServlet", MatchPasswordServlet.class);
             reg94.addMapping("/MatchPassword");
 
-            ServletRegistration.Dynamic reg95 = ctx.addServlet("ParticipantFormServlet", ParticipantFormServlet.class);
-            reg95.addMapping("/ParticipantFormServlet");
-
             ServletRegistration.Dynamic reg96 = ctx.addServlet("PauseJobServlet", PauseJobServlet.class);
             reg96.addMapping("/PauseJob");
 
@@ -618,8 +605,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg121 = ctx.addServlet("RequestAccountServlet", RequestAccountServlet.class);
             reg121.addMapping("/RequestAccount");
 
-            ServletRegistration.Dynamic reg122 = ctx.addServlet("RequestPasswordServlet", RequestPasswordServlet.class);
-            reg122.addMapping("/RequestPassword");
 
             ServletRegistration.Dynamic reg123 = ctx.addServlet("RequestStudyServlet", RequestStudyServlet.class);
             reg123.addMapping("/RequestStudy");

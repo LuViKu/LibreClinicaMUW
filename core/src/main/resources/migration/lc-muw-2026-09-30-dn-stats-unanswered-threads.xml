@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    R1-MON (2026-09-30) — the legacy notes list shows a thread nobody has
+    answered yet.
+
+    view_dn_stats joined every parent note to the aggregate of its child
+    notes with an inner join, so a parent without a child dropped out of
+    it, and with it out of view_discrepancy_note: the legacy View Notes
+    list, its summary and its CSV/PDF download all read that view.
+
+    The heritage UI wrote a child copy with every new thread (issue 2659,
+    CreateOneDiscrepancyNoteServlet), so its threads always had one. The
+    SPA writes the parent only, so each note it created stayed out of the
+    legacy list until somebody replied; so did the eight notes of the
+    demo seed.
+
+    The view now joins the aggregate with a left join. A parent without a
+    child counts as one note, last updated when it was created. Threads
+    that have children read exactly as before. The column list, names and
+    types are unchanged, so CREATE OR REPLACE keeps the dependent views.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="muw-ophthalmology" id="2026-09-30-dn-stats-unanswered-threads" dbms="postgresql">
+        <comment>view_dn_stats keeps parent notes that have no child note</comment>
+        <sql>
+            CREATE OR REPLACE VIEW view_dn_stats AS
+            SELECT dn.discrepancy_note_id,
+                CASE
+                    WHEN dn.resolution_status_id = 1 OR dn.resolution_status_id = 2
+                        OR dn.resolution_status_id = 3
+                    THEN DATE_PART('day', current_timestamp
+                        - COALESCE(totals.date_updated, dn.date_created))
+                    ELSE NULL::integer
+                END AS days,
+                CASE
+                    WHEN dn.resolution_status_id = 1 OR dn.resolution_status_id = 2
+                        OR dn.resolution_status_id = 3
+                    THEN DATE_PART('day', current_timestamp - dn.date_created)
+                    WHEN dn.resolution_status_id = 4
+                    THEN DATE_PART('day', COALESCE(totals.date_updated, dn.date_created)
+                        - dn.date_created)
+                    ELSE NULL::integer
+                END AS age,
+                COALESCE(totals.total_notes, 1) AS total_notes,
+                dn.date_created,
+                COALESCE(totals.date_updated, dn.date_created) AS date_updated
+            FROM discrepancy_note dn
+            LEFT JOIN (SELECT dn1.parent_dn_id,
+                              max(dn1.date_created) AS date_updated,
+                              count(dn1.discrepancy_note_id) AS total_notes
+                       FROM discrepancy_note dn1
+                       GROUP BY dn1.parent_dn_id) totals
+                ON dn.discrepancy_note_id = totals.parent_dn_id
+            WHERE dn.parent_dn_id IS NULL OR dn.parent_dn_id = 0;
+        </sql>
+        <rollback>
+            <sql>
+                CREATE OR REPLACE VIEW view_dn_stats AS
+                SELECT dn.discrepancy_note_id,
+                    CASE
+                        WHEN dn.resolution_status_id = 1 OR dn.resolution_status_id = 2
+                            OR dn.resolution_status_id = 3
+                        THEN DATE_PART('day', current_timestamp - totals.date_updated)
+                        ELSE NULL::integer
+                    END AS days,
+                    CASE
+                        WHEN dn.resolution_status_id = 1 OR dn.resolution_status_id = 2
+                            OR dn.resolution_status_id = 3
+                        THEN DATE_PART('day', current_timestamp - dn.date_created)
+                        WHEN dn.resolution_status_id = 4
+                        THEN DATE_PART('day', totals.date_updated - dn.date_created)
+                        ELSE NULL::integer
+                    END AS age,
+                    totals.total_notes, dn.date_created, totals.date_updated
+                FROM discrepancy_note dn,
+                     (SELECT dn1.parent_dn_id,
+                             max(dn1.date_created) AS date_updated,
+                             count(dn1.discrepancy_note_id) AS total_notes
+                      FROM discrepancy_note dn1
+                      GROUP BY dn1.parent_dn_id) totals
+                WHERE (dn.parent_dn_id IS NULL OR dn.parent_dn_id = 0)
+                  AND dn.discrepancy_note_id = totals.parent_dn_id;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

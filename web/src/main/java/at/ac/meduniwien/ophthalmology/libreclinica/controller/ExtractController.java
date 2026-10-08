@@ -45,7 +45,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller("extractController")
 @RequestMapping("/extract")
-@SuppressWarnings("all")
 public class ExtractController {
     @Autowired
     @Qualifier("sidebarInit")
@@ -69,12 +68,12 @@ public class ExtractController {
 
     /**
      * process the page from whence you came, i.e. extract a dataset
-     * @param id, the id of the extract properties bean, gained from Core Resources
-     * @param datasetId, the id of the dataset, found through DatasetDAO
-     * @param request, http request
      * @return model map, but more importantly, creates a quartz job which runs right away and generates all output there
+     * <p>
+     * POST only: it starts an export job and writes its files, so the export
+     * page posts each format as a small form and a GET answers 405.
      */
-    @RequestMapping(method = RequestMethod.GET)
+    @RequestMapping(method = RequestMethod.POST)
     public ModelMap processSubmit(@RequestParam("id") String id,
                                   @RequestParam("datasetId") String datasetId, HttpServletRequest request, HttpServletResponse response) {
         if(!mayProceed(request)) {
@@ -99,9 +98,22 @@ public class ExtractController {
         UserAccountBean userBean = (UserAccountBean) request.getSession().getAttribute("userBean");
         CoreResources cr =  new CoreResources();
 
-        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(Integer.valueOf(id).intValue(),datasetId);
-
         DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(Integer.valueOf(datasetId).intValue());
+        // the dataset must be the session study's or one of its sites' (as ExportDatasetServlet requires)
+        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean sessionStudy =
+                (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean) request.getSession().getAttribute("study");
+        if (dsBean == null || !new at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope(dataSource)
+                .containsStudy(sessionStudy, dsBean.getStudyId())) {
+            logger.warn("refused an extract of dataset {}: not in the session's study", datasetId);
+            try {
+                response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
+            } catch (Exception e) {
+                logger.error("Error in redirecting the response: ", e);
+            }
+            return null;
+        }
+
+        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(Integer.valueOf(id).intValue(),datasetId);
         // set the job in motion
         String[] files = epBean.getFileName();
         String exportFileName;

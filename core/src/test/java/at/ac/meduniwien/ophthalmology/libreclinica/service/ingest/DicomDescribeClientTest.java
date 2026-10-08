@@ -32,6 +32,7 @@ import org.junit.Test;
  * The describe call is the gate that keeps a hospital patient out of the
  * store, so its failure modes matter as much as its success.
  */
+@SuppressWarnings("resource") // the request body belongs to the HttpExchange, which its handler closes
 public class DicomDescribeClientTest {
 
     private HttpServer server;

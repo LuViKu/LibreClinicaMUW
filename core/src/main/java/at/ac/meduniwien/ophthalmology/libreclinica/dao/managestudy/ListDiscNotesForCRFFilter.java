@@ -37,6 +37,7 @@ public class ListDiscNotesForCRFFilter implements CriteriaCommand {
         filters.add(new Filter(property, value));
     }
 
+    @Override
     public String execute(String criteria) {
         String theCriteria = "";
         for (Filter filter : filters) {
@@ -59,8 +60,8 @@ public class ListDiscNotesForCRFFilter implements CriteriaCommand {
         value = StringEscapeUtils.escapeSql(value.toString());
         if (value != null) {
             if (property.equals("dn.discrepancy_note_type_id")) {
-                int typeId = Integer.valueOf(value.toString());
-                if (typeId > 0 && typeId < 10) {
+                Integer typeId = asIntOrNull(value.toString());
+                if (typeId != null && typeId > 0 && typeId < 10) {
                     criteria += " and " + property + " = " + value.toString() + " ";
                 }
             } else if (property.equals("dn.resolution_status_id")) {
@@ -89,11 +90,18 @@ public class ListDiscNotesForCRFFilter implements CriteriaCommand {
 
                 }
             } else if (property.startsWith("crf_")) {
-                int crfId = Integer.parseInt(property.toString().substring(4));
+                Integer crfId = asIntOrNull(property.substring(4));
+                Integer stageId = asIntOrNull(value.toString());
+                boolean uncompleted = value.equals("1"); // DataEntryStage.UNCOMPLETED
+                if (crfId == null || (!uncompleted && stageId == null)) {
+                    // not a crf_<id> column, or not a data-entry stage id:
+                    // there is no term to build from it
+                    return criteria;
+                }
 
-                if (!value.equals("1")) { // crf data entry stages other than
+                if (!uncompleted) { // crf data entry stages other than
                     // DataEntryStage.UNCOMPLETED
-                    int stage = getStatusForStage(Integer.parseInt(value.toString()));
+                    int stage = getStatusForStage(stageId);
                     criteria +=
                         " AND "
                             + stage
@@ -157,6 +165,27 @@ public class ListDiscNotesForCRFFilter implements CriteriaCommand {
             status = 7;
         }
         return status;
+    }
+
+    /**
+     * The candidate as an int, or {@code null} when it is not one.
+     *
+     * <p>Both the filter property and the filter value reach this class
+     * straight from the listing request, so a hand-crafted request can put a
+     * non-number where a numeric column id or status id is expected. The term
+     * is then dropped — the same thing this filter already does with a value
+     * it does not recognise — instead of aborting the whole listing with an
+     * uncaught NumberFormatException.
+     */
+    private static Integer asIntOrNull(String candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(candidate);
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 
     private static class Filter {

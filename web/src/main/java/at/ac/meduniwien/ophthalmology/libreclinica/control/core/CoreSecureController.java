@@ -212,7 +212,16 @@ public abstract class CoreSecureController extends HttpServlet {
             addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"), request);
             // + "<a href=\"UpdateProfile\">" +
             // respage.getString("user_profile") + " </a>");
-            int pwdChangeRequired = Integer.valueOf(SQLInitServlet.getField("change_passwd_required")).intValue();
+            int pwdChangeRequired;
+            try {
+                pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
+            } catch (NumberFormatException nfe) {
+                // CoreResources defaults this property to "1" when it is
+                // absent; a value that is present but not a number is the same
+                // kind of misconfiguration, so fall back to the same
+                // fail-safe default rather than 500-ing on first login.
+                pwdChangeRequired = 1;
+            }
             if (pwdChangeRequired == 1) {
                 request.setAttribute("mustChangePass", "yes");
                 forwardPage(Page.RESET_PASSWORD, request, response);
@@ -475,6 +484,18 @@ public abstract class CoreSecureController extends HttpServlet {
     }
 
     /**
+     * Whether this servlet serves the given GET; by default it does. The same
+     * rule as {@link SecureController#acceptsGet}: a servlet whose request would
+     * save data answers false for that request, so the save takes a POST.
+     *
+     * @param request the GET, before any session set-up
+     * @return false to answer 405 Method Not Allowed without processing the request
+     */
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return true;
+    }
+
+    /**
      * Handles the HTTP <code>GET</code> method.
      *
      * @param request
@@ -483,7 +504,13 @@ public abstract class CoreSecureController extends HttpServlet {
      * @throws java.io.IOException
      */
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
+        if (!acceptsGet(request)) {
+            LOGGER.warn("{} accepts POST only for this request; refused a GET", getClass().getSimpleName());
+            response.setHeader("Allow", "POST");
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            return;
+        }
         try {
             LOGGER.debug("GET Request");
             process(request, response);
@@ -814,7 +841,7 @@ public abstract class CoreSecureController extends HttpServlet {
             //retrieve the host name
             Properties javaMailProperties = mailSender.getJavaMailProperties();
             if(null != javaMailProperties){
-                if (javaMailProperties.get("mail.smtp.localhost") == null || ((String)javaMailProperties.get("mail.smtp.localhost")).equalsIgnoreCase("") ){
+                if (javaMailProperties.get("mail.smtp.localhost") == null || ((String)javaMailProperties.get("mail.smtp.localhost")).isEmpty() ){
                     javaMailProperties.put("mail.smtp.localhost", "localhost");
                 }
             }

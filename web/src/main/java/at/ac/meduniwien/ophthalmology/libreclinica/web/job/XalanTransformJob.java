@@ -46,6 +46,7 @@ public class XalanTransformJob extends QuartzJobBean {
     public static final String XML_FILE_PATH = "xmlFilePath";
     public static final String SQL_FILE_PATH = "sqlFilePath";
     
+    @Override
     protected void executeInternal(JobExecutionContext context) throws JobExecutionException {
         // need to generate a Locale so that user beans and other things will
         // generate normally

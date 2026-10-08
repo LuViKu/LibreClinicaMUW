@@ -54,7 +54,7 @@ public class StringUtil {
      */
     @Deprecated
     public static boolean isBlank(String s) {
-        return s == null ? true : s.trim().equals("") ? true : false;
+        return s == null ? true : s.trim().isEmpty() ? true : false;
 
     }
 

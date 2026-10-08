@@ -29,12 +29,7 @@ import org.hibernate.query.Query;
  * {@link Session#getCriteriaBuilder()} and let {@link AuditUserLoginFilter}
  * / {@link AuditUserLoginSort} contribute predicates and ordering.
  */
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class AuditUserLoginDao extends AbstractDomainDao<AuditUserLoginBean> {
 
     @Override
@@ -42,6 +37,7 @@ public class AuditUserLoginDao extends AbstractDomainDao<AuditUserLoginBean> {
         return AuditUserLoginBean.class;
     }
 
+    @Override
     public ArrayList<AuditUserLoginBean> findAll() {
         String hql = "from " + getDomainClassName() + " aul order by aul.loginAttemptDate desc";
         Query<AuditUserLoginBean> q = getCurrentSession().createQuery(hql, AuditUserLoginBean.class);

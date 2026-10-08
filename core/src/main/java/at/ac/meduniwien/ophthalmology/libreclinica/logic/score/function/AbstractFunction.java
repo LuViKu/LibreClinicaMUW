@@ -62,6 +62,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#addArgument(Object)
      */
+    @Override
     public void addArgument(Object arg) {
         arguments.add(arg);
     }
@@ -69,6 +70,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#setValue(String)
      */
+    @Override
     public void setValue(String newValue) {
         this.value = newValue;
     }
@@ -76,6 +78,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#getValue()
      */
+    @Override
     public String getValue() {
         return value;
     }
@@ -83,6 +86,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#argumentCount()
      */
+    @Override
     public int argumentCount() {
         return arguments.size();
     }
@@ -90,6 +94,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#getArgument(int)
      */
+    @Override
     public Object getArgument(int index) {
         return arguments.get(index);
     }
@@ -97,6 +102,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#setArguments(List)
      */
+    @Override
     public void setArguments(List<Object> arguments) {
         this.arguments = arguments;
     }
@@ -104,6 +110,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * @see Function#getErrors()
      */
+    @Override
     public HashMap<Integer, String> getErrors() {
         return errors;
     }
@@ -111,6 +118,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * has not been implemented
      */
+    @Override
     public List<Object> getScript() {
         return null;
     }
@@ -118,6 +126,7 @@ public abstract class AbstractFunction implements Function {
     /**
      * has not been implemented
      */
+    @Override
     public HashMap<ItemBean, String> getAssignments() {
         return null;
     }

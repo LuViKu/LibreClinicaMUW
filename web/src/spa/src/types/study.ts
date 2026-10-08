@@ -7,7 +7,7 @@
  * is driven by these states; each task carries `count`, `status`, and
  * a deep-link `to` route for the SPA to consume.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): wire types derived from
+ * Phase E.5 follow-up (2026-06-02): wire types derived from
  * the openapi-typescript-generated {@code components.schemas}; narrow
  * id + status literal unions stay hand-typed.
  */
@@ -80,6 +80,61 @@ export interface StudyIdentity {
    * Phase-E.4 mock literal "01-Jul-2020".
    */
   datePlannedStart?: string | null
+}
+
+/**
+ * A study's status in the system administrator's study list: a stable
+ * key, not a translated term. `REMOVED` was removed on purpose,
+ * `AUTO_REMOVED` with its parent study.
+ */
+export type AdminStudyStatus =
+  | 'AVAILABLE'
+  | 'PENDING'
+  | 'FROZEN'
+  | 'LOCKED'
+  | 'REMOVED'
+  | 'AUTO_REMOVED'
+  | 'UNAVAILABLE'
+  | 'PRIVATE'
+  | 'UNKNOWN'
+
+/**
+ * One study, with its sites nested, from `GET /api/v1/admin/studies`:
+ * every study on the platform, removed ones included. System
+ * administrators only.
+ */
+export interface AdminStudy {
+  oid: string
+  name: string
+  /** The unique protocol id. */
+  uniqueIdentifier: string | null
+  principalInvestigator: string | null
+  /** ISO `yyyy-MM-dd`. */
+  createdDate: string | null
+  status: AdminStudyStatus
+  /** Null for a top-level study. */
+  parentOid: string | null
+  /** Always empty for a site. */
+  sites: AdminStudy[]
+}
+
+/**
+ * What removing a study would take with it, from
+ * `GET /api/v1/studies/{oid}/removal-preview`: the live rows the removal
+ * auto-removes, counted per kind.
+ */
+export interface StudyRemovalPreview {
+  oid: string
+  name: string
+  siteNames: string[]
+  roleBindings: number
+  subjects: number
+  groupClasses: number
+  eventDefinitions: number
+  events: number
+  eventCrfs: number
+  itemData: number
+  datasets: number
 }
 
 /**

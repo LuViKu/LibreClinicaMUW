@@ -290,14 +290,4 @@ public final class AiArmPolicy {
             }
         }
     }
-
-    /**
-     * Group names are compared case-insensitively in SQL to absorb
-     * institutional capitalisation, so the value handed back is normalised too
-     * — {@link #maskAiFor} matches exactly, and "ai_hidden" reaching it
-     * unnormalised would read as "not blinded".
-     */
-    private static String upper(String name) {
-        return name == null ? null : name.toUpperCase(java.util.Locale.ROOT);
-    }
 }

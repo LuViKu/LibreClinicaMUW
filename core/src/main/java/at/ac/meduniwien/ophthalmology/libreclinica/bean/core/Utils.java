@@ -127,7 +127,7 @@ public class Utils {
         if (days > 0)
             ret = ret + days + " " + reswords.getString("Days");
         // also changed the above, tbh 10 2007
-        if (ret.equals(""))
+        if (ret.isEmpty())
             ret = reswords.getString("Less_than_a_day");
         return ret;
 

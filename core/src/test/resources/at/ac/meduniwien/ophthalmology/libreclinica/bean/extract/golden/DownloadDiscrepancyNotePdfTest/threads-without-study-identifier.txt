@@ -1,0 +1,125 @@
+pages: 6
+--- page 1 ---
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Study Subject: M-001 Study Event: Baseline visit
+Study Event Date: Tue Oct CRF: Optical coherence
+06 08:00:00 UTC 2020 tomography
+Status: initial data entry
+Type: Query Resolution Status: New
+Number of notes: 3 Discrepancy Note ID: 200
+Days Open: 12 Days Since Updated: 
+Discrepancy note id: 201
+Subject name: M-001 CRF name: Optical coherence
+tomography
+Description: Reply 1 Discrepancy note type: Query
+Event name: Baseline visit Parent note ID: 200
+Resolution status: Updated Detailed notes: Checked against the
+source scan; value confirmed.
+Entity name: CST_OD Entity value: Ödem, 312 µm ≥
+threshold
+Date updated: 2020-10-07 Study ID: 1
+ 
+Discrepancy note id: 202
+Subject name: M-001 CRF name: Optical coherence
+tomography
+--- page 2 ---
+Discrepancy note id: 202
+Description: Reply 2 Discrepancy note type: Query
+Event name: Baseline visit Parent note ID: 200
+Resolution status: Updated Detailed notes: Checked against the
+source scan; value confirmed.
+Entity name: CST_OD Entity value: Ödem, 312 µm ≥
+threshold
+Date updated: 2020-10-08 Study ID: 1
+ 
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Study Subject: M-002 Study Event: Baseline visit
+Study Event Date: Tue Oct CRF: Optical coherence
+06 08:00:00 UTC 2020 tomography
+Status: initial data entry
+Type: Query Resolution Status: New
+Number of notes: 2 Discrepancy Note ID: 300
+Days Open: 12 Days Since Updated: 
+Discrepancy note id: 301
+Subject name: M-002 CRF name: Optical coherence
+tomography
+Description: Reply 1 Discrepancy note type: Query
+Event name: Baseline visit Parent note ID: 300
+--- page 3 ---
+Discrepancy note id: 301
+Resolution status: Updated Detailed notes: Checked against the
+source scan; value confirmed.
+Entity name: CST_OD Entity value: Ödem, 312 µm ≥
+threshold
+Date updated: 2020-10-08 Study ID: 1
+ 
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Study Subject: M-003 Study Event: Baseline visit
+Study Event Date: Tue Oct CRF: Optical coherence
+06 08:00:00 UTC 2020 tomography
+Status: initial data entry
+Type: Query Resolution Status: New
+Number of notes: 1 Discrepancy Note ID: 400
+Days Open: 12 Days Since Updated: 
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Study Subject: M-004 Study Event: Baseline visit
+Study Event Date: Tue Oct CRF: Optical coherence
+06 08:00:00 UTC 2020 tomography
+Status: initial data entry
+Type: Query Resolution Status: New
+Number of notes: 3 Discrepancy Note ID: 500
+--- page 4 ---
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Days Open: 12 Days Since Updated: 
+Discrepancy note id: 501
+Subject name: M-004 CRF name: Optical coherence
+tomography
+Description: Reply 1 Discrepancy note type: Query
+Event name: Baseline visit Parent note ID: 500
+Resolution status: Updated Detailed notes: Checked against the
+source scan; value confirmed.
+Entity name: CST_OD Entity value: Ödem, 312 µm ≥
+threshold
+Date updated: 2020-10-07 Study ID: 1
+ 
+Discrepancy note id: 502
+Subject name: M-004 CRF name: Optical coherence
+tomography
+Description: Reply 2 Discrepancy note type: Query
+Event name: Baseline visit Parent note ID: 500
+Resolution status: Updated Detailed notes: Checked against the
+source scan; value confirmed.
+Entity name: CST_OD Entity value: Ödem, 312 µm ≥
+threshold
+Date updated: 2020-10-08 Study ID: 1
+--- page 5 ---
+ 
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Study Subject: M-005 Study Event: Baseline visit
+Study Event Date: Tue Oct CRF: Optical coherence
+06 08:00:00 UTC 2020 tomography
+Status: initial data entry
+Type: Query Resolution Status: New
+Number of notes: 2 Discrepancy Note ID: 600
+Days Open: 12 Days Since Updated: 
+Discrepancy note id: 601
+Subject name: M-005 CRF name: Optical coherence
+tomography
+Description: Reply 1 Discrepancy note type: Query
+Event name: Baseline visit Parent note ID: 600
+Resolution status: Updated Detailed notes: Checked against the
+source scan; value confirmed.
+Entity name: CST_OD Entity value: Ödem, 312 µm ≥
+threshold
+Date updated: 2020-10-08 Study ID: 1
+ 
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+--- page 6 ---
+Item field name/value: CST_OD = Ödem, 312 µm ≥ threshold
+Study Subject: M-006 Study Event: Baseline visit
+Study Event Date: Tue Oct CRF: Optical coherence
+06 08:00:00 UTC 2020 tomography
+Status: initial data entry
+Type: Query Resolution Status: New
+Number of notes: 1 Discrepancy Note ID: 700
+Days Open: 12 Days Since Updated: 

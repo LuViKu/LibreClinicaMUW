@@ -12,7 +12,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URI;
 import java.sql.Connection;
@@ -44,8 +43,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterValueDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.Authorization;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1084,43 +1081,22 @@ public class SystemController {
         return pStatus;
     }
 
+    /**
+     * The Participate module is OpenClinica's hosted participant portal,
+     * which this build does not include, so it is never active. "enabled"
+     * still reports the study parameter.
+     */
     public HashMap<String, Object> getParticipateModule(StudyBean studyBean) {
-        String portalURL = CoreResources.getField("portalURL");
         StudyParameterValueBean spvBean = getParticipateMod(studyBean, "participantPortal");
         String ocParticipateStatus = "";
         if (spvBean.isActive()) {
             ocParticipateStatus = spvBean.getValue().toString(); // enabled , disabled
         }
-        String ocuiParticipateStatus = "";
-        ParticipantPortalRegistrar participantPortalRegistrar = new ParticipantPortalRegistrar();
-        if (ocParticipateStatus.equals("enabled")) {
-            try {
-                ocuiParticipateStatus = participantPortalRegistrar.getRegistrationStatus(studyBean.getOid());
-            } catch (Exception e) {
-                logger.error("Error while accessing participant portal registrar: ", e);
-            }
-        }
-
-        HashMap<String, String> mapMetadata = new HashMap<>();
-
-        String url = "";
-        URL pManageUrl = null;
-        try {
-            pManageUrl = URI.create(portalURL).toURL();
-        } catch (MalformedURLException e) {
-            logger.error("Portal Url is not correct: ", e);
-        }
-        Authorization pManageAuthorization = participantPortalRegistrar.getAuthorization(studyBean.getOid());
-        if (pManageAuthorization != null) {
-            url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
-                    + ((pManageUrl.getPort() > 0) ? ":" + String.valueOf(pManageUrl.getPort()) : "");
-            mapMetadata.put("Participate Url", url);
-        }
 
         HashMap<String, Object> mapParticipate = new HashMap<>();
         mapParticipate.put("enabled", ocParticipateStatus.equals("enabled") ? "True" : "False");
-        mapParticipate.put("status", ocuiParticipateStatus.equals("") ? "INACTIVE" : ocuiParticipateStatus);
-        mapParticipate.put("metadata", mapMetadata);
+        mapParticipate.put("status", "INACTIVE");
+        mapParticipate.put("metadata", new HashMap<String, String>());
 
         HashMap<String, Object> mapModule = new HashMap<>();
         mapModule.put("Participate", mapParticipate);
@@ -1157,7 +1133,7 @@ public class SystemController {
         }
 
         HashMap<String, Object> mapRuleDesigner = new HashMap<>();
-        mapRuleDesigner.put("enabled", !designerUrl.equals("") ? "True" : "False");
+        mapRuleDesigner.put("enabled", !designerUrl.isEmpty() ? "True" : "False");
         mapRuleDesigner.put("status", result);
         mapRuleDesigner.put("metadata", mapMetadata);
 
@@ -1179,7 +1155,7 @@ public class SystemController {
         mapMetadata.put("mail.protocol", mailProtocol);
 
         HashMap<String, Object> mapMessaging = new HashMap<>();
-        mapMessaging.put("enabled", (!mailProtocol.equals("") && !mailPort.equals("") && !mailHost.equals("")) ? "True" : "False");
+        mapMessaging.put("enabled", (!mailProtocol.isEmpty() && !mailPort.isEmpty() && !mailHost.isEmpty()) ? "True" : "False");
         mapMessaging.put("status", result);
         mapMessaging.put("metadata", mapMetadata);
 
@@ -1262,7 +1238,7 @@ public class SystemController {
         }
 
         HashMap<String, Object> mapWebService = new HashMap<>();
-        mapWebService.put("enabled", !webserviceUrl.equals("") ? "True" : "False");
+        mapWebService.put("enabled", !webserviceUrl.isEmpty() ? "True" : "False");
         mapWebService.put("status", result);
         mapWebService.put("metadata", mapMetadata);
 

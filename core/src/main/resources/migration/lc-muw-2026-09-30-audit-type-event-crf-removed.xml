@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      155 — an event CRF removed (status removed, its values auto-removed),
+      with the reason the remover gave. Written by EventCrfRemovalApiController;
+      the restore is 139 (event_crf_restored). The event_crf trigger records
+      no row for a removal, and legacy RemoveEventCRFServlet asks for no
+      reason, so without this the trail would not say that, or why, a CRF
+      was taken out of a subject's data. Visible: it is a change to the
+      subject's data.
+    -->
+    <changeSet id="2026-09-30-audit-type-event-crf-removed" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 155;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="155"/>
+            <column name="name" value="event_crf_removed"/>
+            <column name="display_name" value="CRF removed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 155</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

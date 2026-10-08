@@ -22,6 +22,7 @@ public class Median extends AbstractFunction {
      * @see Function#execute
      */
 
+    @Override
     public void execute() {
         logger.info("Execute the function Median... ");
 
@@ -44,7 +45,7 @@ public class Median extends AbstractFunction {
             return;
         }
 
-        if (values != null && values.length > 0) {
+        if (values.length > 0) {
             double v = (new org.apache.commons.math.stat.descriptive.rank.Median()).evaluate(values);
             value = Double.toString(v);
         } else {

@@ -25,6 +25,7 @@ import org.springframework.security.ldap.userdetails.LdapAuthoritiesPopulator;
 @SuppressWarnings("all")
 public class OpenClinicaLdapAuthoritiesPopulator implements LdapAuthoritiesPopulator {
 
+    @Override
     public Collection<GrantedAuthority> getGrantedAuthorities(DirContextOperations userData, String username) {
         Collection<GrantedAuthority> auths = new ArrayList<GrantedAuthority>(1);
         auths.add(new SimpleGrantedAuthority("ROLE_USER"));

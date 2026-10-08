@@ -24,8 +24,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefiniti
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyConfigService;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterValueDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
@@ -80,20 +78,8 @@ public class ViewStudyServlet extends SecureController {
             StudyConfigService scs = new StudyConfigService(sm.getDataSource());
             study = scs.setParametersForStudy(study);
 
-            StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());
-            String participantStatusInOC = spvdao.findByHandleAndStudy(study.getId(), "participantPortal").getValue();
-            if(participantStatusInOC=="") participantStatusInOC="disabled";
             // Randomization is removed from LibreClinica
             study.getStudyParameterConfig().setRandomization("disabled");
-
-             ParticipantPortalRegistrar  participantPortalRegistrar = new ParticipantPortalRegistrar();
-             String pStatus = participantPortalRegistrar.getCachedRegistrationStatus(study.getOid(), session);
-             if (participantPortalRegistrar!=null && pStatus.equalsIgnoreCase("ACTIVE") && participantStatusInOC.equalsIgnoreCase("enabled")){
-                 study.getStudyParameterConfig().setParticipantPortal("enabled");
-             }else{
-                 study.getStudyParameterConfig().setParticipantPortal("disabled");
-              };
-
 
             request.setAttribute("studyToView", study);
             if ("yes".equalsIgnoreCase(viewFullRecords)) {
@@ -139,9 +125,6 @@ public class ViewStudyServlet extends SecureController {
                 }
                 String moduleManager = CoreResources.getField("moduleManager");
                 request.setAttribute("moduleManager", moduleManager);
-
-                String portalURL = CoreResources.getField("portalURL");
-                request.setAttribute("portalURL", portalURL);
 
                 request.setAttribute("config", study);
 

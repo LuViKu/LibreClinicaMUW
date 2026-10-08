@@ -48,11 +48,11 @@ public record ImportCrfPreviewDto(
         int rowCount,
         @Schema(description = "Rows that would be inserted (no existing item_data row for the triple).")
         int insertCount,
-        @Schema(description = "Rows that would overwrite an existing item_data value.")
+        @Schema(description = "Rows that would overwrite a different stored item_data value.")
         int overwriteCount,
-        @Schema(description = "Rows the validator rejected; commit skips them.")
+        @Schema(description = "ERROR findings (unresolved OIDs, a closed or missing visit, an unknown item); the commit is refused while any exist.")
         int errorCount,
-        @Schema(description = "Rows the validator flagged as soft warnings (out-of-range etc.); commit imports them and files a discrepancy.")
+        @Schema(description = "Rows the commit skips because their CRF is not open to the import (the file's UpsertOn, or the CRF's stage).")
         int warningCount,
         @Schema(description = "Inline first page of preview rows (up to 200). Page the rest via /import/{token}/rows.")
         List<PreviewRowDto> rows,
@@ -73,8 +73,11 @@ public record ImportCrfPreviewDto(
      * + {@code action} pair drives the row's chip + diff display.
      *
      * @param status     wire-shape status — one of
-     *                   {@code "ready"} / {@code "overwrite"} /
-     *                   {@code "warning"} / {@code "error"}
+     *                   {@code "ready"} (inserted, or the same value
+     *                   stored already) / {@code "overwrite"} /
+     *                   {@code "warning"} (skipped: its CRF is not open
+     *                   to the import) / {@code "error"} (refuses the
+     *                   file); see {@link ImportRowProjection}
      * @param action     what the commit will do — one of
      *                   {@code "insert"} / {@code "overwrite"} /
      *                   {@code "skip"} / {@code "flag"}

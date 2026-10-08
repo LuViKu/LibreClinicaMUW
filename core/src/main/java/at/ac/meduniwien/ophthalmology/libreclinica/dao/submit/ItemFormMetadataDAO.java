@@ -156,6 +156,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
         return answer;
     }
 
+    @Override
     public void setTypesExpected() {
         this.unsetTypeExpected();
 
@@ -226,6 +227,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemFormMetadataBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
@@ -235,6 +237,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAOInterface#findAll()
      */
+    @Override
     public ArrayList<ItemFormMetadataBean> findAll() throws OpenClinicaException {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -413,6 +416,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAOInterface#findByPK(int)
      */
+    @Override
     public ItemFormMetadataBean findByPK(int id) throws OpenClinicaException {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(id);
@@ -424,6 +428,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAOInterface#create(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean)
      */
+    @Override
     public ItemFormMetadataBean create(ItemFormMetadataBean ifmb) throws OpenClinicaException {
         HashMap<Integer, Object> variables = new HashMap<>();
 
@@ -489,6 +494,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
      *
      * @see at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAOInterface#update(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.EntityBean)
      */
+    @Override
     public ItemFormMetadataBean update(ItemFormMetadataBean ifmb) throws OpenClinicaException {
         HashMap<Integer, Object> variables = new HashMap<>();
 
@@ -561,6 +567,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemFormMetadataBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase)
             throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
@@ -575,6 +582,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemFormMetadataBean> findAllByPermission(Object objCurrentUser, int intActionType) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }

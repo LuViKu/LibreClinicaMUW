@@ -33,6 +33,7 @@ public abstract class BusinessEvaluator implements Runnable {
         businessObject = o;
     }
 
+    @Override
     public void run() {
         if (hasBeenUpdated) {
             evaluateRuleSet();

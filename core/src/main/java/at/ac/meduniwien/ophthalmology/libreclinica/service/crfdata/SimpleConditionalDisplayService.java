@@ -182,7 +182,7 @@ public class SimpleConditionalDisplayService {
         ArrayList<SCDItemMetadataBean> cds = dib.getScdData().getScdSetsForControl();
         if (!cds.isEmpty()) {
             for(SCDItemMetadataBean cd : cds) {
-                Integer scdItemId = cd.getScdItemId();
+                int scdItemId = cd.getScdItemId();
                 if (scdItemId > 0) {
                     // If it should be shown add it the item ID to the list
                     if (conditionalDisplayToBeShown(dib.getData().getValue(), cd)) {

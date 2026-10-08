@@ -115,5 +115,21 @@
   <include  file="migration/lc-muw-2026-12-07-retinal-jobs-follow-file.xml"/>
   <include  file="migration/lc-muw-2026-12-08-audit-labels-and-context.xml"/>
   <include  file="migration/lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-login-history-index.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-type-system-setting.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-dn-stats-unanswered-threads.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-dde-second-pass-date.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-type-crf-field-updated.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-types-event-crf-migration.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-types-crf-lifecycle-cascade.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-export-schedule-enabled.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-export-completion-mail.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-log-event-date-index.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-audit-type-event-crf-removed.xml"/>
+  <include  file="migration/lc-muw-2026-09-30-event-crf-cascade-removal.xml"/>
+  <include  file="migration/lc-muw-2026-10-06-account-lockout.xml"/>
+  <include  file="migration/lc-muw-2026-10-07-audit-types-deidentification.xml"/>
+  <include  file="migration/lc-muw-2026-10-07-ingest-origin-study.xml"/>
+  <include  file="migration/lc-muw-2026-10-07-retinal-task-sdretinanet.xml"/>
 </databaseChangeLog>
 

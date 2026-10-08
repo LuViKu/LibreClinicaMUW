@@ -69,4 +69,51 @@ describe('CreateStudyView — pre-submit validation', () => {
 
     expect(createSpy).toHaveBeenCalledTimes(1)
   })
+
+  it('sends the detailed description, collaborators and contact e-mail', async () => {
+    const w = await mountView()
+    const createSpy = vi
+      .spyOn(useStudyStore(), 'create')
+      .mockResolvedValue({ ok: true, study: { oid: 'S_NEW' } } as never)
+    vi.spyOn(useAuthStore(), 'pickStudy').mockResolvedValue(undefined as never)
+
+    await w.get('#study-name').setValue('Glaucoma Cohort')
+    await w.get('#study-uid').setValue('GLAU01')
+    await w.get('#study-summary').setValue('A study')
+    await w.get('#study-pi').setValue('Dr. Vision')
+    await w.get('#study-sponsor').setValue('MUW')
+    await w.get('#study-description').setValue('Randomised, double-masked, 24 months.')
+    await w.get('#study-collaborators').setValue('AKH Wien')
+    await w.get('#study-contact-email').setValue('pm@example.org')
+
+    await w.findAll('button').find((b) => b.text() === 'Create study')!.trigger('click')
+    await flushPromises()
+
+    expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({
+      protocolDescription: 'Randomised, double-masked, 24 months.',
+      collaborators: 'AKH Wien',
+      contactEmail: 'pm@example.org',
+    }))
+  })
+
+  it('shows the server’s verdict on a malformed contact e-mail next to the field', async () => {
+    const w = await mountView()
+    vi.spyOn(useStudyStore(), 'create').mockResolvedValue({
+      ok: false,
+      fieldErrors: { contactEmail: 'Contact e-mail must be a valid e-mail address' },
+      message: 'Validation failed',
+    })
+
+    await w.get('#study-name').setValue('Glaucoma Cohort')
+    await w.get('#study-uid').setValue('GLAU01')
+    await w.get('#study-summary').setValue('A study')
+    await w.get('#study-pi').setValue('Dr. Vision')
+    await w.get('#study-sponsor').setValue('MUW')
+    await w.get('#study-contact-email').setValue('nobody')
+
+    await w.findAll('button').find((b) => b.text() === 'Create study')!.trigger('click')
+    await flushPromises()
+
+    expect(w.text()).toContain('Contact e-mail must be a valid e-mail address')
+  })
 })

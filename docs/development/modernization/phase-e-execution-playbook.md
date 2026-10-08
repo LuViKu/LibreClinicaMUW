@@ -1,7 +1,7 @@
 # Phase E — execution playbook
 
 **Date:** 2026-05-30
-**Status:** Draft. Approves entry once the [post-Phase-D UI validation](phase-e/post-phase-d-ui-validation.md)'s Phase E entry checklist closes.
+**Status:** Active. Written as a draft on 2026-05-30; Phase E has since shipped E.1–E.8 (see MIGRATION.md). Retirement of the JSP layer follows [DR-018](decision-record.md) and the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md).
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Sibling playbooks:** [phase-b](archive/phase-b-execution-playbook.md) · [phase-c](archive/phase-c-execution-playbook.md) · [phase-d](phase-d-execution-playbook.md)
 
@@ -13,12 +13,12 @@ The Phase E SPA rewrite replaces the JSP + jQuery 1.9 + Prototype.js + GWT-compi
 
 | Decision | Status | Notes |
 |---|---|---|
-| [DR-004](decision-record.md) — Phase E may overlap with first clinical use; admin screens stay JSP | Accepted | Constrains Phase E scope to high-traffic clinician screens |
+| [DR-004](decision-record.md) — Phase E may overlap with first clinical use; admin screens stay JSP | Accepted — **admin-scope clause superseded by DR-018 (2026-09-30)** | Constrained Phase E to high-traffic clinician screens. Its clinical-use timing still stands; its "admin stays JSP" scoping is what DR-018 replaces. |
 | [DR-005](decision-record.md) — MUW Ophthalmology branding | Accepted | Applied via [muw-tailwind-config.js + muw-tokens.css](phase-e/design-system/project/) |
-| [DR-008](decision-record.md) — UI framework (React / Vue 3 / Svelte) | **Open — required for E.1 gate** | Tentative recommendation: **React 19** for the size of the candidate-developer pool at MedUni Wien IT and the maturity of the React data-table / form ecosystem; final pick made at the E.1 framework-bake-off |
+| [DR-008](decision-record.md) — UI framework | **Accepted — Vue 3** | Settled without the E.1 bake-off; see the DR for the reasoning. |
 | [DR-014](decision-record.md) — Institution-agnostic SSO via reverse-proxy pre-auth | Accepted | Login screen must adopt the configurable "Sign in with Institutional Account" button (not the LDAP-specific button left in the static mockup) |
-| DR-018 (new) — JSP retirement strategy | **Open — required for E.11 gate** | Choices: (a) retire JSPs as their SPA equivalent ships, JSP/SPA toggle behind a feature flag; (b) keep JSPs alive in parallel for a 6-month bake-in window; (c) hard-cutover at end of Phase E |
-| DR-019 (new) — Acceptance gate: usability + accessibility | **Open — required for E.10 gate** | Defines what "ready for clinical use" means quantitatively (WCAG 2.2 AA + N-user usability tests with success criteria) |
+| [DR-018](decision-record.md) — JSP retirement strategy | **Accepted (2026-09-30)** | Full retirement, admin included. (a) + (b) per screen: dead JSPs deleted first; a covered screen's route is closed behind an administrator-only, logged `/legacy/` alias for the six-month bake-in, then deleted. Admin screens need an administrator parity catalogue first. |
+| [DR-019](decision-record.md) — Acceptance gate: usability + accessibility | **Accepted** — E.10 not yet run | Defines what "ready for clinical use" means quantitatively (WCAG 2.2 AA + N-user usability tests with success criteria) |
 
 ---
 
@@ -321,7 +321,8 @@ The helper is exported so route-guard unit tests don't need to spin the router.
 
 1. Each SPA route ships behind a `libreclinica.spa.<feature>.enabled` flag (default off in the first PR, default on after the in-clinic walkthrough closes successfully).
 2. When the flag flips to default-on, the **legacy JSP path stays reachable** for a **6-month bake-in window** via the explicit URL (`/legacy/<jsp-path>`). After that window, the JSP is deleted in a dedicated `chore(phase-e.11-retire-<feature>)` commit.
-3. **Cross-reference each retirement against [DR-004](decision-record.md)**: admin / low-frequency screens (CRF upload, study config, user mgmt) may stay JSP indefinitely — Phase E does not force them into the SPA.
+3. **Cross-reference each retirement against [DR-018](decision-record.md)**, which proposes superseding DR-004's scoping clause: admin / low-frequency screens (CRF upload, study config, user mgmt) are now in scope and are retired like any other screen, once an administrator parity catalogue exists to retire them against. Until DR-018 is accepted, DR-004 stands and these screens stay JSP.
+4. **Changed by DR-018:** the `/legacy/<jsp-path>` alias in point 2 is reachable only by an administrator, and every hit is logged. An alias any user can reach keeps the legacy surface exposed for the whole bake-in.
 
 **Verification gates:**
 

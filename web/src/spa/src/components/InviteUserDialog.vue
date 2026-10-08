@@ -10,6 +10,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
+import type { AccountType } from '@/types/auth'
 import type { UserRole } from '@/types/user'
 
 /**
@@ -25,6 +26,11 @@ import type { UserRole } from '@/types/user'
  * carries the one-time password, which we surface in a copy-to-clipboard
  * panel on success. The default is to NOT send (since email isn't wired
  * yet), so the admin always gets the password to distribute manually.
+ *
+ * The account type makes the new user an ordinary user (the default), a
+ * business administrator or, offered only to a technical administrator,
+ * a technical administrator: the legacy create form's User Type, and the
+ * rule the server enforces.
  */
 interface Props {
   open: boolean
@@ -54,6 +60,7 @@ interface Form {
    */
   authMethod: AuthMethod
   externalId: string
+  userType: AccountType
 }
 const form = ref<Form>(initialForm())
 const fieldErrors = ref<Record<string, string>>({})
@@ -79,6 +86,7 @@ function initialForm(): Form {
     role: 'Investigator',
     authMethod: 'local',
     externalId: '',
+    userType: 'USER',
   }
 }
 
@@ -126,6 +134,11 @@ const canSubmit = computed(() => {
   return true
 })
 
+/** Only a technical administrator may create another one. */
+const userTypeOptions = computed<AccountType[]>(() =>
+  auth.isTechAdmin ? ['USER', 'SYSADMIN', 'TECHADMIN'] : ['USER', 'SYSADMIN'],
+)
+
 const roleOptions: { v: UserRole; l: () => string }[] = [
   { v: 'Investigator',  l: () => t('manageUsers.role.Investigator') },
   { v: 'CRC',           l: () => t('manageUsers.role.CRC') },
@@ -156,6 +169,7 @@ async function submit() {
       phone: form.value.phone.trim() === '' ? null : form.value.phone.trim(),
       studyId: studyId.value,
       role: form.value.role,
+      userType: form.value.userType,
       // Local-only sends sendEmail:false (returns one-time password).
       // SSO branch always returns null generatedPassword from the
       // server, so sendEmail is meaningless — keep it consistent.
@@ -315,6 +329,16 @@ async function copyPassword() {
           <FieldLabel for="invite-affiliation" required>{{ t('manageUsers.invite.affiliation') }}</FieldLabel>
           <TextInput id="invite-affiliation" v-model="form.institutionalAffiliation" />
           <ErrorText v-if="fieldErrors.institutionalAffiliation">{{ fieldErrors.institutionalAffiliation }}</ErrorText>
+        </div>
+        <div class="col-span-2">
+          <FieldLabel for="invite-usertype" required>{{ t('manageUsers.userType.label') }}</FieldLabel>
+          <SelectInput id="invite-usertype" v-model="form.userType">
+            <option v-for="type in userTypeOptions" :key="type" :value="type">
+              {{ t(`manageUsers.userType.${type}`) }}
+            </option>
+          </SelectInput>
+          <p class="text-[11px] text-slate-500 mt-1">{{ t('manageUsers.userType.help') }}</p>
+          <ErrorText v-if="fieldErrors.userType">{{ fieldErrors.userType }}</ErrorText>
         </div>
       </div>
 

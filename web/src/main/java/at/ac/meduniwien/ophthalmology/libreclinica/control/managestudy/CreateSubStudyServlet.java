@@ -13,12 +13,13 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asHashMap;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
@@ -84,6 +85,13 @@ public class CreateSubStudyServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + "\n" + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.SITE_LIST_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form; the confirmation and creating the site take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override
@@ -477,7 +485,7 @@ public class CreateSubStudyServlet extends SecureController {
 
     }
 
-    private ArrayList<StudyEventDefinitionBean> createSiteEventDefinitions(StudyBean site, Validator v) throws MalformedURLException {
+    private ArrayList<StudyEventDefinitionBean> createSiteEventDefinitions(StudyBean site, Validator v) {
         FormProcessor fp = new FormProcessor(request);
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
         ArrayList <EventDefinitionCRFBean> edcsInSession = new ArrayList<EventDefinitionCRFBean>();
@@ -503,7 +511,6 @@ public class CreateSubStudyServlet extends SecureController {
         HashMap<String, Boolean> changes = new HashMap<String, Boolean>();
         for (StudyEventDefinitionBean sed : seds) {
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-            if (participateFormStatus.equals("enabled")) baseUrl();
             request.setAttribute("participateFormStatus",participateFormStatus );
 
             ArrayList<EventDefinitionCRFBean> edcs = asArrayList(sed.getCrfs(), EventDefinitionCRFBean.class);
@@ -613,7 +620,7 @@ public class CreateSubStudyServlet extends SecureController {
                             edcBean.setHideCrf(isHide);
                             edcBean.setSubmissionUrl(submissionUrl);
                         }
-                        if (!submissionUrl.equals("")) {
+                        if (!submissionUrl.isEmpty()) {
                             changed = true;
                             edcBean.setSubmissionUrl(submissionUrl);
                         }
@@ -712,7 +719,7 @@ public class CreateSubStudyServlet extends SecureController {
         return seds;
     }
 
-    private void submitSiteEventDefinitions(StudyBean site) throws MalformedURLException {
+    private void submitSiteEventDefinitions(StudyBean site) {
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
 
         ArrayList<StudyEventDefinitionBean> seds = new ArrayList<StudyEventDefinitionBean>();
@@ -721,7 +728,6 @@ public class CreateSubStudyServlet extends SecureController {
         for (StudyEventDefinitionBean sed : seds) {
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
             request.setAttribute("participateFormStatus",participateFormStatus );
-            if (participateFormStatus.equals("enabled")) 	baseUrl();
 
             EventDefinitionCRFDAO edcdao = new EventDefinitionCRFDAO(sm.getDataSource());
             ArrayList<EventDefinitionCRFBean> edcs = asArrayList(sed.getCrfs(), EventDefinitionCRFBean.class);
@@ -748,7 +754,7 @@ public class CreateSubStudyServlet extends SecureController {
         session.removeAttribute("sdvOptions");
     }
 
-    private ArrayList<StudyEventDefinitionBean> initDefinitions(StudyBean site) throws MalformedURLException {
+    private ArrayList<StudyEventDefinitionBean> initDefinitions(StudyBean site) {
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
 
         ArrayList<StudyEventDefinitionBean> seds = new ArrayList<StudyEventDefinitionBean>();
@@ -760,7 +766,6 @@ public class CreateSubStudyServlet extends SecureController {
         seds = sedDao.findAllByStudy(parentStudy);
         for (StudyEventDefinitionBean sed : seds) {
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-            if (participateFormStatus.equals("enabled")) 	baseUrl();
             request.setAttribute("participateFormStatus",participateFormStatus );
 
             int defId = sed.getId();
@@ -844,7 +849,7 @@ public class CreateSubStudyServlet extends SecureController {
             		System.out.println("iter:           "+eventDef.getId()+            "--db:    "+eventDef.getSubmissionUrl()); 
             		System.out.println("edcsInSession:  "+sessionBean.getId()  + "--session:"+sessionBean.getSubmissionUrl()); 
             		System.out.println();
-            	if(sessionBean.getSubmissionUrl().trim().equals("") || sessionBean.getSubmissionUrl().trim() ==null){
+            	if(sessionBean.getSubmissionUrl().trim().isEmpty() || sessionBean.getSubmissionUrl().trim() ==null){
             		break;
             	}else{
                 if (eventDef.getSubmissionUrl().trim().equalsIgnoreCase(sessionBean.getSubmissionUrl().trim()) && (eventDef.getId() != sessionBean.getId())){

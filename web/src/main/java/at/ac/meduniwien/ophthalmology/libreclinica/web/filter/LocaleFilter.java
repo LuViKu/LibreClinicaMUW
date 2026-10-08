@@ -40,6 +40,7 @@ public final class LocaleFilter implements Filter {
     /**
      * Save customized Locale into session for Locale attribute and fmt Locale; and set response Locale
      */
+    @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
         HttpServletRequest req = (HttpServletRequest)request;
@@ -50,9 +51,11 @@ public final class LocaleFilter implements Filter {
         }
     }
 
+    @Override
     public void init(FilterConfig filterConfig) throws ServletException {
     }
 
+    @Override
     public void destroy() {
     }
 

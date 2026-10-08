@@ -17,6 +17,8 @@ import java.util.Locale;
 
 import javax.sql.DataSource;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
@@ -124,6 +126,12 @@ public class VerifyImportedCRFDataServlet extends SecureController {
         dndao.createMapping(note);
         // System.out.println("just created mapping");
         return note;
+    }
+
+    /** GET shows the import to verify; saving it (action=save) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"save".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override
@@ -340,7 +348,7 @@ public class VerifyImportedCRFDataServlet extends SecureController {
                     if (container.getShouldRunRules())
                         containers.add(container);
                 }
-                if (containers != null && !containers.isEmpty())
+                if (!containers.isEmpty())
                     ruleSetService.runRulesInImportData(containers, studyBean, userBean, ExecutionMode.DRY_RUN);
             }
         }

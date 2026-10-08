@@ -102,8 +102,9 @@ public class CoreResources implements ResourceLoaderAware {
         if (!file.exists())
             return null;
 
-        InputStream inputStream = new FileInputStream(propFileName);
-        prop.load(inputStream);
+        try (InputStream inputStream = new FileInputStream(propFileName)) {
+            prop.load(inputStream);
+        }
 
         return prop;
     }
@@ -655,7 +656,7 @@ public class CoreResources implements ResourceLoaderAware {
         int i = 1;
         int maxExtractOption = getMaxExtractCounterValue();
         while (i <= maxExtractOption) {
-            if (!getExtractField("extract." + i + ".file").equals("")) {
+            if (!getExtractField("extract." + i + ".file").isEmpty()) {
                 ExtractPropertyBean epbean = new ExtractPropertyBean();
                 epbean.setId(i);
                 // we will implement a find by id function in the front end
@@ -739,7 +740,7 @@ public class CoreResources implements ResourceLoaderAware {
                                 + " removed from this release. The extract itself still runs; no PDF is produced.", i, whichFunction);
                         epbean.setPostProcessing(null);
                     }
-                    // since the database is the last option TODO: think about custom post processing options
+                    // the database is the last option: any other postProcessor value is treated as a SQL target
                     else {
                         SqlProcessingFunction function = new SqlProcessingFunction(epbean);
     
@@ -938,12 +939,15 @@ public class CoreResources implements ResourceLoaderAware {
     public static String[] getExtractFields(String key) {
         String value = EXTRACTINFO.getProperty(key);
 
-        // System.out.println("key? " + key + " value = " + value);
-
-        if (value != null) {
-            value = value.trim();
+        // A missing extract.properties key used to NPE here and abort startup
+        // with a bare NullPointerException. Return no fields instead; the
+        // caller in findExtractProperties() then reports the real problem
+        // (file/exportname lists that do not correspond 1 on 1) as an
+        // OpenClinicaSystemException naming the property number.
+        if (value == null) {
+            return new String[0];
         }
-        return value.split(",");
+        return value.trim().split(",");
     }
 
     // JN: by using static when u click same export link from 2 different datasets the first one stays in tact and

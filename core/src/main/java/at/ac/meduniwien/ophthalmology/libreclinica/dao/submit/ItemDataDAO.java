@@ -255,6 +255,49 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         return idb;
     }
 
+    /**
+     * Changes only the item's status, stamped with its updater. For the
+     * cascades that hide or show a value (an event cancelled or restored, a
+     * subject removed or restored, an event definition restored, locked or
+     * unlocked): unlike {@link #update}, the path for writing a value, it
+     * leaves the value and its provenance alone.
+     */
+    public ItemDataBean updateStatusOnly(ItemDataBean idb) {
+        idb.setActive(false);
+        HashMap<Integer, Object> variables = new HashMap<>();
+        variables.put(Integer.valueOf(1), Integer.valueOf(idb.getStatus().getId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(idb.getUpdaterId()));
+        variables.put(Integer.valueOf(3), Integer.valueOf(idb.getId()));
+        this.executeUpdate(digester.getQuery("updateStatusOnly"), variables);
+
+        if (isQuerySuccessful()) {
+            idb.setActive(true);
+        }
+
+        return idb;
+    }
+
+    /**
+     * As {@link #updateStatusOnly}, and it also stores the bean's old status.
+     * For the remove cascades whose restore reads it back (study, site, event
+     * definition).
+     */
+    public ItemDataBean updateStatusAndOldStatusOnly(ItemDataBean idb) {
+        idb.setActive(false);
+        HashMap<Integer, Object> variables = new HashMap<>();
+        variables.put(Integer.valueOf(1), Integer.valueOf(idb.getStatus().getId()));
+        variables.put(Integer.valueOf(2), Integer.valueOf(idb.getOldStatus().getId()));
+        variables.put(Integer.valueOf(3), Integer.valueOf(idb.getUpdaterId()));
+        variables.put(Integer.valueOf(4), Integer.valueOf(idb.getId()));
+        this.executeUpdate(digester.getQuery("updateStatusAndOldStatusOnly"), variables);
+
+        if (isQuerySuccessful()) {
+            idb.setActive(true);
+        }
+
+        return idb;
+    }
+
     /*
      * current_df_string= yyyy-MM-dd oc_df_string = yyyy-mm-dd local_df_string = dd-MMM-yyyy
      */
@@ -436,6 +479,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         return temp;
     }
 
+    @Override
     public ItemDataBean getEntityFromHashMap(HashMap<String, Object> hm) {
         ItemDataBean eb = new ItemDataBean();
         this.setEntityAuditInformation(eb, hm);
@@ -519,6 +563,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
     	throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
         ItemDataBean eb = new ItemDataBean();
         this.setTypesExpected();
@@ -555,6 +600,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemDataBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -562,6 +608,7 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemDataBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

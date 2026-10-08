@@ -198,6 +198,7 @@ public class TerminologyIngestService {
         return loaded;
     }
 
+    @SuppressWarnings("resource") // skipChildren() returns the caller's own parser; the caller closes it
     private int readConceptArray(JsonParser p, StringBuilder csv, String codeSystem, long versionId)
             throws IOException {
         if (p.currentToken() != JsonToken.START_ARRAY) { p.skipChildren(); return 0; }
@@ -271,6 +272,7 @@ public class TerminologyIngestService {
      * a container value MUST be skipped or the parser desyncs and the concept
      * array terminates early (dropping thousands of rows).
      */
+    @SuppressWarnings("resource") // skipChildren() returns the caller's own parser; the caller closes it
     private Map<String, String> collectProperties(JsonParser p, Set<String> wanted) throws IOException {
         Map<String, String> out = new HashMap<>();
         if (p.currentToken() != JsonToken.START_ARRAY) { p.skipChildren(); return out; }

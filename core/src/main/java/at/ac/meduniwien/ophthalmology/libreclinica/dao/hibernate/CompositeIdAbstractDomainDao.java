@@ -11,28 +11,23 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.CompositeIdDomainObject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
 
 /**
  * Phase B.5: same JPA EntityManager wiring as {@link AbstractDomainDao};
  * see that class for rationale.
+ *
+ * <p>Its one subclass, {@link StudyUserRoleDao}, is only ever asked to
+ * {@link #saveOrUpdate} and to run its own query, so that is all this base
+ * still offers.
  */
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainObject> {
 
     @PersistenceContext
@@ -44,39 +39,17 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
         return domainClass().getName();
     }
 
-    @SuppressWarnings("unchecked")
-    @Transactional
-    public ArrayList<T> findAll() {
-        getSessionFactory().getStatistics().logSummary();
-        String query = "from " + getDomainClassName() + " do";
-        Query<T> q = getCurrentSession().createQuery(query);
-        return new ArrayList<T>(q.getResultList());
-    }
-
+    /**
+     * Deprecated {@link Session#saveOrUpdate} on purpose; see
+     * {@link AbstractDomainDao#saveOrUpdate} for why it is not yet
+     * {@code persist}/{@code merge}.
+     */
+    @SuppressWarnings("deprecation")
     @Transactional
     public T saveOrUpdate(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
         getCurrentSession().saveOrUpdate(domainObject);
         return domainObject;
-    }
-
-    @Transactional
-    public Serializable save(T domainObject) {
-        getSessionFactory().getStatistics().logSummary();
-        return (Serializable) getCurrentSession().save(domainObject);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Transactional
-    public T findByColumnName(Object id, String key) {
-        String query = "from " + getDomainClassName() + " do where do." + key + "= :id";
-        Query<T> q = getCurrentSession().createQuery(query);
-        q.setParameter("id", id);
-        return q.getSingleResultOrNull();
-    }
-
-    public Long count() {
-        return (Long) getCurrentSession().createQuery("select count(*) from " + domainClass().getName()).uniqueResult();
     }
 
     public SessionFactory getSessionFactory() {

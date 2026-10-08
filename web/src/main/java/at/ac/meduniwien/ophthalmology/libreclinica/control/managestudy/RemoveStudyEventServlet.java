@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -45,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Removes a study event and all its related event CRFs, items
  */
-@SuppressWarnings("all")
 public class RemoveStudyEventServlet extends SecureController {
     /**
 	 * 
@@ -73,6 +74,12 @@ public class RemoveStudyEventServlet extends SecureController {
 
     }
 
+    /** GET shows the confirmation; removing the event takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         FormProcessor fp = new FormProcessor(request);
@@ -88,6 +95,8 @@ public class RemoveStudyEventServlet extends SecureController {
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
 
+            assertStudyEventInScope(studyEventId);
+            assertStudySubjectInScope(studySubId);
             StudyEventBean event = (StudyEventBean) sedao.findByPK(studyEventId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
@@ -160,7 +169,7 @@ public class RemoveStudyEventServlet extends SecureController {
                                 item.setStatus(Status.AUTO_DELETED);
                                 item.setUpdater(ub);
                                 item.setUpdatedDate(new Date());
-                                iddao.update(item);
+                                iddao.updateStatusOnly(item);
                             }
                         }
                     }

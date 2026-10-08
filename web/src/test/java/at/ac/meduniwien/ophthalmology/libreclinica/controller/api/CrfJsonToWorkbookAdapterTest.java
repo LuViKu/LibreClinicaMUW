@@ -39,6 +39,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
  * manually here — there's no resource to release beyond the
  * underlying byte buffer, which is GC-managed.
  */
+@SuppressWarnings("resource") // HSSFWorkbook is held in memory only; there is nothing to release
 class CrfJsonToWorkbookAdapterTest {
 
     private final CrfJsonToWorkbookAdapter adapter = new CrfJsonToWorkbookAdapter();

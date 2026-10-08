@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.login;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.TermType;
@@ -31,14 +33,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class RequestStudyServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6545051529086620572L;
 
 	@Override
     public void mayProceed() throws InsufficientPermissionException {
 
+    }
+
+    /** GET shows the form; the confirmation and the request mail take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override
@@ -70,11 +76,6 @@ public class RequestStudyServlet extends SecureController {
         }
     }
 
-    /**
-     *
-     * @param request
-     * @param response
-     */
     private void confirm() throws Exception {
         Validator v = new Validator(request);
         v.addValidation("studyId", Validator.IS_AN_INTEGER);
@@ -108,8 +109,6 @@ public class RequestStudyServlet extends SecureController {
     /**
      * Gets user basic info and set email to the administrator
      *
-     * @param request
-     * @param response
      */
     private void submit() throws Exception {
         StudyUserRoleBean newRole = (StudyUserRoleBean) session.getAttribute("newRole");

@@ -58,7 +58,7 @@ public final class RetinalClusterHealth {
 
     /** The full task set a healthy server registers. Anything less is degraded. */
     public static final List<String> EXPECTED_TASKS =
-            List.of("bm", "fluid", "ga", "layers", "onl", "pr");
+            List.of("bm", "fluid", "ga", "layers", "onl", "pr", "sdretinanet");
 
     /** A node to probe: a display name and the sidecar's base URL (no {@code /health}). */
     public record NodeSpec(String name, String url) { }
@@ -215,6 +215,7 @@ public final class RetinalClusterHealth {
     }
 
     /** Probe every node concurrently, so one dead node costs one timeout, not N. Order is preserved. */
+    @SuppressWarnings("resource") // pool is shut down in finally (shutdownNow, no waiting); ExecutorService.close() would block on the probes
     public List<NodeStatus> probeAll(List<NodeSpec> specs) {
         if (specs.isEmpty()) return List.of();
         ExecutorService pool = Executors.newFixedThreadPool(specs.size());

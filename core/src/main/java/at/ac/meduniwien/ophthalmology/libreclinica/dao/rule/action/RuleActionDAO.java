@@ -144,11 +144,21 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleAction;
     }
 
+    @Override
     public RuleActionBean getEntityFromHashMap(HashMap<String, Object> hm) {
 
         int actionTypeId = ((Integer) hm.get("action_type")).intValue();
         ActionType actionType = ActionType.getByCode(actionTypeId);
         RuleActionBean ruleAction;
+
+        // rule_action.action_type carries the full domain ActionType range
+        // (1..8), but this heritage JDBC mapper can only build the two bean
+        // types below. Unknown and unmapped codes used to fall through with
+        // ruleAction == null and blow up two lines later with a bare NPE;
+        // fail with the offending code instead.
+        if (actionType == null) {
+            throw new IllegalStateException("rule_action row carries unknown action_type code " + actionTypeId);
+        }
 
         switch (actionType) {
         case FILE_DISCREPANCY_NOTE:
@@ -161,7 +171,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
             ((EmailActionBean) ruleAction).setTo(((String) hm.get("email_to")));
             break;
         default:
-        	 ruleAction = null;
+            throw new IllegalStateException("RuleActionDAO cannot map rule action type " + actionType + " (code " + actionTypeId + ")");
         }
 
         this.setEntityAuditInformation(ruleAction, hm);
@@ -172,6 +182,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleAction;
     }
 
+    @Override
     public ArrayList<RuleActionBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -183,6 +194,7 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleSetBeans;
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
         RuleActionBean action = new RuleActionBean();
         this.setTypesExpected();
@@ -217,32 +229,29 @@ public class RuleActionDAO extends AuditableEntityDAO<RuleActionBean> {
         return ruleActionBeans;
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleActionBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleActionBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleActionBean> findAllByPermission(Object objCurrentUser, int intActionType) {
        throw new RuntimeException("Not implemented");
     }

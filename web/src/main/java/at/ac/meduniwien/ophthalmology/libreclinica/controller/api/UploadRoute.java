@@ -86,7 +86,8 @@ final class UploadRoute {
                 yield ResponseEntity.status(409).body(body);
             }
             case IngestUploadService.Rejected r -> ResponseEntity.status(r.status()).body(Map.of("message", r.message()));
-            case IngestUploadService.Undone u -> ResponseEntity.noContent().build();
+            case IngestUploadService.DeidRejected d -> DeidUploadGate.response(422, d.violations());
+            case IngestUploadService.Undone _ -> ResponseEntity.noContent().build();
         };
     }
 

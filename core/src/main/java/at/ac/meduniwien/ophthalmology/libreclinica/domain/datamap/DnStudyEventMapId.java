@@ -67,6 +67,7 @@ public class DnStudyEventMapId extends DataMapDomainObject {
 		this.columnName = columnName;
 	}
 
+	@Override
 	public boolean equals(Object other) {
 		if ((this == other))
 			return true;
@@ -92,6 +93,7 @@ public class DnStudyEventMapId extends DataMapDomainObject {
 						.getColumnName().equals(castOther.getColumnName())));
 	}
 
+	@Override
 	public int hashCode() {
 		int result = 17;
 

@@ -53,6 +53,7 @@ public class EventService implements EventServiceInterface {
         this.dataSource = sessionManager.getDataSource();
     }
 
+    @Override
     public HashMap<String, String> scheduleEvent(UserAccountBean user, Date startDateTime, Date endDateTime, String location, String studyUniqueId,
             String siteUniqueId, String eventDefinitionOID, String studySubjectId) throws OpenClinicaSystemException {
 
@@ -160,7 +161,7 @@ public class EventService implements EventServiceInterface {
     }
 
     /**
-     * @param datasource
+     * @param dataSource
      *            the datasource to set
      */
     public void setDatasource(DataSource dataSource) {

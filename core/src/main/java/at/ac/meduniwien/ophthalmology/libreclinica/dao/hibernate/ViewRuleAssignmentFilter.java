@@ -52,6 +52,7 @@ public class ViewRuleAssignmentFilter implements CriteriaCommand {
         filters.add(new Filter(property, value));
     }
 
+    @Override
     public String execute(String criteria) {
         String theCriteria = "";
         for (int i = 0; i < filters.size(); i++) {

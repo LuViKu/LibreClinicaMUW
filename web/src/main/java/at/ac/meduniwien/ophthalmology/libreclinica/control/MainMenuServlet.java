@@ -17,7 +17,6 @@ import java.util.Locale;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.StudyParameterValueBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
@@ -85,14 +84,25 @@ public class MainMenuServlet extends SecureController {
     @Override
     public void processRequest() throws Exception {
 
+        // The `ub == null` half of the guard below sat *after*
+        // ub.incNumVisitsToMainMenu(), so the broken-database case it was
+        // written for ended in NullPointerException instead of the plain menu
+        // page. Only that half moves up; the `getId() == 0` half stays where
+        // it was so a zero-id user still gets the visit count and the request
+        // attributes it has always got.
+        if (ub == null) {// in case database connection is
+            // broken
+            forwardPage(Page.MENU, false);
+            return;
+        }
+
     	FormProcessor fp = new FormProcessor(request);
         ub.incNumVisitsToMainMenu();
         session.setAttribute(USER_BEAN_NAME, ub);
         request.setAttribute("iconInfoShown", true);
         request.setAttribute("closeInfoShowIcons", false);
 
-        if (ub == null || ub.getId() == 0) {// in case database connection is
-            // broken
+        if (ub.getId() == 0) {
             forwardPage(Page.MENU, false);
             return;
         }
@@ -106,14 +116,11 @@ public class MainMenuServlet extends SecureController {
         // a flag tells whether users are required to change pwd upon the first
         // time log in or pwd expired
         int pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
-        // update last visit date to current date
+        // update last visit date to current date. Only date_lastvisit: every
+        // login lands here, and a full update() would name the user as the
+        // account's last updater and re-create a sysadmin's admin role.
         UserAccountDAO udao = new UserAccountDAO(sm.getDataSource());
-        UserAccountBean ub1 = (UserAccountBean) udao.findByPK(ub.getId());
-        ub1.setLastVisitDate(new Date(System.currentTimeMillis()));
-        // have to actually set the above to a timestamp? tbh
-        ub1.setOwner(ub1);
-        ub1.setUpdater(ub1);
-        udao.update(ub1);
+        udao.updateLastVisitDate(ub.getId(), new Date());
 
         // Use study Id in JSPs
         request.setAttribute("studyId", currentStudy.getId());

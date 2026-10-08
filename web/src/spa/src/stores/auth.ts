@@ -2,8 +2,9 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
-  AuthState, AuthenticatedUser, PasswordChangeFieldError, PasswordChangeRequest,
-  ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption, UserRole,
+  AuthState, AuthenticatedUser, LoginFailure, LoginFailureReason, PasswordChangeFieldError,
+  PasswordChangeRequest, ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
+  StudyWritePermissions, UserRole,
 } from '@/types/auth'
 import { useSubjectsStore } from './subjects'
 import { useEventsStore } from './events'
@@ -103,6 +104,16 @@ export const useAuthStore = defineStore('auth', () => {
   const needsPasswordChange = computed(
     () => user.value?.mustChangePassword === true,
   )
+  /**
+   * A system administrator (business or technical). The `Administrator`
+   * role also covers the study-level `admin` role; this is the account
+   * type, which the platform-wide screens need.
+   */
+  const isSysAdmin = computed(
+    () => user.value?.userType === 'SYSADMIN' || user.value?.userType === 'TECHADMIN',
+  )
+  /** Only a technical administrator may make another one. */
+  const isTechAdmin = computed(() => user.value?.userType === 'TECHADMIN')
 
   /**
    * Boot the store on app load. Calls /me; on 401 we know the user is
@@ -147,9 +158,12 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Local-account form submission. POSTs to Spring Security's
    * `j_spring_security_check`, then re-hydrates from /me.
-   * SecureController auto-binds the user's stored active_study_id
-   * on the next /pages/* request, so /me's activeStudy reflects
-   * the binding without a separate call.
+   *
+   * `Accept: application/json` asks the login filter for its SPA
+   * answer: 204 on success, 401 with a {@link LoginFailure} body
+   * otherwise, instead of the legacy redirect to /MainMenu. The
+   * success handler binds the user's stored active study to the
+   * session, so /me's activeStudy reflects it without a separate call.
    */
   async function localLogin(username: string, password: string): Promise<void> {
     error.value = null
@@ -164,15 +178,16 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await fetch('/LibreClinica/j_spring_security_check', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
         body: body.toString(),
       })
 
-      const finalUrl = response.url || ''
-      if (/errorLogin|action=2faOutdated|errorLocked/.test(finalUrl)) {
-        if (/errorLocked/.test(finalUrl)) error.value = 'Account locked. Contact your administrator.'
-        else if (/2faOutdated/.test(finalUrl)) error.value = '2FA setup required. Sign in via the legacy UI to enroll.'
-        else error.value = 'Invalid username or password.'
+      if (response.status === 401) {
+        const failure = (await response.json().catch(() => null)) as LoginFailure | null
+        error.value = loginFailureMessage(failure?.error)
         return
       }
       if (!response.ok) {
@@ -185,6 +200,14 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = e instanceof Error ? `Login failed: ${e.message}` : 'Login failed.'
     } finally {
       isLoading.value = false
+    }
+  }
+
+  function loginFailureMessage(reason: LoginFailureReason | undefined): string {
+    switch (reason) {
+      case 'locked': return 'Account locked. Contact your administrator.'
+      case '2fa_outdated': return '2FA setup required. Sign in via the legacy UI to enroll.'
+      default: return 'Invalid username or password.'
     }
   }
 
@@ -362,9 +385,32 @@ export const useAuthStore = defineStore('auth', () => {
     return u.role === role
   }
 
+  /**
+   * What the server says the session's binding may write
+   * ({@link ActiveStudySummary.permissions}), or `null` when /me did not
+   * say, so that the caller falls back to its role check. Prefer this to
+   * a role check for a write the roles cannot decide: ra and ra2 are
+   * "Investigator", a system administrator is "Administrator" whatever
+   * the binding.
+   */
+  function permits(permission: keyof StudyWritePermissions): boolean | null {
+    const permissions = user.value?.activeStudy?.permissions
+    return permissions ? permissions[permission] : null
+  }
+
+  /**
+   * Sign-out: POST /pages/api/v1/auth/logout writes the logout audit
+   * row and ends the server session. A plain fetch rather than
+   * apiPost, so a session that has already expired (401) does not
+   * trigger the global unauthorised redirect on top of this one.
+   */
   async function logout(): Promise<void> {
     try {
-      await fetch('/LibreClinica/Logout', { method: 'GET', credentials: 'include' })
+      await fetch('/LibreClinica/pages/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      })
     } catch { /* best-effort — clear local state regardless */ }
     user.value = null
     state.value = 'anonymous'
@@ -434,6 +480,8 @@ export const useAuthStore = defineStore('auth', () => {
     isAnonymous,
     needsStudyPick,
     needsPasswordChange,
+    isSysAdmin,
+    isTechAdmin,
     bootstrap,
     localLogin,
     loadStudies,
@@ -442,6 +490,7 @@ export const useAuthStore = defineStore('auth', () => {
     completeProfile,
     changePassword,
     hasRole,
+    permits,
     logout,
     clearForUnauthorized,
   }

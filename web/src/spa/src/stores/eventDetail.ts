@@ -2,7 +2,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type {
+  EventCrfRemovalImpact,
   EventDetailDto,
+  RemoveEventCrfRequest,
   StartEventCrfRequest,
   StartEventCrfResponse,
 } from '@/types/event'
@@ -179,6 +181,74 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     }
   }
 
+  /**
+   * What removing the CRF would take out, for the confirm dialog
+   * (`GET /api/v1/eventCrfs/{id}/removal-impact`). A refusal (the CRF is
+   * locked, the role may not remove it, ...) comes back as its message so
+   * the dialog can say why before a reason is typed; throws on 401.
+   */
+  async function removalImpact(
+    eventCrfId: number | string,
+  ): Promise<{ impact: EventCrfRemovalImpact } | { refused: string }> {
+    try {
+      const impact = await apiGet<EventCrfRemovalImpact>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(String(eventCrfId))}/removal-impact`,
+      )
+      return { impact }
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.isUnauthorized) throw e
+        const body = e.body as { message?: string } | null
+        return { refused: body?.message ?? `HTTP ${e.status}` }
+      }
+      if (e instanceof ApiNetworkError) return { refused: 'network' }
+      return { refused: e instanceof Error ? e.message : 'Unknown error' }
+    }
+  }
+
+  const removeCrfError = ref<string | null>(null)
+  const isRemovingCrf = ref(false)
+
+  /**
+   * Remove an event CRF with the reason the operator gave
+   * (`POST /api/v1/eventCrfs/{id}/remove`): the CRF and its values are
+   * marked removed and the open discrepancy notes on them closed.
+   * {@link restoreCrf} is the inverse.
+   *
+   * <p>Does not refetch the event detail: {@link load} empties the event
+   * first, which would unmount the confirm dialog while it is still open.
+   * The caller closes the dialog, then reloads, and the row shows as
+   * removed with its Restore action. Returns true on success, false on a
+   * handled server error ({@link removeCrfError} says why); throws on 401.
+   */
+  async function removeCrf(eventCrfId: number | string, reason: string): Promise<boolean> {
+    isRemovingCrf.value = true
+    removeCrfError.value = null
+    try {
+      const body: RemoveEventCrfRequest = { reason }
+      await apiPost<void>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(String(eventCrfId))}/remove`,
+        body,
+      )
+      return true
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.isUnauthorized) throw e
+        const errorBody = e.body as { message?: string } | null
+        removeCrfError.value = errorBody?.message ?? `HTTP ${e.status}`
+        return false
+      }
+      if (e instanceof ApiNetworkError) {
+        removeCrfError.value = 'network'
+        return false
+      }
+      removeCrfError.value = e instanceof Error ? e.message : 'Unknown error'
+      return false
+    } finally {
+      isRemovingCrf.value = false
+    }
+  }
+
   function reset(): void {
     event.value = null
     isLoading.value = false
@@ -190,6 +260,8 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     isStartingCrf.value = false
     restoreCrfError.value = null
     isRestoringCrf.value = false
+    removeCrfError.value = null
+    isRemovingCrf.value = false
   }
 
   return {
@@ -203,9 +275,13 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     isStartingCrf,
     restoreCrfError,
     isRestoringCrf,
+    removeCrfError,
+    isRemovingCrf,
     load,
     startCrf,
     restoreCrf,
+    removalImpact,
+    removeCrf,
     reset,
   }
 })

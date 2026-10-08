@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Utils;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
@@ -125,6 +126,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.form.DataEntryInputGener
 import at.ac.meduniwien.ophthalmology.libreclinica.view.form.FormBeanUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InconsistentStateException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
@@ -305,6 +307,12 @@ public abstract class DataEntryServlet extends CoreSecureController {
         LOGGER.trace(message);
     }
 
+    /** GET opens a section; saving it (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !(new FormProcessor(request).isSubmitted() && request.getAttribute(INPUT_IGNORE_PARAMETERS) == null);
+    }
+
     @Override
     protected  void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         //JN:The following were the the global variables, moved as local.
@@ -442,12 +450,12 @@ public abstract class DataEntryServlet extends CoreSecureController {
             newUploadedFiles = new HashMap<String, String>();
         }
         request.setAttribute("newUploadedFiles", newUploadedFiles);
-        if (!fp.getString("exitTo").equals("")) {
+        if (!fp.getString("exitTo").isEmpty()) {
             request.setAttribute("exitTo", fp.getString("exitTo"));
         }
         //some EVENT CRF CHECK
         logMe("Entering some EVENT CRF CHECK"+System.currentTimeMillis());
-        if (!fp.getString(GO_EXIT).equals("")) {
+        if (!fp.getString(GO_EXIT).isEmpty()) {
             session.removeAttribute(GROUP_HAS_DATA);
             session.removeAttribute("to_create_crf");
             session.removeAttribute("mayProcessUploading");
@@ -478,7 +486,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
             		&& !(winLocation == null || winLocation.trim().isEmpty())) {
                 response.sendRedirect(response.encodeRedirectURL(winLocation));
             } else {
-                if (!fp.getString("exitTo").equals("")) {
+                if (!fp.getString("exitTo").isEmpty()) {
                     response.sendRedirect(response.encodeRedirectURL(fp.getString("exitTo")));
                 } else
                     response.sendRedirect(response.encodeRedirectURL("ListStudySubjects"));
@@ -494,6 +502,17 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
         Boolean b = (Boolean) request.getAttribute(INPUT_IGNORE_PARAMETERS);
         isSubmitted = fp.isSubmitted() && b == null;
+        if (isSubmitted && isInClosedRecord(ecb, currentStudy)) {
+            // Nothing is saved into a removed, locked, signed or frozen record.
+            if (getCrfLocker().isLocked(ecb.getId()) && getCrfLocker().getLockOwner(ecb.getId()) == ub.getId()) {
+                getCrfLocker().unlock(ecb.getId());
+            }
+            addPageMessage(respage.getString("you_may_not_perform_data_entry_on_a_CRF") + " " + respage.getString("data_entry_record_closed"), request);
+            request.setAttribute("id", Integer.valueOf(ecb.getStudySubjectId()).toString());
+            session.removeAttribute(instantAtt);
+            forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET, request, response);
+            return;
+        }
         // variable is used for fetching any null values like "not applicable"
         int eventDefinitionCRFId = 0;
         if (fp != null) {
@@ -1282,7 +1301,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
 
                         LOGGER.debug("-- found group label " + ifmb.getGroupLabel());
-                        if (!ifmb.getGroupLabel().equalsIgnoreCase("Ungrouped") && !ifmb.getGroupLabel().equalsIgnoreCase(""))
+                        if (!ifmb.getGroupLabel().equalsIgnoreCase("Ungrouped") && !ifmb.getGroupLabel().isEmpty())
 
                         {
                             // << tbh 11/2009 sometimes the group label is blank instead of ungrouped???
@@ -1547,7 +1566,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                             boolean undelete = false;
                             for (DisplayItemBean displayItem : items) {
                                 String currItemVal = displayItem.getData().getValue();
-                                if (currItemVal != null && !currItemVal.equals("")){
+                                if (currItemVal != null && !currItemVal.isEmpty()){
                                     undelete = true;
                                     break;
                                 }
@@ -1939,7 +1958,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     } else {
                         boolean forwardingSucceeded = false;
 
-                        if (!fp.getString(GO_PREVIOUS).equals("")) {
+                        if (!fp.getString(GO_PREVIOUS).isEmpty()) {
                             if (previousSec.isActive()) {
                                 forwardingSucceeded = true;
                                 request.setAttribute(INPUT_EVENT_CRF, ecb);
@@ -1955,7 +1974,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                               //  forwardPage(getServletPage(request), request, response);
                                 getServletContext().getRequestDispatcher(getServletPage(request)).forward(request, response);
                             }
-                        } else if (!fp.getString(GO_NEXT).equals("")) {
+                        } else if (!fp.getString(GO_NEXT).isEmpty()) {
                             if (nextSec.isActive()) {
                                 forwardingSucceeded = true;
                                 request.setAttribute(INPUT_EVENT_CRF, ecb);
@@ -3171,7 +3190,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         idb.setItemId(dib.getItem().getId());
         idb.setEventCRFId(ecb.getId());
 
-        if (idb.getValue().equals("")) {
+        if (idb.getValue().isEmpty()) {
             idb.setStatus(getBlankItemStatus());
         } else {
             idb.setStatus(getNonBlankItemStatus(request));
@@ -4160,7 +4179,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 return false;
             for (ItemDataBean itemdata : itemdatas) {
                 LOGGER.debug(itemdata.getItemId() + "  :  " + itemdata.getValue());
-                if ((itemdata.getValue()==null || itemdata.getValue().equals("") || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 ) {
+                if ((itemdata.getValue()==null || itemdata.getValue().isEmpty() || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 ) {
                     return false;
                 }
             }
@@ -4176,7 +4195,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 return false;
             }
             for (ItemDataBean itemdata : itemdatas) {
-                if ((itemdata.getValue()==null || itemdata.getValue().equals("") || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 && dynamicsItemFormMetadataBeans.size() > 0) {
+                if ((itemdata.getValue()==null || itemdata.getValue().isEmpty() || itemdata.getValue().trim().length()==0) && dndao.findNumExistingNotesForItem(itemdata.getId())<1 && dynamicsItemFormMetadataBeans.size() > 0) {
                         return false;
                 }
             }
@@ -4550,7 +4569,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                 DisplayItemBean displayItemBean = new DisplayItemBean();
                 ItemFormMetadataBean ifm = ifmdao.findByItemIdAndCRFVersionId(itBean.getId(), ecb.getCRFVersionId());
-               // itBean.setItemMeta(ifm);//TODO:remove this or the one down displayItemBean.setMetadata(ifm);
                 displayItemBean.setMetadata(ifm);
                 displayItemBean.setItem(itBean);
                 ItemDataBean itemData =  dataMap.get(itBean.getId()+","+i);
@@ -5581,17 +5599,83 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
         return n != null && n.getId() > 0 ? n : new SectionBean();
     }
 
+    /**
+     * Refuses a user whose role in the current study does not enter data. The
+     * rule is {@link SubmitDataServlet#maySubmitData}, which administrative
+     * editing and the table of contents apply: coordinator, director,
+     * investigator and the two research-assistant roles. A Monitor reviews CRFs
+     * through the read-only view. Called before the event CRF is loaded,
+     * because loading it can create it.
+     */
+    protected void mayEnterData(HttpServletRequest request) throws InsufficientPermissionException {
+        HttpSession session = request.getSession();
+        UserAccountBean ub = (UserAccountBean) session.getAttribute(USER_BEAN_NAME);
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!SubmitDataServlet.maySubmitData(ub, currentRole)) {
+            session.setAttribute("mayProcessUploading", "false");
+            addPageMessage(respage.getString("you_may_not_perform_data_entry_on_a_CRF") + " "
+                    + respage.getString("change_study_contact_study_coordinator"), request);
+            throw new InsufficientPermissionException(Page.MENU, resexception.getString("no_permission_to_perform_data_entry"), "1");
+        }
+    }
+
+    /**
+     * Whether the event CRF, its event, study subject or subject is removed, the
+     * study subject is locked or signed, or the study (or, for a site, its
+     * parent) is locked or frozen: a record data may no longer be saved into.
+     */
+    private boolean isInClosedRecord(EventCRFBean ecb, StudyBean currentStudy) {
+        if (ecb.getStatus().isDeleted()) {
+            return true;
+        }
+        StudyEventBean event = (StudyEventBean) new StudyEventDAO(getDataSource()).findByPK(ecb.getStudyEventId());
+        if (event.getStatus().isDeleted()) {
+            return true;
+        }
+        StudySubjectBean studySubject = (StudySubjectBean) new StudySubjectDAO(getDataSource()).findByPK(ecb.getStudySubjectId());
+        Status ssStatus = studySubject.getStatus();
+        if (ssStatus.isDeleted() || ssStatus.isLocked() || ssStatus.isSigned()) {
+            return true;
+        }
+        if (new SubjectDAO(getDataSource()).findByPK(studySubject.getSubjectId()).getStatus().isDeleted()) {
+            return true;
+        }
+        StudyDAO studyDao = new StudyDAO(getDataSource());
+        StudyBean study = (StudyBean) studyDao.findByPK(currentStudy.getId());
+        if (study.getStatus().isLocked() || study.getStatus().isFrozen()) {
+            return true;
+        }
+        if (study.getParentStudyId() > 0) {
+            StudyBean parent = (StudyBean) studyDao.findByPK(study.getParentStudyId());
+            return parent.getStatus().isLocked() || parent.getStatus().isFrozen();
+        }
+        return false;
+    }
+
+    /**
+     * Refuses an event CRF outside the session's current study and its sites
+     * ({@link StudyTreeScope}): the role {@link #mayEnterData} checks is the
+     * role in that study. The id is the one {@link #getInputBeans} loads.
+     */
+    protected void mayUseEventCrfOfCurrentStudy(HttpServletRequest request) throws InsufficientPermissionException {
+        EventCRFBean ecb = (EventCRFBean) request.getAttribute(INPUT_EVENT_CRF);
+        int eventCRFId = ecb != null ? ecb.getId() : new FormProcessor(request).getInt(INPUT_EVENT_CRF_ID, true);
+        StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
+        if (eventCRFId > 0 && !new StudyTreeScope(getDataSource()).containsEventCrf(currentStudy, eventCRFId)) {
+            addPageMessage(respage.getString("required_event_CRF_belong"), request);
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("event_CRF_not_belong_current_study"), "1");
+        }
+    }
+
     public void mayAccess(HttpServletRequest request) throws InsufficientPermissionException {
         FormProcessor fp = new FormProcessor(request);
         EventCRFDAO edao = new EventCRFDAO(getDataSource());
         UserAccountBean ub =(UserAccountBean) request.getSession().getAttribute(USER_BEAN_NAME);
-        int eventCRFId = fp.getInt("ecId", true);
-        if (eventCRFId == 0) {
-            eventCRFId = fp.getInt("eventCRFId", true);
-        }
-
-        if (eventCRFId > 0) {
-            if (!entityIncluded(eventCRFId, ub.getName(), edao, getDataSource())) {
+        // Each id the request names is checked: getInputBeans loads
+        // "eventCRFId", whichever of the two is present.
+        for (String name : new String[] { "ecId", INPUT_EVENT_CRF_ID }) {
+            int eventCRFId = fp.getInt(name, true);
+            if (eventCRFId > 0 && !entityIncluded(eventCRFId, ub.getName(), edao, getDataSource())) {
                 addPageMessage(respage.getString("required_event_CRF_belong"), request);
                 throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
             }

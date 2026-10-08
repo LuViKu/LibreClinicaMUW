@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DatasetItemStatus;
@@ -208,7 +209,7 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
 
     private SynchronousExportMaterializer materializer() {
         RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
-        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt()))
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(ArgumentMatchers.anyInt()))
                 .thenReturn(new ArrayList<>());
         return new SynchronousExportMaterializer(
                 DATA_SOURCE, Mockito.mock(CoreResources.class), rules);
@@ -239,7 +240,9 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
             while (entries.hasMoreElements()) {
                 ZipEntry e = entries.nextElement();
                 all.append("=== ").append(e.getName()).append(" ===\n");
-                all.append(new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+                try (java.io.InputStream in = zip.getInputStream(e)) {
+                    all.append(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                }
             }
         }
         return all.toString();
@@ -650,8 +653,9 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
             var entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry e = entries.nextElement();
-                out.put(e.getName(),
-                        new String(zip.getInputStream(e).readAllBytes(), StandardCharsets.UTF_8));
+                try (java.io.InputStream in = zip.getInputStream(e)) {
+                    out.put(e.getName(), new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                }
             }
         }
         return out;

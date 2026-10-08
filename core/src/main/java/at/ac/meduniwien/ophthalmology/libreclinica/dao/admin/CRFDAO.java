@@ -67,6 +67,7 @@ public class CRFDAO extends AuditableEntityDAO<CRFBean> {
         this.setTypeExpected(10, TypeNames.INT);// study_id
     }
 
+    @Override
     public CRFBean update(CRFBean cb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         variables.put(Integer.valueOf(1), Integer.valueOf(cb.getStatus().getId()));
@@ -79,6 +80,7 @@ public class CRFDAO extends AuditableEntityDAO<CRFBean> {
         return cb;
     }
 
+    @Override
     public CRFBean create(CRFBean cb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         variables.put(Integer.valueOf(1), Integer.valueOf(cb.getStatus().getId()));
@@ -153,6 +155,7 @@ public class CRFDAO extends AuditableEntityDAO<CRFBean> {
         return executeFindAllQuery(queryName, variables);
     }
 
+    @Override
     public ArrayList<CRFBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -185,6 +188,7 @@ public class CRFDAO extends AuditableEntityDAO<CRFBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<CRFBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -192,6 +196,7 @@ public class CRFDAO extends AuditableEntityDAO<CRFBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<CRFBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

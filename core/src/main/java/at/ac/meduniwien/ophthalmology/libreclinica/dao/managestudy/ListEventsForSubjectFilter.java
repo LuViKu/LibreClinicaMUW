@@ -38,6 +38,7 @@ public class ListEventsForSubjectFilter implements CriteriaCommand {
         filters.add(new Filter(property, value));
     }
 
+    @Override
     public String execute(String criteria) {
         String theCriteria = "";
         for (Filter filter : filters) {
@@ -66,9 +67,11 @@ public class ListEventsForSubjectFilter implements CriteriaCommand {
 
                 }
             } else if (property.startsWith("sgc_")) {
-                int study_group_class_id = Integer.parseInt(property.substring(4));
-
-                int group_id = Integer.parseInt(value.toString());
+                Integer study_group_class_id = asIntOrNull(property.substring(4));
+                Integer group_id = asIntOrNull(value.toString());
+                if (study_group_class_id == null || group_id == null) {
+                    return criteria;
+                }
                 criteria +=
                     "AND " + group_id + " = (" + " select distinct sgm.study_group_id" + " FROM SUBJECT_GROUP_MAP sgm, STUDY_GROUP sg, STUDY_GROUP_CLASS sgc, STUDY s"
                         + " WHERE " + " sgm.study_group_class_id = " + study_group_class_id + " AND sgm.study_subject_id = SS.study_subject_id"
@@ -76,7 +79,10 @@ public class ListEventsForSubjectFilter implements CriteriaCommand {
                         + " AND sgm.study_group_class_id = sgc.study_group_class_id" + " ) ";
 
             } else if (property.startsWith("crf_")) {
-                int crfId = Integer.parseInt(property.toString().substring(4));
+                Integer crfId = asIntOrNull(property.substring(4));
+                if (crfId == null) {
+                    return criteria;
+                }
                 if (value.equals("3") || value.equals("6")) { // DataEntryStage.INITIAL_DATA_ENTRY_COMPLETE
                     criteria += " and  se.study_EVENT_ID  in (select study_event_id from  event_crf ec,crf_version cv where " +
                             "ec.crf_version_id = cv.crf_version_id and crf_id=" + crfId +
@@ -145,6 +151,27 @@ public class ListEventsForSubjectFilter implements CriteriaCommand {
             }
         }
         return criteria;
+    }
+
+    /**
+     * The candidate as an int, or {@code null} when it is not one.
+     *
+     * <p>Both the filter property and the filter value reach this class
+     * straight from the listing request, so a hand-crafted request can put a
+     * non-number where a numeric column id or status id is expected. The term
+     * is then dropped — the same thing this filter already does with a value
+     * it does not recognise — instead of aborting the whole listing with an
+     * uncaught NumberFormatException.
+     */
+    private static Integer asIntOrNull(String candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(candidate);
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 
     private static class Filter {

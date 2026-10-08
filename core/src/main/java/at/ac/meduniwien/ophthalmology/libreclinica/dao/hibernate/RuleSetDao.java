@@ -19,14 +19,8 @@ import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
     @Override
@@ -51,43 +45,6 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
 
     }
 
-    @SuppressWarnings("rawtypes")
-	public int getCountWithFilter(final ViewRuleAssignmentFilter filter) {
-
-        // Using a sql query because we are referencing objects not managed by hibernate
-        String query =
-            "select COUNT(DISTINCT(rs.id)) from rule_set rs "
-                + " left outer join study_event_definition sed on rs.study_event_definition_id = sed.study_event_definition_id "
-                + " left outer join crf_version cv on rs.crf_version_id = cv.crf_version_id " + " left outer join crf c on rs.crf_id = c.crf_id "
-                + " left outer join item i on rs.item_id = i.item_id " + " left outer join item_group ig on rs.item_group_id = ig.item_group_id "
-                + " join rule_expression re on rs.rule_expression_id = re.id " + " join rule_set_rule rsr on rs.id = rsr.rule_set_id  "
-                + " join rule r on r.id = rsr.rule_id " + " join rule_expression rer on r.rule_expression_id = rer.id " + " where ";
-
-        query += filter.execute("");
-        NativeQuery q = getCurrentSession().createNativeQuery(query);
-        return ((BigInteger) q.getSingleResultOrNull()).intValue();
-    }
-
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public ArrayList<RuleSetBean> getWithFilterAndSort(final ViewRuleAssignmentFilter filter, final ViewRuleAssignmentSort sort, final int rowStart,
-            final int rowEnd) {
-
-        String query =
-            "select DISTINCT(rs.*) from rule_set rs "
-                + " left outer join study_event_definition sed on rs.study_event_definition_id = sed.study_event_definition_id "
-                + " left outer join crf_version cv on rs.crf_version_id = cv.crf_version_id " + " left outer join crf c on rs.crf_id = c.crf_id "
-                + " left outer join item i on rs.item_id = i.item_id " + " left outer join item_group ig on rs.item_group_id = ig.item_group_id "
-                + " join rule_expression re on rs.rule_expression_id = re.id " + " join rule_set_rule rsr on rs.id = rsr.rule_set_id "
-                + " join rule r on r.id = rsr.rule_id " + " join rule_expression rer on r.rule_expression_id = rer.id " + " where ";
-
-        query += filter.execute("");
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
-        q.setFirstResult(rowStart);
-        q.setMaxResults(rowEnd - rowStart);
-        return (ArrayList<RuleSetBean>) q.getResultList();
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
     @Transactional
     public ArrayList<RuleSetBean> findByCrfVersionOrCrfAndStudyAndStudyEventDefinition(CRFVersionBean crfVersion, CRFBean crfBean, StudyBean currentStudy,
             StudyEventDefinitionBean sed) {
@@ -97,7 +54,7 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
                 + " AND (( rs.crf_version_id = :crfVersionId AND rs.crf_id = :crfId ) "
                 + " OR (rs.crf_version_id is null AND rs.crf_id = :crfId ))) OR ( rs.study_event_definition_id is null "
                 + " and rs.item_id in (select item_id from item_form_metadata where crf_version_id = :crfVersionId)  ))";
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
+        NativeQuery<RuleSetBean> q = getCurrentSession().createNativeQuery(query, domainClass());
         q.setParameter("crfVersionId", crfVersion.getId());
         q.setParameter("crfId", crfBean.getId());
         q.setParameter("studyId", currentStudy.getParentStudyId() != 0 ? currentStudy.getParentStudyId() : currentStudy.getId());
@@ -114,17 +71,16 @@ public class RuleSetDao extends AbstractDomainDao<RuleSetBean> {
         return new ArrayList<>(q.getResultList());
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public ArrayList<RuleSetBean> findByCrf(CRFBean crfBean, StudyBean currentStudy) {
         String query =
             " select rs.* from rule_set rs where rs.study_id = :studyId "
                 + " AND rs.item_id in ( select distinct(item_id) from item_form_metadata ifm,crf_version cv "
                 + " where ifm.crf_version_id = cv.crf_version_id and cv.crf_id = :crfId) ";
         // Using a sql query because we are referencing objects not managed by hibernate
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
+        NativeQuery<RuleSetBean> q = getCurrentSession().createNativeQuery(query, domainClass());
         q.setParameter("crfId", crfBean.getId());
         q.setParameter("studyId", currentStudy.getId());
-        return (ArrayList<RuleSetBean>) q.getResultList();
+        return new ArrayList<>(q.getResultList());
     }
 
     public RuleSetBean findByExpression(RuleSetBean ruleSet) {

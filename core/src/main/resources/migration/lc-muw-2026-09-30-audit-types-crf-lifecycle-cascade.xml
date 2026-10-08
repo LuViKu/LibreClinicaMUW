@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      CRF library (JSP retirement R1.2): audit types for the event CRFs that
+      removing a CRF, or a CRF version, takes with it. One row per event CRF,
+      on the event CRF, so the change is in the study's and the subject's
+      audit log; the restore writes 139 (event_crf_restored) per event CRF.
+      The event_crf trigger does not audit a status change to or from
+      auto-removed.
+    -->
+
+    <!-- 190: an event CRF auto-removed with its CRF. -->
+    <changeSet id="2026-09-30-audit-type-event-crf-removed-with-crf" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 190;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="190"/>
+            <column name="name" value="event_crf_removed_with_crf"/>
+            <column name="display_name" value="Event CRF removed with its CRF"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 190</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!-- 191: an event CRF auto-removed with its CRF version. -->
+    <changeSet id="2026-09-30-audit-type-event-crf-removed-with-version" author="muw">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 191;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="191"/>
+            <column name="name" value="event_crf_removed_with_version"/>
+            <column name="display_name" value="Event CRF removed with its CRF version"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 191</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

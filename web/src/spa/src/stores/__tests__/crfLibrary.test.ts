@@ -25,7 +25,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiDelete, apiGet, apiPost } from '@/api/client'
+import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
 
 const V1: CrfVersion = {
   oid: 'F_DEMOS_V1',
@@ -111,6 +111,149 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
     })
   })
 
+  describe('fetchCrfDetail', () => {
+    it('GETs the CRF view', async () => {
+      const store = useCrfLibraryStore()
+      const detail = { ...DEMOS, mayEdit: false, items: [], studies: [] }
+      vi.mocked(apiGet).mockResolvedValue(detail)
+
+      const result = await store.fetchCrfDetail('F_DEMOS')
+
+      expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS')
+      expect(result).toEqual({ ok: true, detail })
+    })
+
+    it('returns a refusal as a message and rethrows a lost session', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(403, 'Forbidden', { message: 'not yours' }))
+      expect(await store.fetchCrfDetail('F_DEMOS')).toEqual({ ok: false, message: 'not yours' })
+
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(401, 'Unauthorized', null))
+      await expect(store.fetchCrfDetail('F_DEMOS')).rejects.toBeInstanceOf(ApiError)
+    })
+  })
+
+  describe('loadVersionPreview', () => {
+    it('turns the version contents into a draft for the preview', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiGet).mockResolvedValue({
+        versionName: '',
+        versionDescription: 'Initial',
+        revisionNotes: '',
+        sections: [{
+          label: 'S_VITALS',
+          title: 'Vitals',
+          instructions: '',
+          ordinal: 1,
+          items: [{ name: 'HEIGHT', oid: 'I_HEIGHT', descriptionLabel: 'Body height', dataType: 'INT' }],
+        }],
+        groups: [],
+      })
+
+      const result = await store.loadVersionPreview('F_DEMOS', 'F_DEMOS_V1')
+
+      expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/contents')
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        expect(result.draft.sections).toHaveLength(1)
+        expect(result.draft.sections[0]!.items[0]!.oid).toBe('I_HEIGHT')
+      }
+    })
+
+    it('returns the server message when the contents cannot be read', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiGet).mockRejectedValue(new ApiError(404, 'Not Found', { message: "No version with oid 'X'" }))
+
+      expect(await store.loadVersionPreview('F_DEMOS', 'X')).toEqual({ ok: false, message: "No version with oid 'X'" })
+    })
+  })
+
+  describe('updateCrf', () => {
+    it('PUTs name and description and replaces the row', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiPut).mockResolvedValue({ ...DEMOS, name: 'Demographics II', description: 'baseline' })
+
+      const result = await store.updateCrf('F_DEMOS', { name: 'Demographics II', description: 'baseline' })
+
+      expect(result.ok).toBe(true)
+      expect(apiPut).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS', {
+        name: 'Demographics II',
+        description: 'baseline',
+      })
+      expect(store.crfs[0]!.name).toBe('Demographics II')
+    })
+
+    it('returns the field errors of a 400 per field', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(400, 'Bad Request', {
+        message: 'Validation failed',
+        errors: [{ field: 'name', message: "A CRF named 'AE' already exists" }],
+      }))
+
+      const result = await store.updateCrf('F_DEMOS', { name: 'AE', description: '' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.fieldErrors.name).toBe("A CRF named 'AE' already exists")
+      expect(store.crfs[0]!.name).toBe('Demographics')
+    })
+
+    it('returns a refusal (403) as a message instead of throwing', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(403, 'Forbidden', {
+        message: "Only the CRF's owner may change it",
+      }))
+
+      const result = await store.updateCrf('F_DEMOS', { name: 'X', description: '' })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.message).toBe("Only the CRF's owner may change it")
+    })
+
+    it('rethrows a lost session (401)', async () => {
+      const store = useCrfLibraryStore()
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(401, 'Unauthorized', null))
+
+      await expect(store.updateCrf('F_DEMOS', { name: 'X', description: '' })).rejects.toBeInstanceOf(ApiError)
+    })
+  })
+
+  describe('restoreCrf', () => {
+    it('replaces the CRF row, versions included, with the restored one', async () => {
+      const store = useCrfLibraryStore()
+      const removed: Crf = {
+        ...DEMOS,
+        status: 'removed',
+        versions: [{ ...V1, status: 'auto-removed' }, { ...V2, status: 'auto-removed' }],
+      }
+      seed(store, removed)
+      vi.mocked(apiPost).mockResolvedValue(DEMOS)
+
+      const ok = await store.restoreCrf('F_DEMOS')
+
+      expect(ok).toBe(true)
+      expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/crfs/F_DEMOS/restore', {})
+      expect(store.crfs[0]!.status).toBe('available')
+      expect(store.crfs[0]!.versions.map((v) => v.status)).toEqual(['available', 'available'])
+    })
+
+    it('keeps the row and surfaces the server message on failure', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, { ...DEMOS, status: 'available' })
+      vi.mocked(apiPost).mockRejectedValue(
+        new ApiError(409, 'Conflict', { message: "CRF 'F_DEMOS' is not removed" }),
+      )
+
+      const ok = await store.restoreCrf('F_DEMOS')
+
+      expect(ok).toBe(false)
+      expect(store.error).toBe("CRF 'F_DEMOS' is not removed")
+      expect(store.crfs[0]!.status).toBe('available')
+    })
+  })
+
   describe('restoreVersion', () => {
     it('patches the version status from removed → available on success', async () => {
       const store = useCrfLibraryStore()
@@ -166,6 +309,19 @@ describe('useCrfLibraryStore — Phase E.6 lifecycle actions', () => {
         expect.fail('expected blocker variant')
       }
       // Local state still has the version — 409 doesn't drop it.
+      expect(store.crfs[0]!.versions.length).toBe(2)
+    })
+
+    it('returns the message of a 409 that carries no report', async () => {
+      const store = useCrfLibraryStore()
+      seed(store, DEMOS)
+      vi.mocked(apiDelete).mockRejectedValue(new ApiError(409, 'Conflict', {
+        message: 'Version \'v1.0\' cannot be hard-removed: 3 item value(s) are stored on items only this version has',
+      }))
+
+      const result = await store.hardRemoveVersion('F_DEMOS', 'F_DEMOS_V1')
+
+      expect(result).toEqual({ ok: false, message: expect.stringContaining('3 item value(s)') })
       expect(store.crfs[0]!.versions.length).toBe(2)
     })
 

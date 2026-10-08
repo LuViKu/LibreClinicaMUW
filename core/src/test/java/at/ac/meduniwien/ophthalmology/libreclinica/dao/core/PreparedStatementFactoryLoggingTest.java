@@ -28,6 +28,7 @@ import ch.qos.logback.core.read.ListAppender;
  * hashes, API keys, challenge answers and clinical data. At DEBUG — the level
  * the shipped datainfo.properties sets — the factory used to log each value.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 public class PreparedStatementFactoryLoggingTest {
 
     @Test

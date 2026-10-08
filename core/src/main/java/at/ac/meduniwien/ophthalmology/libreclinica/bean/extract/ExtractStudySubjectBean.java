@@ -90,7 +90,7 @@ public class ExtractStudySubjectBean extends EntityBean {
      *         otherwise.
      */
     public String getStudyLabel() {
-        if (this.siteUniqueIdentifier.equals("")) {
+        if (this.siteUniqueIdentifier.isEmpty()) {
             return this.studyProtocolId;
         } else {
             return this.studyProtocolId + "-" + this.siteUniqueIdentifier;

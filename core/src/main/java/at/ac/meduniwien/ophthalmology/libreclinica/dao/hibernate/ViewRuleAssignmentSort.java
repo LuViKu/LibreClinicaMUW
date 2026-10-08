@@ -50,6 +50,7 @@ public class ViewRuleAssignmentSort implements CriteriaCommand {
         return sorts;
     }
 
+    @Override
     public String execute(String criteria) {
         String theCriteria = "";
         for (Sort sort : sorts) {

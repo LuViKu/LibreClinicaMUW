@@ -337,10 +337,8 @@ public class StudySubjectLinkPatientController {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 LinkRow row = new LinkRow();
-                row.id = rs.getInt("study_subject_id");
                 row.studyId = rs.getInt("study_id");
                 row.label = rs.getString("label");
-                row.statusId = rs.getInt("status_id");
                 row.patientUuid = rs.getString("patient_uuid");
                 long pid = rs.getLong("patient_id");
                 row.patientId = rs.wasNull() ? 0L : pid;
@@ -441,10 +439,8 @@ public class StudySubjectLinkPatientController {
 
     /** Minimal struct the endpoint needs from study_subject. */
     private static final class LinkRow {
-        int id;
         int studyId;
         String label;
-        int statusId;
         String patientUuid;
         /** 0 when the row's {@code patient_id} FK is NULL. */
         long patientId;

@@ -21,6 +21,7 @@ import jakarta.mail.internet.MimeMessage;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
@@ -80,7 +81,7 @@ class EmailFailureAuditDatabaseIT extends AbstractApiControllerDatabaseIT {
         // exact superclass of MailException OpenClinicaMailSender
         // catches.
         Mockito.doThrow(new MailSendException("simulated SMTP failure"))
-                .when(spy).send(Mockito.any(MimeMessage.class));
+                .when(spy).send(ArgumentMatchers.any(MimeMessage.class));
 
         OpenClinicaMailSender sender = new OpenClinicaMailSender();
         sender.setMailSender(spy);

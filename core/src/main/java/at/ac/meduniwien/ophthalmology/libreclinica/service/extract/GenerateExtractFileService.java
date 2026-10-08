@@ -16,7 +16,6 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -181,9 +180,6 @@ public class GenerateExtractFileService {
      * createSPSSFile, added by tbh, 01/2009
      *
      * @param db
-     * @param eb
-     * @param currentstudyid
-     * @param parentstudy
      * @return
      */
 	public HashMap<String, Integer> createSPSSFile(DatasetBean db, ExtractBean eb2, StudyBean currentStudy, StudyBean parentStudy, long sysTimeBegin,
@@ -409,7 +405,7 @@ public class GenerateExtractFileService {
                 //A. Hamid. 4910
                 is.close();
                 if(CoreResources.getField("dataset_file_delete").equalsIgnoreCase("true")
-                        || CoreResources.getField("dataset_file_delete").equals("")){
+                        || CoreResources.getField("dataset_file_delete").isEmpty()){
                     newFile.delete();
                 }
 
@@ -505,7 +501,7 @@ public class GenerateExtractFileService {
             File newFile = null;
             if (oldFile.exists()) {
                 newFile = oldFile;
-                if(oldFiles!=null || !oldFiles.isEmpty() )
+                if(oldFiles!=null && !oldFiles.isEmpty() )
                 oldFiles.remove(oldFile);
             } else {
                 newFile = new File(complete, name);
@@ -623,13 +619,6 @@ public class GenerateExtractFileService {
 	            // BufferedWriter w2 = new BufferedWriter(new FileWriter(newFile));
 	            // w2.write(newOut.toString());
 	            // w2.close();
-	            if (is != null) {
-	                try {
-	                    is.close();
-	                } catch (java.io.IOException ie) {
-	                    ie.printStackTrace();
-	                }
-	            }
             }
             logger.info("finished zipping up file...");
             // set up the zip to go into the database
@@ -697,83 +686,6 @@ public class GenerateExtractFileService {
                     new DatasetFilterSubjectResolver(ds).resolve(dsetBean.getId(), scopeStudyId));
         }
         return eb;
-    }
-
-    /**
-     * To zip the xml files and delete the intermediate files.
-     * @param name
-     * @param dir
-     * @throws IOException
-     */
-
-    public void zipFile(String name, String dir) throws IOException
-    {
-        File complete = new File(dir);
-        if (!complete.isDirectory()) {
-            complete.mkdirs();
-        }
-
-        File[] interXMLS = complete.listFiles();
-        List<File> temp  = new LinkedList<File>(Arrays.asList(interXMLS));
-
-
-        File oldFile = new File(complete, name);
-
-        File newFile = null;
-        if (oldFile.exists()) {
-            newFile = oldFile;
-
-        } else {
-            newFile = new File(complete, name);
-        }
-            // now, we write the file to the zip file
-            FileInputStream is = new FileInputStream(newFile);
-            ZipOutputStream z = new ZipOutputStream(new FileOutputStream(new File(complete, name + ".zip")));
-            if(oldFiles!=null || !oldFiles.isEmpty())
-            {
-
-                if(oldFiles.contains(new File(complete, name + ".zip")))
-                {
-                    oldFiles.remove(new File(complete, name + ".zip"));//Dont delete the files which u r just creating
-
-                }
-            }
-            logger.info("created zip output stream...");
-            // we write over the content no matter what
-            // we then check to make sure there are no duplicates
-            // z.write(content);
-            z.putNextEntry(new java.util.zip.ZipEntry(name));
-            // int length = (int) newFile.length();
-            int bytesRead;
-            byte[] buff = new byte[512];
-            // read from buffered input stream and put into zip file
-            // while (-1 != (bytesRead = bis.read(buff, 0, buff.length))) {
-            while ((bytesRead = is.read(buff)) != -1) {
-                z.write(buff, 0, bytesRead);
-            }
-            logger.info("writing buffer...");
-            // }
-
-            z.closeEntry();
-            z.finish();
-            if(z!=null)z.close();
-            // newFile = new File(complete, name+".zip");
-            // newFile.setLastModified(System.currentTimeMillis());
-            //
-            // BufferedWriter w2 = new BufferedWriter(new FileWriter(newFile));
-            // w2.write(newOut.toString());
-            // w2.close();
-            if (is != null) {
-                try {
-                    is.close();
-                } catch (java.io.IOException ie) {
-                    ie.printStackTrace();
-                }
-            }
-           //Adding the logic to delete the intermediate xmls
-           oldFiles = temp;
-            logger.info("finished zipping up file...");
-       // }
     }
 
 }

@@ -16,7 +16,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import javax.sql.DataSource;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -207,7 +209,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void sqlTemplateIncludesDatasetExportBranch() throws Exception {
-        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPE_TEMPLATE");
         f.setAccessible(true);
         String sql = (String) f.get(null);
         assertTrue(sql.contains("a.audit_table = 'dataset'"),
@@ -223,7 +225,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void sqlTemplatePlacesAutoTickAndIngestRowsByWhatTheyRecord() throws Exception {
-        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPE_TEMPLATE");
         f.setAccessible(true);
         String sql = (String) f.get(null);
         assertTrue(sql.contains("a.audit_log_event_type_id IS DISTINCT FROM 129"),
@@ -255,6 +257,21 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     }
 
     /**
+     * The CRF library's types: a CRF's name or description edited (142) and
+     * a batch move of event CRFs to another version (143) are admin rows; a
+     * signature removed by that move (144) is a signing row; an event CRF
+     * removed with its CRF or version (190, 191) is a data row.
+     */
+    @Test
+    void variantForTheCrfLibraryTypes() {
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.CRF_FIELD_UPDATED, null));
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_BATCH_MIGRATION, null));
+        assertEquals("signed", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_SIGNATURE_REMOVED, null));
+        assertEquals("data", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, null));
+        assertEquals("data", AuditApiController.variantForType(AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION, null));
+    }
+
+    /**
      * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
      * the filter parameter and reaches the SQL try-block. With the mock
      * DataSource the query throws inside the try/catch and we get a 500;
@@ -266,7 +283,7 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(get("/api/v1/audit")
                 .param("variant", "admin")
                 .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").exists());
     }
@@ -286,8 +303,50 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
                 .param("variant", "data")
                 .param("subjectId", "M-001")
                 .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").exists());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Study audit log role gate — legacy StudyAuditLogServlet.mayProceed     */
+    /* ---------------------------------------------------------------------- */
+
+    /** A DataSource whose connection fails, so a request that passes the gate ends in 500, not 403. */
+    private MockMvc mockMvcWithFailingDb() throws Exception {
+        DataSource ds = Mockito.mock(DataSource.class);
+        Mockito.when(ds.getConnection()).thenThrow(new java.sql.SQLException("no db"));
+        return mockMvcFor(new AuditApiController(ds, Mockito.mock(SiteVisibilityFilter.class)));
+    }
+
+    private org.springframework.mock.web.MockHttpSession sessionWithRole(Role role) {
+        return (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithRole(
+                7, "someone", 1, "S_1", "Study", role, 1);
+    }
+
+    @Test
+    void dataEntryRolesAreRefusedTheStudyAuditLog() throws Exception {
+        for (Role role : new Role[] {Role.INVESTIGATOR, Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2})
+        for (String url : new String[] {"/api/v1/audit", "/api/v1/audit/facets", "/api/v1/audit/export.xlsx"}) {
+            mockMvcWithFailingDb().perform(get(url).session(sessionWithRole(role)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void directorCoordinatorAndMonitorPassTheStudyAuditGate() throws Exception {
+        for (Role role : new Role[] {Role.ADMIN, Role.STUDYDIRECTOR, Role.COORDINATOR, Role.MONITOR})
+        for (String url : new String[] {"/api/v1/audit", "/api/v1/audit/facets"}) {
+            mockMvcWithFailingDb().perform(get(url).session(sessionWithRole(role)))
+                    .andExpect(status().isInternalServerError());
+        }
+    }
+
+    @Test
+    void aSystemAdministratorPassesTheStudyAuditGate() throws Exception {
+        mockMvcWithFailingDb().perform(get("/api/v1/audit")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_1", "Study")))
+                .andExpect(status().isInternalServerError());
     }
 }

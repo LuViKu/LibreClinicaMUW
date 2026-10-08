@@ -148,7 +148,11 @@
 <tr>
 <c:if test="${fn:length(ruleSetResult) > 0}">
 <td>
-<input type="button" name="Submit" id="submit" value="<fmt:message key="submit" bundle="${resword}"/>" class="button_long" onClick="window.location.href='RunRuleSet?ruleSetId=${ruleSet.id}&dryRun=no';"/></td>
+<%-- Submit applies the rule actions: RunRuleSet takes that as a POST only. --%>
+<form action="RunRuleSet" method="post" style="margin:0">
+<input type="hidden" name="ruleSetId" value="<c:out value="${ruleSet.id}"/>"/>
+<input type="hidden" name="dryRun" value="no"/>
+<input type="submit" name="Submit" id="submit" value="<fmt:message key="submit" bundle="${resword}"/>" class="button_long"/></form></td>
 </td>
 </c:if>
 <td>

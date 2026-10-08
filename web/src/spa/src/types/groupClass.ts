@@ -42,3 +42,13 @@ export interface UpdateGroupClassInput {
   subjectAssignment?: SubjectAssignment
   groups?: { id?: number | null; name: string; description?: string }[]
 }
+
+/**
+ * What removing a group class would remove with it
+ * (`GET …/group-classes/{id}/removal-impact`). Its subject assignments are
+ * marked auto-removed and come back when the class is restored.
+ */
+export interface GroupClassRemovalImpact {
+  groups: number
+  subjectAssignments: number
+}

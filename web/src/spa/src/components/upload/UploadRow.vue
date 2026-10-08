@@ -65,6 +65,16 @@ const lateralityEditable = computed(() =>
   && ['suggested', 'novisit', 'nopatient', 'ambiguous'].includes(props.row.state),
 )
 
+/** The confirmation panel shows while the row can still be sent. */
+const showDeidPanel = computed(() =>
+  props.row.needsDeidConfirm === true
+  && ['suggested', 'novisit', 'nopatient', 'ambiguous'].includes(props.row.state),
+)
+
+function onDeidTick(e: Event): void {
+  store.setDeidConfirmed(props.row.rowId, (e.target as HTMLInputElement).checked)
+}
+
 function onLateralityChange(e: Event): void {
   const v = (e.target as HTMLSelectElement).value
   store.setRowLaterality(props.row.rowId, (v || null) as Laterality | null)
@@ -73,7 +83,7 @@ function onLateralityChange(e: Event): void {
 
 <template>
   <div
-    class="relative overflow-hidden flex flex-col md:flex-row md:items-center gap-3 md:gap-4 px-4 md:px-5 py-3.5 border-t border-slate-100"
+    class="relative overflow-hidden flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 md:gap-4 px-4 md:px-5 py-3.5 border-t border-slate-100"
     :class="dim ? 'bg-slate-50/40' : 'hover:bg-slate-50/60'"
     :data-testid="`upload-row-${props.row.rowId}`"
     :data-row-state="props.row.state"
@@ -117,7 +127,7 @@ function onLateralityChange(e: Event): void {
         <option value="">—</option>
         <option value="OD">OD</option>
         <option value="OS">OS</option>
-        <option value="OU">OU</option>
+        <option v-if="!props.row.needsDeidConfirm" value="OU">OU</option>
       </select>
       <template v-else>
         <EyeBadge v-if="props.row.laterality !== 'OU'" :laterality="props.row.laterality" />
@@ -136,6 +146,38 @@ function onLateralityChange(e: Event): void {
         @search-patient="(id) => emit('search-patient', id)"
         @dismiss="(id) => emit('dismiss', id)"
       />
+    </div>
+
+    <!-- De-identifying deployment: what the operator confirms against. The
+         header is already stripped in the browser; the one thing a rewrite
+         cannot reach is text burned into the picture itself. -->
+    <div
+      v-if="showDeidPanel"
+      class="relative z-10 w-full md:basis-full flex flex-col sm:flex-row gap-4 items-start rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3"
+      :data-testid="`deid-panel-${props.row.rowId}`"
+    >
+      <img
+        v-if="props.row.previewUrl"
+        :src="props.row.previewUrl"
+        :alt="t('uploadPortal.deid.previewAlt', { file: props.row.file.name })"
+        class="max-h-56 max-w-full sm:max-w-[320px] rounded-md ring-1 ring-slate-300 bg-black object-contain"
+        :data-testid="`deid-preview-${props.row.rowId}`"
+      />
+      <p
+        v-else
+        class="text-[12px] text-amber-800 bg-amber-50 ring-1 ring-amber-200 rounded-md px-3 py-2 max-w-[320px]"
+        :data-testid="`deid-nopreview-${props.row.rowId}`"
+      >{{ t('uploadPortal.deid.noPreview') }}</p>
+      <label class="flex items-start gap-2 text-[13px] text-slate-800 cursor-pointer">
+        <input
+          type="checkbox"
+          class="mt-0.5 h-4 w-4 shrink-0"
+          :checked="props.row.deidConfirmed === true"
+          :data-testid="`deid-confirm-${props.row.rowId}`"
+          @change="onDeidTick"
+        />
+        <span>{{ t('uploadPortal.deid.confirmLabel') }}</span>
+      </label>
     </div>
   </div>
 </template>

@@ -35,6 +35,7 @@ public final class SpreadsheetPreview implements Preview {
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
     @SuppressWarnings("rawtypes")
+	@Override
 	public Map<String, Map> createCrfMetaObject(HSSFWorkbook workbook) {
         if (workbook == null)
             return new HashMap<String, Map>();
@@ -70,6 +71,7 @@ public final class SpreadsheetPreview implements Preview {
      *            should specify "items" or "sections" or the associated static
      *            variable, i.e. SpreadsheetPreview.ITEMS
      */
+    @Override
     public Map<Integer, Map<String, String>> createItemsOrSectionMap(HSSFWorkbook workbook, String itemsOrSection) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<Integer, Map<String, String>>();
@@ -80,18 +82,7 @@ public final class SpreadsheetPreview implements Preview {
         HSSFSheet sheet;
         HSSFRow row;
         HSSFCell cell;
-        // static item headers for a CRF; TODO: change these so they are not
-        // static and hard-coded
-        /*
-         * New itemHeaders String[] itemHeaders =
-         * {"item_name","description_label","left_item_text",
-         * "units","right_item_text","section_label","group_label","header",
-         * "subheader","parent_item","column_number","page_number",
-         * "question_number","response_type","response_label",
-         * "response_options_text","response_values","response_layout","default_value",
-         * "data_type",
-         * "validation","validation_error_message","phi","required"};
-         */
+        // Column headers of the CRF template's Items sheet; the layout is fixed by the template format.
         String[] itemHeaders =
             { "item_name", "description_label", "left_item_text", "units", "right_item_text", "section_label", "header", "subheader", "parent_item",
                 "column_number", "page_number", "question_number", "response_type", "response_label", "response_options_text", "response_values", "data_type",
@@ -134,6 +125,7 @@ public final class SpreadsheetPreview implements Preview {
         return allRows;
     }
 
+    @Override
     public Map<Integer, Map<String, String>> createGroupsMap(HSSFWorkbook workbook) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<Integer, Map<String, String>>();
@@ -141,8 +133,7 @@ public final class SpreadsheetPreview implements Preview {
         HSSFSheet sheet;
         HSSFRow row;
         HSSFCell cell;
-        // static group headers for a CRF; TODO: change these so they are not
-        // static and hard-coded
+        // Column headers of the CRF template's Groups sheet; the layout is fixed by the template format.
         String[] groupHeaders =
             { "group_label", "group_layout", "group_header", "group_sub_header", "group_repeat_number", "group_repeat_max", "group_repeat_array",
                 "group_row_start_number" };
@@ -208,6 +199,7 @@ public final class SpreadsheetPreview implements Preview {
      * keys. Returns an empty HashMap if the spreadsheet does not contain any
      * sheets named "Sections."
      */
+    @Override
     public Map<String, String> createCrfMap(HSSFWorkbook workbook) {
         if (workbook == null || workbook.getNumberOfSheets() == 0) {
             return new HashMap<String, String>();

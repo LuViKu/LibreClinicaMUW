@@ -57,6 +57,7 @@ public class RandomizeActionValidator implements Validator {
     /**
      * This Validator validates just Person instances
      */
+    @Override
     public boolean supports(Class<?> clazz) {
         return RandomizeActionBean.class.equals(clazz);
     }
@@ -103,6 +104,7 @@ public class RandomizeActionValidator implements Validator {
     }
 
     
+    @Override
     public void validate(Object obj, Errors e) {
         RandomizeActionBean randomizeActionBean = (RandomizeActionBean) obj;
         String p="";

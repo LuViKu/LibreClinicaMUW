@@ -66,7 +66,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingSer
  * did. The DICOM sidecar is a stub here; what matters is what the app asks
  * of it and what it does with the answer.
  */
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "resource"}) // resource: the request body belongs to the HttpExchange, and row() hands its open ResultSet to a caller that closes the connection
 class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final String BASE = "/api/v1/public/upload";

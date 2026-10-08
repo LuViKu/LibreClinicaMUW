@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * top of {@link AbstractDomainDao} so it picks up {@code findById},
  * {@code save}, {@code count}, etc. for free.
  */
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class PatientDao extends AbstractDomainDao<Patient> {
 
     @Override

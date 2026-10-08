@@ -6,10 +6,19 @@ with the Java side's ``LIBRECLINICA_*`` vars.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_TYPED_GRES = re.compile(r"^gpu:[A-Za-z][\w.\-]*:\d+$")
+
+
+def is_typed_gres(gres: str) -> bool:
+    """True for ``gpu:<type>:<count>`` (e.g. ``gpu:nv2080ti:1``), false for ``gpu`` / ``gpu:1``."""
+    return bool(_TYPED_GRES.match((gres or "").strip()))
 
 
 class Settings(BaseSettings):
@@ -95,15 +104,44 @@ class Settings(BaseSettings):
     # The pr task (sese_pr) is torch1.0 / CUDA 9 — no Turing (RTX 2080 Ti, sm_75)
     # kernels; pin to a non-Turing GPU (TITAN Xp/V), or set "" to force CPU.
     apptainer_pr_gpu_device: str | None = None
-    # When true, wrap each apptainer call in ``srun`` (one blocking SLURM job per
-    # scan) instead of running it directly. Required on the OPTIMA cluster: all
-    # partitions cap at MaxTime=2d, so no persistent GPU service — the /run
-    # dispatcher stays CPU-only off-GPU and submits a short GPU job per scan.
+    # SLURM mode: when true, every GPU call (apptainer .sif tasks AND the
+    # host-native bm venv) runs as one blocking ``srun`` job per task, and the
+    # dispatcher itself stays off the GPUs (no CUDA_VISIBLE_DEVICES pin).
+    # Direct mode (false) runs on the node the server lives on, outside SLURM.
     apptainer_use_slurm: bool = False
     apptainer_slurm_partition: str | None = None  # e.g. "full_optima"; None = SLURM default
-    apptainer_slurm_account: str | None = None  # SLURM --account (this cluster requires one)
+    # SLURM --account. REQUIRED in SLURM mode (startup refuses without it): this
+    # cluster has no default association.
+    apptainer_slurm_account: str | None = None
     apptainer_slurm_time: str = "01:00:00"  # walltime per inference job (<< 2d cap)
-    apptainer_slurm_gres: str = "gpu:1"  # or typed, e.g. "gpu:nvtitanxp:1"
+    # Recommended: a TYPED request, "gpu:nv2080ti:1". The pr + bm models have no
+    # Ampere/Ada kernels, and the partition also contains those nodes, so an
+    # untyped "gpu:1" can land on one and fail. Startup refuses an untyped gres
+    # unless apptainer_slurm_allow_untyped_gres is set. The default is the
+    # recommended value so that setting only the account is enough.
+    apptainer_slurm_gres: str = "gpu:nv2080ti:1"
+    apptainer_slurm_allow_untyped_gres: bool = False
+    apptainer_slurm_mem: str | None = None  # --mem, e.g. "32G"
+    apptainer_slurm_cpus_per_task: int | None = None  # --cpus-per-task
+    apptainer_slurm_qos: str | None = None  # --qos
+    apptainer_slurm_constraint: str | None = None  # --constraint
+    # --exclude: nodes jobs must never land on (e.g. "vn1,vn2,cn5" until vn1/vn2
+    # are validated; feature tags cannot separate on3/cn6 from vn1/vn2).
+    apptainer_slurm_exclude: str | None = None
+    # --nodelist: restrict GPU jobs to these nodes (e.g. "on3,cn6").
+    apptainer_slurm_nodelist: str | None = None
+    # The host-native IOWA layer-segmentation step (ga / layers) is CPU-only and
+    # runs as its own srun job (no --gres) in SLURM mode, with its own sizing.
+    apptainer_slurm_iowa_cpus_per_task: int | None = None
+    apptainer_slurm_iowa_mem: str | None = None
+    # --job-name is "<prefix>-<task>". Never contains patient / scan identifiers:
+    # job names are visible to every cluster user via squeue.
+    apptainer_slurm_job_name: str = "ri"
+    # How many /run requests may execute at once in this process. None = auto:
+    # 1 in direct mode (one resident GPU pin, one scan at a time), 4 in SLURM
+    # mode (SLURM queues the actual GPU work; the cap bounds dispatcher threads,
+    # /scratch pressure and queue footprint).
+    max_concurrent_runs: int | None = None
 
     fluid_sif: str | None = None  # fluid_segmentation.sif (v2.5.0)
     onl_sif: str | None = None
@@ -149,6 +187,71 @@ class Settings(BaseSettings):
     bm_code: Path | None = None  # dir with application.py (+ models/, tpstorch.py)
     bm_ld_library_path: str | None = None  # colon-joined LMOD module lib dirs
     bm_gpu_device: str | None = None  # CUDA_VISIBLE_DEVICES (app pins device 0)
+
+    # --- SD-RetinaNet (layers + lesions) ----------------------------------------
+    # The standalone image (code, AOT models and fold config baked in):
+    #   .../lesions-layerseg-standalone/retinanet-spectralis_main.sif
+    # Its runscript is main.py <input> <output_folder> [--tta_level] [--threshold]
+    # [--output_formatter]. The eCRF stores the model's native layerlib/lesionlib
+    # files, so after the run the output folder must hold layers/NNN.yml and
+    # lesions/NNN.png; sdretinanet_formatter is the --output_formatter file that
+    # writes them (bind-mounted read-only into the container).
+    sdretinanet_sif: str | None = None
+    sdretinanet_formatter: Path | None = None
+    # The image's own /app/aot_models_spectralis is not readable for other users
+    # (checked 2026-10-08), so a readable copy of model0..4.pt2 is bound over it.
+    sdretinanet_models: Path | None = None
+    # The models are AOT-compiled for sm_80 (checked 2026-10-08: cubin e_flags;
+    # a run on an A6000 succeeded, on a 2080 Ti it failed with "device kernel
+    # image is invalid"). So they need Ampere/Ada (A6000, 3080 Ti, A6000 Ada), not
+    # the Turing nodes the other tasks need: sdretinanet runs in SLURM mode only,
+    # with its own typed gres, and the global nodelist/constraint (which pin the
+    # Turing nodes) do not apply to it -- its own nodelist does.
+    apptainer_slurm_sdretinanet_gres: str = "gpu:nva6000:1"
+    apptainer_slurm_sdretinanet_nodelist: str | None = None
+    sdretinanet_tta_level: int = 2
+    sdretinanet_threshold: str = "0.5"
+
+    @property
+    def effective_max_concurrent_runs(self) -> int:
+        if self.max_concurrent_runs is not None:
+            return max(1, self.max_concurrent_runs)
+        return 4 if self.apptainer_use_slurm else 1
+
+    @property
+    def slurm_mode(self) -> bool:
+        return self.inference_adapter == "apptainer" and self.apptainer_use_slurm
+
+    def validate_slurm(self) -> None:
+        """Raise ``RuntimeError`` if SLURM mode is on but misconfigured.
+
+        Called at adapter construction (i.e. server startup) so a bad config
+        fails loudly instead of failing every job at srun time.
+        """
+        if not self.apptainer_use_slurm:
+            return
+        if not (self.apptainer_slurm_account or "").strip():
+            raise RuntimeError(
+                "SLURM mode requires RETINAL_INFERENCE_APPTAINER_SLURM_ACCOUNT "
+                "(this cluster has no default association; srun would fail per job)"
+            )
+        if not self.apptainer_slurm_allow_untyped_gres and not is_typed_gres(
+            self.apptainer_slurm_gres
+        ):
+            raise RuntimeError(
+                f"SLURM gres '{self.apptainer_slurm_gres}' is untyped; it could land on an "
+                "Ampere/Ada node where the pr and bm tasks fail ('no kernel image'). Use a "
+                "typed request such as 'gpu:nv2080ti:1', or set "
+                "RETINAL_INFERENCE_APPTAINER_SLURM_ALLOW_UNTYPED_GRES=true to override."
+            )
+        if not self.apptainer_slurm_allow_untyped_gres and not is_typed_gres(
+            self.apptainer_slurm_sdretinanet_gres
+        ):
+            raise RuntimeError(
+                f"SLURM gres '{self.apptainer_slurm_sdretinanet_gres}' for sdretinanet is "
+                "untyped; its models are compiled for sm_80 and fail on the Turing nodes. "
+                "Use a typed request such as 'gpu:nva6000:1'."
+            )
 
 
 settings = Settings()

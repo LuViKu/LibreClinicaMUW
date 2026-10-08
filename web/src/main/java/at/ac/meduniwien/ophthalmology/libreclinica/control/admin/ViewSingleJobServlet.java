@@ -78,7 +78,7 @@ public class ViewSingleJobServlet extends SecureController {
         String triggerName = fp.getString("tname");
         String gName = fp.getString("gname");
         String groupName = "";
-        if (gName.equals("") || gName.equals("0")) {
+        if (gName.isEmpty() || gName.equals("0")) {
             groupName = XsltTriggerService.TRIGGER_GROUP_NAME;
         } else { // if (gName.equals("1")) {
             groupName = TRIGGER_IMPORT_GROUP;
@@ -127,7 +127,7 @@ public class ViewSingleJobServlet extends SecureController {
                 // String datasetId =
                 // dataMap.getString(ExampleSpringJob.DATASET_ID);
                 // int dsId = Integer.valueOf(datasetId).intValue();
-                if (gName.equals("") || gName.equals("0")) {
+                if (gName.isEmpty() || gName.equals("0")) {
                     String exportFormat = dataMap.getString(XsltTriggerService.EXPORT_FORMAT);
                     String periodToRun = dataMap.getString(ExampleSpringJob.PERIOD);
                     // int userId = Integer.valueOf(userAcctId).intValue();

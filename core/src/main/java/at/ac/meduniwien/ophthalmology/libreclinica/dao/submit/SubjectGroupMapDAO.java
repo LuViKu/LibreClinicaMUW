@@ -99,6 +99,7 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
      * getEntityFromHashMap, the method that gets the object from the database
      * query.
      */
+    @Override
     public SubjectGroupMapBean getEntityFromHashMap(HashMap<String, Object> hm) {
         SubjectGroupMapBean eb = new SubjectGroupMapBean();
         super.setEntityAuditInformation(eb, hm);
@@ -121,6 +122,7 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
         return eb;
     }
 
+    @Override
     public ArrayList<SubjectGroupMapBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -165,10 +167,12 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<SubjectGroupMapBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public SubjectGroupMapBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -178,6 +182,7 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
     /**
      * Creates a new subject
      */
+    @Override
     public SubjectGroupMapBean create(SubjectGroupMapBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         // INSERT INTO SUBJECT_GROUP_MAP (study_group_class_id,
@@ -203,6 +208,7 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
      * 
      * @return sb, an updated study bean.
      */
+    @Override
     public SubjectGroupMapBean update(SubjectGroupMapBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         // UPDATE SUBJECT_GROUP_MAP SET STUDY_GROUP_CLASS_ID=?,
@@ -246,6 +252,7 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<SubjectGroupMapBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -253,6 +260,7 @@ public class SubjectGroupMapDAO extends AuditableEntityDAO<SubjectGroupMapBean> 
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<SubjectGroupMapBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

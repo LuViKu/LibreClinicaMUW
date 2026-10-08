@@ -105,6 +105,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         this.setTypeExpected(23, TypeNames.INT); // sdv_update_id
     }
 
+    @Override
     public EventCRFBean update(EventCRFBean ecb) {
         ecb.setActive(false);
 
@@ -173,6 +174,24 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return ecb;
     }
 
+    /**
+     * Record that the event CRF's data were just changed: sets
+     * {@code date_updated} and {@code update_id}, and no other column.
+     *
+     * <p>A request that changed only item data calls this rather than
+     * {@link #update}. {@code update} writes every column back from the
+     * bean, which the request loaded when it started; a verification, its
+     * withdrawal or a completion that another request made in the meantime
+     * would be undone, and the {@code event_crf} trigger would record the
+     * reverted SDV flag as a change by whoever last set it.
+     *
+     * @param eventCrfId the event CRF
+     * @param updaterId  who changed the data
+     */
+    public void touch(int eventCrfId, int updaterId) {
+        executeUpdate(digester.getQuery("touch"), variables(updaterId, eventCrfId));
+    }
+
     public void markComplete(EventCRFBean ecb, boolean ide) {
         HashMap<Integer, Object> variables = variables(ecb.getId());
 
@@ -184,24 +203,26 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
     }
 
     /**
-     * Phase E A5 — inverse of {@link #markComplete}. Clears the
-     * {@code date_completed} column so the event_crf transitions from
-     * {@link DataEntryStage#INITIAL_DATA_ENTRY_COMPLETE} back to
-     * {@link DataEntryStage#INITIAL_DATA_ENTRY}, re-enabling editing
-     * via the SPA's CRF entry form. The {@code status_id} column is
-     * NOT touched — callers must reject {@link Status#LOCKED} /
-     * {@link Status#SIGNED} CRFs at the controller layer before
-     * invoking this method.
+     * Phase E A5 — inverse of {@link #markComplete}: reopens the event
+     * CRF for data entry. Clears {@code date_completed} and
+     * {@code date_validate_completed}, the markers of the first and the
+     * second pass, and sets a legacy completed status
+     * ({@link Status#UNAVAILABLE}, or {@link Status#PENDING} after the
+     * first pass of double data entry) back to {@link Status#AVAILABLE}.
+     * The SPA reads completion from the dates, legacy screens and SDV
+     * also from the status; clearing only the SPA's date left the others
+     * reading the CRF as complete. Double data entry needs its second
+     * pass again once the first is complete.
      *
-     * <p>IDE-only because the legacy DDE (double data entry) workflow
-     * is not exposed via the SPA. A future {@code markIncompleteDDE}
-     * pair would mirror the existing DDE pair.
+     * <p>Callers must reject {@link Status#LOCKED} / {@link Status#SIGNED}
+     * CRFs at the controller layer before invoking this method.
      */
     public void markIncomplete(EventCRFBean ecb) {
         HashMap<Integer, Object> variables = variables(ecb.getId());
-        executeUpdate(digester.getQuery("markIncompleteIDE"), variables);
+        executeUpdate(digester.getQuery("markIncomplete"), variables);
     }
 
+    @Override
     public EventCRFBean create(EventCRFBean ecb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();
@@ -234,6 +255,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return ecb;
     }
 
+    @Override
     public EventCRFBean getEntityFromHashMap(HashMap<String, Object> hm) {
         EventCRFBean eb = new EventCRFBean();
         this.setEntityAuditInformation(eb, hm);
@@ -261,6 +283,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return eb;
     }
 
+    @Override
     public ArrayList<EventCRFBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -269,10 +292,12 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<EventCRFBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public EventCRFBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -282,6 +307,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<EventCRFBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -289,6 +315,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<EventCRFBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }
@@ -765,10 +792,11 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
             Integer studyEventId = bean.getStudyEventId();
             if (!result.containsKey(studyEventId)) {
                 result.put(studyEventId, new TreeSet<EventCRFBean>(new Comparator<EventCRFBean>() {
+                    @Override
                     public int compare(EventCRFBean o1, EventCRFBean o2) {
-                        Integer id1 = o1.getId();
-                        Integer id2 = o2.getId();
-                        return id1.compareTo(id2);
+                        int id1 = o1.getId();
+                        int id2 = o2.getId();
+                        return Integer.compare(id1, id2);
                     }
                 }));
             }

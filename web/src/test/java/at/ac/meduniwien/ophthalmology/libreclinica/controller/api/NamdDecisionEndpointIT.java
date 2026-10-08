@@ -30,11 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -324,8 +320,10 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].studyEventId").value(STUDY_EVENT_ID))
                 .andExpect(jsonPath("$[0].od.hemorrhage").value(true))
-                .andExpect(jsonPath("$[0].od.bcvaLossAttributedToNamd").value(false))
-                .andExpect(jsonPath("$[0].os.hemorrhage").value(false))
+                // Never recorded is null, not false: the rule engine must be able
+                // to tell "no" from "nobody asked".
+                .andExpect(jsonPath("$[0].od.bcvaLossAttributedToNamd").doesNotExist())
+                .andExpect(jsonPath("$[0].os.hemorrhage").doesNotExist())
                 .andExpect(jsonPath("$[0].os.bcvaLossAttributedToNamd").value(true));
     }
 

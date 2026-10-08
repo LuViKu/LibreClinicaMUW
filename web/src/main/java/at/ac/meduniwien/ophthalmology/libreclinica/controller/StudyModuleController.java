@@ -9,17 +9,12 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
-import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asArrayList;
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asList;
 
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
-import java.util.ResourceBundle;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -41,12 +36,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterVal
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.managestudy.StudyModuleStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.Authorization;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanel;
 import org.apache.commons.dbcp.BasicDataSource;
-import org.apache.commons.lang.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,35 +90,11 @@ public class StudyModuleController {
 
     /** Where a refused request goes (same target as the page's own refusal). */
     static final String DENIED = "redirect:/MainMenu?message=authentication_failed";
-    public static ResourceBundle respage;
     @Autowired
     CoreResources coreResources;
 
     public StudyModuleController() {
 
-    }
-
-    @RequestMapping(value = "/{study}/deactivate", method = RequestMethod.POST)
-    public String deactivateParticipate(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
-        if (!mayChangeStudy(request, studyOid)) {
-            return DENIED;
-        }
-        studyDao = new StudyDAO(dataSource);
-        StudyBean study = studyDao.findByOid(studyOid);
-        StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
-        StudyParameterValueBean spv = spvdao.findByHandleAndStudy(study.getId(), "participantPortal");
-        spv.setStudyId(study.getId());
-        spv.setParameter("participantPortal");
-        spv.setValue("disabled");
-
-        if (spv.getId() > 0)
-            spvdao.update(spv);
-        else
-            spvdao.create(spv);
-        StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
-        currentStudy.getStudyParameterConfig().setParticipantPortal("disabled");
-
-        return "redirect:/pages/studymodule";
     }
 
     @RequestMapping(value = "/{study}/deactivaterandomization", method = RequestMethod.POST)
@@ -152,29 +120,6 @@ public class StudyModuleController {
         return "redirect:/pages/studymodule";
     }
 
-    @RequestMapping(value = "/{study}/reactivate", method = RequestMethod.POST)
-    public String reactivateParticipate(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
-        if (!mayChangeStudy(request, studyOid)) {
-            return DENIED;
-        }
-        studyDao = new StudyDAO(dataSource);
-        StudyBean study = studyDao.findByOid(studyOid);
-        StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
-        StudyParameterValueBean spv = spvdao.findByHandleAndStudy(study.getId(), "participantPortal");
-        spv.setStudyId(study.getId());
-        spv.setParameter("participantPortal");
-        spv.setValue("enabled");
-
-        if (spv.getId() > 0)
-            spvdao.update(spv);
-        else
-            spvdao.create(spv);
-        StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
-        currentStudy.getStudyParameterConfig().setParticipantPortal("enabled");
-
-        return "redirect:/pages/studymodule";
-    }
-
     @RequestMapping(value = "/{study}/reactivaterandomization", method = RequestMethod.POST)
     public String reactivateRandomization(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
         if (!mayChangeStudy(request, studyOid)) {
@@ -194,64 +139,6 @@ public class StudyModuleController {
             spvdao.create(spv);
         StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
         currentStudy.getStudyParameterConfig().setRandomization("enabled");
-
-        return "redirect:/pages/studymodule";
-    }
-
-
-    @RequestMapping(value = "/{study}/register", method = RequestMethod.POST)
-    public String registerParticipate(@PathVariable("study") String studyOid, HttpServletRequest request) throws Exception {
-        if (!mayChangeStudy(request, studyOid)) {
-            return DENIED;
-        }
-        studyDao = new StudyDAO(dataSource);
-        StudyBean study = studyDao.findByOid(studyOid);
-        StudyParameterValueDAO spvdao = new StudyParameterValueDAO(dataSource);
-        StudyParameterValueBean spv = spvdao.findByHandleAndStudy(study.getId(), "participantPortal");
-        ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
-
-        Locale locale = LocaleResolver.getLocale(request);
-        ResourceBundleProvider.updateLocale(locale);
-        respage = ResourceBundleProvider.getPageMessagesBundle(locale);
-
-        // Check if desired hostName is available. If so, send OCUI registration request
-        String hostName = request.getParameter("hostName");
-        if (hostName == null || hostName.equals("")) {
-            addRegMessage(request, respage.getString("participate_hostname_invalid"));
-            return "redirect:/pages/studymodule";
-        }
-        String status = "";
-        String nameAvailability = registrar.getHostNameAvailability(hostName);
-        if (nameAvailability.equals(ParticipantPortalRegistrar.UNAVAILABLE)) {
-            addRegMessage(request, respage.getString("participate_hostname_not_available"));
-            return "redirect:/pages/studymodule";
-        } else if (nameAvailability.equals(ParticipantPortalRegistrar.UNKNOWN)) {
-            addRegMessage(request, respage.getString("participate_not_available"));
-            return "redirect:/pages/studymodule";
-        } else if (nameAvailability.equals(ParticipantPortalRegistrar.INVALID)) {
-            addRegMessage(request, respage.getString("participate_hostname_invalid"));
-            return "redirect:/pages/studymodule";
-        } else {
-            // Returned status was 'available'. Proceed with registration.
-            status = registrar.registerStudy(study.getOid(), hostName, study.getIdentifier());
-        }
-
-        // If status == "", that indicates the request to OCUI failed. Post an error message and don't update study
-        // parameter.
-        if (status.equals("")) {
-            addRegMessage(request, respage.getString("participate_not_available"));
-        } else {
-            // Update OC Study configuration
-            spv.setStudyId(study.getId());
-            spv.setParameter("participantPortal");
-            spv.setValue("enabled");
-            if (spv.getId() > 0)
-                spvdao.update(spv);
-            else
-                spvdao.create(spv);
-            StudyBean currentStudy = (StudyBean) request.getSession().getAttribute("study");
-            currentStudy.getStudyParameterConfig().setParticipantPortal("enabled");
-        }
 
         return "redirect:/pages/studymodule";
     }
@@ -364,41 +251,10 @@ public class StudyModuleController {
         map.addAttribute("studyId", currentStudy.getId());
         map.addAttribute("currentStudy", currentStudy);
 
-        // Load Participate registration information
-        String portalURL = CoreResources.getField("portalURL");
-        map.addAttribute("portalURL", portalURL);
-        if (portalURL != null && !portalURL.equals("")) {
-            String participateOCStatus = currentStudy.getStudyParameterConfig().getParticipantPortal();
-            ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
-            Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());
-            String participateStatus = "";
-            String url = "";
-            try {
-                URL pManageUrl = URI.create(portalURL).toURL();
-                if (pManageAuthorization != null && pManageAuthorization.getAuthorizationStatus() != null
-                        && pManageAuthorization.getAuthorizationStatus().getStatus() != null)
-                    participateStatus = pManageAuthorization.getAuthorizationStatus().getStatus();
-                map.addAttribute("participateURL", pManageUrl);
-                map.addAttribute("participateOCStatus", participateOCStatus);
-                map.addAttribute("participateStatus", participateStatus);
-
-                if (pManageAuthorization != null && pManageAuthorization.getStudy() != null && pManageAuthorization.getStudy().getHost() != null
-                        && !pManageAuthorization.getStudy().getHost().equals("")) {
-                    url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
-                            + ((pManageUrl.getPort() > 0) ? ":" + String.valueOf(pManageUrl.getPort()) : "");
-
-                }
-            } catch (MalformedURLException e) {
-                logger.error(e.getMessage());
-                logger.error(ExceptionUtils.getStackTrace(e));
-            }
-            map.addAttribute("participateURLDisplay", url);
-        }
-
         // Load Randomization  information
         String moduleManager = CoreResources.getField("moduleManager");
         map.addAttribute("moduleManager", moduleManager);
-        if (moduleManager != null && !moduleManager.equals("")) {
+        if (moduleManager != null && !moduleManager.isEmpty()) {
 
             String randomizationOCStatus = currentStudy.getStudyParameterConfig().getRandomization();
 
@@ -500,17 +356,6 @@ public class StudyModuleController {
             return "redirect:/MainMenu";
         }
         throw ex;
-    }
-
-    private void addRegMessage(HttpServletRequest request, String message) {
-        ArrayList<String> regMessages = asArrayList(request.getSession().getAttribute(REG_MESSAGE), String.class);
-        if (regMessages == null) {
-            regMessages = new ArrayList<>();
-        }
-
-        regMessages.add(message);
-        logger.debug(message);
-        request.getSession().setAttribute(REG_MESSAGE, regMessages);
     }
 
     public SidebarInit getSidebarInit() {

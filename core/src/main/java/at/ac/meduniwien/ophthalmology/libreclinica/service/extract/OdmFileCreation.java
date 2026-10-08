@@ -38,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.JobInterruptedException;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTerminationMonitor;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.AdminDataCollector;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.odmExport.ClinicalDataCollector;
@@ -160,141 +161,154 @@ public class OdmFileCreation {
 
         long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
         String ODMXMLFileName = mdc.getODMBean().getFileOID() + ".xml";
-        int fId =
-            createFileK(ODMXMLFileName, generalFileDir, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
-        if (!"".equals(generalFileDirCopy)) {
-            createFileK(ODMXMLFileName, generalFileDirCopy, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
-                        false, zipped, deleteOld, userBean);
-        }
-        //////////////////////////////////////////
-        ////////// AdminData Extraction //////////
+        // createFileK appends: the file grows section by section and is
+        // complete, and registered, only once "</ODM>" is written. A job
+        // cancelled in between must not leave the part it wrote.
+        File partial = new File(generalFileDir, ODMXMLFileName.replaceAll(" ", "_"));
+        File partialCopy = "".equals(generalFileDirCopy) ? null
+                : new File(generalFileDirCopy, ODMXMLFileName.replaceAll(" ", "_"));
+        boolean partialExisted = partial.exists();
+        boolean partialCopyExisted = partialCopy != null && partialCopy.exists();
+        try {
+            int fId =
+                createFileK(ODMXMLFileName, generalFileDir, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+            if (!"".equals(generalFileDirCopy)) {
+                createFileK(ODMXMLFileName, generalFileDirCopy, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
+                            false, zipped, deleteOld, userBean);
+            }
+            //////////////////////////////////////////
+            ////////// AdminData Extraction //////////
 
-        adc.collectFileData();
-        AdminDataReportBean adminReport = new AdminDataReportBean(adc.getOdmAdminDataMap());
-        adminReport.setODMVersion(odmVersion);
-        adminReport.setOdmBean(mdc.getODMBean());
-        adminReport.createChunkedOdmXml(Boolean.TRUE);
+            adc.collectFileData();
+            AdminDataReportBean adminReport = new AdminDataReportBean(adc.getOdmAdminDataMap());
+            adminReport.setODMVersion(odmVersion);
+            adminReport.setOdmBean(mdc.getODMBean());
+            adminReport.createChunkedOdmXml(Boolean.TRUE);
 
 
 
-        sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
-        fId =
-            createFileK(ODMXMLFileName, generalFileDir, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
-        if (!"".equals(generalFileDirCopy)) {
-            createFileK(ODMXMLFileName, generalFileDirCopy, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
-                        false, zipped, deleteOld, userBean);
-        }
+            sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
+            fId =
+                createFileK(ODMXMLFileName, generalFileDir, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+            if (!"".equals(generalFileDirCopy)) {
+                createFileK(ODMXMLFileName, generalFileDirCopy, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
+                            false, zipped, deleteOld, userBean);
+            }
 
-        //////////////////////////////////////////
-        ////////// ClinicalData Extraction ///////
+            //////////////////////////////////////////
+            ////////// ClinicalData Extraction ///////
 
-        DatasetDAO dsdao = new DatasetDAO(dataSource);
-        String sql = eb.getDataset().getSQLStatement();
-        String st_sed_in = dsdao.parseSQLDataset(sql, true, true);
-        String st_itemid_in = dsdao.parseSQLDataset(sql, false, true);
-        int datasetItemStatusId = eb.getDataset().getDatasetItemStatus().getId();
-        String ecStatusConstraint = dsdao.getECStatusConstraint(datasetItemStatusId);
-        String itStatusConstraint = dsdao.getItemDataStatusConstraint(datasetItemStatusId);
+            DatasetDAO dsdao = new DatasetDAO(dataSource);
+            String sql = eb.getDataset().getSQLStatement();
+            String st_sed_in = dsdao.parseSQLDataset(sql, true, true);
+            String st_itemid_in = dsdao.parseSQLDataset(sql, false, true);
+            int datasetItemStatusId = eb.getDataset().getDatasetItemStatus().getId();
+            String ecStatusConstraint = dsdao.getECStatusConstraint(datasetItemStatusId);
+            String itStatusConstraint = dsdao.getItemDataStatusConstraint(datasetItemStatusId);
 
-        Iterator<OdmStudyBase> it = cdc.getStudyBaseMap().values().iterator();
-        while (it.hasNext()) {
-            JobTerminationMonitor.check();
-
-            OdmStudyBase u = it.next();
-            ArrayList<StudySubjectBean> newRows =
-                dsdao.selectStudySubjects(u.getStudy().getId(), 0, st_sed_in, st_itemid_in, dsdao.genDatabaseDateConstraint(eb), ecStatusConstraint,
-                        itStatusConstraint);
-
-            ///////////////
-            int fromIndex = 0;
-            boolean firstIteration = true;
-            while (fromIndex < newRows.size()) {
+            Iterator<OdmStudyBase> it = cdc.getStudyBaseMap().values().iterator();
+            while (it.hasNext()) {
                 JobTerminationMonitor.check();
 
-                int toIndex = fromIndex + ssNumber < newRows.size() ? fromIndex + ssNumber : newRows.size() - 1;
-                List<StudySubjectBean> x = newRows.subList(fromIndex, toIndex + 1);
-                fromIndex = toIndex + 1;
-                String studySubjectIds = "";
-                for (int i = 0; i < x.size(); i++) {
-                    StudySubjectBean sub = new StudySubjectBean();
-                    sub = (StudySubjectBean) x.get(i);
-                    studySubjectIds += "," + sub.getId();
-                }//for
-                studySubjectIds = studySubjectIds.replaceFirst(",", "");
+                OdmStudyBase u = it.next();
+                ArrayList<StudySubjectBean> newRows =
+                    dsdao.selectStudySubjects(u.getStudy().getId(), 0, st_sed_in, st_itemid_in, dsdao.genDatabaseDateConstraint(eb), ecStatusConstraint,
+                            itStatusConstraint);
 
-                ClinicalDataUnit cdata = new ClinicalDataUnit(dataSource, datasetBean, cdc.getOdmbean(), u.getStudy(), cdc.getCategory(), studySubjectIds);
-                cdata.setCategory(cdc.getCategory());
-                cdata.collectOdmClinicalData();
+                ///////////////
+                int fromIndex = 0;
+                boolean firstIteration = true;
+                while (fromIndex < newRows.size()) {
+                    JobTerminationMonitor.check();
 
-                FullReportBean report = new FullReportBean();
-                report.setClinicalData(cdata.getOdmClinicalData());
-                report.setOdmStudyMap(mdc.getOdmStudyMap());
-                report.setODMVersion(odmVersion);
-                //report.setOdmStudy(mdc.getOdmStudy());
-                report.setOdmBean(mdc.getODMBean());
-                if (firstIteration && fromIndex >= newRows.size()) {
-                    report.createChunkedOdmXml(Boolean.TRUE, true, true);
-                    firstIteration = false;
-                } else if (firstIteration) {
-                    report.createChunkedOdmXml(Boolean.TRUE, true, false);
-                    firstIteration = false;
-                } else if (fromIndex >= newRows.size()) {
-                    report.createChunkedOdmXml(Boolean.TRUE, false, true);
-                } else {
-                    report.createChunkedOdmXml(Boolean.TRUE, false, false);
-                }
-                fId = createFileK(ODMXMLFileName, generalFileDir, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
-                                    false, zipped, deleteOld, userBean);
-                if (!"".equals(generalFileDirCopy)) {
-                    createFileK(ODMXMLFileName, generalFileDirCopy, report.getXmlOutput().toString(), datasetBean, sysTimeEnd,
-                                ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+                    int toIndex = fromIndex + ssNumber < newRows.size() ? fromIndex + ssNumber : newRows.size() - 1;
+                    List<StudySubjectBean> x = newRows.subList(fromIndex, toIndex + 1);
+                    fromIndex = toIndex + 1;
+                    String studySubjectIds = "";
+                    for (int i = 0; i < x.size(); i++) {
+                        StudySubjectBean sub = new StudySubjectBean();
+                        sub = (StudySubjectBean) x.get(i);
+                        studySubjectIds += "," + sub.getId();
+                    }//for
+                    studySubjectIds = studySubjectIds.replaceFirst(",", "");
+
+                    ClinicalDataUnit cdata = new ClinicalDataUnit(dataSource, datasetBean, cdc.getOdmbean(), u.getStudy(), cdc.getCategory(), studySubjectIds);
+                    cdata.setCategory(cdc.getCategory());
+                    cdata.collectOdmClinicalData();
+
+                    FullReportBean report = new FullReportBean();
+                    report.setClinicalData(cdata.getOdmClinicalData());
+                    report.setOdmStudyMap(mdc.getOdmStudyMap());
+                    report.setODMVersion(odmVersion);
+                    //report.setOdmStudy(mdc.getOdmStudy());
+                    report.setOdmBean(mdc.getODMBean());
+                    if (firstIteration && fromIndex >= newRows.size()) {
+                        report.createChunkedOdmXml(Boolean.TRUE, true, true);
+                        firstIteration = false;
+                    } else if (firstIteration) {
+                        report.createChunkedOdmXml(Boolean.TRUE, true, false);
+                        firstIteration = false;
+                    } else if (fromIndex >= newRows.size()) {
+                        report.createChunkedOdmXml(Boolean.TRUE, false, true);
+                    } else {
+                        report.createChunkedOdmXml(Boolean.TRUE, false, false);
+                    }
+                    fId = createFileK(ODMXMLFileName, generalFileDir, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
+                                        false, zipped, deleteOld, userBean);
+                    if (!"".equals(generalFileDirCopy)) {
+                        createFileK(ODMXMLFileName, generalFileDirCopy, report.getXmlOutput().toString(), datasetBean, sysTimeEnd,
+                                    ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+                    }
                 }
             }
+
+            sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
+            fId = createFileK(ODMXMLFileName, generalFileDir, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, saveToDB, zipped, deleteOld, userBean);
+            if (!"".equals(generalFileDirCopy)) {
+                createFileK(ODMXMLFileName, generalFileDirCopy, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+            }
+
+            //////////////////////////////////////////
+            ////////// pre pagination extraction /////
+            /*
+            mdc.collectFileData();
+            adc.collectOdmAdminDataMap();
+            cdc.collectOdmClinicalDataMap();
+            FullReportBean report = new FullReportBean();
+            report.setClinicalDataMap(cdc.getOdmClinicalDataMap());
+            report.setAdminDataMap(adc.getOdmAdminDataMap());
+            report.setOdmStudyMap(mdc.getOdmStudyMap());
+            report.setOdmBean(mdc.getODMBean());
+            report.setODMVersion(odmVersion);
+            report.createOdmXml(Boolean.TRUE);
+            long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
+            String ODMXMLFileName = mdc.getODMBean().getFileOID() + ".xml";
+            int fId = this.createFile(ODMXMLFileName, generalFileDir, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, true);
+            if (!"".equals(generalFileDirCopy)) {
+                int fId2 = this.createFile(ODMXMLFileName, generalFileDirCopy, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false);
+            } */
+            HashMap<String, Integer> answerMap = new HashMap<>();
+            //JN: Zipped in the next stage as thats where the ODM file is named and copied over in default categories.
+
+            answerMap.put(ODMXMLFileName, Integer.valueOf(fId));
+        //    if(deleteOld && files!=null &&oldFiles!=null) setOldFiles(oldFiles);
+
+            return answerMap;
+        } catch (JobInterruptedException cancelled) {
+            // Nothing is registered before "</ODM>", so the file on disk is
+            // the only trace: an unterminated document holding subject data
+            // that no file list shows and no retention sweep removes. A file
+            // that was there before this run is not this run's to delete.
+            if (!partialExisted) removePartial(partial);
+            if (partialCopy != null && !partialCopyExisted) removePartial(partialCopy);
+            throw cancelled;
         }
+    }
 
-        sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
-        fId = createFileK(ODMXMLFileName, generalFileDir, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, saveToDB, zipped, deleteOld, userBean);
-        if (!"".equals(generalFileDirCopy)) {
-            createFileK(ODMXMLFileName, generalFileDirCopy, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+    private static void removePartial(File f) {
+        if (f.exists() && !f.delete()) {
+            LOG.warn("Could not remove the partial ODM file of a cancelled extract: {}", f.getName());
         }
-
-        //////////////////////////////////////////
-        ////////// pre pagination extraction /////
-        /*
-        mdc.collectFileData();
-        adc.collectOdmAdminDataMap();
-        cdc.collectOdmClinicalDataMap();
-        FullReportBean report = new FullReportBean();
-        report.setClinicalDataMap(cdc.getOdmClinicalDataMap());
-        report.setAdminDataMap(adc.getOdmAdminDataMap());
-        report.setOdmStudyMap(mdc.getOdmStudyMap());
-        report.setOdmBean(mdc.getODMBean());
-        report.setODMVersion(odmVersion);
-        report.createOdmXml(Boolean.TRUE);
-        long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
-        String ODMXMLFileName = mdc.getODMBean().getFileOID() + ".xml";
-        int fId = this.createFile(ODMXMLFileName, generalFileDir, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, true);
-        if (!"".equals(generalFileDirCopy)) {
-            int fId2 = this.createFile(ODMXMLFileName, generalFileDirCopy, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false);
-        } */
-        HashMap<String, Integer> answerMap = new HashMap<>();
-        //JN: Zipped in the next stage as thats where the ODM file is named and copied over in default categories.
-//        if(zipped)
-//        { try {
-//              zipFile(ODMXMLFileName,generalFileDir);
-//
-//          } catch (IOException e) {
-//              // TODO Auto-generated catch block
-//              logger.error(e.getMessage());
-//              e.printStackTrace();
-//          }
-//
-//        }   // return ODMXMLFileName;
-
-        answerMap.put(ODMXMLFileName, Integer.valueOf(fId));
-    //    if(deleteOld && files!=null &&oldFiles!=null) setOldFiles(oldFiles);
-
-        return answerMap;
     }
 
     public int createFileK(String name, String dir, String content,
@@ -326,7 +340,7 @@ public class OdmFileCreation {
             File newFile = null;
             if (oldFile.exists()) {
                 newFile = oldFile;
-                if(oldFiles!=null || !oldFiles.isEmpty() )
+                if(oldFiles!=null && !oldFiles.isEmpty() )
                 oldFiles.remove(oldFile);
             } else {
                 newFile = new File(complete, name);

@@ -35,8 +35,7 @@
     <!--
         Phase B.3 (Castor → JAXB, DR-006): single Spring-managed JAXBContext
         cache for the lifetime of the application context. Used by the rules
-        import/export servlets and (in subsequent B.3 PRs) the CDISC ODM,
-        OpenRosa, and XForm code paths.
+        import/export servlets and the CDISC ODM import.
     -->
     <bean id="odmJaxbContext" class="at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext"/>
 

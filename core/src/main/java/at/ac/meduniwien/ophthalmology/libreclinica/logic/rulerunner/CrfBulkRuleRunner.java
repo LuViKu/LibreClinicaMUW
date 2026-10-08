@@ -259,7 +259,11 @@ public class CrfBulkRuleRunner extends RuleRunner {
             Collections.sort(entry.getValue(), new RuleActionContainerComparator());
             for (EvaluatedAction ruleActionContainer : entry.getValue()) {
 
-                //ruleSet.setTarget(ruleAction.getRuleSetExpression());
+                // Point the rule set at the target this action was evaluated
+                // for, as the other runners do: the evaluation loop above left
+                // it at the last one, and the action processors (an insert's
+                // group row and visit, the e-mail contents) read it.
+                ruleActionContainer.getRuleSetBean().setTarget(ruleActionContainer.getExpressionBean());
                 ruleActionContainer.getRuleAction().setCuratedMessage(
                         curateMessage(ruleActionContainer.getRuleAction(), ruleActionContainer.getRuleAction().getRuleSetRule()));
                 ActionProcessor ap =

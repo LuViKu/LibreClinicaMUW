@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -44,16 +46,9 @@ import java.util.Date;
  * 
  * Processes request of 'restore an event CRF from a event'
  */
-@SuppressWarnings("all")
 public class RestoreEventCRFServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -2651073493567393033L;
 
-	/**
-     * 
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
@@ -67,6 +62,12 @@ public class RestoreEventCRFServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the confirmation; restoring the event CRF takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override
@@ -85,6 +86,8 @@ public class RestoreEventCRFServlet extends SecureController {
             request.setAttribute("id", Integer.valueOf(studySubId).toString());
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
+            assertEventCrfInScope(eventCRFId);
+            assertStudySubjectInScope(studySubId);
             EventCRFBean eventCRF = (EventCRFBean) ecdao.findByPK(eventCRFId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
@@ -167,7 +170,7 @@ public class RestoreEventCRFServlet extends SecureController {
                         item.setStatus(Status.AVAILABLE);
                         item.setUpdater(ub);
                         item.setUpdatedDate(new Date());
-                        iddao.update(item);
+                        iddao.updateStatusOnly(item);
                     }
                 }
 
@@ -186,8 +189,6 @@ public class RestoreEventCRFServlet extends SecureController {
     /**
      * Send email to director and administrator
      * 
-     * @param request
-     * @param response
      */
     private void sendEmail(String emailBody) throws Exception {
 

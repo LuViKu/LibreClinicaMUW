@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.UUID;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -81,6 +83,13 @@ public class CreateUserAccountServlet extends SecureController {
         if (!ub.isSysAdmin()) {
             throw new InsufficientPermissionException(Page.MENU, resexception.getString("you_may_not_perform_administrative_functions"), "1");
         }
+    }
+
+    /** GET shows the form; creating the account (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted()
+                || Boolean.parseBoolean(request.getParameter("changeRoles"));
     }
 
     @Override

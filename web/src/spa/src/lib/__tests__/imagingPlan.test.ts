@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  RETINAL_TASK_OPTIONS,
   buildPlanRows,
   requiredTasksOf,
   toWriteEntries,
@@ -91,6 +92,16 @@ describe('toWriteEntries', () => {
     expect(toWriteEntries(rows)).toEqual([
       { modalityId: 2, requirement: 'optional', laterality: null, tasks: [] },
     ])
+  })
+})
+
+describe('RETINAL_TASK_OPTIONS', () => {
+  it('offers sdretinanet after the existing tasks (mirrors ALLOWED_RETINAL_TASKS)', () => {
+    expect(RETINAL_TASK_OPTIONS).toEqual(['fluid', 'ga', 'onl', 'pr', 'layers', 'sdretinanet'])
+  })
+
+  it('orders sdretinanet last when a plan names it', () => {
+    expect(withRequired(['sdretinanet', 'layers'], ['fluid'])).toEqual(['fluid', 'layers', 'sdretinanet'])
   })
 })
 

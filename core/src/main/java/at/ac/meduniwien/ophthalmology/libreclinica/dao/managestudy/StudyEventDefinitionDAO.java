@@ -119,6 +119,7 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
 
     }
 
+    @Override
     public StudyEventDefinitionBean create(StudyEventDefinitionBean sedb) {
         // study_event_definition_id ,
         // STUDY_ID, NAME,DESCRIPTION, REPEATING, TYPE, CATEGORY, OWNER_ID,
@@ -142,6 +143,7 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
         return sedb;
     }
 
+    @Override
     public StudyEventDefinitionBean update(StudyEventDefinitionBean sedb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         variables.put(Integer.valueOf(1), Integer.valueOf(sedb.getStudyId()));
@@ -158,6 +160,7 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
         return sedb;
     }
 
+    @Override
     public StudyEventDefinitionBean getEntityFromHashMap(HashMap<String, Object> hm) {
         StudyEventDefinitionBean eb = new StudyEventDefinitionBean();
 
@@ -259,6 +262,7 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
         return executeFindAllQuery(queryName, variables);
     }
 
+    @Override
     public ArrayList<StudyEventDefinitionBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -267,10 +271,12 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyEventDefinitionBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public StudyEventDefinitionBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -291,6 +297,7 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyEventDefinitionBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -298,6 +305,7 @@ public class StudyEventDefinitionDAO extends AuditableEntityDAO<StudyEventDefini
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyEventDefinitionBean> findAllByPermission(Object objCurrentUser, int intActionType) {
        throw new RuntimeException("Not implemented");
     }

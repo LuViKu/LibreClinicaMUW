@@ -60,19 +60,23 @@ public abstract class AbstractMutableDomainObject implements MutableDomainObject
 
     @Id
     @GeneratedValue(generator = "id-generator")
+    @Override
     public Integer getId() {
         return id;
     }
 
+    @Override
     public void setId(Integer id) {
         this.id = id;
     }
 
     @Version
+    @Override
     public Integer getVersion() {
         return version;
     }
 
+    @Override
     public void setVersion(Integer version) {
         this.version = version;
     }

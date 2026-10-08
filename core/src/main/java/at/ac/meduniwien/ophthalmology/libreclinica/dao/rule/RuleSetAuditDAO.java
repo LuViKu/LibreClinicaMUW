@@ -51,6 +51,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
         digesterName = SQLFactory.getInstance().DAO_RULESET_AUDIT;
     }
 
+    @Override
     public void setTypesExpected() {
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);
@@ -61,6 +62,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
 
     }
 
+    @Override
     public RuleSetAuditBean getEntityFromHashMap(HashMap<String, Object> hm) {
         RuleSetAuditBean ruleSetAudit = new RuleSetAuditBean();
         ruleSetAudit.setId((Integer) hm.get("rule_set_audit_id"));
@@ -79,6 +81,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetAuditBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) throws OpenClinicaException {
     	throw new RuntimeException("Not implemented");
     }
@@ -86,10 +89,12 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetAuditBean> findAll() throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public RuleSetAuditBean findByPK(int id) throws OpenClinicaException {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(id);
@@ -134,6 +139,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public RuleSetAuditBean create(RuleSetAuditBean eb) throws OpenClinicaException {
     	// implementation not reasonable
     	throw new RuntimeException("Not implemented");
@@ -142,6 +148,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public RuleSetAuditBean update(RuleSetAuditBean eb) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
@@ -149,6 +156,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetAuditBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase)
             throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
@@ -157,6 +165,7 @@ public class RuleSetAuditDAO extends EntityDAO<RuleSetAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetAuditBean> findAllByPermission(Object objCurrentUser, int intActionType) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }

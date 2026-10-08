@@ -62,7 +62,7 @@ public class OpenClinicaSessionRegistryImpl extends SessionRegistryImpl {
         auditUserLogin.setUserName(username);
         auditUserLogin.setLoginStatus(LoginStatus.SUCCESSFUL_LOGOUT);
         auditUserLogin.setLoginAttemptDate(new Date());
-        auditUserLogin.setUserAccountId(userAccount != null ? userAccount.getId() : null);
+        auditUserLogin.setUserAccountId(userAccount.getId());
         getAuditUserLoginDao().saveOrUpdate(auditUserLogin);
     }
 

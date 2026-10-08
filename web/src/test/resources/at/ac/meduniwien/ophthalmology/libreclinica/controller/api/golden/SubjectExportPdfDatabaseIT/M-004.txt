@@ -1,0 +1,28 @@
+pages: 1
+--- page 1 ---
+D efault Study
+Subject: M-004
+ 
+Secondary ID 04-MUW
+Gender M
+Year of birth 1971
+Enrolled on 2020-11-02
+Study OID S_DEFAULTS1
+Generated <today>
+ 
+ 
+V 1 Inclusion (SE_V1_INCLUSION)
+Status: data entry started · Started 2020-11-02
+ 
+D emographics
+Item Value Units
+Date of informed consent 2020-11-01
+Height (cm) 184 cm
+ 
+V 2 Day 30 (SE_V2_DAY30)
+Status: not scheduled
+No CRFs attached.
+ 
+V 3 Day 90 (SE_V3_DAY90)
+Status: not scheduled
+No CRFs attached.

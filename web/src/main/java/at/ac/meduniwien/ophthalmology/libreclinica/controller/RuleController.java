@@ -99,7 +99,7 @@ public class RuleController {
             RuleSetBean ruleSetBean = new RuleSetBean();
             ruleSetBean.setOriginalTarget(targetBean);
             if (scheduleType != null) {
-                if (!scheduleType.getTime().equals("")) {
+                if (!scheduleType.getTime().isEmpty()) {
                     ruleSetBean.setRunTime(scheduleType.getTime());
                 }
             }
@@ -230,6 +230,7 @@ public class RuleController {
         return rpic;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @RequestMapping(value = "/studies/{study}/metadata", method = RequestMethod.GET)
     public ModelAndView studyMetadata(Model model, HttpSession session, @PathVariable("study") String studyOid, HttpServletResponse response) throws Exception {
         ResourceBundleProvider.updateLocale(Locale.US);
@@ -237,6 +238,15 @@ public class RuleController {
 
         StudyDAO studyDao = new StudyDAO(dataSource);
         currentStudy = studyDao.findByOid(studyOid);
+
+        // As the other endpoints of this class: Study Director or Data Manager of that study (a site inherits the
+        // role held on its parent), nobody else; an unknown study is not told apart from a forbidden one.
+        try {
+            mayProceed(getUserAccount(), currentStudy);
+        } catch (Exception e) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return null;
+        }
 
         MetaDataCollector mdc = new MetaDataCollector(dataSource, currentStudy, getRuleSetRuleDao());
         AdminDataCollector adc = new AdminDataCollector(dataSource, currentStudy);

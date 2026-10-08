@@ -118,19 +118,19 @@ public class XsltTriggerService {
     }
 
     public static int getIntervalTimeInSeconds(String period) {
-        Integer interval = Integer.valueOf("0");
+        Integer interval = Integer.valueOf(0);
         if ("monthly".equalsIgnoreCase(period)) {
-            interval = Integer.valueOf("2419200"); // how many
+            interval = Integer.valueOf(2419200); // how many
             // milliseconds in
             // a month? should
             // be 24192000000
         } else if ("weekly".equalsIgnoreCase(period)) {
-            interval = Integer.valueOf("604800"); // how many
+            interval = Integer.valueOf(604800); // how many
             // milliseconds in
             // a week? should
             // be 6048000000
         } else { // daily
-            interval = Integer.valueOf("86400");// how many
+            interval = Integer.valueOf(86400);// how many
             // milliseconds in a
             // day?
         }

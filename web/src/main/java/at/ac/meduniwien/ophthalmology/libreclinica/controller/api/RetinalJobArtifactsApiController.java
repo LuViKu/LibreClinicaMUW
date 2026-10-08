@@ -9,8 +9,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -22,12 +20,8 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
@@ -46,7 +40,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -63,6 +56,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -94,8 +88,6 @@ public class RetinalJobArtifactsApiController {
     private static final Logger LOG =
             LoggerFactory.getLogger(RetinalJobArtifactsApiController.class);
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     private final DataSource dataSource;
     private final RetinalArtifactStorageService artifactStore;
     private final StudyResourceAccess accessDelegate;
@@ -119,6 +111,7 @@ public class RetinalJobArtifactsApiController {
         return jobsDelegate;
     }
 
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/artifacts/{name:.+}")
     public ResponseEntity<?> streamArtifact(@PathVariable("jobId") long jobId,
                                             @PathVariable("name") String name,
@@ -239,8 +232,10 @@ public class RetinalJobArtifactsApiController {
     /* onl/pr = surface_y float32 (z, cols). Only fluid is wired in this     */
     /* push; ga/onl/pr surface 501 Not Implemented until their loaders land. */
     /* ====================================================================== */
+    @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation")
     public ResponseEntity<?> streamSegmentation(@PathVariable("jobId") long jobId,
+                                                @RequestParam(name = "part", required = false) String part,
                                                 HttpSession session,
                                                 HttpServletResponse response) {
         ResponseEntity<?> guard = access().guardSession(session);
@@ -276,7 +271,9 @@ public class RetinalJobArtifactsApiController {
 
         SegmentationEnvelopeLoader.SegmentationEnvelope env;
         try {
-            env = SegmentationEnvelopeLoader.load(row.task, dir);
+            // part: sdretinanet serves its layer boundaries by default and its
+            // lesion masks for part=lesions; other tasks ignore it
+            env = SegmentationEnvelopeLoader.load(row.task, dir, part);
         } catch (IOException ioEx) {
             LOG.error("Failed to load segmentation envelope for job {} (task={}): {}",
                     jobId, row.task, ioEx.getMessage());

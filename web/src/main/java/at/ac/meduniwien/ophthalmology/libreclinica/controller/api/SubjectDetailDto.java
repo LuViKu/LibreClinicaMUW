@@ -123,7 +123,14 @@ public record SubjectDetailDto(
          * caller assembles the DTO before the DAO insert has assigned
          * an id, OR on legacy fixture rows that pre-date this field.
          */
-        int studySubjectId
+        int studySubjectId,
+        /**
+         * The full date of birth as ISO {@code YYYY-MM-DD}, when one was
+         * recorded ({@code subject.dob_collected}); {@code null} when only
+         * the year, or nothing, was. The subject edit form corrects it
+         * where the study collects the full date.
+         */
+        String dateOfBirth
 ) {
 
     /**

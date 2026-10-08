@@ -41,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfWriteRules;
 
 /**
  * Public BCVA-entry portal backend.
@@ -157,25 +158,21 @@ public class PublicBcvaEntryController {
             Map.entry(Field.OS_AXIS,     Set.of("OS_BCVA_REFRACTION_AXIS",     "REFRACT_OS_AXIS"))
     );
 
-    /** Inverse lookup: every OID the controller knows about, flat. */
-    private static final Set<String> ALL_KNOWN_OIDS = OID_BY_FIELD.values().stream()
-            .flatMap(Set::stream)
-            .collect(Collectors.toUnmodifiableSet());
-
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
     /**
      * Subject-event statuses for which the BCVA portal will list a
      * visit. Per {@code SubjectEventStatus}:
-     *   1 = SCHEDULED, 3 = DATA_ENTRY_STARTED, 4 = COMPLETED, 8 = SIGNED.
-     * Excluded: 2 (NOT_SCHEDULED), 5 (STOPPED), 6 (SKIPPED), 7 (LOCKED)
-     * — none of those should accept new BCVA data.
+     *   1 = SCHEDULED, 3 = DATA_ENTRY_STARTED, 4 = COMPLETED.
+     * Excluded: 2 (NOT_SCHEDULED), 5 (STOPPED), 6 (SKIPPED), 7 (LOCKED),
+     * 8 (SIGNED) — none of those should accept new BCVA data; the commit
+     * refuses a signed or locked visit in any case (EventCrfWriteRules).
      *
      * <p>2026-06-24: was {@code (1, 2, 4, 8)}, which dropped the very
      * common DATA_ENTRY_STARTED state (the typical state after an
      * operator opens any CRF on the visit). Fixed in this commit.
      */
-    private static final Set<Integer> ENTRY_OK_STATUS_IDS = Set.of(1, 3, 4, 8);
+    private static final Set<Integer> ENTRY_OK_STATUS_IDS = Set.of(1, 3, 4);
 
     private final DataSource dataSource;
 
@@ -379,6 +376,17 @@ public class PublicBcvaEntryController {
                 }
                 int eventCrfId = instance.eventCrfId();
 
+                // No change to a visit whose form, visit, subject or study
+                // is removed, locked or signed (EventCrfWriteRules).
+                EventCrfWriteRules.Refusal refusal = EventCrfWriteRules.refusal(c, eventCrfId);
+                if (refusal != null) {
+                    c.rollback();
+                    return ResponseEntity.status(409).body(Map.of(
+                            "message", "This visit's BCVA form " + refusal.reason()
+                                    + "; nothing was saved",
+                            "code", "EVENT_CRF_" + refusal.name()));
+                }
+
                 // 3. Project the SPA payload into the semantic field
                 //    model (decimal/partial/letters/logMAR/refraction
                 //    per eye), deriving letters + logMAR from the
@@ -403,20 +411,29 @@ public class PublicBcvaEntryController {
                 //    its semantic field + collect the item_data ids so
                 //    the audit row can surface them.
                 List<Integer> writtenItemDataIds = new ArrayList<>();
+                boolean changed = false;
                 for (Map.Entry<Field, String> e : valueByField.entrySet()) {
                     String value = e.getValue();
                     if (value == null || value.isBlank()) continue;
                     for (String oid : OID_BY_FIELD.getOrDefault(e.getKey(), Set.of())) {
                         Integer itemId = itemIdByOid.get(oid);
                         if (itemId == null) continue;
-                        int itemDataId = upsertItemData(c, eventCrfId, itemId, value);
-                        writtenItemDataIds.add(itemDataId);
+                        Upserted upserted = upsertItemData(c, eventCrfId, itemId, value);
+                        writtenItemDataIds.add(upserted.itemDataId());
+                        changed |= upserted.changed();
                     }
                 }
                 if (writtenItemDataIds.isEmpty()) {
                     c.rollback();
                     return ResponseEntity.badRequest().body(Map.of(
                             "message", "No supplied field matched any item the target CRF exposes — nothing written"));
+                }
+                // A changed value ends the form's source data verification.
+                // The portal's operator is no user account: the trigger's
+                // audit row names nobody, not the stand-in owner account,
+                // and the portal's audit row below names the operator.
+                if (changed) {
+                    EventCrfWriteRules.withdrawVerification(c, eventCrfId, null);
                 }
 
                 // 5. Audit row. user_id NULL (trust-the-reverse-proxy).
@@ -565,7 +582,7 @@ public class PublicBcvaEntryController {
         // Build a parameterised IN list — OIDs are whitelisted from
         // BCVA_ITEM_OIDS so SQL injection is moot; the explicit
         // PreparedStatement parameterisation is still hygiene.
-        String placeholders = wantedOids.stream().map(o -> "?").collect(Collectors.joining(","));
+        String placeholders = wantedOids.stream().map(_ -> "?").collect(Collectors.joining(","));
         String sql = "SELECT i.name, i.item_id "
                 + "  FROM item_form_metadata ifm "
                 + "  JOIN item i ON i.item_id = ifm.item_id "
@@ -585,18 +602,26 @@ public class PublicBcvaEntryController {
         return out;
     }
 
+    /** An upserted row, and whether its value changed. */
+    private record Upserted(int itemDataId, boolean changed) {}
+
     /**
      * INSERT a fresh item_data row OR UPDATE the existing one for
      * the (event_crf_id, item_id, ordinal=1) tuple. Returns the
-     * item_data_id either way.
+     * item_data_id either way; a value that would not change is left
+     * alone.
      *
      * <p>Status / ownership: portal writes land in {@code status_id = 1}
      * (available); {@code owner_id = 0} (portal sentinel); {@code ordinal = 1}
      * (BCVA items are single-row, no repeating group).
+     *
+     * <p>Provenance follows the value: a row the portal writes says so in
+     * {@code source_kind}, and carries no machine's source ids, whoever
+     * wrote the value before.
      */
-    private int upsertItemData(Connection c, int eventCrfId, int itemId, String value) throws SQLException {
+    private Upserted upsertItemData(Connection c, int eventCrfId, int itemId, String value) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT item_data_id FROM item_data "
+                "SELECT item_data_id, value FROM item_data "
                         + " WHERE event_crf_id = ? AND item_id = ? AND COALESCE(ordinal, 1) = 1 "
                         + "   AND COALESCE(deleted, false) = false "
                         + " ORDER BY item_data_id ASC LIMIT 1")) {
@@ -605,14 +630,19 @@ public class PublicBcvaEntryController {
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     int idataId = rs.getInt(1);
+                    if (value.equals(rs.getString(2))) {
+                        return new Upserted(idataId, false);
+                    }
                     try (PreparedStatement upd = c.prepareStatement(
-                            "UPDATE item_data SET value = ?, date_updated = now(), update_id = 0 "
+                            "UPDATE item_data SET value = ?, date_updated = now(), update_id = 0, "
+                                    + "       source_kind = 'bcva_portal', source_retinal_job_id = NULL, "
+                                    + "       source_ingest_item_id = NULL "
                                     + " WHERE item_data_id = ?")) {
                         upd.setString(1, value);
                         upd.setInt(2, idataId);
                         upd.executeUpdate();
                     }
-                    return idataId;
+                    return new Upserted(idataId, true);
                 }
             }
         }
@@ -629,7 +659,7 @@ public class PublicBcvaEntryController {
             ps.setInt(4, portalOwnerId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) throw new SQLException("INSERT item_data returned no id");
-                return rs.getInt(1);
+                return new Upserted(rs.getInt(1), true);
             }
         }
     }

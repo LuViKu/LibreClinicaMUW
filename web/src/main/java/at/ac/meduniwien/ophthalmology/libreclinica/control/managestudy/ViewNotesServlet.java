@@ -41,9 +41,6 @@ import org.springframework.web.context.support.WebApplicationContextUtils;
  */
 @SuppressWarnings("all")
 public class ViewNotesServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6196337101804576598L;
 	public static final String PRINT = "print";
     public static final String RESOLUTION_STATUS = "resolutionStatus";
@@ -62,21 +59,18 @@ public class ViewNotesServlet extends SecureController {
     @Override
     protected void processRequest() throws Exception {
         String module = request.getParameter("module");
-        String moduleStr = "manage";
         if (module != null && module.trim().length() > 0) {
             if ("submit".equals(module)) {
                 request.setAttribute("module", "submit");
-                moduleStr = "submit";
             } else if ("admin".equals(module)) {
                 request.setAttribute("module", "admin");
-                moduleStr = "admin";
             } else {
                 request.setAttribute("module", "manage");
             }
         }
 
         FormProcessor fp = new FormProcessor(request);
-        if(fp.getString("showMoreLink").equals("")){
+        if(fp.getString("showMoreLink").isEmpty()){
             showMoreLink = true;
         }else {
             showMoreLink = Boolean.parseBoolean(fp.getString("showMoreLink"));
@@ -252,7 +246,6 @@ public class ViewNotesServlet extends SecureController {
     }
 
     /**
-     * @param resolveViewNotesService
      * @return
      */
     private Map<String, Map<String, String>> generateDiscrepancyNotesSummary(DiscrepancyNotesSummary summary) {

@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -66,9 +68,24 @@ public class RemoveEventDefinitionServlet extends SecureController {
 
     }
 
+    /** GET shows the confirmation; removing the event definition takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         String idString = request.getParameter("id");
+        // The `idString == null` guard below the DAO calls sat *after* idString
+        // had already been dereferenced (`idString.trim()`), so a request without
+        // ?id= raised NullPointerException and never reached the page message the
+        // guard was written to produce. Test before the first dereference.
+        if (idString == null || idString.trim().isEmpty()) {
+            addPageMessage(respage.getString("please_choose_a_SED_to_remove"));
+            forwardPage(Page.LIST_DEFINITION_SERVLET);
+            return;
+        }
 
         int defId = Integer.valueOf(idString.trim()).intValue();
         StudyEventDefinitionDAO sdao = new StudyEventDefinitionDAO(sm.getDataSource());
@@ -109,93 +126,87 @@ public class RemoveEventDefinitionServlet extends SecureController {
         ArrayList<StudyEventBean> events = sedao.findAllByDefinition(sed.getId());
 
         String action = request.getParameter("action");
-        if (idString == null || idString.trim().isEmpty()) {
-            addPageMessage(respage.getString("please_choose_a_SED_to_remove"));
-            forwardPage(Page.LIST_DEFINITION_SERVLET);
-        } else {
-            if ("confirm".equalsIgnoreCase(action)) {
-                if (!sed.getStatus().equals(Status.AVAILABLE)) {
-                    addPageMessage(respage.getString("this_SED_is_not_available_for_this_study")
-                        + respage.getString("please_contact_sysadmin_for_more_information"));
-                    forwardPage(Page.LIST_DEFINITION_SERVLET);
-                    return;
-                }
-                StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
-                String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-                if (participateFormStatus.equals("enabled")) baseUrl();
+        if ("confirm".equalsIgnoreCase(action)) {
+            if (!sed.getStatus().equals(Status.AVAILABLE)) {
+                addPageMessage(respage.getString("this_SED_is_not_available_for_this_study")
+                    + respage.getString("please_contact_sysadmin_for_more_information"));
+                forwardPage(Page.LIST_DEFINITION_SERVLET);
+                return;
+            }
+            StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
+            String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
+        
+            request.setAttribute("participateFormStatus",participateFormStatus );
+
             
-                request.setAttribute("participateFormStatus",participateFormStatus );
+            
+            request.setAttribute("definitionToRemove", sed);
+            request.setAttribute("eventDefinitionCRFs", eventDefinitionCRFs);
+            request.setAttribute("events", events);
+            forwardPage(Page.REMOVE_DEFINITION);
+        } else {
+            logger.info("submit to remove the definition");
+            // remove definition
+            sed.setStatus(Status.DELETED);
+            sed.setUpdater(ub);
+            sed.setUpdatedDate(new Date());
+            sdao.update(sed);
 
-                
-                
-                request.setAttribute("definitionToRemove", sed);
-                request.setAttribute("eventDefinitionCRFs", eventDefinitionCRFs);
-                request.setAttribute("events", events);
-                forwardPage(Page.REMOVE_DEFINITION);
-            } else {
-                logger.info("submit to remove the definition");
-                // remove definition
-                sed.setStatus(Status.DELETED);
-                sed.setUpdater(ub);
-                sed.setUpdatedDate(new Date());
-                sdao.update(sed);
-
-                // remove all crfs
-                for (int j = 0; j < eventDefinitionCRFs.size(); j++) {
-                    EventDefinitionCRFBean edc = (EventDefinitionCRFBean) eventDefinitionCRFs.get(j);
-                    if (!edc.getStatus().equals(Status.DELETED)) {
-                        edc.setStatus(Status.AUTO_DELETED);
-                        edc.setUpdater(ub);
-                        edc.setUpdatedDate(new Date());
-                        edao.update(edc);
-                    }
+            // remove all crfs
+            for (int j = 0; j < eventDefinitionCRFs.size(); j++) {
+                EventDefinitionCRFBean edc = (EventDefinitionCRFBean) eventDefinitionCRFs.get(j);
+                if (!edc.getStatus().equals(Status.DELETED)) {
+                    edc.setStatus(Status.AUTO_DELETED);
+                    edc.setUpdater(ub);
+                    edc.setUpdatedDate(new Date());
+                    edao.update(edc);
                 }
-                // remove all events
+            }
+            // remove all events
 
-                EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
+            EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
 
-                for (int j = 0; j < events.size(); j++) {
-                    StudyEventBean event = (StudyEventBean) events.get(j);
-                    if (!event.getStatus().equals(Status.DELETED)) {
-                        event.setStatus(Status.AUTO_DELETED);
-                        event.setUpdater(ub);
-                        event.setUpdatedDate(new Date());
-                        sedao.update(event);
+            for (int j = 0; j < events.size(); j++) {
+                StudyEventBean event = (StudyEventBean) events.get(j);
+                if (!event.getStatus().equals(Status.DELETED)) {
+                    event.setStatus(Status.AUTO_DELETED);
+                    event.setUpdater(ub);
+                    event.setUpdatedDate(new Date());
+                    sedao.update(event);
 
-                        ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(event);
-                        // remove all the item data
-                        ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
-                        for (int k = 0; k < eventCRFs.size(); k++) {
-                            EventCRFBean eventCRF = (EventCRFBean) eventCRFs.get(k);
-                            if (!eventCRF.getStatus().equals(Status.DELETED)) {
-                                eventCRF.setStatus(Status.AUTO_DELETED);
-                                eventCRF.setUpdater(ub);
-                                eventCRF.setUpdatedDate(new Date());
-                                ecdao.update(eventCRF);
+                    ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(event);
+                    // remove all the item data
+                    ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
+                    for (int k = 0; k < eventCRFs.size(); k++) {
+                        EventCRFBean eventCRF = (EventCRFBean) eventCRFs.get(k);
+                        if (!eventCRF.getStatus().equals(Status.DELETED)) {
+                            eventCRF.setStatus(Status.AUTO_DELETED);
+                            eventCRF.setUpdater(ub);
+                            eventCRF.setUpdatedDate(new Date());
+                            ecdao.update(eventCRF);
 
-                                ArrayList<ItemDataBean> itemDatas = iddao.findAllByEventCRFId(eventCRF.getId());
-                                for (int a = 0; a < itemDatas.size(); a++) {
-                                    ItemDataBean item = (ItemDataBean) itemDatas.get(a);
-                                    if (!item.getStatus().equals(Status.DELETED)) {
-                                        item.setStatus(Status.AUTO_DELETED);
-                                        item.setUpdater(ub);
-                                        item.setUpdatedDate(new Date());
-                                        iddao.update(item);
-                                    }
+                            ArrayList<ItemDataBean> itemDatas = iddao.findAllByEventCRFId(eventCRF.getId());
+                            for (int a = 0; a < itemDatas.size(); a++) {
+                                ItemDataBean item = (ItemDataBean) itemDatas.get(a);
+                                if (!item.getStatus().equals(Status.DELETED)) {
+                                    item.setStatus(Status.AUTO_DELETED);
+                                    item.setUpdater(ub);
+                                    item.setUpdatedDate(new Date());
+                                    iddao.updateStatusOnly(item);
                                 }
                             }
                         }
                     }
                 }
-                String emailBody =
-                    respage.getString("the_SED") + sed.getName() + " " + respage.getString("has_been_removed_from_the_study") + currentStudy.getName() + ".";
-
-                addPageMessage(emailBody);
-//                sendEmail(emailBody);
-                forwardPage(Page.LIST_DEFINITION_SERVLET);
             }
+            String emailBody =
+                respage.getString("the_SED") + sed.getName() + " " + respage.getString("has_been_removed_from_the_study") + currentStudy.getName() + ".";
 
+            addPageMessage(emailBody);
+//                sendEmail(emailBody);
+            forwardPage(Page.LIST_DEFINITION_SERVLET);
         }
+
 
     }
     

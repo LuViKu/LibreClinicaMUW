@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -45,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Restores a removed study event and all its data
  */
-@SuppressWarnings("all")
 public class RestoreStudyEventServlet extends SecureController {
     /**
 	 * 
@@ -73,6 +74,12 @@ public class RestoreStudyEventServlet extends SecureController {
 
     }
 
+    /** GET shows the confirmation; restoring the event takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return "confirm".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         FormProcessor fp = new FormProcessor(request);
@@ -88,6 +95,8 @@ public class RestoreStudyEventServlet extends SecureController {
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
 
+            assertStudyEventInScope(studyEventId);
+            assertStudySubjectInScope(studySubId);
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
 
             // YW 11-07-2007, a study event could not be restored if its study
@@ -167,7 +176,7 @@ public class RestoreStudyEventServlet extends SecureController {
                                 item.setStatus(Status.AVAILABLE);
                                 item.setUpdater(ub);
                                 item.setUpdatedDate(new Date());
-                                iddao.update(item);
+                                iddao.updateStatusOnly(item);
                             }
                         }
                     }

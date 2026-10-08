@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.LaxParsingSpringLiquibase;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 
@@ -38,9 +39,11 @@ import org.testcontainers.utility.DockerImageName;
  * <p>A single {@link PostgreSQLContainer} is started per-class (static
  * field + {@link BeforeAll}/{@link AfterAll}) instead of per-test, so
  * the ~10-second Liquibase migration runs once per IT class rather
- * than per method. The container is the canonical {@code postgres:14-alpine}
- * image used elsewhere in the repo (matches the Compose stack + the
- * isolated-network IT runner documented in CLAUDE.md).
+ * than per method. The image is {@code postgres:17-alpine}, the version the
+ * Compose stack runs, unless the system property {@code it.postgres.image}
+ * names another: the CI integration-test matrix passes it to run the same
+ * suite on the PostgreSQL 14 production uses until its upgrade
+ * (docs/operations/postgresql-17-upgrade.md).
  *
  * <p>{@link SpringLiquibase} is invoked directly against the container's
  * JDBC URL with {@code classpath:migration/master.xml} — the same
@@ -72,8 +75,12 @@ import org.testcontainers.utility.DockerImageName;
  * every test in the class — a 10-method IT class still pays only one
  * 7-second migration tax.
  */
-@SuppressWarnings("null")
+@SuppressWarnings({"null", "resource"}) // resource: the Testcontainers PostgreSQL container is shared by every IT and stopped when the JVM exits
 public abstract class AbstractApiControllerDatabaseIT {
+
+    /** Image for the per-class container; see the class comment. */
+    private static final String POSTGRES_IMAGE =
+            System.getProperty("it.postgres.image", "postgres:17-alpine");
 
     /** Single container per IT-class lifetime. */
     protected static PostgreSQLContainer<?> POSTGRES;
@@ -135,7 +142,8 @@ public abstract class AbstractApiControllerDatabaseIT {
             dataInfoField.set(null, dataInfo);
         }
 
-        POSTGRES = new PostgreSQLContainer<>(DockerImageName.parse("postgres:14-alpine"))
+        POSTGRES = new PostgreSQLContainer<>(
+                DockerImageName.parse(POSTGRES_IMAGE).asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName("openclinica")
                 .withUsername("clinica")
                 .withPassword("clinica");
@@ -152,7 +160,7 @@ public abstract class AbstractApiControllerDatabaseIT {
         // file at the tail of master.xml fixes M-001 .. M-007.
         org.springframework.core.io.ResourceLoader resourceLoader =
                 new org.springframework.core.io.DefaultResourceLoader();
-        SpringLiquibase liquibase = new SpringLiquibase();
+        SpringLiquibase liquibase = new LaxParsingSpringLiquibase();
         liquibase.setDataSource(DATA_SOURCE);
         liquibase.setChangeLog("classpath:migration/master.xml");
         liquibase.setResourceLoader(resourceLoader);

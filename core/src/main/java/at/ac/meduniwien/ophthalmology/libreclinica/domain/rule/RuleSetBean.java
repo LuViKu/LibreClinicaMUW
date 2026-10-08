@@ -156,7 +156,7 @@ public class RuleSetBean extends AbstractAuditableMutableDomainObject implements
     @Transient
     public String getCrfWithVersionNameWithOid() {
         String oid = getCrfVersion() != null ? getCrfVersion().getOid() : getCrf() != null ? getCrf().getOid() : "";
-        return getCrfWithVersionName() + (!oid.equals("") ? " (" + oid + ")" : "");
+        return getCrfWithVersionName() + (!oid.isEmpty() ? " (" + oid + ")" : "");
     }
 
     @Transient
@@ -420,9 +420,11 @@ public class RuleSetBean extends AbstractAuditableMutableDomainObject implements
                 return false;
         } else if (!runTime.equals(other.runTime))
             return false;
-        if (expressions == null && other.expressions != null) return false;
-        if (expressions != null && other.expressions == null) return false;
-        if (expressions.size() != other.expressions.size()) return false;
+        if (expressions == null) {
+            if (other.expressions != null)
+                return false;
+        } else if (other.expressions == null || expressions.size() != other.expressions.size())
+            return false;
         return true;
     }
 

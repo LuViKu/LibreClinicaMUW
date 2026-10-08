@@ -43,6 +43,10 @@ vi.mock('@/api/retinal', () => {
 // eslint-disable-next-line import/first
 import { getJob, fetchGeometry, retryRetinalJob } from '@/api/retinal'
 // eslint-disable-next-line import/first
+import { useAuthStore } from '@/stores/auth'
+// eslint-disable-next-line import/first
+import type { StudyWritePermissions, UserRole } from '@/types/auth'
+// eslint-disable-next-line import/first
 import RetinalMetricsView from '../RetinalMetricsView.vue'
 
 const getJobMock = getJob as unknown as ReturnType<typeof vi.fn>
@@ -150,6 +154,39 @@ function makeOnlJob() {
   }
 }
 
+function makeSdRetinaNetJob(overrides: Record<string, unknown> = {}) {
+  const lesion = (volume: number) => ({ volume_mm3: volume, area_mm2: volume * 10, max_height_um: 50 })
+  return {
+    ...makeFluidJob({
+      task: 'sdretinanet',
+      primaryMetric: { value: 0.35, unit: 'mm³' },
+      outputPayload: {
+        lesions: {
+          IRF: lesion(0.2),
+          SRF: lesion(0.1),
+          PED: lesion(0.05),
+          SHRM: lesion(0),
+          SDD: lesion(0),
+          ORT: lesion(0),
+          HRF: { ...lesion(0.001), foci_n: 3 },
+        },
+        crt_um: 312.4,
+        fovea: {
+          x_mm: 0.1, y_mm: -0.05, offset_mm: 0.11, inner_retina_um: 20,
+          pit_depth_um: 110, at_search_edge: false, needs_review: false,
+        },
+        grid_center: { x_mm: 0.1, y_mm: -0.05, source: 'detected', bscan_z: 1, ascan_x: 260 },
+        per_bscan_mm2: {
+          irf: [0.1, 0.2, 0], srf: [0, 0.1, 0], ped: [0, 0, 0.05],
+          shrm: [0, 0, 0], sdd: [0, 0, 0], ort: [0, 0, 0], hrf: [0, 0.01, 0],
+        },
+        ...overrides,
+      },
+      artifactNames: [],
+    }),
+  }
+}
+
 function makeRouter(jobId: number): Router {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -167,8 +204,27 @@ function makeRouter(jobId: number): Router {
   return router
 }
 
-async function mountView(jobPayload: Record<string, unknown>) {
+async function mountView(
+  jobPayload: Record<string, unknown>,
+  role: UserRole = 'Investigator',
+  permissions?: StudyWritePermissions,
+) {
   setActivePinia(createPinia())
+  useAuthStore().user = {
+    username: 'demo',
+    displayName: 'Demo',
+    email: null,
+    role,
+    siteLabel: null,
+    source: 'local',
+    mfaSatisfied: true,
+    profileComplete: true,
+    mustChangePassword: false,
+    passwordChangeReason: null,
+    locale: null,
+    timezone: null,
+    activeStudy: { id: 1, oid: 'S_DEFAULTS1', name: 'iAMD', isSite: false, permissions },
+  } as unknown as ReturnType<typeof useAuthStore>['user']
   getJobMock.mockReset()
   fetchGeometryMock.mockReset()
   getJobMock.mockResolvedValue(jobPayload)
@@ -296,6 +352,26 @@ describe('RetinalMetricsView — task surfaces', () => {
     expect(w.html()).not.toContain('fehlgeschlagen')
   })
 
+  it('offers neither Retry nor Re-run to a Monitor: a run writes into the CRF', async () => {
+    const w = await mountView(
+      makeFluidJob({ status: 'failed', primaryMetric: null }),
+      'Monitor',
+    )
+    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(false)
+    expect(w.find('[data-testid="retinal-view-rerun-as"]').exists()).toBe(false)
+  })
+
+  it('offers neither to a system administrator bound as Monitor', async () => {
+    // /me says "Administrator"; the binding does not enter data.
+    const w = await mountView(
+      makeFluidJob({ status: 'failed', primaryMetric: null }),
+      'Administrator',
+      { enterData: false, editSubject: false, signSubject: false },
+    )
+    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(false)
+    expect(w.find('[data-testid="retinal-view-rerun-as"]').exists()).toBe(false)
+  })
+
   it('renders the retry button always (design promotes it to the header)', async () => {
     // 2026-06-22 — the design moved the retry button from the inflight
     // banner into the page header where it is always visible and only
@@ -305,5 +381,68 @@ describe('RetinalMetricsView — task surfaces', () => {
       makeFluidJob({ status: 'queued', primaryMetric: null }),
     )
     expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(true)
+  })
+})
+
+describe('RetinalMetricsView — sdretinanet', () => {
+  beforeEach(() => {
+    getJobMock.mockReset()
+    fetchGeometryMock.mockReset()
+  })
+
+  it('renders CRT + IRF / SRF / PED tiles from outputPayload.lesions', async () => {
+    const w = await mountView(makeSdRetinaNetJob())
+    const tiles = w.findAll('[data-testid="retinal-kpi-tile"]')
+    expect(tiles.map((t) => t.find('div').text())).toEqual(['CRT', 'IRF', 'SRF', 'PED'])
+    expect(tiles[0].text()).toContain('312')
+    expect(tiles[0].text()).toContain('µm')
+    expect(tiles[1].text()).toContain('0.200')
+    // 2 of 3 B-scans carry IRF in per_bscan_mm2.irf.
+    expect(tiles[1].text()).toContain('2 von 3')
+    expect(w.find('[data-testid="retinal-view-sd-caution"]').exists()).toBe(false)
+  })
+
+  it('shows the task label in the header pill', async () => {
+    const w = await mountView(makeSdRetinaNetJob())
+    expect(w.text()).toContain('SD-RetinaNet Schichten + Läsionen')
+  })
+
+  it('cautions when the fovea needs review or the grid fell back to the scan centre', async () => {
+    const w = await mountView(makeSdRetinaNetJob({
+      fovea: {
+        x_mm: 0, y_mm: 0, offset_mm: 0, inner_retina_um: null,
+        pit_depth_um: null, at_search_edge: true, needs_review: true,
+      },
+      grid_center: { x_mm: 0, y_mm: 0, source: 'scan_center_fallback', bscan_z: 1, ascan_x: 256 },
+    }))
+    const caution = w.find('[data-testid="retinal-view-sd-caution"]')
+    expect(caution.exists()).toBe(true)
+    expect(caution.findAll('li').length).toBe(2)
+    expect(caution.text()).toContain('Fovea')
+    expect(caution.text()).toContain('Scanmitte')
+  })
+
+  it('cautions when geometry is missing and shows dashes for the absent CRT', async () => {
+    const w = await mountView(makeSdRetinaNetJob({
+      geometry: 'missing', crt_um: undefined, fovea: undefined, grid_center: undefined,
+    }))
+    expect(w.find('[data-testid="retinal-view-sd-caution"]').text()).toContain('Geometrie')
+    expect(w.findAll('[data-testid="retinal-kpi-tile"]')[0].text()).toContain('—')
+  })
+
+  it('offers sdretinanet in the re-run menu of other tasks but not of itself', async () => {
+    const fluid = await mountView(makeFluidJob())
+    await fluid.find('[data-testid="retinal-view-rerun-as"] button').trigger('click')
+    expect(fluid.find('[data-testid="retinal-view-rerun-as-sdretinanet"]').exists()).toBe(true)
+
+    const sd = await mountView(makeSdRetinaNetJob())
+    await sd.find('[data-testid="retinal-view-rerun-as"] button').trigger('click')
+    expect(sd.find('[data-testid="retinal-view-rerun-as-sdretinanet"]').exists()).toBe(false)
+    expect(sd.find('[data-testid="retinal-view-rerun-as-layers"]').exists()).toBe(true)
+  })
+
+  it('does not offer the layer-correction fullscreen (read-only task)', async () => {
+    const w = await mountView(makeSdRetinaNetJob())
+    expect(w.find('[data-testid="retinal-view-fs-open"]').exists()).toBe(false)
   })
 })

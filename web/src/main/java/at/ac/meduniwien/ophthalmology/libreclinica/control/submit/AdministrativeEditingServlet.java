@@ -165,6 +165,9 @@ public class AdministrativeEditingServlet extends DataEntryServlet {
     @Override
     protected void mayProceed(HttpServletRequest request, HttpServletResponse response) throws InsufficientPermissionException {
         mayAccess(request);
+        // The role checked below is the one held in the current study, so the
+        // event CRF must be one of that study's.
+        mayUseEventCrfOfCurrentStudy(request);
         locale = LocaleResolver.getLocale(request);
         HttpSession session = request.getSession();
         FormProcessor fp = new FormProcessor(request);

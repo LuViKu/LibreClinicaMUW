@@ -26,6 +26,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
@@ -48,6 +49,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * per-audit-insert sequence. We capture every {@code prepareStatement}
  * call and route it to the matching mock by sniffing the SQL.
  */
+@SuppressWarnings("resource") // Connection, PreparedStatement and ResultSet here are Mockito mocks; there is nothing to close
 class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
 
     /* ---------------------------------------------------------------- */
@@ -80,7 +82,7 @@ class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
         // request. A separate mock PreparedStatement per call ensures
         // independent ResultSet state per SELECT.
         Capture capture = new Capture();
-        Mockito.when(conn.prepareStatement(Mockito.anyString()))
+        Mockito.when(conn.prepareStatement(ArgumentMatchers.anyString()))
                 .thenAnswer(inv -> {
                     String sql = inv.getArgument(0);
                     capture.statements.add(sql);
@@ -141,9 +143,9 @@ class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
 
         SiteVisibilityFilter visibility = Mockito.mock(SiteVisibilityFilter.class);
         Mockito.when(visibility.visibleStudyIds(
-                        Mockito.any(),
-                        Mockito.any(),
-                        Mockito.any()))
+                        ArgumentMatchers.any(),
+                        ArgumentMatchers.any(),
+                        ArgumentMatchers.any()))
                 .thenReturn(visibleStudyIds);
 
         MockMvc mvc = mockMvcFor(

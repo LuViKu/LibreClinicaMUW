@@ -252,6 +252,7 @@ public class ItemGroupMetadataBean extends EntityBean implements Comparable<Item
         this.isHighlighted = isHighlighted;
     }
 
+    @Override
     public int compareTo(ItemGroupMetadataBean o) {
         return this.getOrdinal().compareTo(o.getOrdinal());
     }

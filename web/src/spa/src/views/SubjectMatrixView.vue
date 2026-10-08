@@ -12,13 +12,21 @@ import { useStudyStore } from '@/stores/study'
 import { useAuthStore } from '@/stores/auth'
 import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
+import { canEnterData } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
+import { csvCell } from '@/lib/csv'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
 const study = useStudyStore()
 const auth = useAuthStore()
 const route = useRoute()
+
+/** Adding a subject enters data; the Monitor, who may only view, does not see the button. */
+const mayAddSubject = computed(() => {
+  const role = auth.user?.role ?? null
+  return !!role && canEnterData(role)
+})
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail.
 // "<study> > Studienteilnehmer". The Subject Matrix is the leaf
@@ -151,11 +159,8 @@ const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${s
  * visit with its status, aggregate signed). No backend round-trip; honours the
  * active filter/search. (Per-subject ODM/CSV/PDF snapshots remain the row-level
  * SubjectExportButton.) Previously this button had no handler at all.
+ * Cells go through the shared csvCell, which keeps formula-like text as text.
  */
-function csvCell(v: unknown): string {
-  const s = v == null ? '' : String(v)
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
 function exportCsv(): void {
   const rows = subjects.filtered
   if (rows.length === 0) return
@@ -349,8 +354,10 @@ watch(eventColumns, async (next, prev) => {
             {{ t('common.export') }}
           </button>
           <RouterLink
+            v-if="mayAddSubject"
             to="/subjects/new"
             class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 inline-flex items-center gap-1.5"
+            data-testid="subject-matrix-add"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <line x1="12" x2="12" y1="5" y2="19" />

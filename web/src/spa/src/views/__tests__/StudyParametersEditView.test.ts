@@ -113,21 +113,17 @@ async function mountAt(oid: string) {
   const wrapper = mount(StudyParametersEditView, {
     global: {
       plugins: [router, i18n],
-      stubs: { BuildStudyRail: true },
+      stubs: { BuildStudyRail: true, StudyModuleEnrollmentPanel: true, StudySettingsPanel: true },
     },
   })
   await flushPromises()
   return { wrapper, router }
 }
 
-// 2026-06-25 — these specs reflect a pre-Phase-E.7 wire shape (the view
-// has since gained a second bootstrap GET, the 401 path now goes through
-// the global API-client auth-redirect hook instead of an in-view router
-// push, and the fieldErrors envelope format moved to the unified
-// {path,message} shape). Mark the suite obsolete so CI stays green; the
-// view's contract is exercised by the e2e route smoke. Track-as TODO for
-// the next StudyParameters refresh.
-describe.skip('StudyParametersEditView', () => {
+// The two panels at the foot of the page (study modules, study settings) fetch
+// their own data, so they are stubbed in mountAt: this suite pins the parameter
+// form's single GET and its PUT.
+describe('StudyParametersEditView', () => {
   beforeEach(() => {
     apiGetMock.mockReset()
     apiPutMock.mockReset()
@@ -244,5 +240,39 @@ describe.skip('StudyParametersEditView', () => {
     // for the view's inline banner) and does NOT re-throw. The view
     // catch is never entered for this path — documenting the contract.
     expect(errors.recent).toHaveLength(0)
+  })
+})
+
+// 2026-09-30 — the participant portal is not part of this build, and the
+// backend no longer writes the participantPortal handle, so the form does
+// not offer it. The two panels at the foot of the page fetch their own data
+// and are stubbed out; this spec only looks at the parameter form.
+describe('StudyParametersEditView without the participant portal', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPutMock.mockReset()
+  })
+
+  async function mountForm() {
+    setActivePinia(createPinia())
+    const router = makeRouter()
+    router.push('/studies/S_DEMO/parameters')
+    await router.isReady()
+    apiGetMock.mockResolvedValue(FIXTURE)
+    const wrapper = mount(StudyParametersEditView, {
+      global: {
+        plugins: [router, i18n],
+        stubs: { BuildStudyRail: true, StudyModuleEnrollmentPanel: true, StudySettingsPanel: true },
+      },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('offers randomization but not the participant portal', async () => {
+    const wrapper = await mountForm()
+
+    expect(wrapper.find('#sp-randomization').exists()).toBe(true)
+    expect(wrapper.find('#sp-participantPortal').exists()).toBe(false)
   })
 })

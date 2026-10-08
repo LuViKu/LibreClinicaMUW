@@ -16,7 +16,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.Expres
 
 @SuppressWarnings("all")
 
-public class RuleActionContainer implements Comparable<RuleActionBean> {
+public class RuleActionContainer {
     RuleActionBean ruleAction;
     ExpressionBean expressionBean;
     ItemDataBean itemDataBean;
@@ -61,9 +61,5 @@ public class RuleActionContainer implements Comparable<RuleActionBean> {
 
     public void setRuleSetBean(RuleSetBean ruleSetBean) {
         this.ruleSetBean = ruleSetBean;
-    }
-
-    public int compareTo(RuleActionBean o) {
-        return 0;
     }
 }

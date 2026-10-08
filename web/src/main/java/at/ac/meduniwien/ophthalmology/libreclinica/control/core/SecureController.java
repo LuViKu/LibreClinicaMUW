@@ -18,9 +18,6 @@ import java.io.FileInputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -85,13 +82,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaExceptio
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.I18nFormatUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.Authorization;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.pmanage.ParticipantPortalRegistrar;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanel;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanelLine;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InconsistentStateException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 import org.quartz.JobKey;
@@ -157,7 +153,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 // request/session state. MUW runs single-host (no session replication), so the
 // servlet never round-trips a serialized form — the warning is meaningless here
 // and noisy across 195 subclasses.
-@SuppressWarnings("all")
 public abstract class SecureController extends HttpServlet {
     /**
 	 * 
@@ -286,6 +281,49 @@ public abstract class SecureController extends HttpServlet {
 
     protected abstract void mayProceed() throws InsufficientPermissionException;
 
+    /**
+     * Refuses a request that names a record outside the current study: the
+     * "not a valid entity for the current study" message and the main menu.
+     */
+    protected void refuseRecordOutsideCurrentStudy() throws InsufficientPermissionException {
+        addPageMessage(resexception.getString("not_select_valid_entity_current_study"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
+    }
+
+    /**
+     * The record-scope check of the heritage servlets: the study that owns a record the request names (its study
+     * subject's {@code study_id}) must be the session's study or one of its sites, which is all a site session
+     * covers. Refuses with the main menu otherwise; an unknown record (id 0) is refused too.
+     *
+     * @param owningStudyId the {@code study_id} of the record's study subject
+     */
+    protected void assertRecordInScope(int owningStudyId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsStudy(currentStudy, owningStudyId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
+    /** {@link #assertRecordInScope(int)} for a study subject id of the request. */
+    protected void assertStudySubjectInScope(int studySubjectId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsStudySubject(currentStudy, studySubjectId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
+    /** {@link #assertRecordInScope(int)} for a study event id of the request. */
+    protected void assertStudyEventInScope(int studyEventId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsStudyEvent(currentStudy, studyEventId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
+    /** {@link #assertRecordInScope(int)} for an event CRF id of the request. */
+    protected void assertEventCrfInScope(int eventCrfId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsEventCrf(currentStudy, eventCrfId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
     public static final String USER_BEAN_NAME = "userBean";
 
     public void passwdTimeOut() {
@@ -294,7 +332,16 @@ public abstract class SecureController extends HttpServlet {
         	//@pgawade 18-Sep-2012: fix for issue #14506 (https://issuetracker.openclinica.com/view.php?id=14506#c58197)
             //addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"));
             // + "<a href=\"UpdateProfile\">" + respage.getString("user_profile") + " </a>");
-            int pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
+            int pwdChangeRequired;
+            try {
+                pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
+            } catch (NumberFormatException nfe) {
+                // CoreResources defaults this property to "1" when it is
+                // absent; a value that is present but not a number is the same
+                // kind of misconfiguration, so fall back to the same
+                // fail-safe default rather than 500-ing on first login.
+                pwdChangeRequired = 1;
+            }
             if (pwdChangeRequired == 1) {
             	addPageMessage(respage.getString("welcome") + " " + ub.getFirstName() + " " + ub.getLastName() + ". " + respage.getString("password_set"));
                 request.setAttribute("mustChangePass", "yes");
@@ -633,6 +680,21 @@ public abstract class SecureController extends HttpServlet {
     }
 
     /**
+     * Whether this servlet serves the given GET; by default it does. A servlet
+     * whose request changes state (removes a user, pauses a job, sends a mail)
+     * answers false, so the change takes a POST: a link, a prefetch or an image
+     * elsewhere cannot trigger it, and a cross-site POST is refused by
+     * {@code CrossSiteRequestFilter}. A servlet whose GET only renders a page, a
+     * confirmation for instance, can decide per request.
+     *
+     * @param request the GET, before any session set-up
+     * @return false to answer 405 Method Not Allowed without processing the request
+     */
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return true;
+    }
+
+    /**
      * Handles the HTTP <code>GET</code> method.
      *
      * @param request
@@ -642,6 +704,12 @@ public abstract class SecureController extends HttpServlet {
      */
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, java.io.IOException {
+        if (!acceptsGet(request)) {
+            logger.warn("{} accepts POST only for this request; refused a GET", getClass().getSimpleName());
+            response.setHeader("Allow", "POST");
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            return;
+        }
         try {
             logger.debug("GET Request");
             process(request, response);
@@ -976,7 +1044,7 @@ public abstract class SecureController extends HttpServlet {
         //retrieve the host name
         Properties javaMailProperties = mailSender.getJavaMailProperties();
         if(null != javaMailProperties){
-            if (javaMailProperties.get("mail.smtp.localhost") == null || ((String)javaMailProperties.get("mail.smtp.localhost")).equalsIgnoreCase("") ){
+            if (javaMailProperties.get("mail.smtp.localhost") == null || ((String)javaMailProperties.get("mail.smtp.localhost")).isEmpty() ){
                 javaMailProperties.put("mail.smtp.localhost", "localhost");
             }
         }
@@ -1153,7 +1221,14 @@ public abstract class SecureController extends HttpServlet {
 
         return note;
     }
-    public void checkRoleByUserAndStudy(UserAccountBean ub, int studyId, int siteId){
+    /**
+     * Refuses the request when the user holds no role on the study or the site. The refusal is an
+     * {@link InsufficientPermissionException}, which ends the request at the main menu.
+     */
+    public void checkRoleByUserAndStudy(UserAccountBean ub, int studyId, int siteId) throws InsufficientPermissionException {
+        if (ub.isSysAdmin()) {
+            return;
+        }
         StudyUserRoleBean studyUserRole = ub.getRoleByStudy(studyId);
         StudyUserRoleBean siteUserRole = new StudyUserRoleBean();
         if (siteId != 0) {
@@ -1162,31 +1237,8 @@ public abstract class SecureController extends HttpServlet {
         if(studyUserRole.getRole().equals(Role.INVALID) && siteUserRole.getRole().equals(Role.INVALID)){
             addPageMessage(respage.getString("no_have_correct_privilege_current_study")
                     + " " + respage.getString("change_active_study_or_contact"));
-            forwardPage(Page.MENU_SERVLET);
-            return;
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
         }
-    }
-
-    protected void baseUrl() throws MalformedURLException {
-        String portalURL = CoreResources.getField("portalURL");
-        URL pManageUrl;
-        try {
-            pManageUrl = URI.create(portalURL).toURL();
-        } catch (IllegalArgumentException e) {
-            throw new MalformedURLException(e.getMessage());
-        }
-
-        ParticipantPortalRegistrar registrar = new ParticipantPortalRegistrar();
-        Authorization pManageAuthorization = registrar.getAuthorization(currentStudy.getOid());
-        String url = "";
-
-        if (pManageAuthorization != null) {
-            url = pManageUrl.getProtocol() + "://" + pManageAuthorization.getStudy().getHost() + "." + pManageUrl.getHost()
-                    + ((pManageUrl.getPort() > 0) ? ":" + pManageUrl.getPort() : "");
-        }
-        
-        logger.debug("the url: " + url);
-        request.setAttribute("participantUrl",url + "/");
     }
 
     /**

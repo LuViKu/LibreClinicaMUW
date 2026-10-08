@@ -38,8 +38,6 @@ public interface Function {
     /**
      * Sets the function value to the aValue.
      *
-     * @param new
-     *            Value a new value.
      */
     public void setValue(String newValue);
 

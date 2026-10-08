@@ -86,6 +86,7 @@ public enum EventCRFStatus  implements CodedEnum  {
 	        return this.name();
 	    }
 
+	    @Override
 	    public Integer getCode() {
 	        return code;
 	    }

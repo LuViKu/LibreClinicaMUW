@@ -102,6 +102,7 @@ public class ViewEventDefinitionReadOnlyServlet extends ViewEventDefinitionServl
             forwardPage(Page.VIEW_EVENT_DEFINITION_NOSIDEBAR);
         }
     }
+    @Override
     public EventDefinitionCrfTagService getEventDefinitionCrfTagService() {
         eventDefinitionCrfTagService=
          this.eventDefinitionCrfTagService != null ? eventDefinitionCrfTagService : (EventDefinitionCrfTagService) SpringServletAccess.getApplicationContext(context).getBean("eventDefinitionCrfTagService");

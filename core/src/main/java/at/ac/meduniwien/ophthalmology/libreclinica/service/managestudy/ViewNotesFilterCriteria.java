@@ -131,11 +131,11 @@ public class ViewNotesFilterCriteria {
                 // Parse value to a list of integers.
                 List<Integer> intList = new ArrayList<Integer>(multipleValues.length);
                 for (int i = 0; i < multipleValues.length; i++) {
-                    intList.add(Integer.parseInt(multipleValues[i]));
+                    intList.add(parseNumericFilter(filterName, multipleValues[i]));
                 }
                 return intList;
             } else {
-                return Integer.parseInt(value);
+                return parseNumericFilter(filterName, value);
             }
         } else if (Arrays.asList(DATE_FILTERS).contains(filterName)) {
             try {
@@ -145,6 +145,25 @@ public class ViewNotesFilterCriteria {
             }
         }
         return "%" + StringUtils.trim(value) + "%";
+    }
+
+    /**
+     * Parse one value for a numeric filter column.
+     *
+     * <p>The filter text comes straight off the request, so a non-numeric value
+     * is a malformed request rather than a server fault. It stays an
+     * {@link IllegalArgumentException} -- which is what the unhandled
+     * {@link NumberFormatException} already was, and what
+     * ViewNotesDataServlet turns into a 400 -- but the message now names the
+     * filter instead of only repeating the offending text.
+     */
+    private static int parseNumericFilter(String filterName, String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException nfe) {
+            throw new IllegalArgumentException(
+                    "Filter '" + filterName + "' expects a number but got '" + value + "'", nfe);
+        }
     }
 
     public Integer getPageNumber() {

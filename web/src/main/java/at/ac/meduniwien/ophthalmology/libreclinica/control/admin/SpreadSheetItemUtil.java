@@ -238,9 +238,6 @@ public class SpreadSheetItemUtil {
 	public int getResponseTypeId() {
 		return responseTypeId;
 	}
-	/**
-	 * @param responSe_type the responSe_type to set
-	 */
 	public void setResponseTypeId(int response_type_id) {
 		this.responseTypeId = response_type_id;
 	}
@@ -691,7 +688,7 @@ public class SpreadSheetItemUtil {
 				 check_group_count++;
 		    	 //we expect no more than one hit
 		    	 if (check_group.getItemName().equals(row_item.getItemName()) && 
-		    	 	!(row_item.getGroupLabel().equals("") && check_group.getGroupName().equals("Ungrouped"))){
+		    	 	!(row_item.getGroupLabel().isEmpty() && check_group.getGroupName().equals("Ungrouped"))){
 		    		 
 			    		 if ( !row_item.getGroupLabel().equals(check_group.getGroupName()) && check_group.getCrfVersionStatus()==1){
 			    			 item_messages.append(resPageMsg.getString("verifyUniqueItemPlacementInGroups_4") + check_group.getGroupName() );

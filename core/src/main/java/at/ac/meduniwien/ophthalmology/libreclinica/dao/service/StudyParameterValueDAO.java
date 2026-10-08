@@ -46,6 +46,7 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyParameterValueBean> findAll() {
     	throw new RuntimeException("Not implemented");
     }
@@ -53,10 +54,12 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyParameterValueBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public StudyParameterValueBean create(StudyParameterValueBean spvb) {
         HashMap<Integer, Object> variables = variables(spvb.getStudyId(), spvb.getValue(), spvb.getParameter());
 
@@ -65,6 +68,7 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
 
     }
 
+    @Override
     public StudyParameterValueBean update(StudyParameterValueBean spvb) {
         HashMap<Integer, Object> variables = variables(spvb.getValue(), spvb.getStudyId(), spvb.getParameter());
 
@@ -72,6 +76,7 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
         return spvb;
     }
 
+    @Override
     public StudyParameterValueBean getEntityFromHashMap(HashMap<String, Object> hm) {
         // study_id numeric,
         // value varchar(50),
@@ -208,6 +213,7 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
 
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
         EntityBean eb = new StudyParameterValueBean();
         return eb;
@@ -217,6 +223,7 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyParameterValueBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -224,6 +231,7 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyParameterValueBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

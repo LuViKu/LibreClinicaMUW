@@ -38,6 +38,7 @@ public enum SourceDataVerification implements CodedEnum {
         this.description = description;
     }
 
+    @Override
     public Integer getCode() {
         return code;
     }

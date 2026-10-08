@@ -8,7 +8,7 @@
  * the Pinia store hydrates from mock data with the production shape
  * until the adapter lands during E.5.3's backend pass.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): wire types derived
+ * Phase E.5 follow-up (2026-06-02): wire types derived
  * from the openapi-typescript-generated {@code components.schemas}
  * so the SPA's call sites stay aligned with the backend record shape.
  * Narrow literal-union enums ({@link ItemDataType},

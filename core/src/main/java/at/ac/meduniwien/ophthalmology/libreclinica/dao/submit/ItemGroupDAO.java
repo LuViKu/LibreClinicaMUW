@@ -96,11 +96,13 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<ItemGroupBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase)
             throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public ArrayList<ItemGroupBean> findAllByPermission(Object objCurrentUser, int intActionType) throws OpenClinicaException {
         return new ArrayList<>();
     }
@@ -152,6 +154,7 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
         return formGroupBean;
     }
 
+    @Override
     public ArrayList<ItemGroupBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -172,6 +175,7 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
 
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -244,6 +248,7 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
         return executeFindAllQuery(queryName, variables);
     }
     
+    @Override
     public ItemGroupBean getEntityFromHashMap(HashMap<String, Object> hm) {
         ItemGroupBean formGroupBean = new ItemGroupBean();
         super.setEntityAuditInformation(formGroupBean, hm);
@@ -255,6 +260,7 @@ public class ItemGroupDAO extends AuditableEntityDAO<ItemGroupBean> {
         return formGroupBean;
     }
 
+    @Override
     public ArrayList<ItemGroupBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         return new ArrayList<>();
     }

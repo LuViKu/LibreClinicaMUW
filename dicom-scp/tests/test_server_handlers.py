@@ -191,3 +191,50 @@ def test_worklist_and_verification_contexts_are_offered():
     offered = {c.abstract_syntax for c in ae.supported_contexts}
     assert MWL_FIND in offered, "the Lumo pulls a worklist before it stores"
     assert "1.2.840.10008.1.1" in offered, "C-ECHO backs the device's connection test"
+
+
+# --- describe/verify-only mode (internet-facing deployment) ----------------
+
+def test_describe_only_mode_never_starts_the_scp(monkeypatch):
+    from unittest import mock
+
+    from dicom_scp import describe
+
+    monkeypatch.setattr(config.settings, "scp_enabled", False)
+    monkeypatch.setattr(config.settings, "ingest_token", "t")
+    monkeypatch.setattr(config.settings, "ingest_url", "")
+    served = mock.Mock()
+    monkeypatch.setattr(describe, "serve_forever", served)
+    with mock.patch("dicom_scp.server.AE.start_server") as start_server, \
+            mock.patch.object(server, "build_ae") as build_ae:
+        server.serve()
+    served.assert_called_once_with(config.settings)
+    start_server.assert_not_called()
+    build_ae.assert_not_called()
+
+
+def test_describe_only_mode_requires_the_token(monkeypatch):
+    monkeypatch.setattr(config.settings, "scp_enabled", False)
+    monkeypatch.setattr(config.settings, "ingest_token", "")
+    with pytest.raises(SystemExit):
+        server.serve()
+
+
+def test_describe_only_http_server_answers_without_binding_scp_port(monkeypatch):
+    import http.client
+    import threading
+
+    from dicom_scp import describe
+
+    monkeypatch.setattr(config.settings, "describe_host", "127.0.0.1")
+    monkeypatch.setattr(config.settings, "describe_port", 0 + 18081)
+    srv = describe._make_server(config.settings)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", 18081, timeout=5)
+        conn.request("POST", "/verify", body=b"{}")
+        assert conn.getresponse().status in (400, 401, 403)
+    finally:
+        srv.shutdown()
+        srv.server_close()

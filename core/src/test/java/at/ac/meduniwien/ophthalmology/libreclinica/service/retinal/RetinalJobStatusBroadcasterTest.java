@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
+import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -85,7 +86,7 @@ public class RetinalJobStatusBroadcasterTest {
             this.sends = sends;
         }
         @Override
-        public void send(SseEventBuilder builder) throws IOException {
+        public void send(@NonNull SseEventBuilder builder) throws IOException {
             sends.incrementAndGet();
         }
     }
@@ -93,7 +94,7 @@ public class RetinalJobStatusBroadcasterTest {
     /** SseEmitter that always throws on send — exercises the eviction path. */
     private static final class FailingEmitter extends SseEmitter {
         @Override
-        public void send(SseEventBuilder builder) throws IOException {
+        public void send(@NonNull SseEventBuilder builder) throws IOException {
             throw new IOException("client gone");
         }
     }

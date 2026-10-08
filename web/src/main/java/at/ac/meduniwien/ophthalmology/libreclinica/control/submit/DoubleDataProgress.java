@@ -53,6 +53,7 @@ public class DoubleDataProgress implements EnterDataProgress {
         synchronizedList = Collections.synchronizedList(sectionVisits);
     }
 
+    @Override
     public boolean getSectionVisited(int sectionNumber, int eventCRFId) {
         for (SectionVisit secVisit : synchronizedList) {
             if (secVisit.getEventCRFId() == eventCRFId && secVisit.getSectionNumber() == sectionNumber)
@@ -61,6 +62,7 @@ public class DoubleDataProgress implements EnterDataProgress {
         return false;
     }
 
+    @Override
     public void setSectionVisited(int eventCRFId, int sectionNumber, boolean hasVisited) {
         for (SectionVisit secVisit : synchronizedList) {
             if (secVisit.getEventCRFId() == eventCRFId && secVisit.getSectionNumber() == sectionNumber) {

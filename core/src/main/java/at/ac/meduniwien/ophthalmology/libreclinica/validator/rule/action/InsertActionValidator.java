@@ -61,6 +61,7 @@ public class InsertActionValidator implements Validator {
     /**
      * This Validator validates just Person instances
      */
+    @Override
     public boolean supports(Class<?> clazz) {
         return InsertActionBean.class.equals(clazz);
     }
@@ -141,6 +142,7 @@ public class InsertActionValidator implements Validator {
         }
     }
 
+    @Override
     public void validate(Object obj, Errors e) {
         InsertActionBean insertActionBean = (InsertActionBean) obj;
         for (int i = 0; i < insertActionBean.getProperties().size(); i++) {

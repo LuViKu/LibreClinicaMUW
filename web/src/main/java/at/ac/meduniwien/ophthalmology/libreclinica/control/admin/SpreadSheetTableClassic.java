@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -44,7 +45,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.CRFReadingException;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.score.ScoreValidator;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -113,6 +113,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
         this.studyId = studyId;
     }
 
+    @Override
     public void setCrfId(int id) {
         this.crfId = id;
     }
@@ -121,9 +122,8 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
         return this.crfId;
     }
 
+	@Override
 	public NewCRFBean toNewCRF(javax.sql.DataSource ds, ResourceBundle resPageMsg) throws IOException, CRFReadingException {
-
-        String dbName = SQLInitServlet.getDBName();
 
         NewCRFBean ncrf = new NewCRFBean(ds, crfId);
         ncrf.setCrfId(crfId);// set crf id
@@ -349,7 +349,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                                 }
                                 this.existingOIDs.add(oid);
                                 this.existingUnits.add(unit.toUpperCase());
-                                muSql = this.getMUInsertSql(oid, unit, ub.getId(), dbName);
+                                muSql = this.getMUInsertSql(oid, unit);
                                 queries.add(muSql);
                             }
                         }
@@ -1137,17 +1137,21 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                              * id.
                              */
 
-                            ResultSet nextIdRs = con.createStatement().executeQuery("select nextval('crf_crf_id_seq')");
-
-                            nextIdRs.next();
-                            nextCRFId = nextIdRs.getInt(1);
-                            crfId = nextCRFId;
-                            ncrf.setCrfId(crfId);
-                            String createCRFSql =
-                                    "INSERT INTO CRF (CRF_ID, STATUS_ID, NAME, DESCRIPTION, OWNER_ID, DATE_CREATED, OC_OID, SOURCE_STUDY_ID) VALUES (" + crfId
-                                        + ", 1,'" + stripQuotes(crfName) + "','" + stripQuotes(versionDesc) + "'," + ub.getId() + ",NOW()" + ",'" + crfOid
-                                        + "'," + studyId + ")";
-                            queries.add(createCRFSql);
+                            // try-with-resources: the Statement and the
+                            // ResultSet were only released when the Connection
+                            // in the finally block closed them.
+                            try (Statement nextIdStmt = con.createStatement();
+                                    ResultSet nextIdRs = nextIdStmt.executeQuery("select nextval('crf_crf_id_seq')")) {
+                                nextIdRs.next();
+                                nextCRFId = nextIdRs.getInt(1);
+                                crfId = nextCRFId;
+                                ncrf.setCrfId(crfId);
+                                String createCRFSql =
+                                        "INSERT INTO CRF (CRF_ID, STATUS_ID, NAME, DESCRIPTION, OWNER_ID, DATE_CREATED, OC_OID, SOURCE_STUDY_ID) VALUES (" + crfId
+                                            + ", 1,'" + stripQuotes(crfName) + "','" + stripQuotes(versionDesc) + "'," + ub.getId() + ",NOW()" + ",'" + crfOid
+                                            + "'," + studyId + ")";
+                                queries.add(createCRFSql);
+                            }
                         } catch (SQLException e) {
                             logger.warn("Exception encountered with query select nextval('crf_crf_id_seq'), Message-" + e.getMessage());
                         } finally {
@@ -1409,7 +1413,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
     }
 
    
-    private String getMUInsertSql(String oid, String measurementUnitName, int ownerId, String dbName) {
+    private String getMUInsertSql(String oid, String measurementUnitName) {
         return "insert into measurement_unit (oc_oid, name) values ('" + oid + "', '" + stripQuotes(measurementUnitName) + "')";
     }
 

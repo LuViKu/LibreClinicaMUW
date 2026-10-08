@@ -40,12 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The {@code getCurrentSession()} / {@code getSessionFactory()} accessor
  * surface is preserved so subclasses keep working without per-DAO edits.
  */
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public abstract class AbstractDomainDao<T extends DomainObject> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -59,34 +54,41 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         return domainClass().getName();
     }
 
-    @SuppressWarnings("unchecked")
     @Transactional
     public T findById(Integer id) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.id = :id";
-        Query<T> q = getCurrentSession().createQuery(query);
+        Query<T> q = getCurrentSession().createQuery(query, domainClass());
         q.setParameter("id", id);
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings("unchecked")
     @Transactional
     public ArrayList<T> findAll() {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do";
-        Query<T> q = getCurrentSession().createQuery(query);
+        Query<T> q = getCurrentSession().createQuery(query, domainClass());
         return new ArrayList<T>(q.getResultList());
     }
 
-    @SuppressWarnings("unchecked")
     public T findByOcOID(String OCOID){
          getSessionFactory().getStatistics().logSummary();
          String query = "from " + getDomainClassName() + " do  where do.oc_oid = :oc_oid";
-         Query<T> q = getCurrentSession().createQuery(query);
+         Query<T> q = getCurrentSession().createQuery(query, domainClass());
          q.setParameter("oc_oid", OCOID);
          return q.getSingleResultOrNull();
     }
 
+    /**
+     * Still {@link Session#saveOrUpdate}, deprecated since Hibernate 6.0 and
+     * gone in 7. Neither replacement keeps its contract: {@code merge} returns
+     * a managed copy and leaves a detached argument detached, and
+     * {@code persist} rejects a detached entity reached by cascade. Callers
+     * rely on the argument itself becoming persistent (the rule import saves
+     * graphs that were loaded in an earlier request), so the move belongs with
+     * the Hibernate 7 upgrade, caller by caller.
+     */
+    @SuppressWarnings("deprecation")
     @Transactional
     public T saveOrUpdate(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
@@ -94,26 +96,33 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         return domainObject;
     }
 
+    /**
+     * Insert a new entity and return its generated id. Every caller hands in
+     * a freshly constructed entity, for which {@code persist} does what the
+     * deprecated {@code Session.save} did: it assigns the id to the instance
+     * itself. The id returned is the one the session holds for the instance,
+     * not {@link DomainObject#getId()}: the {@code DataMapDomainObject}
+     * entities (CrfBean, CrfVersion, ItemGroup, Item and most of
+     * {@code domain.datamap}) map their id on a getter of their own, and
+     * their {@code getId()} returns null.
+     */
     @Transactional
     public Serializable save(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        // Hibernate 6: Session.save(Object) returns Object (deprecated; persist()
-        // is the JPA-style replacement but returns void). Callers cast to
-        // Integer; the underlying ID is always Serializable.
-        return (Serializable) getCurrentSession().save(domainObject);
+        getCurrentSession().persist(domainObject);
+        return (Serializable) getCurrentSession().getIdentifier(domainObject);
     }
 
-    @SuppressWarnings("unchecked")
     @Transactional
     public T findByColumnName(Object id, String key) {
         String query = "from " + getDomainClassName() + " do where do." + key + " = :key_value";
-        Query<T> q = getCurrentSession().createQuery(query);
+        Query<T> q = getCurrentSession().createQuery(query, domainClass());
         q.setParameter("key_value", id);
         return q.getSingleResultOrNull();
     }
 
     public Long count() {
-        return (Long) getCurrentSession().createQuery("select count(*) from " + domainClass().getName()).uniqueResult();
+        return getCurrentSession().createQuery("select count(*) from " + domainClass().getName(), Long.class).uniqueResult();
     }
 
     /**

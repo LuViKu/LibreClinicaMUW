@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfWriteRules;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.SourcedItemDataWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudyBindings;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
@@ -59,7 +60,6 @@ public class RetinalResultItemDataPopulator {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultItemDataPopulator.class);
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final String SOURCE_KIND = SourcedItemDataWriter.Source.RETINAL_INFERENCE.kind();
 
     /**
      * Mapping from the fluid runner's output_payload key to the binding role
@@ -156,6 +156,14 @@ public class RetinalResultItemDataPopulator {
      * malformed JSON).
      */
     public PopulateResult populateForEventCrf(int eventCrfId, int operatorUserId) {
+        // Nothing is written into removed, locked or signed data; the shared
+        // writer refuses each value too, this says why once.
+        EventCrfWriteRules.Refusal refusal = writeRefusal(eventCrfId);
+        if (refusal != null) {
+            LOG.info("RetinalResultItemDataPopulator: ecrf={} {}, nothing populated", eventCrfId, refusal.reason());
+            return new PopulateResult(eventCrfId, 0, 0,
+                    List.of("event_crf " + eventCrfId + " " + refusal.reason() + "; nothing was populated."));
+        }
         List<JobMetrics> jobs = loadCompletedJobs(eventCrfId);
         int rowsWritten = 0;
         java.util.ArrayList<String> warnings = new java.util.ArrayList<>();
@@ -241,6 +249,15 @@ public class RetinalResultItemDataPopulator {
         LOG.info("RetinalResultItemDataPopulator: ecrf={} jobs={} rows_written={}",
                 eventCrfId, jobs.size(), rowsWritten);
         return new PopulateResult(eventCrfId, jobs.size(), rowsWritten, List.copyOf(warnings));
+    }
+
+    /** Why the event CRF's values may not change now, or null ({@link EventCrfWriteRules}). */
+    private EventCrfWriteRules.Refusal writeRefusal(int eventCrfId) {
+        try (Connection c = dataSource.getConnection()) {
+            return EventCrfWriteRules.refusal(c, eventCrfId);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not read the state of event_crf " + eventCrfId, e);
+        }
     }
 
     /**

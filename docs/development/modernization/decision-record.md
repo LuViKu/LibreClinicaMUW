@@ -873,12 +873,162 @@ The second problem is the one that decided the shape. A camera that sits in the 
 
 ---
 
+## DR-018 — The legacy JSP layer is retired in full, admin screens included
+
+**Date:** 2026-09-30
+**Status:** Accepted (2026-09-30), when the owner directed the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) to be implemented in full. DR-004's scoping clause is superseded from that date.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Supersedes:** the scoping clause of [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes) — *"only the high-traffic SPA screens are within scope; admin screens remain on JSP."* DR-004's decision on clinical-use timing is untouched.
+**Related:** [DR-008](#dr-008--ui-framework-for-phase-e-vue-3) (Vue 3), [DR-019](#dr-019--phase-e-usability-acceptance-bar) (usability bar), Phase E execution playbook §E.11 (which reserved this number for the retirement strategy); the feature-parity catalogue in `docs/development/modernization/phase-e/` (`investigator-features.md`, `monitor-features.md`, `data-manager-features.md`).
+
+**Context.** DR-004 kept admin screens on JSP as a way of bounding Phase E, so that the UI work could overlap with first clinical use without growing into a full rewrite. Its reasoning is about schedule and validation cost; it does not weigh the security of the code it leaves in place. The playbook later reserved DR-018 for a retirement strategy and listed three options — retire each JSP as its SPA equivalent ships, behind a flag; run both in parallel for a six-month bake-in; or cut over at the end of Phase E — and left it open.
+
+What has changed is evidence about that code, gathered during the 2026-09-29/30 code-scanning remediation:
+
+- **The legacy tree carries a disproportionate share of the findings.** Of the 1,573 code-scanning alerts open after the security release, 485 (30%) sit in the JSP-facing trees: `control/` 367, `web/pform/` 44, `view/` 34, `web/job/` 27, `web/bean/` 10, `web/domain/` 3.
+- **It keeps producing real defects, not only style findings.** Reading the heritage servlets turned up a request parameter that crashed `CreateFiltersTwoServlet` on any name beginning with `ID`; six servlets that dereferenced their `id` parameter above the null guard written to protect it; and CRF data imported through `ImportCRFDataServlet` landing in the shared, world-readable temp directory. None was caught by a test. The code is old enough that nobody reads it, and the test suite covers the SPA-facing controllers far better than the servlets.
+- **All of it is reachable.** `deploy/nginx/ecrf.conf` proxies `/LibreClinica/` straight to the WAR, so every legacy URL works as a bookmark, whether or not the SPA has replaced the screen.
+- **Some of what ships does nothing.** The Jersey 1.x servlets are recorded as deploy-time zombies in both `web.xml` and `LegacyServletRegistry`, yet `com.sun.jersey` is still declared in the root and core poms and ships in the WAR.
+
+A static coverage survey (2026-09-30) mapped the 421 JSPs to 97 screens: **31 covered** by an SPA route, **18 partially covered**, **48 not covered**, plus **38 files already unreachable**. Admin is the least covered area — the `/AdminSystem` and `/TechAdmin` landings, `/AuditDatabase`, `/ViewLogMessage`, scheduled import jobs, job pause and cancel, the cross-study subject registry and `/Enterprise` have no SPA equivalent at all.
+
+**Decision.** The JSP layer is retired in full, admin screens included. The aim is to reduce the amount of legacy code that can carry an undetected vulnerability, so the order of work is chosen to shrink what is *reachable* early, and to delete only once deletion is safe.
+
+1. **Unreachable code goes first.** The 38 JSPs no route reaches are deleted, with the `Page` constants that only they used. `printcrf.jsp` is reachable solely through Jersey, so it goes with the `web/restful/**` tree and `com.sun.jersey` leaves the poms. Nothing a user can reach changes.
+2. **A covered screen is switched off before it is deleted.** When the SPA covers a screen, its legacy route is closed and moved behind the `/legacy/<jsp-path>` alias the playbook (§E.11) specifies, and the SPA route goes live behind its `libreclinica.spa.<feature>.enabled` flag as the playbook also requires. This is the playbook's option (a) with (b)'s safety net, applied per screen rather than at one cutover.
+
+   **One change to the playbook's mechanism:** the playbook leaves the `/legacy/` URL open to every user for the bake-in. Here it is **reachable only by an administrator, and every hit is logged.** An alias any user can reach keeps the whole legacy surface exposed for the full bake-in, which is the thing this decision exists to reduce; restricted and logged, it still lets an administrator reach a screen a gap has left users stranded on, and the log is what point 4 measures.
+3. **Why switch off first.** The coverage map is static: it matches routes, views and API controllers against what each servlet does, and it has not compared the large forms field by field (study create/update across eight pages, the event definition's CRF and SDV matrix, the dataset inclusion flags). A `COVERED` verdict can therefore hide a gap. A closed route turns a missed gap into a support request that can be answered by reopening it; a deleted one turns it into lost clinical capability.
+4. **A screen is deleted only when** its SPA replacement is recorded against the parity catalogue for each role that uses it, its legacy route has been closed for the playbook's **six-month bake-in window**, and the access log shows no use by anyone in that time. The deletion is its own `chore(phase-e.11-retire-<feature>)` commit, as the playbook specifies.
+5. **Admin screens need a catalogue first.** The parity catalogue covers the Investigator, Monitor and Data Manager roles only, because admin was out of scope under DR-004. Before an admin screen can meet point 4 there has to be an administrator feature catalogue in the same form; writing it is the first piece of admin work.
+6. **Every retirement is recorded** in `docs/development/modernization/phase-e-retirement-log.md`: the screen, its replacement, the date it was closed, the date it was deleted, and who signed it off. The playbook requires this log; it does not yet exist.
+
+**Consequences.**
+- The reachable legacy surface shrinks with each screen the SPA covers, long before the last screen is rebuilt.
+- The 48 uncovered and 18 partially covered screens become planned work rather than a permanent residue. Admin is the largest part of it.
+- Validation cost rises: DR-004 scoped admin out partly to keep validation small. Each admin screen now needs an SPA replacement that passes the DR-019 bar.
+- Two things from the survey want fixing before step 2 begins, because both undermine a clean cut-over: the SPA's only link into the legacy UI (`DatasetListView.vue` hard-links `/LibreClinica/CreateDataset`, which the SPA's own wizard already replaces), and `/pages/user`, a live route still serving the upstream demo stub that fills `user.jsp` with sample names.
+- Six live screens are rendered by Spring MVC controllers rather than servlets (the CRF-version change pages, `studymodule.jsp`, `extract.jsp`, `listCurrentScheduledJobs.jsp` and the SDV pages). A retirement pass that traces only `Page` constants will miss them; they are counted as live in the survey.
+
+**Reversible.** Steps 1 and 2 are reversed by restoring the files or reopening the route. Deletion after step 4 is reversed only by restoring from history, which is why it waits for the bake-in and the log.
+
+---
+
+## DR-037 — Two support windows set the order of platform upgrades: PostgreSQL 17 now, Spring Boot 4 next
+
+**Date:** 2026-09-30
+**Status:** Accepted for PostgreSQL. Proposed for Spring Boot 4 (a plan, not started).
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** [DR-018](#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included) (JSP retirement), DR-011 (connection pool, open), the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) §9 (R4), the MIGRATION.md risk register (R9, R10), `docs/operations/postgresql-17-upgrade.md`.
+
+**Context.** Two support windows close around the platform.
+
+- **Spring Boot 3.5 and Spring Framework 6.2 reached open-source end of life on 2026-06-30.** Spring Boot 3.5.16, which this project runs, was the last free 3.5 release (2026-06-25). Spring Framework 6.2 and Spring Security 6.5 belong to the same generation: further fixes for them now come only with a commercial subscription (6.2 enterprise support runs to 2032). The current open-source line is Spring Boot 4 / Spring Framework 7 (7.0 is supported until 2027-07-31).
+- **PostgreSQL 14 reaches community end of life on 2026-11-12.** A major version is supported for five years, and 14 was released on 2021-09-30.
+
+The two are not alike. The database upgrade is operational and bounded: a dump and restore, with the application unchanged. The framework upgrade is a code migration across the whole application: Spring 7, Spring Security 7, Hibernate 7, Jakarta EE 11 / Tomcat 11 and Jackson 3. Much of the code it would touch is the legacy layer that DR-018 retires.
+
+**Decision.**
+
+1. **PostgreSQL 17 is the target major.**
+   - **Why 17, not 18:** 18's official image moves the data directory (`/var/lib/postgresql/18/docker`), which would change the production volume mapping for no benefit. 17 is supported until November 2029.
+   - **Dev, test and CI move now:** the compose `db` service, on a new volume so an old 14 volume is never opened by 17; the Testcontainers image; and the CI integration-test matrix, which runs 14 and 17 until production has moved.
+   - **Production moves by the upgrade runbook** (`docs/operations/postgresql-17-upgrade.md`, `deploy/pg-major-upgrade.sh`) before 2026-11-12. Its production overlay pins 14 explicitly until the runbook's last step, because a 17 image cannot start on a 14 data directory.
+2. **Spring Boot 4 is the next platform phase, sized by a spike first.**
+   - **The spike** measures what breaks when the build moves to Boot 4, and in which code: the legacy servlets, Jersey `web/restful`, the XML contexts, heritage DAOs, or the SPA-facing API.
+   - **Timing** depends on the spike. Every legacy file deleted under DR-018 before the migration is a file that never has to be ported. But DR-018's six-month bake-in keeps closed screens in the tree until mid-2027, and running an unsupported framework for that long is itself a risk.
+   - **Until the migration:** keep Dependabot, CodeQL and the blocking Trivy scan on. Review every Spring, Spring Security and Tomcat advisory for 3.5 / 6.2 / 6.5 applicability. Buy commercial support if an advisory lands that the open-source line will not fix.
+
+**Consequences.**
+
+- **Developers' dev databases start empty on the new volume;** Liquibase re-creates the schema and demo data. The runbook covers carrying data over.
+- **CI runs the integration tests twice** until production is on 17.
+- **The framework risk is accepted for now,** with compensating controls, and is tracked as risk R9 until the Boot 4 decision is taken.
+
+**Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started.
+
+**Spike result (2026-09-30).** [spring-boot-4-spike-2026-09-30.md](spring-boot-4-spike-2026-09-30.md) built, tested and started the tree on Spring Boot 4.1.1, on branch `spike/muw-spring-boot-4`. That branch is a measurement, not for merging.
+
+- **Compile:** 32 errors in 6 files, none of them in the legacy servlets, Jersey or the SPA API.
+  - **Where:** Boot bootstrap and `SecurityConfig` (23), the two heritage base DAOs (4), `BatchCRFMigrationController` (3) and one test.
+  - **Causes:**
+    - auto-configuration split into modules;
+    - Hibernate 7 dropping `save`/`saveOrUpdate`;
+    - Security 7 dropping `AntPathRequestMatcher` and `ChannelProcessingFilter`;
+    - `HttpHeaders` no longer a map.
+- **Beyond compile:**
+  - Core 359/359 and all 445 database ITs pass on Hibernate 7.4.5, and the WAR starts on Tomcat 11.
+  - Web is 951/964. The 13 failures share one cause: Jackson 3 refuses `null` for a primitive before the controller runs.
+  - There is one XML startup blocker: `applicationContext-core-security.xml` sets a `DaoAuthenticationProvider` property that Security 7 removed.
+- **Estimate:** 8–16 developer-days. That covers the compile fixes, a review of 97 `save`/`saveOrUpdate` call sites, the Jackson 2-or-3 choice and verification. DR-018 deletions would save only about 2–4 of those days.
+- **Consequence for timing:** waiting for the mid-2027 bake-in saves little and keeps an unsupported Spring for nine more months.
+- **Recommendation:** start the migration as its own phase, as soon as the current retirement PRs have landed. Keep Liquibase pinned, because Boot 4.1 would pull the FSL-licensed 5.x, and keep the logback pin.
+
+---
+
+## DR-007 — iText 2.1.2 replacement: OpenPDF 2.0.x
+
+**Date:** 2026-09-30
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) §9 (R4), MIGRATION.md (Phase D-Libs).
+
+**Context.** Two code paths write PDFs: the discrepancy-note export and the per-subject casebook. Both used iText 2.1.2, from 2008. iText 2.1.2 is unmaintained, every later iText release is AGPL, and it brought BouncyCastle 1.38 into the WAR. The options were:
+
+- **OpenPDF 2.0.x:** LGPL/MPL, maintained, keeps the `com.lowagie.text` packages.
+- **OpenPDF 3.x:** renames the packages.
+- **PDFBox:** tables, page breaks and running headers would be built by hand, so the documents would change.
+- **iText 7+:** AGPL.
+
+**Decision.** OpenPDF 2.0.5.
+
+**Consequences.**
+
+- The code change is one line: an enum overload that stores the same value.
+- Characterisation tests pin both documents. Text, page breaks and page counts match the output of iText 2.1.2, except that OpenPDF prints a "≥" character the old library silently dropped.
+- The WAR loses iText and BouncyCastle 1.38.
+- A character the standard fonts cannot render would still need an embedded Unicode font.
+
+**Revisit** when 2.0.x stops receiving fixes. Moving to 3.x is a mechanical package rename plus a re-run of the two characterisation tests.
+
+---
+
+## DR-038 — DutyPlan is served through the eCRF nginx, never at the eCRF's expense
+
+**Status:** Accepted (2026-10-03)
+
+**Context.** DutyPlan, a small separate web app (FastAPI, one container, its own
+repository and compose project), runs on the eCRF VM. The eCRF's nginx sidecar
+already owns ports 80 and 443 there, and opening another port is not wanted.
+
+**Decision.** The eCRF nginx gets one more name-based server block for
+`einteilung.augen.meduniwien.ac.at` ([deploy/nginx/dutyplan.conf](../../../deploy/nginx/dutyplan.conf)),
+forwarding to `dutyplan:8000` over an external docker network `edge` that both
+compose projects join. DutyPlan stays out of the LibreClinica compose files. Three
+rules keep a DutyPlan problem from ever affecting the eCRF:
+
+- the block is installed (in `/etc/libreclinica/nginx-sites`, included by
+  `ecrf.conf`) only when its own certificate exists, because nginx exits on a
+  missing `ssl_certificate`;
+- the upstream is resolved per request, so a stopped DutyPlan is a 502 on its own
+  hostname, not an nginx startup failure;
+- the `edge` network is created by the setup script and before every start of
+  the systemd unit, because compose refuses to start a service whose external
+  network is missing.
+
+DutyPlan has its own certificate, so the eCRF certificate is never reissued for it.
+
+**Consequences.** One more certificate to renew (second cron line in
+[deploy/nginx/README.md](../../../deploy/nginx/README.md)). nginx keeps `default`
+in its network list explicitly; without it, it would lose the eCRF backend.
+
+---
+
 ## Future decisions (open)
 
-- DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
-- DR-009 — Spring Authorization Server adoption (replaces deprecated Spring Security OAuth2 — superseded by DR-014's reverse-proxy SSO architecture; close as obsolete)
-- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP; decide during Phase C)
-- DR-012 — Date/time API: Joda-Time → `java.time` (recommend `java.time`; decide during Phase B)
-- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache (recommend Caffeine + JCache for Spring Boot 3 default; decide during Phase B)
+*Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*
+
+- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP). The app still runs on DBCP 1.x; plan item R4
+- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache. De facto EhCache 3 (3.10.8) since B.5; decide with the Spring Boot 4 migration (DR-037)
 - DR-016 — JIT vs LOOKUP_ONLY provisioning default for SSO users (decide during Phase D execution after MedUni Wien admin-process review)
 - DR-017 — Authority/role mapping from SSO attributes (institution-specific; document a mapping-rule format)

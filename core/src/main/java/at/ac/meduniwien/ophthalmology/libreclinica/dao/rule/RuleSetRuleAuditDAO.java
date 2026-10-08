@@ -52,6 +52,7 @@ public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
         digesterName = SQLFactory.getInstance().DAO_RULESETRULE_AUDIT;
     }
 
+    @Override
     public void setTypesExpected() {
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);
@@ -62,6 +63,7 @@ public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
 
     }
 
+    @Override
     public RuleSetRuleAuditBean getEntityFromHashMap(HashMap<String, Object> hm) {
         RuleSetRuleAuditBean ruleSetRuleAudit = new RuleSetRuleAuditBean();
         ruleSetRuleAudit.setId((Integer) hm.get("rule_set_rule_audit_id"));
@@ -80,6 +82,7 @@ public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleAuditBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
@@ -87,10 +90,12 @@ public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleAuditBean> findAll() throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public RuleSetRuleAuditBean findByPK(int id) throws OpenClinicaException {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(id);
@@ -140,6 +145,7 @@ public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleAuditBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase)
             throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
@@ -148,6 +154,7 @@ public class RuleSetRuleAuditDAO extends EntityDAO<RuleSetRuleAuditBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleAuditBean> findAllByPermission(Object objCurrentUser, int intActionType) throws OpenClinicaException {
         throw new RuntimeException("Not implemented");
     }

@@ -231,6 +231,7 @@ public class BeanFactory {
         // sort the list
         Collections.sort(list, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayFormGroupBean, DisplayItemGroupBean displayFormGroupBean1) {
                 return displayFormGroupBean.getGroupMetaBean().getOrdinal().compareTo(displayFormGroupBean1.getGroupMetaBean().getOrdinal());
             }
@@ -386,6 +387,7 @@ public class BeanFactory {
         // API.
         Collections.sort(children, new Comparator<DisplayItemBean>() {
 
+            @Override
             public int compare(DisplayItemBean displayItemBean, DisplayItemBean displayItemBean1) {
                 return Integer.valueOf(displayItemBean.getMetadata().getColumnNumber()).compareTo(displayItemBean1.getMetadata().getColumnNumber());
             }
@@ -512,7 +514,7 @@ public class BeanFactory {
 //        }
         metadataBean.setQuestionNumberLabel(questNum);
         String requStr = map.get("required");
-        requStr = requStr.equalsIgnoreCase("") ? "0" : requStr;
+        requStr = requStr.isEmpty() ? "0" : requStr;
         double required;
         try {
             required = Double.parseDouble(requStr);
@@ -581,7 +583,7 @@ public class BeanFactory {
         }
         metadataBean.setQuestionNumberLabel(questNum);
         String requStr = map.get("required");
-        requStr = requStr.equalsIgnoreCase("") ? "0" : requStr;
+        requStr = requStr.isEmpty() ? "0" : requStr;
         double required;
         try {
             required = Double.parseDouble(requStr);
@@ -719,7 +721,17 @@ public class BeanFactory {
             // set borders property
             String bordersTemp = sectionVals.get("borders");
             if (bordersTemp != null) {
-                borders = Integer.valueOf(bordersTemp);
+                try {
+                    borders = Integer.parseInt(bordersTemp.trim());
+                } catch (NumberFormatException nfe) {
+                    // The BORDERS column comes from the uploaded CRF
+                    // spreadsheet, so it can hold anything a CRF author typed.
+                    // Anything that is not a number is treated like a blank
+                    // cell (0, no borders) — the same default this loop
+                    // already applies when the column is absent — instead of
+                    // failing the whole CRF preview with a 500.
+                    borders = 0;
+                }
             }
             secBean.setBorders(borders);
             secBean.setParent(createSectionBean(sectionVals.get("parent_section")));

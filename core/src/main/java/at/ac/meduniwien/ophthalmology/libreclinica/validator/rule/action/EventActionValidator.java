@@ -44,8 +44,8 @@ public class EventActionValidator implements Validator {
     ResourceBundle respage;
     
     public static final String VALUE_EXPRESSION_DATE_FORMAT = "yyyy-MM-dd";
-    public static final String BRACKETS_AND_CONTENTS = ".*\\[(END|ALL|[1-9]\\d*)\\]";
-    private final String REPEATING = ".*\\[(END|ALL|[1-9]\\d*)\\]";
+    public static final String BRACKETS_AND_CONTENTS = ".*\\[(END|ALL|[1-9]\\d{0,8})\\]";
+    private final String REPEATING = ".*\\[(END|ALL|[1-9]\\d{0,8})\\]";
 
 	public EventActionValidator(DataSource dataSource) {
         this.dataSource = dataSource;
@@ -54,10 +54,12 @@ public class EventActionValidator implements Validator {
     /**
      * This Validator validates just Person instances
      */
+    @Override
     public boolean supports(Class<?> clazz) {
         return EventActionBean.class.equals(clazz);
     }
 
+    @Override
     public void validate(Object obj, Errors e) {
         EventActionBean eventActionBean = (EventActionBean) obj;
 
@@ -81,7 +83,7 @@ public class EventActionValidator implements Validator {
 
     public void validateOidInAction(String oid, Errors e) {
             try {
-            	if (oid.contains(".") ||oid.contains("[ALL]")) {
+            	if (oid.contains(".") ||oid.contains("[ALL]") || oid.contains("[END]")) {
             		getRuleSetBeanWrapper().error(createError("OCRERR_0041", new String[]{oid}));
             		return;
             	}

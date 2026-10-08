@@ -31,6 +31,7 @@ public class OCServletFilter implements jakarta.servlet.Filter {
 
     public static final String USER_BEAN_NAME = "userBean";
 
+    @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         HttpServletRequest req = (HttpServletRequest) request;
         UserAccountBean ub = (UserAccountBean) req.getSession().getAttribute(USER_BEAN_NAME);
@@ -39,7 +40,7 @@ public class OCServletFilter implements jakarta.servlet.Filter {
 
         Principal principal = req.getUserPrincipal();
 
-        if ((ub != null) && (null != ub.getName()) && (!ub.getName().equals(""))) {
+        if ((ub != null) && (null != ub.getName()) && (!ub.getName().isEmpty())) {
             username = ub.getName();
             successfulRegistration = registerUsernameWithLogContext(username);
         } else if (principal != null) {
@@ -56,9 +57,11 @@ public class OCServletFilter implements jakarta.servlet.Filter {
         }
     }
 
+    @Override
     public void init(FilterConfig arg0) throws ServletException {
     }
 
+    @Override
     public void destroy() {
     }
 

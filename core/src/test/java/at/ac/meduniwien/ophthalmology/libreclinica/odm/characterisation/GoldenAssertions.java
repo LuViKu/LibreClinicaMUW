@@ -70,12 +70,17 @@ public final class GoldenAssertions {
                                                 Class<?> testClass,
                                                 String goldenName) {
         String prefix = goldenClasspathPrefix(testClass);
-        InputStream golden = testClass.getResourceAsStream(prefix + goldenName);
-        if (golden == null) {
-            fail(missingGoldenMessage(producedXml, prefix, goldenName));
-            return; // unreachable; appeases the compiler
+        byte[] goldenBytes;
+        try (InputStream golden = testClass.getResourceAsStream(prefix + goldenName)) {
+            if (golden == null) {
+                fail(missingGoldenMessage(producedXml, prefix, goldenName));
+                return; // unreachable; appeases the compiler
+            }
+            goldenBytes = readAllBytes(golden);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
         }
-        Diff diff = DiffBuilder.compare(Input.fromStream(golden).build())
+        Diff diff = DiffBuilder.compare(Input.fromByteArray(goldenBytes).build())
                 .withTest(Input.fromByteArray(producedXml).build())
                 .ignoreWhitespace()
                 .ignoreComments()
@@ -105,12 +110,16 @@ public final class GoldenAssertions {
                                                   Class<?> testClass,
                                                   String goldenName) {
         String prefix = goldenClasspathPrefix(testClass);
-        InputStream golden = testClass.getResourceAsStream(prefix + goldenName);
-        if (golden == null) {
-            fail(missingGoldenMessage(producedXml, prefix, goldenName));
-            return;
+        byte[] expected;
+        try (InputStream golden = testClass.getResourceAsStream(prefix + goldenName)) {
+            if (golden == null) {
+                fail(missingGoldenMessage(producedXml, prefix, goldenName));
+                return;
+            }
+            expected = readAllBytes(golden);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
         }
-        byte[] expected = readAllBytes(golden);
         if (!java.util.Arrays.equals(producedXml, expected)) {
             fail("Byte-equality mismatch for " + goldenName + ". Produced"
                     + " XML differs from the captured golden. If the diff is"

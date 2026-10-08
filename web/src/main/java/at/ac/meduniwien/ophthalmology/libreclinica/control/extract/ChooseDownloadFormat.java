@@ -27,6 +27,7 @@ public class ChooseDownloadFormat extends SecureController{
 	 */
 	private static final long serialVersionUID = 8667766472280862827L;
 
+	@Override
 	protected void processRequest() throws Exception {
         //FormProcessor fp = new FormProcessor(request);
         String subjectId=request.getParameter("subjectId");
@@ -45,6 +46,7 @@ public class ChooseDownloadFormat extends SecureController{
 
     }
 
+    @Override
     protected void mayProceed() throws InsufficientPermissionException {
 
     }

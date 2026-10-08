@@ -96,7 +96,7 @@ public class OpenClinicaBeanVariableNode extends ExpressionNode {
     private Object calculateVariable() {
         if (number.equals("_CURRENT_DATE")) {
         	String ssTimeZone= getExpressionBeanService().getSSTimeZone();
-        if (ssTimeZone.equals("") || ssTimeZone == null) 	
+        if (ssTimeZone == null || ssTimeZone.isEmpty()) 	
         	ssTimeZone = TimeZone.getDefault().getID();
       
             ZoneId ssZone = ZoneId.of(ssTimeZone);

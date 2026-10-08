@@ -118,6 +118,7 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
         return sb;
     }
 
+    @Override
     public SectionBean getEntityFromHashMap(HashMap<String, Object> hm) {
         SectionBean eb = new SectionBean();
         this.setEntityAuditInformation(eb, hm);
@@ -134,6 +135,7 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
         return eb;
     }
 
+    @Override
     public ArrayList<SectionBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -142,6 +144,7 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<SectionBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -153,6 +156,7 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
         return executeFindAllQuery(queryName, variables, useCache);
     }
 
+    @Override
     public SectionBean findByPK(int ID) {
     	boolean useCache = true;
     	String queryName = "findByPK";
@@ -163,6 +167,7 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<SectionBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -170,6 +175,7 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
 	/**
 	 * NOT IMPLEMENTED
 	 */
+    @Override
     public ArrayList<SectionBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

@@ -83,6 +83,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         this.setTypeExpected(13, TypeNames.INT);// study_id
     }
 
+    @Override
     public RuleBean update(RuleBean ruleBean) {
         ruleBean.setActive(false);
 
@@ -125,6 +126,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleBean;
     }
 
+    @Override
     public RuleBean getEntityFromHashMap(HashMap<String, Object> hm) {
         RuleBean ruleBean = new RuleBean();
         this.setEntityAuditInformation(ruleBean, hm);
@@ -139,6 +141,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleBean;
     }
 
+    @Override
     public ArrayList<RuleBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -150,6 +153,7 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleSetBeans;
     }
 
+    @Override
     public RuleBean findByPK(int ID) {
         RuleBean ruleBean = new RuleBean();
         this.setTypesExpected();
@@ -171,15 +175,14 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
-        variables.put(Integer.valueOf(1), new String(ruleBean.getOid()));
+        variables.put(Integer.valueOf(1), ruleBean.getOid());
 
         String sql = digester.getQuery("findByOid");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
-        if (alist != null && alist.size() > 0) {
-            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
-        }
         if (alist.isEmpty()) {
             ruleBeanInDb = null;
+        } else {
+            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
         }
         return ruleBeanInDb;
     }
@@ -189,15 +192,14 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         this.setTypesExpected();
 
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
-        variables.put(Integer.valueOf(1), new String(oid));
+        variables.put(Integer.valueOf(1), oid);
 
         String sql = digester.getQuery("findByOid");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
-        if (alist != null && alist.size() > 0) {
-            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
-        }
         if (alist.isEmpty()) {
             ruleBeanInDb = null;
+        } else {
+            ruleBeanInDb = (RuleBean) this.getEntityFromHashMap(alist.get(0));
         }
         return ruleBeanInDb;
     }
@@ -219,32 +221,29 @@ public class RuleDAO extends AuditableEntityDAO<RuleBean> {
         return ruleSetBeans;
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

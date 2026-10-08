@@ -30,9 +30,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import javax.sql.DataSource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -57,10 +57,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.ReasonForChangeWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
@@ -72,6 +76,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDA
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
@@ -170,6 +175,14 @@ public class EventCrfsApiController {
     private final EventCrfPresenceRegistry presenceRegistry;
     private final at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
             retinalAutoPopulator;
+
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
 
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -330,7 +343,7 @@ public class EventCrfsApiController {
                         && grp.getOid() != null) {
                     groupOid = grp.getOid();
                     itemOidsByItemGroupId
-                            .computeIfAbsent(grp.getId(), k -> new ArrayList<>())
+                            .computeIfAbsent(grp.getId(), _ -> new ArrayList<>())
                             .add(ib.getOid());
                 }
                 itemDtos.add(buildItemDto(ib, ifm, groupOid, showWhenByItemId.get(ib.getId()),
@@ -363,8 +376,8 @@ public class EventCrfsApiController {
             if (repeating) {
                 int ordinal = Math.max(1, idb.getOrdinal());
                 groupRowValues
-                        .computeIfAbsent(grp.getId(), k -> new LinkedHashMap<>())
-                        .computeIfAbsent(ordinal, k -> new LinkedHashMap<>())
+                        .computeIfAbsent(grp.getId(), _ -> new LinkedHashMap<>())
+                        .computeIfAbsent(ordinal, _ -> new LinkedHashMap<>())
                         .put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
             } else {
                 values.put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
@@ -409,11 +422,12 @@ public class EventCrfsApiController {
         );
 
         // Phase E.6 admin-rfc — `requiresReasonForChange` true once the
-        // CRF is past date_completed. The SPA reads this flag to mount
-        // the ReasonForChangeModal before re-enabling Save on edits to
-        // post-complete entries. SIGNED / LOCKED rows still 409 on save
-        // (legacy unlock path), so we don't need a third state here.
-        boolean requiresRfc = ecb.getDateCompleted() != null;
+        // CRF has ever been completed, reopened or not, and the study
+        // forces a reason (AdministrativeEditing). The SPA reads this flag
+        // to mount the ReasonForChangeModal before Save fires. SIGNED /
+        // LOCKED rows still 409 on save (legacy unlock path), so we don't
+        // need a third state here.
+        boolean requiresRfc = AdministrativeEditing.reasonRequired(dataSource, currentStudy, ecb);
         // Phase E.6 dde — embed the DDE marker block when the parent
         // event_definition_crf has double_entry=true. {@code dde} stays
         // null for single-pass studies so legacy single-entry flows
@@ -455,9 +469,20 @@ public class EventCrfsApiController {
      * refresh its header.
      *
      * <p>Reject if the CRF is locked (status SIGNED or LOCKED) — once
-     * signed, edits go through a different unlock flow.
+     * signed, edits go through a different unlock flow. Reject a role
+     * that may not enter data ({@link ClinicalWriteAuthorization}).
      *
-     * <p>Audit-log: one {@link AuditEventBean} row per changed item,
+     * <p>A save that changes a value of a source-data-verified CRF
+     * withdraws the verification ({@link SdvRevocation}).
+     *
+     * <p>A CRF that has ever been completed is under administrative
+     * editing ({@link AdministrativeEditing}): when the study forces a
+     * reason for change, every changed value, top-level or in a row of a
+     * repeating group, needs one, or nothing is saved (400,
+     * {@code missingReasonItemOids}). A reason given is recorded as a
+     * Reason for Change note whether forced or not.
+     *
+     * <p>Audit-log: one {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean} row per changed item,
      * recording (auditTable="item_data", entityId, columnName="value",
      * oldValue, newValue). Creation-from-empty also writes one row with
      * an empty oldValue so the audit trail shows the initial entry.
@@ -465,7 +490,8 @@ public class EventCrfsApiController {
     @PostMapping("/{id:[0-9]+}/items")
     public ResponseEntity<?> saveItems(@PathVariable("id") int eventCrfId,
                                        @RequestBody SaveItemsRequest body,
-                                       HttpSession session) {
+                                       HttpSession session,
+                                       HttpServletRequest request) {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
@@ -475,6 +501,15 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
+        }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         if (body == null
                 || ((body.values() == null || body.values().isEmpty())
@@ -498,9 +533,10 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
-        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is locked — cannot save"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "saving CRF data");
+        if (closed != null) {
+            return closed;
         }
 
         ItemDAO itemDAO = new ItemDAO(dataSource);
@@ -528,19 +564,39 @@ public class EventCrfsApiController {
                     hiddenItemCount, ecb.getId());
         }
 
-        // Phase E.6 admin-rfc — post-complete edits MUST carry a non-blank
-        // reason for every changed item. We do a pre-pass against the
-        // existing values so we can fail-fast with `missingReasonItemOids`
-        // before we touch any rows.
-        boolean postComplete = ecb.getDateCompleted() != null;
+        // A value that fails its item's CRF validation (func: / regexp:) is
+        // refused, with the CRF author's message, as the legacy form refuses
+        // it; nothing is written. A value already carrying a discrepancy
+        // note stands (CrfItemValidation).
+        List<ValidationErrorBody.FieldError> invalid = crfValidationFailures(
+                request, visibleTopLevelValues, body.groups(), ecb, itemDAO, idDAO);
+        if (!invalid.isEmpty()) {
+            List<String> messages = new ArrayList<>();
+            for (ValidationErrorBody.FieldError e : invalid) messages.add(e.message());
+            LOG.info("saveItems: refused {} value(s) failing their CRF validation on event_crf {}",
+                    invalid.size(), ecb.getId());
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    String.join(" ", messages), invalid));
+        }
+
+        // Phase E.6 admin-rfc — a CRF that has ever been completed is under
+        // administrative editing for good; reopening it does not end that
+        // (AdministrativeEditing). When the study forces a reason, every
+        // changed value MUST carry a non-blank one: keyed by item OID, or by
+        // OID[row] for a row of a repeating group. We do a pre-pass against
+        // the existing values so we can fail-fast with
+        // `missingReasonItemOids` before we touch any rows.
+        boolean administrativeEditing = AdministrativeEditing.everCompleted(dataSource, ecb);
+        boolean reasonRequired = administrativeEditing
+                && StudyParameters.adminForcedReasonForChange(dataSource, currentStudy);
         Map<String, String> reasons = body.reasons() == null ? Map.of() : body.reasons();
         List<String> missingReasonItemOids = new ArrayList<>();
         Map<String, ItemBean> resolvedItems = new HashMap<>();
         Map<String, ItemDataBean> existingByOid = new HashMap<>();
-        if (postComplete) {
+        if (reasonRequired) {
             for (Map.Entry<String, Object> entry : visibleTopLevelValues.entrySet()) {
                 String itemOid = entry.getKey();
-                String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
+                String newValue = serialiseValueForStorage(entry.getValue());
                 ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
                 if (candidates == null || candidates.isEmpty()) continue;
                 ItemBean item = candidates.get(0);
@@ -549,11 +605,27 @@ public class EventCrfsApiController {
                 existingByOid.put(itemOid, existing);
                 String oldValue = (existing != null && existing.getId() > 0 && existing.getValue() != null)
                         ? existing.getValue() : "";
-                boolean willChange = !oldValue.equals(newValue);
-                if (willChange) {
-                    String reason = reasons.get(itemOid);
-                    if (reason == null || reason.trim().isEmpty()) {
-                        missingReasonItemOids.add(itemOid);
+                if (!oldValue.equals(newValue) && !hasReason(reasons, itemOid)) {
+                    missingReasonItemOids.add(itemOid);
+                }
+            }
+            if (body.groups() != null) {
+                for (SaveItemsRequest.GroupRowSavePayload row : body.groups()) {
+                    if (row == null || row.values() == null) continue;
+                    int ordinal = Math.max(1, row.rowOrdinal());
+                    for (Map.Entry<String, Object> rowVal : row.values().entrySet()) {
+                        String itemOid = rowVal.getKey();
+                        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+                        if (candidates == null || candidates.isEmpty()) continue;
+                        ItemDataBean existing = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                                candidates.get(0).getId(), ecb.getId(), ordinal);
+                        String oldValue = (existing != null && existing.getId() > 0 && existing.getValue() != null)
+                                ? existing.getValue() : "";
+                        String rowKey = groupRowReasonKey(itemOid, ordinal);
+                        if (!oldValue.equals(serialiseValueForStorage(rowVal.getValue()))
+                                && !hasReason(reasons, rowKey)) {
+                            missingReasonItemOids.add(rowKey);
+                        }
                     }
                 }
             }
@@ -567,7 +639,7 @@ public class EventCrfsApiController {
             }
         }
 
-        ReasonForChangeWriter rfcWriter = postComplete
+        ReasonForChangeWriter rfcWriter = administrativeEditing
                 ? new ReasonForChangeWriter(new DiscrepancyNoteDAO(dataSource))
                 : null;
 
@@ -575,6 +647,9 @@ public class EventCrfsApiController {
         int rejected = 0;
         int rfcCreatedCount = 0;
         int groupRowsSaved = 0;
+        // Whether any stored value actually changed; a changed value ends
+        // an SDV attestation (SdvRevocation).
+        boolean dataChanged = false;
         // 2026-06-30 — nAMD treat-and-extend decision summary capture.
         // The save loop emits one type-1 (item value updated) audit row
         // per changed item, which is fine for the audit-log table but
@@ -637,6 +712,9 @@ public class EventCrfsApiController {
                 isCreate = true;
                 itemDataIdAfter = createdRow != null ? createdRow.getId() : idb.getId();
             }
+            if (!oldValue.equals(newValue)) {
+                dataChanged = true;
+            }
 
             writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
                     currentUser, currentStudy, ss,
@@ -656,27 +734,10 @@ public class EventCrfsApiController {
             }
 
             // Phase E.6 admin-rfc — write the RFC discrepancy note + mapping
-            // when this is a post-complete edit. The writer is best-effort:
-            // it logs + swallows DAO failures so a flaky RFC write never
-            // rolls back the item_data save.
-            if (rfcWriter != null && itemDataIdAfter > 0) {
-                String reason = reasons.get(itemOid);
-                if (reason != null && !reason.trim().isEmpty()) {
-                    DiscrepancyNoteBean rfcDn = rfcWriter.writeRfc(
-                            itemDataIdAfter, currentStudy, currentUser, reason);
-                    if (rfcDn != null) {
-                        rfcCreatedCount++;
-                        // Also emit an audit row carrying the reason itself, so
-                        // the audit log says why the value changed and not only
-                        // that a note exists. Its own type since 2026-09-27:
-                        // it was written under 27, the study_subject trigger's
-                        // "moved to another site".
-                        writeAuditEvent(auditDAO, AuditTypeIds.ITEM_DATA_REASON_FOR_CHANGE,
-                                currentUser, currentStudy, ss,
-                                "item_data_rfc", "item_data", itemDataIdAfter,
-                                itemOid, oldValue, newValue, reason);
-                    }
-                }
+            // when this is an edit under administrative editing.
+            if (recordReasonForChange(rfcWriter, auditDAO, reasons.get(itemOid), itemDataIdAfter,
+                    itemOid, oldValue, newValue, currentUser, currentStudy, ss)) {
+                rfcCreatedCount++;
             }
 
             saved++;
@@ -707,6 +768,7 @@ public class EventCrfsApiController {
                             item.getId(), ecb.getId(), ordinal);
                     String oldValue = "";
                     boolean isCreate;
+                    int rowItemDataId;
                     if (existing != null && existing.getId() > 0) {
                         oldValue = existing.getValue() == null ? "" : existing.getValue();
                         if (oldValue.equals(newValue)) { groupRowsSaved++; continue; }
@@ -717,6 +779,7 @@ public class EventCrfsApiController {
                         existing.setOldStatus(Status.AVAILABLE);
                         idDAO.update(existing);
                         isCreate = false;
+                        rowItemDataId = existing.getId();
                     } else {
                         ItemDataBean idb = new ItemDataBean();
                         idb.setEventCRFId(ecb.getId());
@@ -728,14 +791,23 @@ public class EventCrfsApiController {
                         idb.setStatus(Status.AVAILABLE);
                         idb.setOldStatus(Status.AVAILABLE);
                         idb.setDeleted(false);
-                        idDAO.create(idb);
+                        ItemDataBean createdRow = idDAO.create(idb);
                         isCreate = true;
+                        rowItemDataId = createdRow != null ? createdRow.getId() : idb.getId();
                     }
+                    if (!oldValue.equals(newValue)) {
+                        dataChanged = true;
+                    }
+                    String rowKey = groupRowReasonKey(itemOid, ordinal);
                     writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
                             currentUser, currentStudy, ss,
                             isCreate ? "item_data_create" : "item_data_update",
-                            "item_data", existing != null ? existing.getId() : 0,
-                            itemOid + "[" + ordinal + "]", oldValue, newValue);
+                            "item_data", rowItemDataId,
+                            rowKey, oldValue, newValue);
+                    if (recordReasonForChange(rfcWriter, auditDAO, reasons.get(rowKey), rowItemDataId,
+                            rowKey, oldValue, newValue, currentUser, currentStudy, ss)) {
+                        rfcCreatedCount++;
+                    }
                     groupRowsSaved++;
                 }
             }
@@ -759,11 +831,16 @@ public class EventCrfsApiController {
                     "F_NAMD_VISIT", "", newVal.toString());
         }
 
+        // A verified CRF whose data changed is no longer verified.
+        if (dataChanged) {
+            SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
+        }
+
         // Touch the EventCRF so {date_updated} reflects the save —
-        // drives the SPA's lastSavedAt header.
-        ecb.setUpdater(currentUser);
-        ecb.setUpdatedDate(new Date());
-        eventCrfDAO.update(ecb);
+        // drives the SPA's lastSavedAt header. Only that: the bean dates
+        // from the start of the request, and writing it back would undo
+        // an SDV change or a completion made meanwhile (EventCRFDAO.touch).
+        eventCrfDAO.touch(ecb.getId(), currentUser.getId());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("eventCrfOid", String.valueOf(ecb.getId()));
@@ -781,21 +858,159 @@ public class EventCrfsApiController {
     }
 
     /**
+     * The {@code reasons} key of a value in a row of a repeating group:
+     * {@code OID[row]}, the column marker its audit row carries.
+     */
+    static String groupRowReasonKey(String itemOid, int rowOrdinal) {
+        return itemOid + "[" + rowOrdinal + "]";
+    }
+
+    private static boolean hasReason(Map<String, String> reasons, String key) {
+        String reason = reasons.get(key);
+        return reason != null && !reason.trim().isEmpty();
+    }
+
+    /**
+     * Phase E.6 admin-rfc — record the reason for a changed value: a Reason
+     * for Change note on its {@code item_data} row, and an audit row that
+     * carries the reason itself, so the audit log says why the value
+     * changed and not only that a note exists. The note writer is
+     * best-effort: it logs + swallows DAO failures so a flaky RFC write
+     * never rolls back the item_data save.
+     *
+     * @param writer null outside administrative editing: nothing is recorded
+     * @return true when a note was written
+     */
+    private static boolean recordReasonForChange(ReasonForChangeWriter writer, AuditEventDAO auditDAO,
+                                                 String reason, int itemDataId, String columnName,
+                                                 String oldValue, String newValue,
+                                                 UserAccountBean user, StudyBean study,
+                                                 StudySubjectBean ss) {
+        if (writer == null || itemDataId <= 0 || reason == null || reason.trim().isEmpty()) {
+            return false;
+        }
+        DiscrepancyNoteBean rfcDn = writer.writeRfc(itemDataId, study, user, reason);
+        if (rfcDn == null) {
+            return false;
+        }
+        // Its own type since 2026-09-27: it was written under 27, the
+        // study_subject trigger's "moved to another site".
+        writeAuditEvent(auditDAO, AuditTypeIds.ITEM_DATA_REASON_FOR_CHANGE,
+                user, study, ss,
+                "item_data_rfc", "item_data", itemDataId,
+                columnName, oldValue, newValue, reason);
+        return true;
+    }
+
+    /**
+     * The values of a save that fail their item's CRF validation, keyed as
+     * the RFC keys are (item OID, or {@code OID[row]}). Only values the save
+     * changes are checked; a blank one is the required check's business, and
+     * one whose row already carries an active discrepancy note stands, as
+     * {@code DiscrepancyValidator} lets it in legacy.
+     */
+    private List<ValidationErrorBody.FieldError> crfValidationFailures(
+            HttpServletRequest request, Map<String, Object> topLevelValues,
+            List<SaveItemsRequest.GroupRowSavePayload> groups, EventCRFBean ecb,
+            ItemDAO itemDAO, ItemDataDAO idDAO) {
+        Map<Integer, String[]> validations = loadCrfValidations(ecb.getCRFVersionId());
+        if (validations.isEmpty()) {
+            return List.of();
+        }
+        DiscrepancyNoteDAO notes = new DiscrepancyNoteDAO(dataSource);
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
+        if (topLevelValues != null) {
+            for (Map.Entry<String, Object> entry : topLevelValues.entrySet()) {
+                checkCrfValidation(request, entry.getKey(), 0, entry.getValue(), ecb,
+                        itemDAO, idDAO, validations, notes, out);
+            }
+        }
+        if (groups != null) {
+            for (SaveItemsRequest.GroupRowSavePayload row : groups) {
+                if (row == null || row.values() == null) continue;
+                int ordinal = Math.max(1, row.rowOrdinal());
+                for (Map.Entry<String, Object> rowVal : row.values().entrySet()) {
+                    checkCrfValidation(request, rowVal.getKey(), ordinal, rowVal.getValue(), ecb,
+                            itemDAO, idDAO, validations, notes, out);
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * item_id → (validation, author's message, label) of every item of the
+     * version that has a validation. Read uncached: the item-metadata DAO
+     * caches its lookups.
+     */
+    private Map<Integer, String[]> loadCrfValidations(int crfVersionId) {
+        Map<Integer, String[]> out = new HashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ifm.item_id, ifm.regexp, ifm.regexp_error_msg, "
+                             + "       COALESCE(NULLIF(TRIM(ifm.left_item_text), ''), i.name) "
+                             + "  FROM item_form_metadata ifm JOIN item i ON i.item_id = ifm.item_id "
+                             + " WHERE ifm.crf_version_id = ? "
+                             + "   AND COALESCE(TRIM(ifm.regexp), '') <> ''")) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.put(rs.getInt(1), new String[] {rs.getString(2), rs.getString(3), rs.getString(4)});
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Could not read the CRF validations of crf_version " + crfVersionId, e);
+        }
+        return out;
+    }
+
+    /** @param rowOrdinal 0 for a top-level item */
+    private static void checkCrfValidation(HttpServletRequest request, String itemOid, int rowOrdinal,
+                                           Object rawValue, EventCRFBean ecb, ItemDAO itemDAO,
+                                           ItemDataDAO idDAO, Map<Integer, String[]> validations,
+                                           DiscrepancyNoteDAO notes,
+                                           List<ValidationErrorBody.FieldError> out) {
+        String newValue = serialiseValueForStorage(rawValue);
+        if (newValue.trim().isEmpty()) return;
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) return;
+        ItemBean item = candidates.get(0);
+        String[] validation = validations.get(item.getId());
+        if (validation == null) return;
+        ItemDataBean existing = rowOrdinal == 0
+                ? idDAO.findByItemIdAndEventCRFId(item.getId(), ecb.getId())
+                : idDAO.findByItemIdAndEventCRFIdAndOrdinal(item.getId(), ecb.getId(), rowOrdinal);
+        boolean stored = existing != null && existing.getId() > 0;
+        if (stored && newValue.equals(existing.getValue())) return;
+
+        String failure = CrfItemValidation.failure(request,
+                CrfItemValidation.of(validation[0], validation[1]), newValue);
+        if (failure == null) return;
+        if (stored && notes.findNumOfActiveExistingNotesForItemData(existing.getId()) > 0) return;
+
+        String key = rowOrdinal == 0 ? itemOid : groupRowReasonKey(itemOid, rowOrdinal);
+        out.add(new ValidationErrorBody.FieldError(key, validation[2] + ": " + failure));
+    }
+
+    /**
      * Phase E.4 M6 — mark CRF complete. Delegates to
      * {@link EventCRFDAO#markComplete} (the IDE — initial data entry —
      * path). The SPA calls this when the user clicks "Mark complete"
-     * after a clean validation pass; the SPA-side validation in
-     * {@code stores/crfEntry.ts:computeItemErrors} prevents the click
-     * when required items are missing, so this endpoint trusts the
-     * client to have run that gate and only enforces the locked-CRF
-     * gate server-side.
+     * after a clean validation pass ({@code stores/crfEntry.ts:computeItemErrors}).
+     * The server does not rely on that: as legacy data entry does, it
+     * refuses to complete a CRF while a required item that is shown has
+     * no value (400, {@link ValidationErrorBody} listing them;
+     * {@link RequiredItemsCheck}). It also enforces the locked-CRF gate
+     * and the role ({@link ClinicalWriteAuthorization}).
      *
      * <p>Reject if the CRF is locked (idempotent on already-complete
      * CRFs: returns 200 with the existing state).
      */
     @PostMapping("/{id:[0-9]+}/markComplete")
     public ResponseEntity<?> markComplete(@PathVariable("id") int eventCrfId,
-                                          HttpSession session) {
+                                          HttpSession session,
+                                          HttpServletRequest request) {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
@@ -805,6 +1020,15 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session."
             ));
+        }
+        ResponseEntity<?> noStudyRole = DataEntryRoleGuard.refuseWithoutStudyRole(session);
+        if (noStudyRole != null) {
+            return noStudyRole;
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "completing CRFs");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
 
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
@@ -822,9 +1046,30 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
-        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is already locked"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "completing the CRF");
+        if (closed != null) {
+            return closed;
+        }
+
+        // Legacy data entry does not complete a CRF while a required item
+        // that is shown is empty. A CRF that is complete already stays so.
+        if (ecb.getDateCompleted() == null) {
+            List<RequiredItemsCheck.Missing> missing = RequiredItemsCheck.missing(dataSource, ecb);
+            if (!missing.isEmpty()) {
+                String notBlank = ResourceBundleProvider
+                        .getExceptionsBundle(LocaleResolver.getLocale(request)).getString("field_not_blank");
+                List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
+                List<String> labels = new ArrayList<>();
+                for (RequiredItemsCheck.Missing m : missing) {
+                    errors.add(new ValidationErrorBody.FieldError(m.key(), m.label() + ": " + notBlank));
+                    labels.add(m.label());
+                }
+                LOG.info("CRF markComplete: event_crf {} refused, {} required item(s) empty",
+                        ecb.getId(), missing.size());
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                        "Required items are missing: " + String.join(", ", labels), errors));
+            }
         }
 
         // Phase B2 (2026-06-10) — failure-audit wrap. Any Throwable from
@@ -888,11 +1133,12 @@ public class EventCrfsApiController {
 
     /**
      * Phase E A5 — reopen a completed CRF for editing. Inverse of
-     * {@link #markComplete} — clears {@code date_completed} so the
-     * legacy {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage}
-     * transitions from {@code INITIAL_DATA_ENTRY_COMPLETE} (3) back
-     * to {@code INITIAL_DATA_ENTRY} (2), re-enabling the SPA's CRF
-     * entry form.
+     * {@link #markComplete} — clears every completion marker the CRF
+     * carries ({@link EventCRFDAO#markIncomplete}): {@code date_completed},
+     * the second pass's {@code date_validate_completed}, and a legacy
+     * completed status. The SPA's CRF entry form, legacy screens and SDV
+     * then all read the CRF as in data entry: it is no longer offered for
+     * verification, and double data entry needs its second pass again.
      *
      * <p>Guards (order matters — failing earlier guards return earlier
      * status codes):
@@ -919,7 +1165,8 @@ public class EventCrfsApiController {
      * endpoint trusts the click.
      *
      * <p>Writes one audit_event row with action_message
-     * {@code event_crf_reopen} so the M10 Audit Log view surfaces it.
+     * {@code event_crf_reopen} for each marker it clears, so the M10
+     * Audit Log view surfaces it.
      */
     @PostMapping("/{id:[0-9]+}/markIncomplete")
     public ResponseEntity<?> markIncomplete(@PathVariable("id") int eventCrfId,
@@ -951,10 +1198,10 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
 
-        if (ecb.getStatus() == Status.LOCKED || ecb.getStatus() == Status.SIGNED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is locked or signed — "
-                            + "un-sign / unlock via the legacy admin path before reopening"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "reopening the CRF");
+        if (closed != null) {
+            return closed;
         }
         if (ecb.getDateCompleted() == null) {
             return ResponseEntity.status(409).body(Map.of("message",
@@ -978,6 +1225,20 @@ public class EventCrfsApiController {
                 /* columnName */ "date_completed",
                 /* old */ previousCompletedAt,
                 /* new */ "");
+        // The bean still holds the markers markIncomplete cleared.
+        if (ecb.getDateValidateCompleted() != null) {
+            writeAuditEvent(auditDAO, AuditTypeIds.EVENT_CRF_REOPENED,
+                    currentUser, currentStudy, ss,
+                    "event_crf_reopen", "event_crf", ecb.getId(),
+                    "date_validate_completed", formatIsoInstant(ecb.getDateValidateCompleted()), "");
+        }
+        if (Status.UNAVAILABLE.equals(ecb.getStatus()) || Status.PENDING.equals(ecb.getStatus())) {
+            writeAuditEvent(auditDAO, AuditTypeIds.EVENT_CRF_REOPENED,
+                    currentUser, currentStudy, ss,
+                    "event_crf_reopen", "event_crf", ecb.getId(),
+                    "status_id", Status.UNAVAILABLE.equals(ecb.getStatus()) ? "UNAVAILABLE" : "PENDING",
+                    "AVAILABLE");
+        }
 
         // Inverse of the markComplete cascade: if the parent
         // study_event was COMPLETED because this was the last
@@ -1268,7 +1529,7 @@ public class EventCrfsApiController {
         for (DiscrepancyNoteBean n : notes) {
             if (n == null || n.getId() == 0) continue;
             totalCount++;
-            boolean isOpen = isOpenStatus(n.getResolutionStatusId());
+            boolean isOpen = isOpenQuery(n);
             if (isOpen) openCount++;
             String itemOid = resolveItemOidForParentNote(n, idDAO, itemDAO, oidByItemId);
             if (itemOid == null || itemOid.isBlank()) continue;
@@ -1276,7 +1537,7 @@ public class EventCrfsApiController {
             if (isOpen) openByOid.merge(itemOid, 1, Integer::sum);
             Instant when = latestActivityInstant(n);
             latestByOid.merge(itemOid, when, (a, b) -> a.isAfter(b) ? a : b);
-            noteIdsByOid.computeIfAbsent(itemOid, k -> new ArrayList<>())
+            noteIdsByOid.computeIfAbsent(itemOid, _ -> new ArrayList<>())
                     .add(String.valueOf(n.getId()));
         }
 
@@ -1368,7 +1629,7 @@ public class EventCrfsApiController {
                 secId = (ifm != null ? ifm.getSectionId() : -1);
                 sectionIdByItemDataId.put(idbId, secId);
             }
-            openByNoteId.put(n.getId(), isOpenStatus(n.getResolutionStatusId()));
+            openByNoteId.put(n.getId(), isOpenQuery(n));
         }
 
         List<SectionStatusDto> out = new ArrayList<>();
@@ -1451,7 +1712,17 @@ public class EventCrfsApiController {
         return null;
     }
 
-    private static boolean isOpenStatus(int resolutionStatusId) {
+    /**
+     * An open query or failed validation check, as the SDV page counts
+     * them. An annotation or a reason for change asks nobody anything, even
+     * one the SPA stored as New before it stored them Not Applicable.
+     */
+    private static boolean isOpenQuery(DiscrepancyNoteBean n) {
+        int type = n.getDiscrepancyNoteTypeId();
+        if (type != DiscrepancyNoteType.QUERY.getId() && type != DiscrepancyNoteType.FAILEDVAL.getId()) {
+            return false;
+        }
+        int resolutionStatusId = n.getResolutionStatusId();
         // 1=new, 2=updated, 3=resolution-proposed are "open"; 4=closed,
         // 5=not-applicable are "resolved" (per the SPA's
         // resolutionStatus union).
@@ -1502,9 +1773,12 @@ public class EventCrfsApiController {
      * Phase E.6 restore-quickwins — restore a soft-deleted event_crf.
      * Inverse of the legacy {@code RemoveEventCRFServlet} +
      * {@code RestoreEventCRFServlet}: flips the event_crf status from
-     * {@link Status#AUTO_DELETED} (or {@link Status#DELETED}) back to
-     * {@link Status#AVAILABLE}, and cascades any AUTO_DELETED item_data
-     * rows back to AVAILABLE.
+     * {@link Status#AUTO_DELETED} (or {@link Status#DELETED}) back, and
+     * cascades its AUTO_DELETED item_data rows back. A CRF whose removal
+     * recorded its status, and which nothing has changed since, gets that
+     * status back, and its values theirs ({@link EventDataStatusCascade});
+     * otherwise the CRF and its values become {@link Status#AVAILABLE}, as
+     * the legacy servlet makes them.
      *
      * <p>Guards (order matters):
      * <ol>
@@ -1519,6 +1793,11 @@ public class EventCrfsApiController {
      *   <li>{@code 409} — parent study_event is currently DELETED;
      *       legacy {@code RestoreEventCRFServlet} blocks the per-CRF
      *       restore in that case (restore the event first).</li>
+     *   <li>{@code 409} — its CRF or its CRF version is removed. That
+     *       removal took the row and recorded its status; its restore
+     *       brings it back at that status (see
+     *       {@code CrfLifecycleCascade}), where this one would make a
+     *       signed or locked event CRF available.</li>
      * </ol>
      *
      * <p>Returns 204 on success — the SPA refetches the event-detail
@@ -1581,34 +1860,76 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " cannot be restored — "
                             + "study_event is removed (restore the event first)"));
         }
+        CRFVersionBean version = new CRFVersionDAO(dataSource).findByPK(ecb.getCRFVersionId());
+        CRFBean crf = version == null || version.getId() == 0 ? null
+                : new CRFDAO(dataSource).findByPK(version.getCrfId());
+        if (crf != null && crf.getStatus() != null && crf.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " cannot be restored on its own — its CRF '"
+                            + crf.getName() + "' is removed (restoring the CRF brings it back)"));
+        }
+        if (version != null && version.getStatus() != null && version.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " cannot be restored on its own — its CRF version '"
+                            + version.getName() + "' is removed (restoring the version brings it back)"));
+        }
 
-        ecb.setStatus(Status.AVAILABLE);
+        // The status the CRF's removal recorded, while nothing has changed
+        // the CRF since (a completed CRF comes back completed); otherwise
+        // available, as legacy RestoreEventCRFServlet makes it.
+        Status removedAs = ecb.getStatus();
+        Integer recorded;
+        try (Connection c = dataSource.getConnection()) {
+            recorded = EventDataStatusCascade.recordedStatus(c, ecb.getId());
+        } catch (SQLException e) {
+            LOG.error("event_crf restore: id={} could not read its removal record: {}",
+                    ecb.getId(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "The CRF could not be restored; nothing was changed. See the server log."));
+        }
+        Status restoredAs = recorded == null ? Status.AVAILABLE : Status.get(recorded);
+        ecb.setStatus(restoredAs);
         ecb.setUpdater(currentUser);
         ecb.setUpdatedDate(new Date());
         ecDao.update(ecb);
 
-        // Cascade AUTO_DELETED item_data rows back to AVAILABLE. Hard
-        // DELETED rows stay put (legacy semantics — they're operator
-        // delete, not parent cascade).
-        ItemDataDAO idDao = new ItemDataDAO(dataSource);
-        java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ecb.getId());
-        for (ItemDataBean it : items) {
-            if (it.getStatus() == null || !it.getStatus().equals(Status.AUTO_DELETED)) continue;
-            it.setStatus(Status.AVAILABLE);
-            it.setUpdater(currentUser);
-            it.setUpdatedDate(new Date());
-            idDao.update(it);
+        // Cascade AUTO_DELETED item_data rows back. Hard DELETED rows stay
+        // put (legacy semantics — they're operator delete, not parent
+        // cascade). Only the status changes: a value keeps its provenance,
+        // which ItemDataDAO.update would clear.
+        try (Connection c = dataSource.getConnection()) {
+            ItemDataStatusCascade.restore(c, ecb.getId(), currentUser.getId(), recorded != null);
+            EventDataStatusCascade.forget(c, List.of(ecb.getId()));
+        } catch (SQLException e) {
+            LOG.error("event_crf restore: id={} is restored but its values are not: {}",
+                    ecb.getId(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "The CRF was restored but its values were not; see the server log."));
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
         writeAuditEvent(auditDao, AuditTypeIds.EVENT_CRF_RESTORED,
                 currentUser, currentStudy, ss,
                 "event_crf_restore", "event_crf", ecb.getId(),
-                "status_id", "AUTO_DELETED", "AVAILABLE");
+                "status_id", statusConstant(removedAs), statusConstant(restoredAs));
 
         LOG.info("event_crf restore: id={} subject={} by user={} role={}",
                 ecb.getId(), ss.getLabel(), currentUser.getName(), roleId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** A status as the restore's audit row names it: the {@link Status} constant's name. */
+    private static String statusConstant(Status status) {
+        return switch (status.getId()) {
+            case 1 -> "AVAILABLE";
+            case 2 -> "UNAVAILABLE";
+            case 4 -> "PENDING";
+            case 5 -> "DELETED";
+            case 6 -> "LOCKED";
+            case 7 -> "AUTO_DELETED";
+            case 8 -> "SIGNED";
+            default -> status.getName();
+        };
     }
 
     /**
@@ -2266,6 +2587,11 @@ public class EventCrfsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "adding repeating-group rows");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
         if (ecb == null || ecb.getId() == 0) {
@@ -2280,9 +2606,10 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
-        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is locked — cannot add rows"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "adding a row");
+        if (closed != null) {
+            return closed;
         }
 
         ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
@@ -2332,7 +2659,9 @@ public class EventCrfsApiController {
 
     /**
      * Delete every item_data row tied to (event_crf, item_group, ordinal).
-     * The SPA calls this when the user clicks the row's trash icon.
+     * The SPA calls this when the user clicks the row's trash icon. A row
+     * that is already deleted is left as it is: deleting it again changes
+     * no data, so it writes no audit row and keeps an SDV verification.
      */
     @org.springframework.web.bind.annotation.DeleteMapping("/{id:[0-9]+}/groups/{groupOid}/rows/{ordinal:[0-9]+}")
     public ResponseEntity<?> deleteGroupRow(@PathVariable("id") int eventCrfId,
@@ -2346,6 +2675,11 @@ public class EventCrfsApiController {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "deleting repeating-group rows");
+        if (roleRefusal != null) {
+            return roleRefusal;
         }
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
@@ -2361,9 +2695,10 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
-        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is locked — cannot delete rows"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "deleting a row");
+        if (closed != null) {
+            return closed;
         }
 
         ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
@@ -2398,11 +2733,15 @@ public class EventCrfsApiController {
             ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
                     ifm.getItemId(), ecb.getId(), ordinal);
             if (idb == null || idb.getId() == 0) continue;
+            if (Status.DELETED.equals(idb.getStatus()) || Status.AUTO_DELETED.equals(idb.getStatus())) {
+                continue;
+            }
             String oldValue = idb.getValue() == null ? "" : idb.getValue();
             idb.setStatus(Status.DELETED);
             idb.setUpdater(currentUser);
             idb.setUpdaterId(currentUser.getId());
-            idDAO.update(idb);
+            // Hides the row; the value and its provenance stay, so not update().
+            idDAO.updateStatusOnly(idb);
             ItemBean ib = (ItemBean) itemDAO.findByPK(ifm.getItemId());
             String itemOid = ib != null ? ib.getOid() : "";
             writeAuditEvent(auditDAO, /* type=13 Item value deleted */ 13,
@@ -2410,6 +2749,9 @@ public class EventCrfsApiController {
                     "item_group_row_delete", "item_data", idb.getId(),
                     itemOid + "[" + ordinal + "]", oldValue, "");
             deleted++;
+        }
+        if (deleted > 0) {
+            SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
         }
 
         return ResponseEntity.ok(Map.of(
@@ -2509,6 +2851,21 @@ public class EventCrfsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "uploading CRF files");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
+        // A file typed into a CRF item is stored as it came: nothing reads it,
+        // so nothing can vouch that it carries no patient data. Closed when
+        // the deployment requires de-identification.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "code", DeidUploadGate.CODE,
+                    "message", "File uploads into CRF items are disabled on this deployment: "
+                            + "uploaded files must be verified as de-identified, and a CRF file "
+                            + "is stored unchecked. Use the imaging upload page for scans."));
+        }
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
         }
@@ -2527,9 +2884,10 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
-        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is locked -- cannot upload files"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "uploading a file");
+        if (closed != null) {
+            return closed;
         }
 
         if (!fileStorageService.checkSize(file)) {
@@ -2619,9 +2977,8 @@ public class EventCrfsApiController {
                 "item_data", existing.getId(),
                 itemOid + "[" + ordinal + "]", oldValue, absolutePath);
 
-        ecb.setUpdater(currentUser);
-        ecb.setUpdatedDate(new Date());
-        eventCrfDAO.update(ecb);
+        SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
+        eventCrfDAO.touch(ecb.getId(), currentUser.getId());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("itemOid", itemOid);
@@ -2709,6 +3066,11 @@ public class EventCrfsApiController {
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "deleting CRF files");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
 
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
@@ -2724,9 +3086,10 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
-        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
-            return ResponseEntity.status(409).body(Map.of("message",
-                    "event_crf " + eventCrfId + " is locked -- cannot delete files"));
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "deleting a file");
+        if (closed != null) {
+            return closed;
         }
 
         ItemDAO itemDAO = new ItemDAO(dataSource);
@@ -2761,9 +3124,10 @@ public class EventCrfsApiController {
                 "item_data_file_delete", "item_data", idb.getId(),
                 itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
 
-        ecb.setUpdater(currentUser);
-        ecb.setUpdatedDate(new Date());
-        eventCrfDAO.update(ecb);
+        if (!oldValue.isEmpty()) {
+            SdvRevocation.revokeIfVerified(ecb, currentUser, eventCrfDAO);
+        }
+        eventCrfDAO.touch(ecb.getId(), currentUser.getId());
 
         return ResponseEntity.noContent().build();
     }
@@ -2853,6 +3217,11 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session."));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
         if (body == null || body.values() == null) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Missing 'values' in request body"));
@@ -2870,6 +3239,11 @@ public class EventCrfsApiController {
         if (ss == null || !visible.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "committing the second pass");
+        if (closed != null) {
+            return closed;
         }
         if (!isDoubleEntryEnabled(ecb)) {
             return ResponseEntity.status(409).body(Map.of(
@@ -3004,6 +3378,11 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "resolving a double-data-entry conflict");
+        if (closed != null) {
+            return closed;
+        }
         try {
             String uri = ddeService().resolveConflict(
                     ecb, ss, currentStudy, currentUser, itemOid, body);
@@ -3028,7 +3407,8 @@ public class EventCrfsApiController {
 
     /**
      * Resolve the DDE block for an EventCRF or {@code null} when
-     * the parent EDC has {@code double_entry=false}. Heuristics:
+     * its event definition CRF has {@code double_entry=false}
+     * ({@link #isDoubleEntryEnabled}). Heuristics:
      * <ul>
      *   <li>{@code date_completed=null} ⇒ pass=1</li>
      *   <li>{@code date_completed!=null, date_validate_completed=null}
@@ -3059,25 +3439,24 @@ public class EventCrfsApiController {
         }
     }
 
-    /** True when the parent event_definition_crf has double_entry=true. */
+    /**
+     * True when the event CRF's event definition CRF has
+     * {@code double_entry=true}: for a subject at a site, the site's own
+     * row where the site overrides the definition, else the study's. This
+     * is the row legacy data entry reads, and SDV (whose completeness test
+     * needs the second pass where this says so).
+     */
     private boolean isDoubleEntryEnabled(EventCRFBean ecb) {
         try {
-            StudyEventDAO seDAO = new StudyEventDAO(dataSource);
-            StudyEventBean ev = (StudyEventBean) seDAO.findByPK(ecb.getStudyEventId());
-            if (ev == null || ev.getId() == 0) return false;
-            CRFVersionDAO cvDAO = new CRFVersionDAO(dataSource);
-            CRFVersionBean cv = (CRFVersionBean) cvDAO.findByPK(ecb.getCRFVersionId());
-            if (cv == null || cv.getId() == 0) return false;
-            EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
-            List<EventDefinitionCRFBean> edcs =
-                    edcDAO.findAllParentsByEventDefinitionId(ev.getStudyEventDefinitionId());
-            if (edcs == null) return false;
-            for (EventDefinitionCRFBean edc : edcs) {
-                if (edc != null && edc.getCrfId() == cv.getCrfId()) {
-                    return edc.isDoubleEntry();
-                }
-            }
-            return false;
+            StudySubjectBean ss = (StudySubjectBean) new StudySubjectDAO(dataSource)
+                    .findByPK(ecb.getStudySubjectId());
+            if (ss == null || ss.getId() == 0) return false;
+            StudyBean subjectStudy = (StudyBean) new StudyDAO(dataSource).findByPK(ss.getStudyId());
+            if (subjectStudy == null || subjectStudy.getId() == 0) return false;
+            EventDefinitionCRFBean edc = new EventDefinitionCRFDAO(dataSource)
+                    .findByStudyEventIdAndCRFVersionId(subjectStudy,
+                            ecb.getStudyEventId(), ecb.getCRFVersionId());
+            return edc != null && edc.getId() > 0 && edc.isDoubleEntry();
         } catch (Exception e) {
             LOG.warn("isDoubleEntryEnabled lookup failed for event_crf {} ({})",
                     ecb.getId(), e.getMessage());
@@ -3145,11 +3524,22 @@ public class EventCrfsApiController {
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "entering CRF data");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
         // Reuse the existing visibility check from this controller's
         // getEventCrf — if the user can't see the row, the populate
         // call must 404 too.
         ResponseEntity<?> visibility = guardEventCrfVisibility(eventCrfId, currentUser, session);
         if (visibility != null) return visibility;
+        EventCRFBean target = new EventCRFDAO(dataSource).findByPK(eventCrfId);
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource,
+                (StudyBean) session.getAttribute("study"),
+                (StudySubjectBean) new StudySubjectDAO(dataSource).findByPK(target.getStudySubjectId()),
+                null, target, "populating retinal values");
+        if (closed != null) return closed;
 
         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.PopulateResult result;
         try {

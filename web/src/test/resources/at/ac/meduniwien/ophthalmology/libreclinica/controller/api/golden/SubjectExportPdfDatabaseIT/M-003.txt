@@ -1,0 +1,41 @@
+pages: 1
+--- page 1 ---
+D efault Study
+Subject: M-003
+ 
+Secondary ID —
+Gender F
+Year of birth 1949
+Enrolled on 2020-10-15
+Study OID S_DEFAULTS1
+Generated <today>
+ 
+ 
+V 1 Inclusion (SE_V1_INCLUSION)
+Status: completed · Started 2020-10-15
+ 
+D emographics
+Item Value Units
+Date of informed consent 2020-10-14
+Consent signed? Y
+Height (cm) 158 cm
+Weight (kg) 62.0 kg
+Data entry completed on 2020-10-15
+ 
+V 2 Day 30 (SE_V2_DAY30)
+Status: completed · Started 2020-11-14
+ 
+D emographics
+Item Value Units
+Height (cm) 158 cm
+Weight (kg) 61.5 kg
+Data entry completed on 2020-11-14
+ 
+V 3 Day 90 (SE_V3_DAY90)
+Status: completed · Started 2021-01-13
+ 
+D emographics
+Item Value Units
+Height (cm) 158 cm
+Weight (kg) 61.0 kg
+Data entry completed on 2021-01-13

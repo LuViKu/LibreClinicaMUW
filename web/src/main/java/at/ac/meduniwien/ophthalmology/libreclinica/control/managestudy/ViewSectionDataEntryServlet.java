@@ -137,6 +137,12 @@ public class ViewSectionDataEntryServlet extends DataEntryServlet {
     }
 
     // BWP 01/08>>
+    /** GET shows the CRF read-only; saving the notes held in the session (action=saveNotes) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"saveNotes".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         FormProcessor fp = new FormProcessor(request);
@@ -146,7 +152,7 @@ public class ViewSectionDataEntryServlet extends DataEntryServlet {
         SectionBean sb = (SectionBean) request.getAttribute(SECTION_BEAN);
         boolean isSubmitted = false;
         EventDefinitionCRFBean edcb = (EventDefinitionCRFBean) request.getAttribute(EVENT_DEF_CRF_BEAN);
-        if (!fp.getString("exitTo").equals("")) {
+        if (!fp.getString("exitTo").isEmpty()) {
             request.setAttribute("exitTo", fp.getString("exitTo"));
         }
         int crfVersionId = fp.getInt("crfVersionId", true);

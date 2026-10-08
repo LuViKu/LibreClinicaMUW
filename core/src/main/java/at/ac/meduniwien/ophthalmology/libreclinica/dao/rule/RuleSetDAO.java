@@ -121,6 +121,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
 
     }
 
+    @Override
     public RuleSetBean update(RuleSetBean ruleSetBean) {
 
         ruleSetBean.setActive(false);
@@ -183,6 +184,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
     /*
      * I am going to attempt to use this create method as we use the saveOrUpdate method in Hibernate.
      */
+    @Override
     public RuleSetBean create(RuleSetBean ruleSetBean) {
         if (ruleSetBean.getId() == 0) {
             HashMap<Integer, Object> variables = new HashMap<>();
@@ -214,6 +216,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         return ruleSetBean;
     }
 
+    @Override
     public RuleSetBean getEntityFromHashMap(HashMap<String, Object> hm) {
         RuleSetBean ruleSetBean = new RuleSetBean();
         this.setEntityAuditInformation(ruleSetBean, hm);
@@ -249,11 +252,10 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
 
         String sql = digester.getQuery("findByExpression");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables);
-        if (alist != null && alist.size() > 0) {
-            ruleSetBeanInDb = (RuleSetBean) this.getEntityFromHashMap(alist.get(0));
-        }
         if (alist.isEmpty()) {
             ruleSetBeanInDb = null;
+        } else {
+            ruleSetBeanInDb = (RuleSetBean) this.getEntityFromHashMap(alist.get(0));
         }
         return ruleSetBeanInDb;
     }
@@ -354,6 +356,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         return ruleSetBeans;
     }
 
+    @Override
     public ArrayList<RuleSetBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -365,6 +368,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         return ruleSetBeans;
     }
 
+    @Override
     public RuleSetBean findByPK(int ID) {
         RuleSetBean ruleSetBean = null;
         this.setTypesExpected();
@@ -396,32 +400,29 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
         return ruleSetBean;
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

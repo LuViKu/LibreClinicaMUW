@@ -132,10 +132,8 @@ session.setAttribute("factorService", factorService);
                         </c:if>
 
                         <input type="submit" name="submit" value="<fmt:message key='login' bundle='${resword}'/>" class="loginbutton" />
-                        <a href="#" id="requestPassword"> <fmt:message key="forgot_password" bundle="${resword}"/></a>
                    </form>
                    <br/><jsp:include page="../login-include/login-alertbox.jsp"/>
-                   <%-- <a href="<c:url value="/RequestPassword"/>"> <fmt:message key="forgot_password" bundle="${resword}"/></a> --%>
                	</div>
             </div>
 		</td>
@@ -146,21 +144,9 @@ session.setAttribute("factorService", factorService);
         document.getElementById('username').setAttribute( 'autocomplete', 'off' );
         document.getElementById('j_password').setAttribute( 'autocomplete', 'off' );
 
-        jQuery(document).ready(function() {
-            jQuery('#requestPassword').click(function() {
-                jQuery.blockUI({ message: jQuery('#requestPasswordForm'), css:{left: "200px", top:"180px", textAlign:"left" } });
-            });
-
-            jQuery('#cancel').click(function() {
-                jQuery.unblockUI();
-                return false;
-            });
-        });
 
     </script>
 
-    <div id="requestPasswordForm" style="display:none;"><c:import url="requestPasswordPop.jsp" /></div> <!-- this is in fact the reset-password-dialog -->
-    
 </div>
 
 <!-- end of login/login.jsp -->

@@ -48,7 +48,11 @@ import { apiGet, apiPost, ApiError } from '@/api/client'
 // eslint-disable-next-line import/first
 import EventDetailView from '@/views/EventDetailView.vue'
 // eslint-disable-next-line import/first
+import { useAuthStore } from '@/stores/auth'
+// eslint-disable-next-line import/first
 import type { EventDetailDto } from '@/types/event'
+// eslint-disable-next-line import/first
+import type { UserRole } from '@/types/auth'
 // eslint-disable-next-line import/first
 import enMessages from '@/locales/en.json'
 
@@ -71,6 +75,7 @@ function makeRouter(): Router {
       { path: '/subjects/:subjectId', name: 'subject-detail', component: { template: '<div />' } },
       { path: '/events/:eventId', name: 'event-detail', component: { template: '<div />' } },
       { path: '/event-crfs/:eventCrfOid', name: 'crf-entry', component: { template: '<div />' } },
+      { path: '/event-crfs/:eventCrfOid/readonly', name: 'crf-readonly', component: { template: '<div />' } },
     ],
   })
 }
@@ -113,8 +118,16 @@ const TWO_ROWS: EventDetailDto = {
   ],
 }
 
-async function mountAt(eventId: number, options: { rows?: EventDetailDto | 'empty' } = {}) {
+async function mountAt(eventId: number, options: { rows?: EventDetailDto | 'empty'; role?: UserRole } = {}) {
   setActivePinia(createPinia())
+  // The page offers what the signed-in role may do; by default an
+  // Investigator, who starts and completes CRFs.
+  const role = options.role ?? 'Investigator'
+  useAuthStore().user = {
+    username: 'demo',
+    role,
+    activeStudy: { id: 1, oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false, role, roles: [role] },
+  } as unknown as ReturnType<typeof useAuthStore>['user']
   const router = makeRouter()
   router.push(`/events/${eventId}`)
   await router.isReady()
@@ -281,5 +294,134 @@ describe('EventDetailView expected imaging', () => {
     ])
     expect(w.get('[data-testid="event-detail-plan-CLARUS"]').text()).toContain('missing – optional')
     expect(w.find('[data-testid="event-detail-plan-missing"]').exists()).toBe(false)
+  })
+})
+
+/*
+ * A Monitor opens a visit to look. The page used to offer them Start and
+ * Mark visit complete, which the API refuses them, and opened the CRF for
+ * data entry, a route that bounced them home.
+ */
+describe('EventDetailView for a Monitor', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+  })
+
+  const WITH_REMOVED_CRF_AND_IMAGE: EventDetailDto = {
+    ...TWO_ROWS,
+    crfs: [
+      ...TWO_ROWS.crfs,
+      {
+        eventCrfId: 8,
+        eventCrfOid: '8',
+        crfName: 'Removed one',
+        crfVersionName: 'v1.0',
+        crfVersionOid: 'F_REMOVED_V1',
+        eventDefinitionCrfId: 102,
+        status: 'removed',
+        required: false,
+        passwordRequired: false,
+      },
+    ],
+  }
+
+  async function mountAs(role: UserRole) {
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/ingest/by-event/')
+        ? Promise.resolve({
+            items: [{ id: 5, kind: 'fundus', sourceKind: 'upload', device: null, patientId: null,
+              laterality: 'OD', acquisitionDate: null, acquisitionDateSource: null, modality: null,
+              originalFilename: null, byteSize: null, scanIndex: null, receivedAt: null,
+              previewUrl: '/pages/api/v1/ingest/5/preview', hasPreview: false, suggestion: null, twin: null }],
+            studyEventId: 42, pendingForSubject: 0, plan: [],
+          })
+        : Promise.resolve(WITH_REMOVED_CRF_AND_IMAGE),
+    )
+    return mountAt(42, { role })
+  }
+
+  it('opens the started CRF read-only', async () => {
+    const w = await mountAs('Monitor')
+    expect(w.get('[data-test="event-detail-open-crf"]').attributes('href')).toBe('/event-crfs/7/readonly')
+  })
+
+  it('offers no start, no visit completion, no CRF restore and no image removal', async () => {
+    const w = await mountAs('Monitor')
+    expect(w.find('[data-test="event-detail-start-spa"]').exists()).toBe(false)
+    expect(w.find('[data-test="event-detail-mark-complete"]').exists()).toBe(false)
+    expect(w.find('[data-test="event-detail-restore-crf"]').exists()).toBe(false)
+    expect(w.find('[data-testid="event-detail-image-remove-5"]').exists()).toBe(false)
+  })
+
+  it('still offers an Investigator start, completion and image removal, and data entry', async () => {
+    const w = await mountAs('Investigator')
+    expect(w.find('[data-test="event-detail-start-spa"]').exists()).toBe(true)
+    expect(w.find('[data-test="event-detail-mark-complete"]').exists()).toBe(true)
+    expect(w.find('[data-testid="event-detail-image-remove-5"]').exists()).toBe(true)
+    expect(w.get('[data-test="event-detail-open-crf"]').attributes('href')).toBe('/event-crfs/7')
+    // Restoring a removed CRF is the coordinator's, director's and admin's.
+    expect(w.find('[data-test="event-detail-restore-crf"]').exists()).toBe(false)
+  })
+
+  it('offers the Data Manager the restore of a removed CRF', async () => {
+    const w = await mountAs('Data Manager')
+    expect(w.find('[data-test="event-detail-restore-crf"]').exists()).toBe(true)
+  })
+})
+
+/*
+ * A query on the visit date, as the legacy visit page flags it: the date
+ * shows its open queries and raises a new one on this visit.
+ */
+describe('EventDetailView — queries on the visit date', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+    document.body.innerHTML = ''
+  })
+
+  function serve(subjectNotes: unknown[]) {
+    apiGetMock.mockImplementation((url: string) => {
+      if (url.includes('/discrepancies')) return Promise.resolve(subjectNotes)
+      if (url.includes('/ingest/by-event/')) {
+        return Promise.resolve({ items: [], studyEventId: 42, pendingForSubject: 0, plan: [] })
+      }
+      if (url.includes('/users')) return Promise.resolve([])
+      return Promise.resolve(TWO_ROWS)
+    })
+  }
+
+  it('shows the open query on the date of this visit only', async () => {
+    const onDate = { id: '41', type: 'query', status: 'updated', subjectId: 'M-001', itemOid: '',
+      description: 'Date differs', entityType: 'studyEvent', column: 'start_date', entityId: '42' }
+    const onOtherVisit = { ...onDate, id: '43', entityId: '7' }
+    serve([onDate, onOtherVisit])
+    const w = await mountAt(42, { role: 'Monitor' })
+    expect(w.get('[data-testid="field-note-start_date"]').text()).toContain('1 open')
+  })
+
+  it('raises a query on the date of this visit', async () => {
+    serve([])
+    const w = await mountAt(42, { role: 'Monitor' })
+    apiPostMock.mockResolvedValueOnce({ id: '44', subjectId: 'M-001', itemOid: '' })
+
+    await w.get('[data-testid="field-note-start_date"]').trigger('click')
+    await flushPromises()
+    const text = document.body.querySelector('#new-note-description') as HTMLTextAreaElement
+    text.value = 'Visit date differs from the source'
+    text.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    ;(Array.from(document.body.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Create query') as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(apiPostMock).toHaveBeenCalledWith('/pages/api/v1/discrepancies', expect.objectContaining({
+      subjectId: 'M-001',
+      itemOid: '',
+      entityType: 'studyEvent',
+      column: 'start_date',
+      eventId: '42',
+    }))
   })
 })

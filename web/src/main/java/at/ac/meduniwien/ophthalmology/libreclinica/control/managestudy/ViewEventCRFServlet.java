@@ -36,7 +36,6 @@ import java.util.ArrayList;
  *
  * Views the detail of an event CRF
  */
-@SuppressWarnings("all")
 public class ViewEventCRFServlet extends SecureController {
     /**
 	 * 
@@ -69,6 +68,8 @@ public class ViewEventCRFServlet extends SecureController {
             addPageMessage(respage.getString("please_choose_an_event_CRF_to_view"));
             forwardPage(Page.LIST_STUDY_SUBJECTS);
         } else {
+            assertEventCrfInScope(eventCRFId);
+            assertStudySubjectInScope(studySubId);
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
             request.setAttribute("studySub", studySub);
 

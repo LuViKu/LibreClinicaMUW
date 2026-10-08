@@ -23,6 +23,7 @@ public final class AutowiringSpringBeanJobFactory
 
     private transient AutowireCapableBeanFactory beanFactory;
 
+    @Override
     public void setApplicationContext(
             final ApplicationContext context) {
         beanFactory = context.getAutowireCapableBeanFactory();

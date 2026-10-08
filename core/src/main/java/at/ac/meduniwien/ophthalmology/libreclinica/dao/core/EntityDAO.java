@@ -1407,7 +1407,11 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
 
                 // itemgroupname
                 String vitemgroupname = getAsString(rs, "name", "");
-                if ("ungrouped".equalsIgnoreCase(vitemgroupname) && vitemdataordinal <= 0) {
+                // item_data.ordinal is nullable in the schema, so getAsInt can
+                // hand back null here. An ungrouped item has exactly one repeat,
+                // so a missing ordinal means the same thing as a non-positive
+                // one: normalise it to 1 instead of throwing NPE on unboxing.
+                if ("ungrouped".equalsIgnoreCase(vitemgroupname) && (vitemdataordinal == null || vitemdataordinal <= 0)) {
                     vitemdataordinal = 1;
                 }
 
@@ -2202,8 +2206,8 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     }//
 
     /**
-     * Return directly the HashMap with the key It shouldn't be NULL !! TODO - throw an error if any of the fields is
-     * null!
+     * Return directly the HashMap with the key. A NULL column is mapped to the empty string
+     * in the key, so a row with a NULL field still yields a key.
      *
      * @param rs result set
      */

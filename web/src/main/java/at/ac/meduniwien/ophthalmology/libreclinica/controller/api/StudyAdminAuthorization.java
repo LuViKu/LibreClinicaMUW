@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
 /**
  * Phase E A8 — study-administration authorization.
@@ -160,6 +161,46 @@ public final class StudyAdminAuthorization {
     }
 
     /**
+     * @return {@code true} when {@code me} may change the name and
+     *         description of a CRF owned by {@code crfOwnerId}. Legacy
+     *         parity: {@code InitUpdateCRFServlet} + {@code UpdateCRFServlet}
+     *         — a sysadmin always; anyone else only for a CRF they own, and
+     *         only while holding an AVAILABLE {@link Role#STUDYDIRECTOR} or
+     *         {@link Role#ADMIN} binding. A coordinator may not, as in the
+     *         legacy screens. The legacy check read the role of the session's
+     *         current study; like {@link #userMayManageCrfLibrary} this walks
+     *         every binding, since a CRF is not scoped to one study.
+     */
+    static boolean userMayEditCrf(UserAccountBean me, int crfOwnerId,
+                                  List<StudyUserRoleBean> myBindings) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (me.getId() == 0 || me.getId() != crfOwnerId) return false;
+        if (myBindings == null) return false;
+        for (StudyUserRoleBean b : myBindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null
+                    || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            Role r = b.getRole();
+            if (r == Role.STUDYDIRECTOR || r == Role.ADMIN) return true;
+        }
+        return false;
+    }
+
+    /** DAO-aware overload of {@link #userMayEditCrf(UserAccountBean, int, List)}; fails closed. */
+    static boolean userMayEditCrf(UserAccountBean me, int crfOwnerId, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (dataSource == null) return false;
+        try {
+            return userMayEditCrf(me, crfOwnerId,
+                    new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName()));
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
      * DAO-aware overload — loads the caller's full binding set via
      * {@link UserAccountDAO#findAllRolesByUserName(String)} and
      * delegates to {@link #userMayEditStudy(UserAccountBean, List, StudyBean)}.
@@ -188,6 +229,42 @@ public final class StudyAdminAuthorization {
         return userMayEditStudy(me, bindings, target);
     }
 
+    /** The roles {@code SubmitDataServlet.mayViewData} lets see a study's data. */
+    private static final List<Role> STUDY_DATA_VIEWERS = List.of(
+            Role.COORDINATOR, Role.STUDYDIRECTOR, Role.INVESTIGATOR,
+            Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2, Role.MONITOR);
+
+    /**
+     * @return {@code true} when {@code me} may read {@code target}'s
+     *         design (its ODM metadata). A system administrator, or a
+     *         user with an active binding on the study, or on its parent
+     *         when the study is a site, in one of the roles that may view
+     *         the study's data. That is the gate of
+     *         {@code DownloadStudyMetadataServlet}, whose session role on a
+     *         site is the higher of the site and parent bindings.
+     */
+    static boolean userMayViewStudyDesign(UserAccountBean me, StudyBean target, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (target == null || dataSource == null) return false;
+        ArrayList<StudyUserRoleBean> bindings;
+        try {
+            bindings = new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName());
+        } catch (RuntimeException e) {
+            // Fail closed, as userMayEditStudy does.
+            return false;
+        }
+        if (bindings == null) return false;
+        for (StudyUserRoleBean b : bindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            boolean onTarget = b.getStudyId() == target.getId()
+                    || (target.getParentStudyId() > 0 && b.getStudyId() == target.getParentStudyId());
+            if (onTarget && STUDY_DATA_VIEWERS.contains(b.getRole())) return true;
+        }
+        return false;
+    }
+
     /**
      * @return {@code true} when {@code me} may transition study
      *         status (LOCK / FROZEN / DELETE / restore). Sysadmin only
@@ -196,6 +273,61 @@ public final class StudyAdminAuthorization {
      */
     static boolean roleMayLifecycleStudy(UserAccountBean me) {
         return me != null && me.isSysAdmin();
+    }
+
+    /**
+     * The ids of the studies on which {@code me} holds a live (AVAILABLE) role;
+     * empty when the lookup fails (fail closed).
+     */
+    static java.util.Set<Integer> liveRoleStudyIds(UserAccountBean me, DataSource dataSource) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        if (me == null || dataSource == null) return ids;
+        try {
+            List<StudyUserRoleBean> bindings = new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName());
+            if (bindings == null) return ids;
+            for (StudyUserRoleBean b : bindings) {
+                if (b == null || b.getStatus() == null
+                        || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                ids.add(b.getStudyId());
+            }
+        } catch (RuntimeException e) {
+            ids.clear();
+        }
+        return ids;
+    }
+
+    /**
+     * May {@code me} read the configuration of {@code target} (identity,
+     * parameters, settings, modules, the site list)? A system administrator
+     * always; otherwise a study the user holds a live role on, a site of such
+     * a study, or the parent of such a site: a site user reads her own site
+     * and the parent study whose configuration the site inherits, and not a
+     * sibling site or another study.
+     */
+    static boolean userMayReadStudy(UserAccountBean me, StudyBean target, DataSource dataSource) {
+        if (me == null || target == null) return false;
+        if (me.isSysAdmin()) return true;
+        java.util.Set<Integer> mine = liveRoleStudyIds(me, dataSource);
+        if (mine.contains(target.getId())) return true;
+        // A role on the parent study covers its sites.
+        if (target.getParentStudyId() > 0 && mine.contains(target.getParentStudyId())) return true;
+        // A role on a site reaches the parent study (the site inherits its configuration).
+        if (target.getParentStudyId() == 0 && target.getId() > 0) {
+            StudyDAO studyDao = new StudyDAO(dataSource);
+            for (int id : mine) {
+                StudyBean granted = (StudyBean) studyDao.findByPK(id);
+                if (granted != null && granted.getParentStudyId() == target.getId()) return true;
+            }
+        }
+        return false;
+    }
+
+    /** 404 (not 403: no existence oracle) for a study {@code me} may not read; null when allowed. */
+    static org.springframework.http.ResponseEntity<?> refuseUnlessMayReadStudy(
+            UserAccountBean me, StudyBean target, String studyOid, DataSource dataSource) {
+        if (userMayReadStudy(me, target, dataSource)) return null;
+        return org.springframework.http.ResponseEntity.status(404).body(java.util.Map.of(
+                "message", "No study with oid '" + studyOid + "'"));
     }
 
     /**

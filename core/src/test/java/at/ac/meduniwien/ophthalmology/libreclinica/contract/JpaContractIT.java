@@ -26,6 +26,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  *
  * <p>Phase C playbook §C.0.3.
  */
+@SuppressWarnings("resource") // the SessionFactory unwrapped from the EntityManagerFactory is owned by Spring
 public class JpaContractIT extends AbstractContractIT {
 
     /**

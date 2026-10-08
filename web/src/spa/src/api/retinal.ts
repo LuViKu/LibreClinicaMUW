@@ -50,7 +50,7 @@ export type RetinalJobStatus =
   | string
 
 /** Inference task — drives KPI / overlay / per-B-scan-trace layout. */
-export type RetinalTask = 'fluid' | 'onl' | 'pr' | 'ga' | string
+export type RetinalTask = 'fluid' | 'onl' | 'pr' | 'ga' | 'sdretinanet' | string
 
 /** Primary metric — `null` when the job hasn't produced one yet. */
 export interface PrimaryMetric {
@@ -206,6 +206,55 @@ export interface GaPayload {
   }
   etdrs_center: EtdrsCenter
   per_bscan_mm2: number[]
+}
+
+/** Whole-scan quantification of one SD-RetinaNet lesion class. */
+export interface SdRetinaNetLesionStats {
+  volume_mm3: number | null
+  area_mm2: number | null
+  max_height_um: number | null
+  /** HRF only — count of connected hyperreflective foci. */
+  foci_n?: number | null
+}
+
+/**
+ * `sdretinanet` task — SD-RetinaNet layers (12 boundaries) + lesions
+ * (7 classes). Lesion keys use the display names (IRF, SDD), not the
+ * model's (Cyst, Pseudodrusen). Every number may be null; `etdrs`,
+ * `fovea` and `crt_um` are absent when `geometry === "missing"`.
+ * The viewer reads `lesions` + `crt_um` for the KPI strip and
+ * `fovea.needs_review` / `grid_center.source` for the caution banner;
+ * the rest is shown through the raw-payload tree.
+ */
+export interface SdRetinaNetPayload {
+  lesions?: Partial<Record<'IRF' | 'SRF' | 'PED' | 'SHRM' | 'SDD' | 'ORT' | 'HRF', SdRetinaNetLesionStats>>
+  /** Central 1 mm ILM–BM thickness. */
+  crt_um?: number | null
+  fovea?: {
+    x_mm: number | null
+    y_mm: number | null
+    offset_mm: number | null
+    inner_retina_um: number | null
+    pit_depth_um: number | null
+    at_search_edge: boolean
+    needs_review: boolean
+  }
+  grid_center?: {
+    x_mm: number | null
+    y_mm: number | null
+    source: 'detected' | 'scan_center_fallback' | string
+    bscan_z: number | null
+    ascan_x: number | null
+  }
+  etdrs?: Record<string, {
+    coverage: number | null
+    n_ascans: number | null
+    layers: Record<string, { thickness_um: number | null; volume_mm3: number | null }>
+    lesions: Record<string, SdRetinaNetLesionStats>
+  }>
+  per_bscan_mm2?: Partial<Record<'irf' | 'srf' | 'ped' | 'shrm' | 'sdd' | 'ort' | 'hrf', number[]>>
+  /** "missing" when the pixel geometry was unavailable. */
+  geometry?: string
 }
 
 /**
@@ -454,8 +503,10 @@ export function listSubjectCrtTimeline(studySubjectId: number): Promise<CrtTimel
  * migration).
  */
 export interface NamdClinicalFlagsEye {
-  hemorrhage: boolean
-  bcvaLossAttributedToNamd: boolean
+  /** null = never recorded for this eye (not "no"). */
+  hemorrhage: boolean | null
+  /** null = never recorded for this eye (not "no"). */
+  bcvaLossAttributedToNamd: boolean | null
 }
 
 export interface NamdClinicalFlagsRow {
@@ -625,7 +676,8 @@ export function retryRetinalJob(jobId: number): Promise<RetinalJobRetryResponse>
  * <p>Returns 409 with {@code existingJobId} if a job already exists for
  * the same scan + task — the SPA navigates the operator there instead
  * of double-enqueueing. Returns 400 for invalid tasks (allow-list:
- * fluid / ga / onl / pr) or when {@code task === sourceTask}.
+ * fluid / ga / onl / pr / layers / sdretinanet) or when
+ * {@code task === sourceTask}.
  */
 export interface RetinalJobRerunAsResponse {
   jobId: number
@@ -640,7 +692,7 @@ export interface RetinalJobRerunAsConflict {
 
 export function rerunRetinalJobAs(
   jobId: number,
-  task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers',
+  task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers' | 'sdretinanet',
 ): Promise<RetinalJobRerunAsResponse> {
   return apiPost<RetinalJobRerunAsResponse>(`${BASE}/${jobId}/rerun-as`, { task })
 }

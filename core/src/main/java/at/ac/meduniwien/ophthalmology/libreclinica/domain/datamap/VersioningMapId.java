@@ -55,6 +55,7 @@ public class VersioningMapId extends DataMapDomainObject {
 		this.itemId = itemId;
 	}
 
+	@Override
 	public boolean equals(Object other) {
 		if ((this == other))
 			return true;
@@ -73,6 +74,7 @@ public class VersioningMapId extends DataMapDomainObject {
 						.getItemId().equals(castOther.getItemId())));
 	}
 
+	@Override
 	public int hashCode() {
 		int result = 17;
 

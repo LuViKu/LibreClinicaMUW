@@ -14,11 +14,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.SubmitDataServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditDAO;
 import java.util.ArrayList;
 
-@SuppressWarnings("all")
 
 public class ViewItemAuditLogServlet extends SecureController {
 
@@ -27,6 +27,7 @@ public class ViewItemAuditLogServlet extends SecureController {
 	 */
 	private static final long serialVersionUID = 4681699989521984006L;
 
+	@Override
 	public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
             return;
@@ -40,6 +41,7 @@ public class ViewItemAuditLogServlet extends SecureController {
         throw new InsufficientPermissionException(Page.LIST_STUDY_SUBJECTS, resexception.getString("not_study_director"), "1");
     }
 
+    @Override
     public void processRequest () throws Exception{
         AuditDAO adao = new AuditDAO(sm.getDataSource());
         FormProcessor fp = new FormProcessor(request);
@@ -54,6 +56,17 @@ public class ViewItemAuditLogServlet extends SecureController {
             auditTable = "item_data";
         }
         int entityId = fp.getInt("entityId");
+        String entityType = switch (auditTable) {
+            case "item_data" -> "itemData";
+            case "event_crf" -> "eventCrf";
+            case "study_event" -> "studyEvent";
+            case "study_subject" -> "studySub";
+            default -> auditTable;
+        };
+        // The audit trail of a record is read by whoever may read the record.
+        if (!new StudyTreeScope(sm.getDataSource()).containsNoteEntity(currentStudy, entityType, entityId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
         ArrayList<AuditBean> itemAuditEvents = adao.findItemAuditEvents(entityId, auditTable);
         request.setAttribute("itemAudits", itemAuditEvents);
         forwardPage(Page.AUDIT_LOGS_ITEMS);

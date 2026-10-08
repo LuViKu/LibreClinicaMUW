@@ -16,6 +16,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ArchivedDatasetFileBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.CommaReportBean;
@@ -76,6 +78,13 @@ public class ExportDatasetServlet extends SecureController {
     public File CSVFile;
     public String CSVFilePath;
     public ArrayList<ArchivedDatasetFileBean> fileList;
+
+    /** GET lists the dataset's export files; exporting or deleting a file takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
+    }
 
     @Override
     public void processRequest() throws Exception {
@@ -157,8 +166,6 @@ public class ExportDatasetServlet extends SecureController {
             loadList(db, asdfdao, datasetId, fp, eb);
             forwardPage(Page.EXPORT_DATASETS);
         } else {
-            logger.info("**** found action ****: " + action);
-            String generateReport = "";
             // generate file, and show screen export
             // String generalFileDir = DATASET_DIR + db.getId() +
             // File.separator;
@@ -208,7 +215,6 @@ public class ExportDatasetServlet extends SecureController {
                     fId = fileID.intValue();
                 }
                 request.setAttribute("generate", generalFileDir + ODMXMLFileName);
-                logger.debug("+++ set the following: " + generalFileDir + ODMXMLFileName);
             } else if ("txt".equalsIgnoreCase(action)) {
                 // generateReport =
                 // dsdao.generateDataset(db,
@@ -426,11 +432,6 @@ public class ExportDatasetServlet extends SecureController {
         logger.info("just set dataset to request");
         request.setAttribute("extractProperties", CoreResources.getExtractProperties());
         // find out if there are any files here:
-
-        //JN: Commenting out this, as its creating directories without any reason. TODO: Check why was this added.
-       // if (!currentDir.isDirectory()) {
-      //      currentDir.mkdirs();
-      //  }
 
         ArrayList<ArchivedDatasetFileBean> fileListRaw = asdfdao.findByDatasetId(datasetId);
         fileList = new ArrayList<>();

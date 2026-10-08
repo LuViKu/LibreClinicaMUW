@@ -623,7 +623,7 @@ public class DiscrepancyNoteUtil {
 
         for (DiscrepancyNoteBean discBean : allDiscNotes) {
             childDiscBeans = discrepancyNoteDAO.findAllByStudyAndParent(currentStudy, discBean.getId());
-            if (!childDiscBeans.isEmpty()) {
+            if (childDiscBeans != null && !childDiscBeans.isEmpty()) {
                 lastChild = childDiscBeans.get(childDiscBeans.size() - 1);
                 resolutionStatusId = lastChild.getResolutionStatusId();
                 if (discBean.getResolutionStatusId() != resolutionStatusId) {
@@ -933,8 +933,6 @@ public class DiscrepancyNoteUtil {
     /**
      * Generate a summary of statistics for a collection of discrepancy notes.
      *
-     * @param allDiscBeans
-     *            A List of DiscrepancyNoteBeans.
      * @return A Map mapping the name of each type of note (e.g., "Annotation")
      *         to another Map containing that type's statistics.
      */
@@ -1044,7 +1042,7 @@ public class DiscrepancyNoteUtil {
     }
 
     public String countNotes(List<DiscrepancyNoteBean> discList, int statusId, int typeId){
-        Integer count = 0;
+        int count = 0;
         for(int i = 0; i < discList.size(); i++){
             DiscrepancyNoteBean discBean = discList.get(i);
             if(typeId == 0 && statusId != 0) {
@@ -1062,7 +1060,7 @@ public class DiscrepancyNoteUtil {
                 }
             }
         }
-        return count.toString();
+        return Integer.toString(count);
     }
 
     /**

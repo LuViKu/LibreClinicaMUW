@@ -70,15 +70,11 @@ logging:
   # runtime; explicit reference keeps Spring Boot's default
   # auto-configuration out of the way).
   config: classpath:logback.xml
-  # Phase C.14 cliff diagnosis (2026-05-30): bump dispatcher + handler
-  # resolution to DEBUG and route to stdout so we can see why the
-  # pages DispatcherServlet's child context isn't picking up
-  # pages-servlet.xml handlers. Note: under LoggingSystem=none, these
-  # have no effect — they're documented here for the next iteration
-  # where logback patterns get a console appender.
-  level:
-    org.springframework.web.servlet: DEBUG
-    org.springframework.security: DEBUG
+  # The Phase C.14 diagnostic DEBUG levels for org.springframework.web.servlet
+  # and org.springframework.security were removed (2026-10-06): they were
+  # leftovers from a one-off investigation, and with logback active they log
+  # request/authentication detail on every request. Set levels per host with
+  # LOGGING_LEVEL_<LOGGER>=DEBUG when diagnosing.
 
 server:
   servlet:
@@ -133,6 +129,28 @@ management:
 # specific reverse-proxy IP. Tomcat MUST bind to the compose-internal
 # network only; the header-spoofing defence depends on it.
 libreclinica:
+  # A second, internet-facing deployment (behind the DMZ reverse proxy) sets
+  # LIBRECLINICA_DEPLOYMENT_INTERNET_FACING=true. That (a) answers 404 for the
+  # account-less upload/entry portals, the device + sidecar APIs, springdoc
+  # and /actuator/info + /actuator/prometheus (SecurityConfig), (b) returns an
+  # identical failure for locked / unknown / bad-password logins
+  # (SpaLoginFailureHandler) and (c) refuses to start while the seeded `root`
+  # password (or any active account with it) is unchanged
+  # (InternetFacingStartupGuard). Default false: the internal deployment is
+  # unchanged.
+  deployment:
+    internet-facing: ${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:false}
+  # Every uploaded file must be verified as de-identified before it is kept
+  # (DeidUploadGate, E2eDeidentificationVerifier, the dicom-scp /verify route,
+  # and the nightly DeidentificationScanner). Defaults to the internet-facing
+  # flag; the internal deployment is unchanged. Also exposed to the SPA as
+  # `deidentificationRequired` on GET /pages/api/v1/me. On the dicom-scp
+  # sidecar set DICOM_SCP_DEIDENTIFY_STRICT=true alongside it.
+  ingest:
+    deidentification:
+      required: ${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:false}}
+      # Nightly re-verification of everything stored; "-" turns it off.
+      scan-cron: ${LIBRECLINICA_INGEST_DEIDENTIFICATION_SCAN_CRON:0 30 2 * * *}
   sso:
     enabled: ${LIBRECLINICA_SSO_ENABLED:false}
     header:
@@ -160,6 +178,57 @@ libreclinica:
   # at deploy time. Override via LIBRECLINICA_BUG_REPORT_RECIPIENT.
   bugReport:
     recipient: ${LIBRECLINICA_BUG_REPORT_RECIPIENT:}
+  # Legacy JSP retirement (DR-018; plan R0.3/R0.4). Every request for a
+  # legacy screen (a servlet in LegacyServletRegistry, or a JSP-rendering
+  # route under /pages) is logged on the `legacy-access` logger as a
+  # `legacy-hit` line: path, bucket, SPA route, method, user, whether it came
+  # through the /legacy/ alias, and what was done with it.
+  #
+  # closedPaths: legacy screens that are switched off. Catalogue keys, as in
+  # LegacyServletDeprecationCatalog, separated by commas or spaces, e.g.
+  # LIBRECLINICA_LEGACY_CLOSED_PATHS=/ListUserAccounts,/pages/studymodule
+  # (a /pages key also closes the paths below it). A closed screen answers
+  # 410 Gone, naming its SPA replacement, to everyone except a system
+  # administrator, who is sent (307) to /legacy/<path> and served there.
+  # Empty: nothing is closed. Entries that are not catalogue keys are
+  # reported at startup at ERROR level and ignored. /MainMenu and /Logout
+  # stay open until the shell wave: logins land on the one, and the SPA's
+  # logout calls the other.
+  #
+  # The earlier servletsEnabled (all-or-nothing), banner and sunsetDate
+  # keys are gone; they never took effect.
+  #
+  # The default below is the set of waves closed so far, so the retirement
+  # state is versioned and reviewed with the code (and recorded in
+  # docs/development/modernization/phase-e-retirement-log.md). Setting the
+  # environment variable replaces it; setting it to an empty value reopens
+  # everything, which is the emergency lever.
+  #
+  # Wave 0 (2026-09-30): screens recorded as not needed, with no SPA
+  # replacement planned — the OpenClinica Enterprise page, the admin and
+  # technical-admin home pages, the schema change log, the heritage global
+  # subject registry (replaced by the patient model), scheduled ODM imports
+  # and their log (dropped), the two-factor letter printout (dropped), the
+  # hard delete of an event CRF's data, and the password-requirements page
+  # (covered by /admin/password-policy).
+  # Also closed in wave 0: the OpenClinica 3.x REST API under /pages/auth/api
+  # (API-key callers only). Nothing in the app, the SPA or the deployment
+  # calls it; any external caller shows up in the legacy-access log.
+  #
+  # Wave 1 (2026-10-02): administration. Users and their study roles, the
+  # lockout settings, the test e-mail, login history and the per-user audit
+  # page, the all-studies list with remove, restore and the ODM metadata
+  # download, the Quartz job pages (including the running-jobs page and the
+  # legacy export-job create/edit), the LDAP picker, and the permanent delete
+  # of a CRF version. All were open to system administrators only, except
+  # the metadata download, which the SPA home page now gives every role that
+  # had it. Also closed, once the SPA admitted the coordinator (D5): the CRF
+  # library servlets (all but /ViewCRF, whose "run all rules for this CRF"
+  # link has no SPA counterpart) and the study audit log. /ViewStudy stays
+  # open: the legacy side bar links it for every role. See the retirement
+  # log for the per-screen parity record.
+  legacy:
+    closedPaths: ${LIBRECLINICA_LEGACY_CLOSED_PATHS:/Enterprise,/TechAdmin,/AdminSystem,/AuditDatabase,/ListSubject,/ListSubjectData,/ViewSubject,/UpdateSubject,/RemoveSubject,/RestoreSubject,/CreateJobImport,/UpdateJobImport,/ViewImportJob,/ViewLogMessage,/PrintoutCertificate,/DeleteEventCRF,/ConfigurePasswordRequirements,/pages/auth,/ListUserAccounts,/CreateUserAccount,/ViewUserAccount,/EditUserAccount,/SetUserRole,/EditStudyUserRole,/DeleteStudyUserRole,/DeleteUser,/UnLockUser,/pages/admin/listLdapUsers,/pages/admin/selectLdapUser,/Configure,/SendTestEmail,/AuditUserActivity,/AuditUserActivityData,/AuditLogUser,/ListStudy,/RemoveStudy,/RestoreStudy,/DownloadStudyMetadata,/ViewAllJobs,/ViewJob,/ViewSingleJob,/PauseJob,/CreateJobExport,/UpdateJobExport,/pages/listCurrentScheduledJobs,/pages/listCurrentScheduledJobsData,/pages/cancelScheduledJob,/DeleteCRFVersion,/ListCRF,/CreateCRF,/CreateCRFVersion,/InitCreateCRFVersion,/RemoveCRF,/RestoreCRF,/InitUpdateCRF,/UpdateCRF,/RemoveCRFVersion,/RestoreCRFVersion,/DownloadVersionSpreadSheet,/BatchCRFMigration,/AuditLogStudy}
 
 # Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
 # left at default (api-docs.path = /v3/api-docs). The OpenApiResource

@@ -12,21 +12,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemGroupMetadataBean;
+import org.hibernate.query.MutationQuery;
+import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItemGroupMetadataBean>{
 
     @Override 
@@ -56,7 +47,6 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings("rawtypes")
     public Boolean hasShowingInSection(int sectionId, int crfVersionId, int eventCrfId) {
         String query = "select dg.item_group_id from dyn_item_group_metadata dg where dg.event_crf_id = :eventCrfId and dg.item_group_metadata_id in ("
                 + " select distinct igm.item_group_metadata_id from item_group_metadata igm where igm.crf_version_id = :crfVersionId"
@@ -64,21 +54,19 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
                 + " and igm.item_id in (select im.item_id from item_form_metadata im where im.section_id = :sectionId and im.crf_version_id = :crfVersionId))"
                 + " and dg.show_group = 'true' limit 1";
         
-        org.hibernate.query.Query q = this.getCurrentSession().createNativeQuery(query);
+        NativeQuery<Object> q = this.getCurrentSession().createNativeQuery(query, Object.class);
         q.setParameter("eventCrfId", eventCrfId);
         q.setParameter("crfVersionId", crfVersionId);
         q.setParameter("sectionId", sectionId);
         q.setParameter("crfVersionId", crfVersionId);
-        /* TODO use uniqueResult (or something similar), if the
-         * query returns multiple (equivalent results) use distinct also
-         */
+        // Existence check only: the query is limited to one row, so uniqueResult would add nothing.
         return q.getResultList() != null && q.getResultList().size() > 0;
     }
 
     @Transactional
     public void delete(int eventCrfId) {
         String query = "delete from " + getDomainClassName() + " metadata where metadata.eventCrfId = :eventCrfId";
-        Query<?> q = getCurrentSession().createQuery(query);
+        MutationQuery q = getCurrentSession().createMutationQuery(query);
         q.setParameter("eventCrfId", eventCrfId);
         q.executeUpdate();
     }

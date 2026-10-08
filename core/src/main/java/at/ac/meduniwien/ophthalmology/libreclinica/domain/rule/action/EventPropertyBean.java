@@ -18,10 +18,12 @@ public class EventPropertyBean extends PropertyBean {
 	private static final long serialVersionUID = 163888549294125461L;
 	private String property;
 
+	@Override
 	public String getProperty() {
 		return property;
 	}
 
+	@Override
 	public void setProperty(String property) {
 		this.property = property;
 	}

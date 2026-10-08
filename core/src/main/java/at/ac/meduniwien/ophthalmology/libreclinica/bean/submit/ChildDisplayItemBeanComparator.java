@@ -38,6 +38,7 @@ public class ChildDisplayItemBeanComparator implements Comparator<DisplayItemBea
      *            The first obje
      *
      */
+    @Override
     public int compare(DisplayItemBean o1, DisplayItemBean o2) {
         if (o1 == null || o2 == null) {
             return 0;

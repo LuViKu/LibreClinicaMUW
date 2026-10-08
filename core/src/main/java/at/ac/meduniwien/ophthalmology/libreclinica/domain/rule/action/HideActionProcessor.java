@@ -31,6 +31,7 @@ public class HideActionProcessor implements ActionProcessor {
         this.ruleSet = ruleSet;
     }
 
+    @Override
     public RuleActionBean execute(RuleRunnerMode ruleRunnerMode, ExecutionMode executionMode, RuleActionBean ruleAction, ItemDataBean itemDataBean,
             String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
 

@@ -535,7 +535,7 @@ public class RulesPostImportContainerService {
 
 	public void runValidationInList(String target, String destination, AuditableBeanWrapper<RuleSetBean> ruleSetBeanWrapper, List<RuleSetBean> eventActionsRuleSetBean) {
 		// eventActionsRuleSetBean is the list of all events from rule set table
-		Boolean isDestinationATarget = false;
+		boolean isDestinationATarget = false;
 		RuleSetBean isDestination = null;
 
 		for (RuleSetBean ruleSetBean : eventActionsRuleSetBean) {

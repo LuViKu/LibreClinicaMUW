@@ -32,6 +32,7 @@ import CrfItemWidget from '@/components/CrfItemWidget.vue'
 import RepeatingTablePreview from '@/components/RepeatingTablePreview.vue'
 import TerminologyAutocomplete, { type TermPick } from '@/components/TerminologyAutocomplete.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
+import { mapTristateReasonSiblings } from '@/components/tristateReason'
 
 import { useCrfPreviewStore } from '@/stores/crfPreview'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
@@ -171,8 +172,36 @@ function onReset(): void {
  * out before grouping so the preview store stays the authority on
  * visibility.
  */
+/**
+ * TRISTATE_REASON pairing for the previewed CRF — the same arrangement
+ * {@link CrfEntryView} uses. The author previews what the operator will see,
+ * so a reason asked for twice here is the same defect as at data entry, and
+ * was reported from this window.
+ */
+const tristatePairing = computed(() =>
+  mapTristateReasonSiblings((store.schema?.sections ?? []).flatMap((sec) => sec.items ?? [])),
+)
+
+function reasonOidFor(item: CrfItem): string | null {
+  return tristatePairing.value.reasonOidByParentOid.get(item.oid) ?? null
+}
+
+function reasonTextFor(item: CrfItem): string {
+  const oid = reasonOidFor(item)
+  if (oid == null) return ''
+  const v = store.values[oid]
+  return v == null ? '' : String(v)
+}
+
+function onTristateReason(item: CrfItem, text: string): void {
+  const oid = reasonOidFor(item)
+  if (oid == null) return
+  store.setValue(oid, text)
+}
+
 function rowsForSection(items: CrfItem[]): BilateralRow[] {
-  const visible = items.filter((it) => !store.isItemHidden(it.oid))
+  const consumed = tristatePairing.value.consumedReasonOids
+  const visible = items.filter((it) => !store.isItemHidden(it.oid) && !consumed.has(it.oid))
   const rows = groupBilateralItems(visible)
   return rows.filter((row) => !isRowEntirelyHidden(row))
 }
@@ -365,7 +394,9 @@ const rootClass = computed(() =>
                       :error-message="showError(row.item)"
                       :suppress-label="true"
                       :parent-value="parentValueFor(row.item)"
+                      :tristate-reason="reasonTextFor(row.item)"
                       @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
+                      @update:tristate-reason="(v: string) => onTristateReason(row.item, v)"
                     />
                   </template>
                   <template v-else-if="row.item.dataType === 'file'">
@@ -432,7 +463,9 @@ const rootClass = computed(() =>
                     :suppress-label="true"
                     :compact="compact"
                     :parent-value="parentValueFor(item)"
+                    :tristate-reason="reasonTextFor(item)"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @update:tristate-reason="(v: string) => onTristateReason(item, v)"
                   />
                 </template>
               </BilateralItemGroup>

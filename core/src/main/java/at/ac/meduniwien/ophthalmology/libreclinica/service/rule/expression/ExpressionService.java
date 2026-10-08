@@ -72,14 +72,14 @@ public class ExpressionService {
     
     private final String SEPARATOR = ".";
     private final String ESCAPED_SEPARATOR = "\\.";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN = "[A-Z_0-9]+|[A-Z_0-9]+\\[(ALL|[1-9]\\d*)\\]$";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_NO_ALL = "[A-Z_0-9]+|[A-Z_0-9]+\\[[1-9]\\d*\\]$";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_ORDINAL = "[A-Z_0-9]+\\[(END|ALL|[1-9]\\d*)\\]$";
-    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_END = "[A-Z_0-9]+|[A-Z_0-9]+\\[(END|ALL|[1-9]\\d*)\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN = "[A-Z_0-9]+|[A-Z_0-9]+\\[(ALL|[1-9]\\d{0,8})\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_NO_ALL = "[A-Z_0-9]+|[A-Z_0-9]+\\[[1-9]\\d{0,8}\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_ORDINAL = "[A-Z_0-9]+\\[(END|ALL|[1-9]\\d{0,8})\\]$";
+    private final String STUDY_EVENT_DEFINITION_OR_ITEM_GROUP_PATTERN_WITH_END = "[A-Z_0-9]+|[A-Z_0-9]+\\[(END|ALL|[1-9]\\d{0,8})\\]$";
     private final String PRE = "[A-Z_0-9]+\\[";
     private final String POST = "\\]";
     private final String CRF_OID_OR_ITEM_DATA_PATTERN = "[A-Z_0-9]+";
-    private final String BRACKETS_AND_CONTENTS = "\\[(END|ALL|[1-9]\\d*)\\]";
+    private final String BRACKETS_AND_CONTENTS = "\\[(END|ALL|[1-9]\\d{0,8})\\]";
     private final String ALL_IN_BRACKETS = "ALL";
     private final String OPENING_BRACKET = "[";
     private final String CLOSING_BRACKET = "]";
@@ -189,7 +189,7 @@ public class ExpressionService {
         }
         String value = null;
         try {
-            int index = getItemGroupOidOrdinalFromExpression(expression).equals("") ? 0 : Integer
+            int index = getItemGroupOidOrdinalFromExpression(expression).isEmpty() ? 0 : Integer
                     .parseInt(getItemGroupOidOrdinalFromExpression(expression)) - 1;
             ItemDataBean itemDataBean = itemData.get(index);
             value = itemData.get(index).getValue();
@@ -217,7 +217,7 @@ public class ExpressionService {
 
     public HashMap<String, String> getSSDate(String ssZoneId, String serverZoneId) {
         HashMap<String, String> map = new HashMap<>();
-        if (ssZoneId == null || ssZoneId.equals("")) {
+        if (ssZoneId == null || ssZoneId.isEmpty()) {
             ssZoneId = TimeZone.getDefault().getID();
         }
 
@@ -252,7 +252,7 @@ public class ExpressionService {
             String studyEventDefinitionOid = getStudyEventDefinitionOidFromExpression(expression);
             String crfOrCrfVersionOid = getCrfOidFromExpression(expression);
             String studyEventDefinitionOrdinal = getStudyEventDefinitionOidOrdinalFromExpression(expression);
-            studyEventDefinitionOrdinal = studyEventDefinitionOrdinal.equals("") ? "1" : studyEventDefinitionOrdinal;
+            studyEventDefinitionOrdinal = studyEventDefinitionOrdinal.isEmpty() ? "1" : studyEventDefinitionOrdinal;
             String studySubjectId = String.valueOf(studyEvent.getStudySubjectId());
             logger.debug("studySubjectId: " + studySubjectId);
             logger.debug(
@@ -282,7 +282,7 @@ public class ExpressionService {
 
             expression = fixGroupOrdinal(expression, ruleSetExpression, itemData, expressionWrapper.getEventCrf());
 
-            int index = getItemGroupOidOrdinalFromExpression(expression).equals("") ? 0 : Integer
+            int index = getItemGroupOidOrdinalFromExpression(expression).isEmpty() ? 0 : Integer
                     .parseInt(getItemGroupOidOrdinalFromExpression(expression)) - 1;
 
             ItemDataBean itemDataBean = itemData.get(index);
@@ -304,7 +304,7 @@ public class ExpressionService {
             );
         }
         String studyEventId = getStudyEventDefinitionOidOrdinalFromExpression(expression);
-        int index = getItemGroupOidOrdinalFromExpression(expression).equals("") ? 0 : Integer
+        int index = getItemGroupOidOrdinalFromExpression(expression).isEmpty() ? 0 : Integer
                 .parseInt(getItemGroupOidOrdinalFromExpression(expression)) - 1;
         List<ItemDataBean> itemData = getItemDataDao().findByStudyEventAndOids(Integer.valueOf(studyEventId),
                 getItemOidFromExpression(expression), getItemGroupOidFromExpression(expression));
@@ -404,17 +404,6 @@ public class ExpressionService {
                             "OCRERR_0017", new Object[] { fullExpression, expressionWrapper.getRuleSet().getTarget().getValue() }
                         );
                     }
-                    /*
-                     * if (valueFromForm != null) { // TODO: Do this if type a
-                     * date String dateFormat =
-                     * ResourceBundleProvider.getFormatBundle
-                     * ().getString("date_format_string"); String dateRegexp =
-                     * ResourceBundleProvider
-                     * .getFormatBundle().getString("date_regexp");
-                     * valueFromForm =
-                     * ExpressionTreeHelper.isValidDate(valueFromForm,
-                     * dateFormat, dateRegexp); }
-                     */
                     value = valueFromForm == null ? valueFromDb : valueFromForm;
                 }
             } else {
@@ -457,7 +446,14 @@ public class ExpressionService {
         if (oid.contains("[")) {
             int leftBracketIndex = oid.indexOf("[");
             int rightBracketIndex = oid.indexOf("]");
-            int ordinal = Integer.parseInt(oid.substring(leftBracketIndex + 1, rightBracketIndex));
+            int ordinal;
+            try {
+                ordinal = Integer.parseInt(oid.substring(leftBracketIndex + 1, rightBracketIndex));
+            } catch (NumberFormatException e) {
+                // [ALL] or [END] names no single occurrence: fail the rule the way an
+                // unknown OID does, so the rule runner skips it instead of the request failing.
+                throw new OpenClinicaSystemException("OCRERR_0019", new String[] { oid });
+            }
             studyEvent = getStudyEventFromDb(oid.substring(0, leftBracketIndex), ordinal, subjectId);
         } else {
             studyEvent = getStudyEventFromDb(oid, 1, subjectId);
@@ -491,8 +487,8 @@ public class ExpressionService {
         String returnedRuleExpression = ruleExpression;
 
         if (getItemGroupOid(ruleExpression).equals(getItemGroupOid(targetExpression))) {
-            if (getGroupOrdninalCurated(ruleExpression).equals("") &&
-                !getGroupOrdninalCurated(targetExpression).equals("")) {
+            if (getGroupOrdninalCurated(ruleExpression).isEmpty() &&
+                !getGroupOrdninalCurated(targetExpression).isEmpty()) {
 
                 returnedRuleExpression = replaceGroupOidOrdinalInExpression(
                     ruleExpression,
@@ -515,7 +511,7 @@ public class ExpressionService {
                 itemId,
                 theEventCrfBean.getCRFVersionId()
             );
-            if (isGroupRepeating(itemGroupMetadataBean) && getGroupOrdninalCurated(ruleExpression).equals("")) {
+            if (isGroupRepeating(itemGroupMetadataBean) && getGroupOrdninalCurated(ruleExpression).isEmpty()) {
                 returnedRuleExpression = replaceGroupOidOrdinalInExpression(
                     ruleExpression,
                     Integer.valueOf(getGroupOrdninalCurated(targetExpression))
@@ -631,7 +627,7 @@ public class ExpressionService {
                     .isItemGroupRepeatingBasedOnCrfVersion(ruleGroupOid, ruleCrfVersion.getId());
             if (!isTargetGroupRepeating && isRuleGroupRepeating) {
                 String ordinal = getItemGroupOidOrdinalFromExpression(fullExpression);
-                if (ordinal.equals("") || ordinal.equals("ALL")) {
+                if (ordinal.isEmpty() || ordinal.equals("ALL")) {
                     result = false;
                 }
             }
@@ -847,7 +843,7 @@ public class ExpressionService {
         String ordinal;
         if (originalOrdinal.equals(ALL_IN_BRACKETS)) {
             throw new OpenClinicaSystemException("ALL not supported in the following instance");
-        } else if (originalOrdinal.equals("")) {
+        } else if (originalOrdinal.isEmpty()) {
             ordinal = "1";
         } else {
             ordinal = originalOrdinal;
@@ -1250,7 +1246,12 @@ public class ExpressionService {
 
             // Query for ItemGroup with OID specified in the expression
             ItemGroupBean itemGroup = getItemGroupDao().findByOid(theOid[0]);
-            boolean isItemGroupBePartOfCrfOrNull = ruleSet.getCrfId() == null || itemGroup.getCrfId().equals(ruleSet.getCrfId());
+            // findByOid returns null for an OID that is not in the database, and the
+            // guard below already expects that -- so the CRF test has to tolerate it
+            // instead of dereferencing first (a rules import naming an unknown item
+            // group OID used to fail with an NPE rather than reporting the OID).
+            boolean isItemGroupBePartOfCrfOrNull = ruleSet.getCrfId() == null
+                    || (itemGroup != null && itemGroup.getCrfId().equals(ruleSet.getCrfId()));
 
             if (itemGroup != null && itemGroup.isActive() && isItemGroupBePartOfCrfOrNull) {
 

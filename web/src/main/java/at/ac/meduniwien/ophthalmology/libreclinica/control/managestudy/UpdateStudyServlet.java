@@ -17,6 +17,8 @@ import java.util.Date;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -41,17 +43,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class UpdateStudyServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6165286395419877159L;
 	public static final String INPUT_START_DATE = "startDate";
     public static final String INPUT_END_DATE = "endDate";
     public static final String INPUT_VER_DATE = "protocolDateVerification";
 
-    /**
-     * 
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
@@ -61,6 +57,13 @@ public class UpdateStudyServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.STUDY_LIST_SERVLET, resexception.getString("not_admin"), "1");
 
+    }
+
+    /** GET shows the form; the wizard steps and the update take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override
@@ -103,7 +106,17 @@ public class UpdateStudyServlet extends SecureController {
                 forwardPage(Page.STUDY_LIST_SERVLET);
 
             } else if ("next".equalsIgnoreCase(action)) {
-                Integer pageNumber = Integer.valueOf(request.getParameter("pageNum"));
+                // Integer.valueOf() never returns null, so the else-branch
+                // below (re-show wizard page 1) was unreachable and a missing
+                // or non-numeric pageNum escaped as a NumberFormatException.
+                // Parsing into null on failure restores the branch the author
+                // wrote for exactly that case.
+                Integer pageNumber;
+                try {
+                    pageNumber = Integer.valueOf(request.getParameter("pageNum"));
+                } catch (NumberFormatException nfe) {
+                    pageNumber = null;
+                }
                 if (pageNumber != null) {
                     if (pageNumber.intValue() == 6) {
                         confirmStudy6();
@@ -134,8 +147,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Validates the first section of study and save it into study bean
      * 
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy1() throws Exception {
@@ -298,8 +309,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Validates the forth section of study and save it into study bean
      * 
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy4() throws Exception {
@@ -337,8 +346,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Validates the forth section of study and save it into study bean
      * 
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy5() throws Exception {
@@ -541,7 +548,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Constructs study bean from request-first section
      * 
-     * @param request
      * @return
      */
     private StudyBean createStudyBean() {
@@ -566,7 +572,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Updates the study bean with inputs from second section
      * 
-     * @param request
      * @return true if study type is Interventional, otherwise false
      */
     private boolean updateStudy2() {
@@ -674,7 +679,6 @@ public class UpdateStudyServlet extends SecureController {
     /**
      * Sets map in request for different JSP pages
      * 
-     * @param request
      * @param isInterventional
      */
     private void setMaps(boolean isInterventional, ArrayList<InterventionBean> interventionArray) {

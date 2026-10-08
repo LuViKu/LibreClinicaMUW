@@ -35,9 +35,6 @@ import jakarta.persistence.Transient;
 @SuppressWarnings("all")
 public class RuleSetRuleAuditBean extends AbstractMutableDomainObject {
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 4263243144104316697L;
 	RuleSetRuleBean ruleSetRuleBean;
     Status status;
@@ -56,9 +53,6 @@ public class RuleSetRuleAuditBean extends AbstractMutableDomainObject {
         return ruleSetRuleBean;
     }
 
-    /**
-     * @param ruleSetBean the ruleSetBean to set
-     */
     public void setRuleSetRuleBean(RuleSetRuleBean ruleSetRuleBean) {
         this.ruleSetRuleBean = ruleSetRuleBean;
     }

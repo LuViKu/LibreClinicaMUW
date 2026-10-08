@@ -1,0 +1,18 @@
+# Trivy findings that are triaged and accepted on the Security tab, where
+# they are dismissed with the same reason. The blocking step in
+# .github/workflows/security.yml ignores exactly these; any other HIGH or
+# CRITICAL finding with a fix fails the job. Each entry carries an expiry:
+# when it passes, the gate fails again and the entry must be re-examined.
+
+# (CVE-2022-0839 in liquibase-core 3.6.3, the previous entry, went with the
+# move to Liquibase 4.31.1.)
+
+# spring-webmvc 6.2.19, CRITICAL, accepted 2026-10-07. The flaw is in
+# XsltView. The app configures no XSLT view: its only view resolver is the
+# JSP InternalResourceViewResolver in WebMvcConfig, and nothing under core/,
+# web/ or odm/ references XsltView or XsltViewResolver. The only fixed
+# release is Spring 7.0.9 (open-source support for 6.2 has ended, so there
+# will be no 6.2.x fix), which means Spring Boot 4: a planned migration, not
+# a patch. Re-examine on expiry, or at once if an XSLT view is ever added.
+CVE-2026-47884 exp:2027-01-07
+

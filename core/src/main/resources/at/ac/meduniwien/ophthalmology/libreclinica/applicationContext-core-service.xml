@@ -150,5 +150,4 @@
          coreResources field. -->
 
     
-    <context:component-scan base-package="at.ac.meduniwien.ophthalmology.libreclinica.controller.openrosa"/>
 </beans>

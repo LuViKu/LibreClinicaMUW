@@ -92,6 +92,30 @@
     </rollingPolicy>
   </appender>
 
+  <!--
+    2026-09-30 — legacy-access evidence for the DR-018 bake-in.
+
+    A closed legacy screen is deleted only after six months without
+    legitimate use, and the evidence is the `legacy-access` logger
+    (LegacyAccessLog: one line per request to a legacy screen, catalogue
+    key only, no query string). JSON_FILE keeps 14 days, so the lines also
+    go to this file, which keeps 220 days: the six-month window plus a
+    month for the review. The volume is one short line per legacy request,
+    so the caps are generous rather than tight.
+  -->
+  <appender name="LEGACY_ACCESS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${log.dir}-legacy-access.log</file>
+    <encoder>
+      <pattern>%date{ISO8601} ${reqIdField} ${safeMsg}%n</pattern>
+    </encoder>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${log.dir}-legacy-access.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+      <maxFileSize>20MB</maxFileSize>
+      <maxHistory>220</maxHistory>
+      <totalSizeCap>500MB</totalSizeCap>
+    </rollingPolicy>
+  </appender>
+
  <!-- @pgawade 19-NOV-2010 commented out this file appender as it will not be used any where; instead new file appeders added will be used
   <appender name="LOGFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <file>${log.dir}.log</file>
@@ -710,6 +734,11 @@
        diagnoses don't repeat the fly-blind cycle. Framework-specific
        DEBUG loggers used during the diagnosis itself were dropped once
        the routing fix landed. -->
+  <!-- DR-018 bake-in evidence; additive, so the lines still reach CONSOLE and JSON_FILE. -->
+  <logger name="legacy-access" level="INFO">
+    <appender-ref ref="LEGACY_ACCESS_FILE"/>
+  </logger>
+
   <root>
     <level value="INFO"/>
     <appender-ref ref="CONSOLE"/>

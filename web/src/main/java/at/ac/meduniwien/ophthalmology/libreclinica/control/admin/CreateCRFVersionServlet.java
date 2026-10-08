@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.NewCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -40,7 +42,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validator;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.MeasurementUnitDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
@@ -92,6 +93,12 @@ public class CreateCRFVersionServlet extends SecureController {
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
     }
 
+    /** Saving the uploaded version (action=confirmsql) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirmsql".equalsIgnoreCase(request.getParameter("action"));
+    }
+
     @Override
     public void processRequest() throws Exception {
         resetPanel();
@@ -106,7 +113,6 @@ public class CreateCRFVersionServlet extends SecureController {
         String module = fp.getString(MODULE);
         // keep the module in the session
         session.setAttribute(MODULE, module);
-        request.setAttribute("xformEnabled", CoreResources.getField("xform.enabled"));
         String action = request.getParameter("action");
         CRFVersionBean version = (CRFVersionBean) session.getAttribute("version");
 

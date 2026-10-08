@@ -73,6 +73,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
      * getEntityFromHashMap, the method that gets the object from the database
      * query.
      */
+    @Override
     public AuditEventBean getEntityFromHashMap(HashMap<String, Object> hm) {
         AuditEventBean eb = new AuditEventBean();
         // AUDIT_ID AUDIT_DATE AUDIT_TABLE USER_ID ENTITY_ID
@@ -179,6 +180,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
         return eb;
     }
 
+    @Override
     public ArrayList<AuditEventBean> findAll() {
     	String queryName = "findAll";
     	return executeFindAllQuery(queryName);
@@ -187,10 +189,12 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<AuditEventBean>  findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public AuditEventBean findByPK(int id) {
     	String queryName = "findByPK";
     	return executeFindByPKQuery(queryName);
@@ -216,6 +220,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
      *     the audit-coverage doc.
      */
     @Deprecated
+    @Override
     public AuditEventBean create(AuditEventBean sb) {
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
         // INSERT INTO audit_event
@@ -658,6 +663,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     /**
      * Updates a AuditEvent
      */
+    @Override
     public AuditEventBean update(AuditEventBean eb) {
         return eb;
     }
@@ -665,6 +671,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<AuditEventBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
@@ -672,6 +679,7 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<AuditEventBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

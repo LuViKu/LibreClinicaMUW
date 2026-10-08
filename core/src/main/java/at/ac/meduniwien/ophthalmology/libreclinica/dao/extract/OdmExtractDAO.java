@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -748,7 +749,7 @@ public class OdmExtractDAO extends DatasetDAO {
     //The method underneath tries to reuse the code based on getODMMetadata
     public void getODMMetadataForForm(MetaDataVersionBean metadata,String formVersionOID,String odmVersion){
     	  FormDefBean formDef = new FormDefBean();
-    	  String cvIds = new String("");
+    	  String cvIds = "";
     	  CRFVersionDAO crfVersionDAO = new CRFVersionDAO(this.ds);
   	 	CRFVersionBean crfVersionBean = crfVersionDAO.findByOid(formVersionOID);
   	 	cvIds =crfVersionBean.getId()+"";
@@ -1126,7 +1127,7 @@ public class OdmExtractDAO extends DatasetDAO {
                 // but parseCode can still produce an empty map (e.g. blank text
                 // pair). Log WARN so operators notice option-code mappings
                 // silently lost in ODM export.
-                if (codes == null || codes.isEmpty()) {
+                if (codes.isEmpty()) {
                     logger.warn("ODM export: empty code list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1137,7 +1138,7 @@ public class OdmExtractDAO extends DatasetDAO {
             if (hasMultiSelect) {
                 multi = MetadataUnit.parseCode(rsText, rsValue);
                 // 2026-06-28 — heritage-debt audit (PR #262): see comment above.
-                if (multi == null || multi.isEmpty()) {
+                if (multi.isEmpty()) {
                     logger.warn("ODM export: empty multi-select list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1229,14 +1230,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 cl.setName(rsLabel);
                 cl.setPreSASFormatName(rsLabel);
                 cl.setDataType(datatype);
-                Iterator<String> iter = codes.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> code : codes.entrySet()) {
                     CodeListItemBean cli = new CodeListItemBean();
-                    cli.setCodedValue(de);
+                    cli.setCodedValue(code.getKey());
                     TranslatedTextBean tt = cli.getDecode();
-                    // cli.getDecode().setText(codes.get(de));
-                    tt.setText(codes.get(de));
+                    tt.setText(code.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     cli.setDecode(tt);
                     cl.getCodeListItems().add(cli);
@@ -1251,14 +1249,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 msl.setName(rsLabel);
                 msl.setDataType(datatype);
                 msl.setActualDataType(datatype);
-                Iterator<String> iter = multi.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> option : multi.entrySet()) {
                     MultiSelectListItemBean msli = new MultiSelectListItemBean();
-                    msli.setCodedOptionValue(de);
+                    msli.setCodedOptionValue(option.getKey());
                     TranslatedTextBean tt = new TranslatedTextBean();
-                    String t = multi.get(de);
-                    tt.setText(t);
+                    tt.setText(option.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     msli.setDecode(tt);
                     msl.getMultiSelectListItems().add(msli);
@@ -1757,7 +1752,7 @@ public class OdmExtractDAO extends DatasetDAO {
                 // 2026-06-28 — heritage-debt audit (PR #262): log WARN so empty
                 // option-code mappings stop being silently swallowed in OC 1.3
                 // ODM export (mirrors the OC 1.2 branch above).
-                if (codes == null || codes.isEmpty()) {
+                if (codes.isEmpty()) {
                     logger.warn("ODM 1.3 export: empty code list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1768,7 +1763,7 @@ public class OdmExtractDAO extends DatasetDAO {
             if (hasMultiSelect) {
                 multi = MetadataUnit.parseCode(rsText, rsValue);
                 // 2026-06-28 — heritage-debt audit (PR #262): see comment above.
-                if (multi == null || multi.isEmpty()) {
+                if (multi.isEmpty()) {
                     logger.warn("ODM 1.3 export: empty multi-select list parsed for itOID={} itName={} rsId={} rsText='{}' rsValue='{}'",
                             itOID, itName, rsId, rsText, rsValue);
                 }
@@ -1858,14 +1853,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 cl.setName(rsLabel);
                 cl.setPreSASFormatName(rsLabel);
                 cl.setDataType(datatype);
-                Iterator<String> iter = codes.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> code : codes.entrySet()) {
                     CodeListItemBean cli = new CodeListItemBean();
-                    cli.setCodedValue(de);
+                    cli.setCodedValue(code.getKey());
                     TranslatedTextBean tt = cli.getDecode();
-                    // cli.getDecode().setText(codes.get(de));
-                    tt.setText(codes.get(de));
+                    tt.setText(code.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     cli.setDecode(tt);
                     cl.getCodeListItems().add(cli);
@@ -1880,14 +1872,11 @@ public class OdmExtractDAO extends DatasetDAO {
                 msl.setName(rsLabel);
                 msl.setDataType(datatype);
                 msl.setActualDataType(datatype);
-                Iterator<String> iter = multi.keySet().iterator();
-                while (iter.hasNext()) {
-                    String de = iter.next();
+                for (Map.Entry<String, String> option : multi.entrySet()) {
                     MultiSelectListItemBean msli = new MultiSelectListItemBean();
-                    msli.setCodedOptionValue(de);
+                    msli.setCodedOptionValue(option.getKey());
                     TranslatedTextBean tt = new TranslatedTextBean();
-                    String t = multi.get(de);
-                    tt.setText(t);
+                    tt.setText(option.getValue());
                     tt.setXmlLang(CoreResources.getField("translated_text_language"));
                     msli.setDecode(tt);
                     msl.getMultiSelectListItems().add(msli);
@@ -2201,7 +2190,7 @@ public class OdmExtractDAO extends DatasetDAO {
                                 it.setReasonForNull(itValue.trim());
                             }
                         } else {
-                            if (datatypeid == 9) {
+                            if (datatypeid != null && datatypeid == 9) {
                                 try {
                                     itValue = new SimpleDateFormat("yyyy-MM-dd").format(new SimpleDateFormat(oc_df_string).parse(itValue));
                                 } catch (Exception fe) {
@@ -2301,16 +2290,14 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 3 || typeId == 6) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(Status.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(Status.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // Same free-text audit value as the form-data branch below:
+                    // parse when it is a status id, copy it through when it is
+                    // not, instead of aborting the whole export. This also
+                    // repairs a transcription slip — the "0" branch for the NEW
+                    // value used to call setOldValue, so an entity moved to
+                    // "invalid" was exported with no NewValue at all.
+                    auditLog.setNewValue(statusNameOrRaw(newValue));
+                    auditLog.setOldValue(statusNameOrRaw(oldValue));
                 } else {
                     auditLog.setNewValue(newValue);
                     auditLog.setOldValue(oldValue);
@@ -2353,16 +2340,10 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 17 || typeId == 18 || typeId == 19 || typeId == 20 || typeId == 21 || typeId == 22 || typeId == 23 || typeId == 31) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setOldValue(SubjectEventStatus.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(SubjectEventStatus.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(SubjectEventStatus.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(SubjectEventStatus.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // See statusNameOrRaw: free-text audit value, and the same
+                    // transcription slip in the "0" branch for the NEW value.
+                    auditLog.setNewValue(subjectEventStatusNameOrRaw(newValue));
+                    auditLog.setOldValue(subjectEventStatusNameOrRaw(oldValue));
                 } else {
                     auditLog.setNewValue(newValue);
                     auditLog.setOldValue(oldValue);
@@ -2395,10 +2376,28 @@ public class OdmExtractDAO extends DatasetDAO {
         }
     }
 
+    /**
+     * The display name of a subject-event status id, or the value itself when
+     * it is not one.
+     *
+     * <p>The subject-event flavour of {@link #statusNameOrRaw(String)}, for the
+     * audit event types that store a subject_event_status id. Same contract,
+     * same reason: old_value/new_value are free text in the schema and an
+     * exporter must not die on the content of a row it is only copying.
+     */
+    static String subjectEventStatusNameOrRaw(String value) {
+        if (value == null) return null;
+        if ("0".equals(value)) return SubjectEventStatus.INVALID.getName();
+        try {
+            return SubjectEventStatus.getFromMap(Integer.parseInt(value.trim())).getName();
+        } catch (NumberFormatException notAStatusId) {
+            return value;
+        }
+    }
+
     protected void setOCFormDataAuditLogs(StudyBean study, OdmClinicalDataBean data, String studySubjectOids, String ecIds,
             HashMap<Integer, String> formOidPoses) {
         this.setOCFormDataAuditsTypesExpected();
-        String dbName = CoreResources.getDBName();
         logger.debug("Begin to execute GetOCFormDataAuditsSql");
         logger.debug("getOCFormDataAuditsSql= " + this.getOCFormDataAuditsSql(studySubjectOids, ecIds));
         ArrayList<HashMap<String, Object>> rows = select(this.getOCFormDataAuditsSql(studySubjectOids, ecIds));
@@ -2477,16 +2476,14 @@ public class OdmExtractDAO extends DatasetDAO {
                 auditLog.setType(type);
                 auditLog.setReasonForChange(auditReason);
                 if (typeId == 12) {
-                    if ("0".equals(newValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setNewValue(Status.getFromMap(Integer.parseInt(newValue)).getName());
-                    }
-                    if ("0".equals(oldValue)) {
-                        auditLog.setOldValue(Status.INVALID.getName());
-                    } else {
-                        auditLog.setOldValue(Status.getFromMap(Integer.parseInt(oldValue)).getName());
-                    }
+                    // Same free-text audit value as the form-data branch below:
+                    // parse when it is a status id, copy it through when it is
+                    // not, instead of aborting the whole export. This also
+                    // repairs a transcription slip — the "0" branch for the NEW
+                    // value used to call setOldValue, so an entity moved to
+                    // "invalid" was exported with no NewValue at all.
+                    auditLog.setNewValue(statusNameOrRaw(newValue));
+                    auditLog.setOldValue(statusNameOrRaw(oldValue));
                 } else {
                     auditLog.setNewValue(newValue);
                     auditLog.setOldValue(oldValue);
@@ -2536,7 +2533,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = studySubjectLabel + "-" + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }
@@ -2593,7 +2590,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = oidKey + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }
@@ -2650,7 +2647,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = ecId + "-" + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }
@@ -2710,7 +2707,7 @@ public class OdmExtractDAO extends DatasetDAO {
             } else {
                 DiscrepancyNoteBean dn = new DiscrepancyNoteBean();
                 String k = idataId + "-" + dnId;
-                if (pDNs != null && pDNs.containsKey(k)) {
+                if (pDNs.containsKey(k)) {
                     dn.setChildNotes(pDNs.get(k));
                     dn.setNumberOfChildNotes(dn.getChildNotes().size());
                 }

@@ -36,6 +36,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
       
     }
 
+    @Override
     public StudySubject findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";

@@ -7,11 +7,14 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import ThreadTimeline from '@/components/discrepancy/ThreadTimeline.vue'
+import UserAutocomplete from '@/components/UserAutocomplete.vue'
 
 import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
 import type { DiscrepancyNote, NoteStatus, NoteType } from '@/types/note'
-import { canRespondToNote, canResolveNote, canCloseNote } from '@/types/note'
+import { canRespondToNote, canResolveNote, canCloseNote, canReopenNote } from '@/types/note'
+import { eventCrfLink } from '@/lib/crfLink'
+import { userRolesFromAuth } from '@/router'
 
 const { t } = useI18n()
 const notes = useNotesStore()
@@ -30,8 +33,11 @@ onMounted(() => { if (notes.rows.length === 0) notes.load() })
 
 interface ComposerState {
   noteId: string
-  intendedStatus: 'updated' | 'resolution-proposed' | 'closed'
+  /** 'reopen' answers a closed thread and leaves it Updated. */
+  intendedStatus: 'updated' | 'resolution-proposed' | 'closed' | 'reopen'
   description: string
+  /** User name of a new assignee; empty keeps the current one. */
+  assignedTo: string
   /* Inline error from the last failed appendThread attempt — distinct
      from notes.error (which is the store-wide banner). */
   error: string | null
@@ -40,7 +46,12 @@ interface ComposerState {
 const composer = ref<ComposerState | null>(null)
 
 function openComposer(n: DiscrepancyNote, intendedStatus: ComposerState['intendedStatus']) {
-  composer.value = { noteId: n.id, intendedStatus, description: '', error: null }
+  composer.value = { noteId: n.id, intendedStatus, description: '', assignedTo: '', error: null }
+}
+
+/** Updating a thread, a re-open included, may hand it to someone else. */
+function composerReassigns(c: ComposerState): boolean {
+  return c.intendedStatus === 'updated' || c.intendedStatus === 'reopen'
 }
 
 function cancelComposer() {
@@ -57,8 +68,9 @@ async function submitComposer() {
   }
   c.error = null
   const result = await notes.appendThread(c.noteId, {
-    newStatus: c.intendedStatus,
+    newStatus: c.intendedStatus === 'reopen' ? 'updated' : c.intendedStatus,
     description: c.description.trim() || undefined,
+    assignedTo: composerReassigns(c) && c.assignedTo ? c.assignedTo : null,
   })
   if (result) {
     composer.value = null
@@ -72,6 +84,17 @@ async function submitComposer() {
 /** Bridge for the role enum — auth.user is null while bootstrap is in flight. */
 function currentRole(): import('@/types/auth').UserRole | null {
   return auth.user?.role ?? null
+}
+
+/** The CRF a note is on, at the item: read-only for a Monitor. */
+function itemLink(n: DiscrepancyNote): string {
+  return eventCrfLink(userRolesFromAuth(auth), n.eventCrfOid ?? '', n.itemOid)
+}
+
+/** What the note is on: its item, or the field of a note on a subject, visit or CRF header. */
+function targetLabel(n: DiscrepancyNote): string {
+  if (n.entityType && n.entityType !== 'itemData' && n.column) return t(`notes.field.${n.column}`)
+  return n.itemLabel || n.itemOid
 }
 
 function typeVariant(t: NoteType): 'danger' | 'warning' | 'neutral' | 'data-manager' {
@@ -301,12 +324,12 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
             <td class="px-3 py-2 align-top">
               <template v-if="n.eventCrfOid && n.itemOid">
                 <RouterLink
-                  :to="`/event-crfs/${encodeURIComponent(n.eventCrfOid)}?item=${encodeURIComponent(n.itemOid)}`"
+                  :to="itemLink(n)"
                   class="font-medium text-slate-800 hover:text-muw-blue hover:underline"
                   data-testid="notes-item-deeplink"
                 >{{ n.itemLabel || n.itemOid }}</RouterLink>
               </template>
-              <span v-else class="font-medium text-slate-800">{{ n.itemLabel || n.itemOid }}</span>
+              <span v-else class="font-medium text-slate-800" data-testid="notes-item-label">{{ targetLabel(n) }}</span>
               <span
                 v-if="n.itemLabel && n.itemOid"
                 class="ml-1 font-mono text-[10px] text-slate-400"
@@ -362,6 +385,15 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
                   @click="openComposer(n, 'closed')"
                 >{{ t('notes.actions.close') }}</button>
               </span>
+              <span v-if="currentRole() && canReopenNote(currentRole()!, n.status)" class="ml-2">
+                <button
+                  type="button"
+                  class="text-muw-blue underline hover:text-muw-blue-700"
+                  :disabled="notes.isSubmitting"
+                  data-testid="notes-action-reopen"
+                  @click="openComposer(n, 'reopen')"
+                >{{ t('notes.actions.reopen') }}</button>
+              </span>
             </td>
           </tr>
           <tr v-if="expandedRowId === n.id" class="bg-slate-25">
@@ -386,6 +418,16 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
                     : t('notes.composer.placeholder')"
                   rows="3"
                 />
+                <div v-if="composerReassigns(composer)" class="flex flex-col gap-1 max-w-xs">
+                  <label for="notes-composer-assignee" class="text-xs text-slate-600">
+                    {{ t('crfEntry.threadDialog.reassignLabel') }}
+                  </label>
+                  <UserAutocomplete
+                    id="notes-composer-assignee"
+                    v-model="composer.assignedTo"
+                    :placeholder="t('crfEntry.threadDialog.reassignPlaceholder')"
+                  />
+                </div>
                 <p v-if="composer.error" class="text-xs text-red-600">{{ composer.error }}</p>
                 <div class="flex justify-end gap-2">
                   <button

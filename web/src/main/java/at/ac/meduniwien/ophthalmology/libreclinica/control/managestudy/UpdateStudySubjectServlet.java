@@ -16,6 +16,8 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -42,11 +44,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 /**
  * @author jxu Processes request to update a study subject
  */
-@SuppressWarnings("all")
 public class UpdateStudySubjectServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -8773308388221272583L;
 
 	/**
@@ -66,6 +64,12 @@ public class UpdateStudySubjectServlet extends SecureController {
 
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
+    }
+
+    /** GET shows the subject (action=show) or its confirmation; saving it (action=submit) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"submit".equalsIgnoreCase(new FormProcessor(request).getString("action", true));
     }
 
     @Override
@@ -96,6 +100,12 @@ public class UpdateStudySubjectServlet extends SecureController {
             }
 
             StudySubjectBean sub = (StudySubjectBean) subdao.findByPK(studySubId);
+            // every action: the subject named by the request, and the one the earlier steps left in the session
+            assertRecordInScope(sub.getStudyId());
+            Object sessionSubject = session.getAttribute("studySub");
+            if (sessionSubject instanceof StudySubjectBean && ((StudySubjectBean) sessionSubject).getStudyId() > 0) {
+                assertRecordInScope(((StudySubjectBean) sessionSubject).getStudyId());
+            }
 
             StudyGroupClassDAO sgcdao = new StudyGroupClassDAO(sm.getDataSource());
             StudyGroupDAO sgdao = new StudyGroupDAO(sm.getDataSource());
@@ -212,7 +222,6 @@ public class UpdateStudySubjectServlet extends SecureController {
     /**
      * Processes 'confirm' request, validate the study subject object
      *
-     * @param sub
      * @throws Exception
      */
     private void confirm(StudyGroupDAO sgdao) throws Exception {

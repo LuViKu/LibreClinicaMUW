@@ -12,6 +12,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
@@ -35,6 +37,12 @@ public class ConfigurePasswordRequirementsServlet extends SecureController {
             addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
             throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("you_may_not_perform_administrative_functions"), "1");
         }
+    }
+
+    /** GET shows the password rules; saving them (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
     }
 
     @Override

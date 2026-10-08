@@ -61,6 +61,7 @@ public class CRFVersionDAO extends AuditableEntityDAO<CRFVersionBean> {
         this.locale = locale;
     }
 
+    @Override
     public CRFVersionBean update(CRFVersionBean ib) {
         // UPDATE CRF_VERSION SET CRF_ID=?,STATUS_ID=?,NAME=?,
         // DESCRIPTION=?,DATE_UPDATED=NOW(),UPDATE_ID=?,REVISION_NOTES =? WHERE
@@ -77,6 +78,7 @@ public class CRFVersionDAO extends AuditableEntityDAO<CRFVersionBean> {
         return ib;
     }
 
+    @Override
     public CRFVersionBean create(CRFVersionBean cvb) {
         // "INSERT INTO CRF_VERSION (NAME, DESCRIPTION, CRF_ID, STATUS_ID,DATE_CREATED," +
         // "OWNER_ID,REVISION_NOTES,OC_OID) "
@@ -171,6 +173,7 @@ public class CRFVersionDAO extends AuditableEntityDAO<CRFVersionBean> {
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<CRFVersionBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -353,10 +356,12 @@ public class CRFVersionDAO extends AuditableEntityDAO<CRFVersionBean> {
 
     }
 
+    @Override
     public ArrayList<CRFVersionBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public ArrayList<CRFVersionBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

@@ -15,6 +15,8 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NullValue;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
@@ -78,6 +80,13 @@ public class UpdateEventDefinitionServlet extends SecureController {
         throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
     }
 
+    /** GET shows the form; the confirmation and the update take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
+    }
+
     @Override
     public void processRequest() throws Exception {
         String action = request.getParameter("action");
@@ -110,7 +119,6 @@ public class UpdateEventDefinitionServlet extends SecureController {
         StudyEventDefinitionBean sed = (StudyEventDefinitionBean) session.getAttribute("definition");
         StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
         String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-        if (participateFormStatus.equals("enabled")) baseUrl();
 
         request.setAttribute("participateFormStatus",participateFormStatus );
 
@@ -354,7 +362,7 @@ public class UpdateEventDefinitionServlet extends SecureController {
                         item.setStatus(Status.AUTO_DELETED);
                         item.setUpdater(ub);
                         item.setUpdatedDate(new Date());
-                        iddao.update(item);
+                        iddao.updateStatusAndOldStatusOnly(item);
                         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(sm.getDataSource());
                         ArrayList<DiscrepancyNoteBean> dnNotesOfRemovedItem = dnDao.findExistingNotesForItemData(item.getId());
                         if (!dnNotesOfRemovedItem.isEmpty()) {
@@ -416,7 +424,7 @@ public class UpdateEventDefinitionServlet extends SecureController {
                         item.setStatus(item.getOldStatus());
                         item.setUpdater(ub);
                         item.setUpdatedDate(new Date());
-                        iddao.update(item);
+                        iddao.updateStatusOnly(item);
                     }
                 }
             }
@@ -437,7 +445,7 @@ public class UpdateEventDefinitionServlet extends SecureController {
             	}
                 logger.debug("iter:           {} --db:   {}", eventDef.getId(), eventDef.getSubmissionUrl());
                 logger.debug("edcsInSession:  {} --session: {}", sessionBean.getId(), sessionBean.getSubmissionUrl());
-            	if (sessionBean.getSubmissionUrl() == null || sessionBean.getSubmissionUrl().trim().equals("")) {
+            	if (sessionBean.getSubmissionUrl() == null || sessionBean.getSubmissionUrl().trim().isEmpty()) {
             		break;
             	} else {
                     if (eventDef.getSubmissionUrl().trim().equalsIgnoreCase(sessionBean.getSubmissionUrl().trim()) && (eventDef.getId() != sessionBean.getId()) ||

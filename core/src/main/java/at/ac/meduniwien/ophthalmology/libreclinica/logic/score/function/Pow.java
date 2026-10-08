@@ -22,6 +22,7 @@ public class Pow extends AbstractFunction {
      * @see Function#execute
      */
 
+    @Override
     public void execute() {
         logger.info("Execute the function Pow... ");
 
@@ -44,12 +45,8 @@ public class Pow extends AbstractFunction {
                 value = "";
                 return;
             }
-            if (values != null && values.length > 0) {
-                double v = Math.pow(values[0], values[1]);
-                value = Double.toString(v);
-            } else {
-                value = "";
-            }
+            double v = Math.pow(values[0], values[1]);
+            value = Double.toString(v);
         } else {
             value = "";
             logger.error("Pow function should have two arguments");

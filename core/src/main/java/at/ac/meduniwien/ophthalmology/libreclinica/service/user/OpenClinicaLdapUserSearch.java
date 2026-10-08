@@ -29,6 +29,7 @@ public class OpenClinicaLdapUserSearch implements LdapUserSearch {
     @Autowired
     private LdapUserService ldapUserService;
 
+    @Override
     public DirContextOperations searchForUser(String username) throws UsernameNotFoundException {
         DirContextOperations result = ldapUserService.searchForUser(username);
         if (result == null) {

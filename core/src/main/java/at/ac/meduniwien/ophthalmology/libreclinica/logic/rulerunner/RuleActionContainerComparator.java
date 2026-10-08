@@ -31,6 +31,7 @@ public class RuleActionContainerComparator implements Comparator<RuleActionConta
         order.put(ActionType.RANDOMIZE,"8");
     }
 
+    @Override
     public int compare(RuleActionContainer o1, RuleActionContainer o2) {
         return order.get(o1.getRuleAction().getActionType()).compareTo(order.get(o2.getRuleAction().getActionType()));
     }

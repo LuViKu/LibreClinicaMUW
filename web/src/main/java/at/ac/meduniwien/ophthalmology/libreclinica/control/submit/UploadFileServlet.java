@@ -43,11 +43,17 @@ public class UploadFileServlet extends SecureController {
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
         locale = LocaleResolver.getLocale(request);
-        if ("false".equals(session.getAttribute("mayProcessUploading"))) {
+        // A file is uploaded for a data-entry form: the data-entry roles, in a
+        // study open for data entry, and not where the data-entry page has
+        // refused uploads. Only a message used to be shown, and the file was
+        // still written.
+        boolean studyClosed = currentStudy.getStatus().isLocked() || currentStudy.getStatus().isFrozen();
+        if (!SubmitDataServlet.maySubmitData(ub, currentRole) || studyClosed
+                || "false".equals(session.getAttribute("mayProcessUploading"))) {
             addPageMessage(respage.getString("you_not_have_permission_upload_file"));
             request.setAttribute("uploadFileStauts", "noPermission");
+            throw new InsufficientPermissionException(Page.FILE_UPLOAD, resexception.getString("no_permission_to_perform_data_entry"), "1");
         }
-        return;
     }
 
     @Override
@@ -153,6 +159,7 @@ public class UploadFileServlet extends SecureController {
     		return DatatypeConverter.printHexBinary(md.digest());
     	}
 
+        @Override
         public File rename(File f, InputStream content) {
             // here, File f has been validated as a valid File.
             String pathAndName = f.getPath();

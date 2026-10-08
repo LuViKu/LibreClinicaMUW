@@ -29,6 +29,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingCard, { type RoleVariant } from '@/components/LandingCard.vue'
 import WorkQueueCard from '@/components/WorkQueueCard.vue'
+import StudyMetadataCard from '@/components/StudyMetadataCard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSdvStore } from '@/stores/sdv'
 import { useNotesStore } from '@/stores/notes'
@@ -37,6 +38,7 @@ import { useRulesStore } from '@/stores/rules'
 import { useSubjectsStore, matchesStatusFilter } from '@/stores/subjects'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { entryAllowsRoles } from '@/studyModules/roleGate'
+import { userMayDownloadStudyMetadata } from '@/lib/studyMetadataAccess'
 import { ingestInboxCounts } from '@/api/ingest'
 import { listDueVisits } from '@/api/events'
 import type { UserRole } from '@/types/auth'
@@ -81,9 +83,13 @@ const ROLE_TO_VARIANT: Record<UserRole, RoleVariant> = {
   Administrator: 'administrator',
 }
 
-const canSwitchStudy = computed(() => (auth.availableStudies?.length ?? 0) > 1)
+// A system administrator can open any study (the picker lists them all),
+// whatever their own bindings.
+const canSwitchStudy = computed(() => auth.isSysAdmin || (auth.availableStudies?.length ?? 0) > 1)
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
 const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
+/** The study's design as ODM, for the roles the endpoint admits: the legacy Download Study Metadata page. */
+const canDownloadMetadata = computed(() => userMayDownloadStudyMetadata(auth.user))
 const displayName = computed(() => auth.user?.displayName || auth.user?.username || '')
 
 /** Today, in the operator's language — the one thing a dashboard header should say. */
@@ -217,7 +223,8 @@ const QUEUES: QueueEntry[] = [
 /**
  * Destinations. Every allowedRoles list mirrors the route's own role meta:
  * a card that opens a route the role cannot enter is a dead click that
- * bounces back here — the CRC's Patientenübersicht did exactly that.
+ * bounces back here. A role may enter a route through the CRC to Investigator
+ * inheritance (roleSatisfies) without the route listing it; the card then stays hidden.
  */
 const WORKSPACES = computed<WorkspaceEntry[]>(() => [
   {
@@ -241,7 +248,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'build-study' },
     titleKey: 'buildStudy.title',
     descKey: 'home.dataManager.buildStudyDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     group: 'study',
   },
   {
@@ -249,7 +256,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'import-crf-data' },
     titleKey: 'importCrf.title',
     descKey: 'home.dataManager.importCrfDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     group: 'study',
   },
   {
@@ -257,7 +264,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'rules' },
     titleKey: 'rules.title',
     descKey: 'home.dataManager.rulesDesc',
-    allowedRoles: ['Data Manager'],
+    allowedRoles: ['Data Manager', 'CRC'],
     badge: () => activeRuleSetsCount.value,
     group: 'study',
   },
@@ -266,7 +273,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'data-export' },
     titleKey: 'home.dataManager.dataExportTitle',
     descKey: 'home.dataManager.dataExportDesc',
-    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    allowedRoles: ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -274,7 +281,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'audit-log' },
     titleKey: 'auditLog.title',
     descKey: 'home.administrator.auditLogDesc',
-    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    allowedRoles: ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -282,7 +289,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'sites' },
     titleKey: 'home.administrator.sitesTitle',
     descKey: 'home.administrator.sitesDesc',
-    allowedRoles: ['Data Manager', 'Administrator'],
+    allowedRoles: ['Data Manager', 'CRC', 'Administrator'],
     group: 'study',
   },
   {
@@ -300,7 +307,8 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'patients-overview' },
     titleKey: 'home.cards.patientsOverview.title',
     descKey: 'home.cards.patientsOverview.description',
-    // Not CRC: /patients does not admit the role, so the card was a dead click.
+    // Not CRC: the route admits it only through the Investigator inheritance in
+    // roleSatisfies, and the card is left to the roles that list the route.
     allowedRoles: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'],
     group: 'platform',
   },
@@ -320,6 +328,17 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     titleKey: 'home.administrator.createStudyTitle',
     descKey: 'home.administrator.createStudyDesc',
     allowedRoles: ['Administrator'],
+    group: 'platform',
+  },
+  {
+    // Every study on the platform; the list is for system administrators
+    // only, which the Administrator role alone does not tell apart.
+    id: 'admin-studies',
+    to: { name: 'admin-studies' },
+    titleKey: 'adminStudies.title',
+    descKey: 'home.administrator.adminStudiesDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => auth.isSysAdmin,
     group: 'platform',
   },
   {
@@ -435,6 +454,8 @@ onMounted(() => {
   }
   if (has('Monitor') || has('Data Manager')) {
     inflight.push(sdv.load())
+  }
+  if (has('Monitor') || has('Data Manager') || has('CRC')) {
     inflight.push(rules.load())
   }
   if (rs.length > 0) {
@@ -501,7 +522,7 @@ onMounted(() => {
 
     <!-- Where else to go, in the active study. -->
     <section
-      v-if="studyWorkspaces.length > 0 || moduleCards.length > 0"
+      v-if="studyWorkspaces.length > 0 || moduleCards.length > 0 || canDownloadMetadata"
       :aria-label="t('home.sections.study', { study: activeStudyName })"
       class="mb-10"
       data-testid="home-study-workspaces"
@@ -528,6 +549,7 @@ onMounted(() => {
           v-for="entry in moduleCards"
           :key="entry.key"
         />
+        <StudyMetadataCard v-if="canDownloadMetadata" :study-oid="activeStudyOid" />
       </div>
     </section>
 

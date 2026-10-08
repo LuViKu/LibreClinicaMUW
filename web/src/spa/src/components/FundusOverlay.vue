@@ -37,7 +37,12 @@ import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 
 const { t } = useI18n()
 
-export type FundusOverlayTask = 'fluid' | 'onl' | 'pr' | 'ga'
+/**
+ * {@code sdretinanet} has no en-face projection or per-task indicator;
+ * it gets the ETDRS grid + B-scan positions only (every task-specific
+ * branch below compares against the other tasks by name).
+ */
+export type FundusOverlayTask = 'fluid' | 'onl' | 'pr' | 'ga' | 'sdretinanet'
 
 /**
  * 2026-06-22 — interactive ETDRS-region IDs the operator can

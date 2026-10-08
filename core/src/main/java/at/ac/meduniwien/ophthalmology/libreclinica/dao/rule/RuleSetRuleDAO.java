@@ -199,6 +199,7 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         return ruleSetRuleBean;
     }
 
+    @Override
     public RuleSetRuleBean getEntityFromHashMap(HashMap<String, Object> hm) {
     	return getEntityFromHashMap(hm, false);
     }
@@ -218,11 +219,13 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         return ruleSetRuleBean;
     }
 
+    @Override
     public ArrayList<RuleSetRuleBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -260,32 +263,29 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
         return executeFindByPKQuery(queryName, variables);
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
 
-    /*
-     * Why should we even have these in here if they are not needed? TODO: refactor super class to remove dependency.
-     */
+    // Required by DAOInterface (via EntityDAO); this DAO has no use for it.
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<RuleSetRuleBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

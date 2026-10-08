@@ -61,12 +61,12 @@ public class ViewRuleAssignmentNewServlet extends SecureController {
     @Override
     public void processRequest() throws Exception {
         FormProcessor fp = new FormProcessor(request);
-        if (fp.getString("designer").equals("")) {
+        if (fp.getString("designer").isEmpty()) {
             isDesigner = false;
         } else {
             isDesigner = Boolean.parseBoolean(fp.getString("designer"));
         }
-        if (fp.getString("showMoreLink").equals("")) {
+        if (fp.getString("showMoreLink").isEmpty()) {
             showMoreLink = true;
         } else {
             showMoreLink = Boolean.parseBoolean(fp.getString("showMoreLink"));

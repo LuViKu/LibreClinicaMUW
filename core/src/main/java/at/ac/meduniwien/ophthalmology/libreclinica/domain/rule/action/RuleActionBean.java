@@ -171,6 +171,7 @@ public class RuleActionBean extends AbstractAuditableMutableDomainObject impleme
     }
 
     @Transient
+    @Override
     public int compareTo(ActionType o) {
         return 0;
     }

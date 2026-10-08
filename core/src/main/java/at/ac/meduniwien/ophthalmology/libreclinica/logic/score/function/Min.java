@@ -24,6 +24,7 @@ public class Min extends AbstractFunction {
      * @see Function#execute
      */
 
+    @Override
     public void execute() {
         logger.info("Execute the function Min... ");
 
@@ -46,7 +47,7 @@ public class Min extends AbstractFunction {
             return;
         }
 
-        if (values != null && values.length > 0) {
+        if (values.length > 0) {
             double v = StatUtils.min(values);
             value = Double.toString(v);
         } else {

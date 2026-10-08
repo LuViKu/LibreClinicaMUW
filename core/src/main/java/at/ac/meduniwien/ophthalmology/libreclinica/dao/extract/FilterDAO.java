@@ -74,6 +74,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
         this.setTypeExpected(9, TypeNames.INT);// update id
     }
 
+    @Override
     public FilterBean update(FilterBean fb) {
         HashMap<Integer, Object> variables = new HashMap<>();
 		HashMap<Integer, Integer> nullVars = new HashMap<>();
@@ -88,6 +89,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
         return fb;
     }
 
+    @Override
     public FilterBean create(FilterBean fb) {
         logger.info("logged following owner id: " + fb.getOwnerId() + " vs. " + fb.getOwner().getId());
         int id = getNextPK();
@@ -116,6 +118,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
         return fb;
     }
 
+    @Override
     public FilterBean getEntityFromHashMap(HashMap<String, Object> hm) {
         FilterBean fb = new FilterBean();
         this.setEntityAuditInformation(fb, hm);
@@ -126,6 +129,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
         return fb;
     }
 
+    @Override
     public ArrayList<FilterBean> findAll() {
         this.setTypesExpected();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAll"));
@@ -151,10 +155,12 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<FilterBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public EntityBean findByPK(int ID) {
         FilterBean fb = new FilterBean();
         this.setTypesExpected();
@@ -175,6 +181,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<FilterBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
@@ -182,6 +189,7 @@ public class FilterDAO extends AuditableEntityDAO<FilterBean> {
      /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<FilterBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

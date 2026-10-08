@@ -7,7 +7,7 @@
  * with this exact shape from the Pinia store so the view code is
  * already written against the production contract.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): the wire-level types
+ * Phase E.5 follow-up (2026-06-02): the wire-level types
  * ({@link Subject}, {@link SubjectDetail}, {@link EventCellSnapshot},
  * {@link EventCellDetail}) are now derived from the
  * openapi-typescript-generated {@code components.schemas} so they
@@ -235,7 +235,7 @@ export type EventCellDetail =
  * fields; the detail view fetches them separately.
  */
 export type SubjectDetail =
-  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate' | 'eyeTransitions'>
+  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate' | 'eyeTransitions' | 'dateOfBirth'>
   & {
     gender: Gender
     secondaryId: string | null
@@ -252,6 +252,12 @@ export type SubjectDetail =
      * Null when not recorded or no separate screening visit was run.
      */
     screeningDate: string | null
+    /**
+     * The full date of birth (ISO YYYY-MM-DD) when one was recorded; null
+     * when only the year, or nothing, was. Typed here until the generated
+     * API types carry it.
+     */
+    dateOfBirth?: string | null
     /**
      * Phase E.6 subject-lifecycle — coarse study_subject status.
      * Optional because the openapi regen may not yet carry the

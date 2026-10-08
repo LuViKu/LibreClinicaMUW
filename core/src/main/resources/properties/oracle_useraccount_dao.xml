@@ -81,6 +81,10 @@
                 <sql>update user_account set lock_counter = ? where user_id = ?</sql>
         </query>
         <query>
+                <name>updateLastVisitDate</name>
+                <sql>update user_account set date_lastvisit = ? where user_id = ?</sql>
+        </query>
+        <query>
                 <name>lockUser</name>
                 <sql>update user_account set account_non_locked = ? , status_id= ? where user_id = ?</sql>
         </query>

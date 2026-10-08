@@ -122,6 +122,7 @@ public class StudyUserRoleId implements Serializable {
 		this.userName = userName;
 	}
 
+	@Override
 	public boolean equals(Object other) {
 		if ((this == other))
 			return true;
@@ -162,6 +163,7 @@ public class StudyUserRoleId implements Serializable {
 						.getUserName().equals(castOther.getUserName())));
 	}
 
+	@Override
 	public int hashCode() {
 		int result = 17;
 

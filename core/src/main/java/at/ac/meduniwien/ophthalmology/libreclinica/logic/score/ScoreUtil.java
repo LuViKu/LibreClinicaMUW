@@ -149,7 +149,7 @@ public class ScoreUtil {
         if (token.getName().length() > 0) {
             finalexp.add(token);
         }
-        if (finalexp != null && finalexp.size() > 0) {
+        if (finalexp.size() > 0) {
             if (finalexp.size() == 1) {
                 value = finalexp.get(0).getName();
             } else {
@@ -396,7 +396,6 @@ public class ScoreUtil {
      * 
      * @param exp
      *            ArrayList<ScoreToken> should be postfix of an expression.
-     * @param errors
      * @return
      */
     // public static String evalSimple(ArrayList<ScoreToken> exp, StringBuffer
@@ -463,7 +462,6 @@ public class ScoreUtil {
      * Return true if one character matches one of those characters '+', '-',
      * '*', '/'
      * 
-     * @param ch
      * @return
      */
     public static boolean isOperator(char c) {

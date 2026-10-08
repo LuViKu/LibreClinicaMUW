@@ -101,7 +101,7 @@ public class ListCRFServlet extends SecureController {
         
         // if coming from change crf version -> display message
         String crfVersionChangeMsg = fp.getString("isFromCRFVersionBatchChange");
-        if (crfVersionChangeMsg != null && !crfVersionChangeMsg.equals("")) {
+        if (crfVersionChangeMsg != null && !crfVersionChangeMsg.isEmpty()) {
             addPageMessage(crfVersionChangeMsg);
         }
 

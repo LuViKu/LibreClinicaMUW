@@ -103,7 +103,7 @@ const router = createRouter({
       path: '/audit-log',
       name: 'audit-log',
       component: () => import('@/views/StudyAuditLogView.vue'),
-      meta: { title: 'Study Audit Log', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
+      meta: { title: 'Study Audit Log', role: ['Monitor', 'Data Manager', 'CRC', 'Administrator'] as const },
     },
     /* Phase E hardening B — sysadmin-only system-wide audit trail
        (surfaces OPERATION_FAILED + JOB_FAILED §11.10(e) rows that
@@ -114,11 +114,28 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
+    /* R1.1 (2026-09-30) — login history over audit_user_login, the SPA
+       replacement for the legacy /AuditUserActivity page. */
+    {
+      path: '/admin/login-history',
+      name: 'admin-login-history',
+      component: () => import('@/views/AdminLoginHistoryView.vue'),
+      meta: { title: 'Login History', role: 'Administrator' as const },
+    },
     {
       path: '/admin/system-status',
       name: 'admin-system-status',
       component: () => import('@/views/AdminSystemStatusView.vue'),
       meta: { title: 'System Status', role: 'Administrator' as const },
+    },
+    /* Every study on the platform, with remove / restore and the ODM
+       metadata download: the legacy /ListStudy. The API admits system
+       administrators only; the view shows its refusal to anyone else. */
+    {
+      path: '/admin/studies',
+      name: 'admin-studies',
+      component: () => import('@/views/AdminStudiesView.vue'),
+      meta: { title: 'Studies', role: 'Administrator' as const },
     },
     {
       path: '/admin/password-policy',
@@ -150,7 +167,7 @@ const router = createRouter({
       path: '/build-study',
       name: 'build-study',
       component: () => import('@/views/BuildStudyView.vue'),
-      meta: { title: 'Build Study', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'Build Study', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     {
       path: '/studies/new',
@@ -174,13 +191,30 @@ const router = createRouter({
       path: '/event-definitions',
       name: 'event-definitions',
       component: () => import('@/views/EventDefinitionsView.vue'),
-      meta: { title: 'Event definitions', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'Event definitions', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     {
       path: '/crf-library',
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
-      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'CRF Library', role: ['Data Manager', 'CRC', 'Administrator'] as const },
+    },
+    /* One CRF: versions, item table with the integrity check, studies using
+       it (the legacy ViewCRF page). */
+    {
+      path: '/crf-library/:crfOid',
+      name: 'crf-detail',
+      component: () => import('@/views/CrfDetailView.vue'),
+      meta: { title: 'CRF', role: ['Data Manager', 'CRC', 'Administrator'] as const },
+    },
+    /* Version migration of one CRF: move existing event CRFs to another
+       version (the legacy batch CRF version migration), and change the
+       default version for new event CRFs. */
+    {
+      path: '/crf-library/:crfOid/migrate',
+      name: 'crf-migration',
+      component: () => import('@/views/CrfMigrationView.vue'),
+      meta: { title: 'CRF version migration', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     /* App-feedback Wave 2 (2026-06-19) — full drag-and-drop CRF builder canvas.
        Now the sole CRF authoring surface; the legacy side-rail wizard
@@ -190,7 +224,7 @@ const router = createRouter({
       path: '/crf-authoring-canvas/:crfOid',
       name: 'crfAuthoringCanvas',
       component: () => import('@/views/CrfAuthoringCanvasView.vue'),
-      meta: { title: 'CRF Builder', role: ['Data Manager', 'Administrator'] as const, canvasBuilder: true },
+      meta: { title: 'CRF Builder', role: ['Data Manager', 'CRC', 'Administrator'] as const, canvasBuilder: true },
     },
     {
       path: '/sites',
@@ -199,20 +233,20 @@ const router = createRouter({
       // Site (location) management is a study-build task the Data Manager /
       // study director owns alongside CRFs, visits, rules and groups — not
       // just a system Administrator concern.
-      meta: { title: 'Sites', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'Sites', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     /* Phase E A8.6 — subject group classes (Arms, families, etc.). */
     {
       path: '/group-classes',
       name: 'group-classes',
       component: () => import('@/views/GroupClassesView.vue'),
-      meta: { title: 'Group classes', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'Group classes', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     {
       path: '/rules',
       name: 'rules',
       component: () => import('@/views/RulesView.vue'),
-      meta: { title: 'Rules', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'Rules', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     {
       path: '/manage-users',
@@ -224,7 +258,7 @@ const router = createRouter({
       path: '/export',
       name: 'data-export',
       component: () => import('@/views/DatasetListView.vue'),
-      meta: { title: 'Data Export', role: ['Data Manager', 'Administrator', 'Monitor'] as const },
+      meta: { title: 'Data Export', role: ['Data Manager', 'CRC', 'Administrator', 'Monitor'] as const },
     },
     /* Phase E.6 P2 — Create-dataset wizard (revival of PR #114). */
     {
@@ -233,7 +267,7 @@ const router = createRouter({
       component: () => import('@/views/CreateDatasetView.vue'),
       meta: {
         title: 'Create dataset',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+        role: ['Monitor', 'Data Manager', 'CRC', 'Administrator'] as const,
       },
     },
     {
@@ -242,14 +276,14 @@ const router = createRouter({
       component: () => import('@/views/CreateDatasetView.vue'),
       meta: {
         title: 'Edit dataset',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+        role: ['Monitor', 'Data Manager', 'CRC', 'Administrator'] as const,
       },
     },
     {
       path: '/import-crf-data',
       name: 'import-crf-data',
       component: () => import('@/views/ImportCrfDataView.vue'),
-      meta: { title: 'Import CRF Data', role: ['Data Manager', 'Administrator'] as const },
+      meta: { title: 'Import CRF Data', role: ['Data Manager', 'CRC', 'Administrator'] as const },
     },
     {
       path: '/subjects/:subjectId/sign',
@@ -258,10 +292,13 @@ const router = createRouter({
       meta: { title: 'Sign Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
+      // A Monitor views the subject read-only, as legacy View Subject lets a
+      // monitor; the page hides every change the role cannot make, and the
+      // API refuses them.
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: ['Investigator', 'Administrator'] as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used
@@ -317,7 +354,7 @@ const router = createRouter({
       component: () => import('@/views/DatasetListView.vue'),
       meta: {
         title: 'Datasets',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+        role: ['Monitor', 'Data Manager', 'CRC', 'Administrator'] as const,
       },
     },
     {

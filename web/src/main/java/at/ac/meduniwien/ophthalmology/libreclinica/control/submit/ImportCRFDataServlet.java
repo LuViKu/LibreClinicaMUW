@@ -114,6 +114,7 @@ public class ImportCRFDataServlet extends SecureController {
                 logger.info("The filePath in datainfo.properties is invalid " + dir);
                 addPageMessage(respage.getString("filepath_you_defined_not_seem_valid"));
                 forwardPage(Page.IMPORT_CRF_DATA);
+                return;
             }
             // All the uploaded files will be saved in filePath/crf/original/
             String theDir = dir + "crf" + File.separator + "original" + File.separator;
@@ -132,6 +133,7 @@ public class ImportCRFDataServlet extends SecureController {
             }
             if (f == null) {
                 forwardPage(Page.IMPORT_CRF_DATA);
+                return;
             }
 
             // validation steps
@@ -166,7 +168,9 @@ public class ImportCRFDataServlet extends SecureController {
 
                 // schemaValidator.validateAgainstSchema(f, xsdFile);
                 // utf-8 compliance, tbh 06/2009
-                odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
+                try (FileInputStream odmStream = new FileInputStream(f)) {
+                    odmContainer = odmJaxbContext.unmarshalClinicalData(odmStream);
+                }
 
                 logger.debug("Found crf data container for study oid: " + odmContainer.getCrfDataPostImportContainer().getStudyOID());
                 logger.debug("found length of subject list: " + odmContainer.getCrfDataPostImportContainer().getSubjectData().size());
@@ -209,7 +213,9 @@ public class ImportCRFDataServlet extends SecureController {
                     schemaValidator.validateAgainstSchema(f, xsdFile2);
                     // for backwards compatibility, we also try to validate vs
                     // 1.2.1 ODM 06/2008
-                    odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
+                    try (FileInputStream odmStream = new FileInputStream(f)) {
+                        odmContainer = odmJaxbContext.unmarshalClinicalData(odmStream);
+                    }
                 } catch (Exception me2) {
                     // not sure if we want to report me2
                     MessageFormat mf = new MessageFormat("");
@@ -226,6 +232,7 @@ public class ImportCRFDataServlet extends SecureController {
                     // you can't really wait to forward because then you throw
                     // NPEs
                     // in the next few parts of the code
+                    return;
                 }
             }
             // 2.a. is the study the same one that the user is in right now?
@@ -248,6 +255,7 @@ public class ImportCRFDataServlet extends SecureController {
                 if (errors.size() > 0) {
                     // fail = true;
                     forwardPage(Page.IMPORT_CRF_DATA);
+                    return;
                 } else {
                     addPageMessage(respage.getString("passed_study_check"));
                     addPageMessage(respage.getString("passed_oid_metadata_check"));

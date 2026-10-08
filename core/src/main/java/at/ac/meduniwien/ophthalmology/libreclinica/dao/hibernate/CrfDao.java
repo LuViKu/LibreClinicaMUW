@@ -30,6 +30,7 @@ public class CrfDao extends AbstractDomainDao<CrfBean> {
         return q.getSingleResultOrNull();
     }
 
+    @Override
     public CrfBean findByOcOID(String OCOID) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";

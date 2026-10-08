@@ -22,6 +22,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DatasetItemStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
@@ -138,6 +140,12 @@ public class CreateDatasetServlet extends SecureController {
         // get the first one and test its name
         // logger.info("found study class "+sgclass.getName());
         return sgclasses;
+    }
+
+    /** GET walks the dataset wizard; saving the dataset (action=confirmall) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirmall".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override

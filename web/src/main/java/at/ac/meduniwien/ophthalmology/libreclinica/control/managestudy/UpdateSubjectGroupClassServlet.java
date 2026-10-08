@@ -14,6 +14,8 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 import java.util.ArrayList;
 import java.util.Date;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.GroupClassType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -34,9 +36,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class UpdateSubjectGroupClassServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 5281504073599016675L;
 
 	@Override
@@ -51,6 +50,12 @@ public class UpdateSubjectGroupClassServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + "\n" + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.SUBJECT_GROUP_CLASS_LIST_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form; the confirmation and the update (submitted) take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
     }
 
     @Override
@@ -93,8 +98,6 @@ public class UpdateSubjectGroupClassServlet extends SecureController {
     /**
      * Validates the first section of study and save it into study bean
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmGroup() throws Exception {

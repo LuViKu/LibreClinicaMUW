@@ -55,7 +55,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  * Enter or Validate Data for StudyEvent CRFs
  * @author ssachs
  */
-@SuppressWarnings("all")
 public class EnterDataForStudyEventServlet extends SecureController {
     
 	private static final long serialVersionUID = -3152159894339737423L;
@@ -108,6 +107,9 @@ public class EnterDataForStudyEventServlet extends SecureController {
         }
 
         StudyEventBean seb = (StudyEventBean) aeb;
+
+        // the check above tests the event's definition (the parent study's, for a site); the subject must be the session's
+        assertStudyEventInScope(seb.getId());
 
         StudyEventDefinitionDAO seddao = new StudyEventDefinitionDAO(sm.getDataSource());
         StudyEventDefinitionBean sedb = seddao.findByPK(seb.getStudyEventDefinitionId());

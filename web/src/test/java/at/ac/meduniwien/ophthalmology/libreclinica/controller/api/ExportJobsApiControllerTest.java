@@ -11,14 +11,22 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.stream.Stream;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.ExportScheduleRegistrar;
 
 /**
@@ -41,6 +49,29 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new ExportJobsApiController(
                 mockDataSource(),
                 Mockito.mock(ExportScheduleRegistrar.class)));
+    }
+
+    /** A registrar that accepts any cron, so validation reaches the fields after it. */
+    private MockMvc mockMvcAcceptingAnyCron() {
+        ExportScheduleRegistrar registrar = Mockito.mock(ExportScheduleRegistrar.class);
+        Mockito.when(registrar.isValidCron(ArgumentMatchers.anyString())).thenReturn(true);
+        return mockMvcFor(new ExportJobsApiController(mockDataSource(), registrar));
+    }
+
+    /** Signed in to the study with the given legacy role; not a sysadmin. */
+    private MockHttpSession sessionWith(Role role) {
+        return (MockHttpSession) authenticatedSessionWithRole(7, "someone", 1, "S_DEFAULTS1",
+                "Default Study", role, 1);
+    }
+
+    /** The roles DatasetsApiController.roleMayExportData refuses: both data entry roles, and none. */
+    static Stream<Role> rolesThatMayNotExport() {
+        return Stream.of(Role.RESEARCHASSISTANT, Role.RESEARCHASSISTANT2, Role.INVALID);
+    }
+
+    /** The roles it lets through. */
+    static Stream<Role> rolesThatMayExport() {
+        return Stream.of(Role.STUDYDIRECTOR, Role.COORDINATOR, Role.INVESTIGATOR, Role.MONITOR);
     }
 
     /* ---------------------------------------------------------------- */
@@ -91,6 +122,13 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void cancelJobReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/exports/42/cancel")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
     /* ---------------------------------------------------------------- */
     /* GET /api/v1/studies/{oid}/export-jobs                            */
     /* ---------------------------------------------------------------- */
@@ -100,6 +138,14 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(get("/api/v1/studies/S_DEMO/export-jobs")
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void listJobsByStudyReturns403WithoutAnExportRole(Role role) throws Exception {
+        mockMvcWith().perform(get("/api/v1/studies/S_DEFAULTS1/export-jobs")
+                .session(sessionWith(role)))
+                .andExpect(status().isForbidden());
     }
 
     /* ---------------------------------------------------------------- */
@@ -141,6 +187,18 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                         .value(containsString("Invalid cron expression")));
     }
 
+    @Test
+    void createScheduleReturns400OnAnInvalidContactAddress() throws Exception {
+        mockMvcAcceptingAnyCron().perform(post("/api/v1/datasets/1/schedules")
+                .contentType("application/json")
+                .content("{\"format\":\"odm\",\"cronExpression\":\"0 0 3 ? * MON\","
+                        + "\"notifyEmail\":\"dm-team@example.org, boss@example.org\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("notifyEmail")));
+    }
+
     /* ---------------------------------------------------------------- */
     /* GET /api/v1/datasets/{id}/schedules                              */
     /* ---------------------------------------------------------------- */
@@ -152,6 +210,86 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void listSchedulesReturns403WithoutAnExportRole(Role role) throws Exception {
+        mockMvcWith().perform(get("/api/v1/datasets/1/schedules")
+                .session(sessionWith(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* PATCH /api/v1/schedules/{id}                                     */
+    /* ---------------------------------------------------------------- */
+
+    @Test
+    void updateScheduleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"enabled\":false}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void updateScheduleReturns403WithoutAnExportRole(Role role) throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"enabled\":false}")
+                .session(sessionWith(role)))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Past the role check, the body is validated: an export role is not refused. */
+    @ParameterizedTest
+    @MethodSource("rolesThatMayExport")
+    void updateScheduleLetsEveryExportRolePastTheRoleCheck(Role role) throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"format\":\"pdf\"}")
+                .session(sessionWith(role)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Unsupported format 'pdf'")));
+    }
+
+    @Test
+    void updateScheduleReturns400OnInvalidCron() throws Exception {
+        // The mocked registrar rejects every cron, as a real one rejects this.
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"cronExpression\":\"every night\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Invalid cron expression")));
+    }
+
+    @Test
+    void updateScheduleReturns400OnUnsupportedFormat() throws Exception {
+        mockMvcWith().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"format\":\"pdf\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Unsupported format 'pdf'")));
+    }
+
+    @Test
+    void updateScheduleReturns400OnAnInvalidContactAddress() throws Exception {
+        mockMvcAcceptingAnyCron().perform(patch("/api/v1/schedules/7")
+                .contentType("application/json")
+                .content("{\"notifyEmail\":\"not an address\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("notifyEmail")));
+    }
+
     /* ---------------------------------------------------------------- */
     /* DELETE /api/v1/schedules/{id}                                    */
     /* ---------------------------------------------------------------- */
@@ -161,5 +299,13 @@ class ExportJobsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(delete("/api/v1/schedules/7")
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @MethodSource("rolesThatMayNotExport")
+    void deleteScheduleReturns403WithoutAnExportRole(Role role) throws Exception {
+        mockMvcWith().perform(delete("/api/v1/schedules/7")
+                .session(sessionWith(role)))
+                .andExpect(status().isForbidden());
     }
 }

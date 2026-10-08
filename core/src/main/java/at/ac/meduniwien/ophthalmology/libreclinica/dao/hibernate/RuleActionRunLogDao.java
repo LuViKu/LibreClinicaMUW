@@ -15,21 +15,11 @@ import java.util.Collections;
 import java.util.List;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunLogBean;
+import org.hibernate.query.MutationQuery;
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class RuleActionRunLogDao extends AbstractDomainDao<RuleActionRunLogBean> {
 
     @Override
@@ -67,7 +57,7 @@ public class RuleActionRunLogDao extends AbstractDomainDao<RuleActionRunLogBean>
     @Transactional
     public void delete(int itemDataId) {
         String hql = "delete from " + getDomainClassName() + " rarl where rarl.itemDataId = :itemDataId";
-        Query<?> q = getCurrentSession().createQuery(hql);
+        MutationQuery q = getCurrentSession().createMutationQuery(hql);
         q.setParameter("itemDataId", itemDataId);
         q.executeUpdate();
     }

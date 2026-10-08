@@ -97,9 +97,6 @@ public class FormBeanUtil {
      *            DisplayItemBean
      * @param dataSource
      *            A DataSource for the DAO classes.
-     * @param crfVersionId
-     *            The CRF version Id for fetching associated
-     *            ItemFormMetadataBeans.
      * @param sectionId
      *            The section ID associated with the Items.
      * @param nullValuesList
@@ -895,6 +892,7 @@ public class FormBeanUtil {
         // then number their ordinals accordingly
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayItemGroupBean, DisplayItemGroupBean displayItemGroupBean1) {
                 return displayItemGroupBean.getGroupMetaBean().compareTo(displayItemGroupBean1.getGroupMetaBean());
             }
@@ -923,6 +921,7 @@ public class FormBeanUtil {
         // DisplayItemGroupBeans
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
                 Integer compInt = disFormGroupBean1.getOrdinal();
                 Integer compInt2 = disFormGroupBean.getOrdinal();
@@ -1002,6 +1001,7 @@ public class FormBeanUtil {
         // then number their ordinals accordingly
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayItemGroupBean, DisplayItemGroupBean displayItemGroupBean1) {
                 return displayItemGroupBean.getGroupMetaBean().compareTo(displayItemGroupBean1.getGroupMetaBean());
             }
@@ -1030,6 +1030,7 @@ public class FormBeanUtil {
         // DisplayItemGroupBeans
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
                 Integer compInt = disFormGroupBean1.getOrdinal();
                 Integer compInt2 = disFormGroupBean.getOrdinal();
@@ -1321,6 +1322,7 @@ public class FormBeanUtil {
         // FormGroupBeans
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
                 return disFormGroupBean.getGroupMetaBean().getOrdinal().compareTo(disFormGroupBean1.getGroupMetaBean().getOrdinal());
             }
@@ -1333,8 +1335,6 @@ public class FormBeanUtil {
      * Create a DisplaySectionBean with a list of ItemGroupBeans. NOTE:
      * unGrouped Items are not included
      * 
-     * @param study
-     *            The StudyBean
      * @param sectionId
      *            The Section ID associated with the Items, which end up
      *            providing the content of the tables.
@@ -1418,6 +1418,7 @@ public class FormBeanUtil {
         // then number their ordinals accordingly
         Collections.sort(displayFormBeans, new Comparator<DisplayItemGroupBean>() {
 
+            @Override
             public int compare(DisplayItemGroupBean displayItemGroupBean, DisplayItemGroupBean displayItemGroupBean1) {
                 return displayItemGroupBean.getGroupMetaBean().compareTo(displayItemGroupBean1.getGroupMetaBean());
             }

@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.XmlSchemaValidationHelper;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
@@ -25,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceIn
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RulesPostImportContainerService;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
@@ -43,6 +46,13 @@ public class RunRuleServlet extends SecureController {
     XmlSchemaValidationHelper schemaValidator = new XmlSchemaValidationHelper();
     RuleSetServiceInterface ruleSetService;
     RulesPostImportContainerService rulesPostImportContainerService;
+
+    /** GET runs the rules as a dry run; applying their actions takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || "dryRun".equalsIgnoreCase(action);
+    }
 
     @Override
     public void processRequest() throws Exception {
@@ -99,14 +109,23 @@ public class RunRuleServlet extends SecureController {
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         locale = LocaleResolver.getLocale(request);
-        if (ub.isSysAdmin()) {
-            return;
-        }
         Role r = currentRole.getRole();
-        if (r.equals(Role.STUDYDIRECTOR) || r.equals(Role.COORDINATOR)) {
-            return;
+        if (!ub.isSysAdmin() && !r.equals(Role.STUDYDIRECTOR) && !r.equals(Role.COORDINATOR)) {
+            addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
         }
-        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
+        // The rule set rule is named by id: it must be the current study's.
+        String ruleSetRuleId = request.getParameter("ruleSetRuleId");
+        if (ruleSetRuleId != null) {
+            int id = 0;
+            try {
+                id = Integer.parseInt(ruleSetRuleId.trim());
+            } catch (NumberFormatException e) {
+                // not an id: refused below
+            }
+            if (!new StudyTreeScope(sm.getDataSource()).containsRuleSetRule(currentStudy, id)) {
+                refuseRecordOutsideCurrentStudy();
+            }
+        }
     }
 }

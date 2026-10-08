@@ -85,6 +85,7 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
      * getEntityFromHashMap, the method that gets the object from the database
      * query.
      */
+    @Override
     public StudyGroupClassBean getEntityFromHashMap(HashMap<String, Object> hm) {
         StudyGroupClassBean eb = new StudyGroupClassBean();
         super.setEntityAuditInformation(eb, hm);
@@ -100,6 +101,7 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
         return eb;
     }
 
+    @Override
     public ArrayList<StudyGroupClassBean> findAll() {
     	String queryName = "findAll";
         return executeFindAllQuery(queryName);
@@ -155,10 +157,12 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyGroupClassBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
        throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public StudyGroupClassBean findByPK(int id) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(id);
@@ -201,6 +205,7 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
     /**
      * Updates a StudyGroupClass
      */
+    @Override
     public StudyGroupClassBean update(StudyGroupClassBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
 
@@ -227,6 +232,7 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyGroupClassBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
     	throw new RuntimeException("Not implemented");
     }
@@ -234,6 +240,7 @@ public class StudyGroupClassDAO extends AuditableEntityDAO<StudyGroupClassBean> 
     /**
      * NOT IMPLEMENTED
      */
+    @Override
     public ArrayList<StudyGroupClassBean> findAllByPermission(Object objCurrentUser, int intActionType) {
         throw new RuntimeException("Not implemented");
     }

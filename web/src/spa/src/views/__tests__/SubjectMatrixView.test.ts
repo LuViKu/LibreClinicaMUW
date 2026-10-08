@@ -61,14 +61,14 @@ function makeRouter(): Router {
   })
 }
 
-async function mountWithQuery(filter: string | undefined) {
+async function mountWithQuery(filter: string | undefined, role = 'Investigator') {
   setActivePinia(createPinia())
   const auth = useAuthStore()
   auth.user = {
     username: 'demo',
     displayName: 'Demo',
     email: null,
-    role: 'Investigator',
+    role,
     siteLabel: null,
     source: 'local',
     mfaSatisfied: true,
@@ -126,5 +126,18 @@ describe('SubjectMatrixView — ?filter query-string adoption', () => {
     await mountWithQuery('not-a-real-filter')
     const store = useSubjectsStore()
     expect(store.statusFilter).toBe('all')
+  })
+})
+
+describe('SubjectMatrixView — Add subject follows the role', () => {
+  // Adding a subject enters data; the API refuses the Monitor.
+  it('is not offered to a Monitor', async () => {
+    const w = await mountWithQuery(undefined, 'Monitor')
+    expect(w.find('a[href="/subjects/new"]').exists()).toBe(false)
+  })
+
+  it('is offered to an Investigator', async () => {
+    const w = await mountWithQuery(undefined, 'Investigator')
+    expect(w.find('a[href="/subjects/new"]').exists()).toBe(true)
   })
 })

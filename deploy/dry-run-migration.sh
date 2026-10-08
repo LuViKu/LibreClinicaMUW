@@ -26,7 +26,11 @@
 #   IMAGE          candidate image (default: the tag in /etc/libreclinica/env,
 #                  else ghcr.io/luviku/libreclinicamuw:latest)
 #   BACKUP_DIR     where backups live (default: /var/backups/libreclinica)
-#   PG_IMAGE       postgres image (default: postgres:14-alpine)
+#   PG_IMAGE       postgres image (default: the version production runs, i.e.
+#                  postgres:$LIBRECLINICA_POSTGRES_IMAGE_TAG from
+#                  /etc/libreclinica/env, else postgres:14-alpine, the pin
+#                  in deploy/compose.production.yaml; postgres:17-alpine
+#                  rehearses on 17)
 #   KEEP           set to 1 to leave the throwaway containers running
 #
 # Exit: 0 the migration completed, 1 it failed or something is missing.
@@ -34,7 +38,6 @@
 set -uo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/libreclinica}"
-PG_IMAGE="${PG_IMAGE:-postgres:14-alpine}"
 PROJECT="libreclinica-dryrun-$$"
 PG_NAME="${PROJECT}-db"
 APP_NAME="${PROJECT}-app"
@@ -60,6 +63,20 @@ if [ -z "$IMAGE" ] && [ -r /etc/libreclinica/env ]; then
   [ -n "$TAG" ] && IMAGE="ghcr.io/luviku/libreclinicamuw:${TAG}"
 fi
 IMAGE="${IMAGE:-ghcr.io/luviku/libreclinicamuw:latest}"
+
+# The throwaway database runs the PostgreSQL version production runs: the
+# rehearsal restores production's own dump, and a dump taken by a newer major's
+# pg_dump does not load cleanly into an older server. So the default follows
+# the variable the production overlay reads for the db image: 14 until
+# docs/operations/postgresql-17-upgrade.md has switched production to 17, and
+# 17 from then on. PG_IMAGE overrides it, e.g. PG_IMAGE=postgres:17-alpine to
+# rehearse a release on 17 before the switch.
+PG_IMAGE="${PG_IMAGE:-}"
+if [ -z "$PG_IMAGE" ] && [ -r /etc/libreclinica/env ]; then
+  PG_TAG="$(sed -n 's/^LIBRECLINICA_POSTGRES_IMAGE_TAG=//p' /etc/libreclinica/env | tail -1)"
+  [ -n "$PG_TAG" ] && PG_IMAGE="postgres:${PG_TAG}"
+fi
+PG_IMAGE="${PG_IMAGE:-postgres:14-alpine}"
 
 say()  { printf '  %s\n' "$1"; }
 ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; }
@@ -92,6 +109,7 @@ if [ -z "$BACKUP" ] || [ ! -r "$BACKUP" ]; then
 fi
 say "backup: $BACKUP"
 say "image:  $IMAGE"
+say "postgres: $PG_IMAGE"
 echo
 
 # --- 1. a throwaway database, restored from the backup ------------------------

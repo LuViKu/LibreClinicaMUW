@@ -17,18 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEvent;
 // overload infers the type from the value, so the explicit Type argument is
 // no longer needed.
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
 
     @Override
@@ -36,8 +25,7 @@ public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
         return AuditLogEvent.class;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> List<T> findByParam(AuditLogEvent auditLogEvent, String anotherAuditTable) {
+    public List<AuditLogEvent> findByParam(AuditLogEvent auditLogEvent, String anotherAuditTable) {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName();
         String buildQuery = "";
@@ -52,7 +40,7 @@ public class AuditLogEventDao extends AbstractDomainDao<AuditLogEvent> {
             query = "from " + getDomainClassName() + " do  where " + buildQuery;
         else
             query = "from " + getDomainClassName();
-        org.hibernate.query.Query<T> q = getCurrentSession().createQuery(query);
+        org.hibernate.query.Query<AuditLogEvent> q = getCurrentSession().createQuery(query, AuditLogEvent.class);
         if (auditLogEvent.getEntityId() != null && auditLogEvent.getAuditTable() != null && anotherAuditTable == null) {
             q.setParameter("entity_id", auditLogEvent.getEntityId());
             q.setParameter("audit_table", auditLogEvent.getAuditTable());

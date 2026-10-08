@@ -302,7 +302,8 @@ class EyeCohortTransitionApiControllerDatabaseIT extends AbstractApiControllerDa
 
     @Test
     void transitionReturns403WhenTargetStudyOutsideVisibleSet() throws Exception {
-        // Session bound to a synthetic study #999 with no role —
+        // Session bound to a synthetic study #999, with a role that may
+        // move eyes (the role check runs first) but no grant on study #1 —
         // visibleStudyIds returns {999}, which does not include
         // study #1's id (the source) → source visibility fails 403.
         // (Whether the 403 trips on source or target side is fine; the
@@ -575,9 +576,10 @@ class EyeCohortTransitionApiControllerDatabaseIT extends AbstractApiControllerDa
 
     /**
      * Session attached to a study_id the seed does not populate, with
-     * no role — the visibility filter returns {@code {studyId}}; M-006
-     * lives in study #1, so the source-side visibility check would
-     * fail. Used to assert the 403 branch.
+     * an Investigator role there — the visibility filter returns
+     * {@code {studyId}}; M-006 lives in study #1, so the source-side
+     * visibility check would fail. The role may move eyes, so the role
+     * check is not what refuses the request.
      */
     private MockHttpSession sessionBoundToStudyId(int studyId) {
         MockHttpSession session = new MockHttpSession();
@@ -590,6 +592,10 @@ class EyeCohortTransitionApiControllerDatabaseIT extends AbstractApiControllerDa
         study.setOid("synthetic-study-" + studyId);
         study.setName("synthetic-study-" + studyId);
         session.setAttribute("study", study);
+        StudyUserRoleBean role = new StudyUserRoleBean();
+        role.setRole(Role.INVESTIGATOR);
+        role.setStudyId(studyId);
+        session.setAttribute("userRole", role);
         return session;
     }
 

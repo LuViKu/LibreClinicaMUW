@@ -28,8 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * Phase E.7 — synchronous client for the retinal-inference sidecar's
  * {@code POST /screen} endpoint.
  *
- * <p>Convention mirrors {@link at.ac.meduniwien.ophthalmology.libreclinica.web.pform.EnketoAPI}:
- * a thin {@link RestTemplate} wrapper with a hand-rolled JSON body and
+ * <p>A thin {@link RestTemplate} wrapper with a hand-rolled JSON body and
  * an SLF4J logger. The connect + read timeout is fixed at 8 seconds via
  * {@link SimpleClientHttpRequestFactory}; on timeout the caller
  * ({@code RetinalInferenceApiController}) leaves the
@@ -95,12 +94,12 @@ public class RetinalInferenceClient {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, screenHeaders(sidecarToken()));
             @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = rest.postForEntity(url, request, Map.class);
-            if (response == null || response.getBody() == null) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> b = (Map<String, Object>) response.getBody();
+            if (b == null) {
                 LOG.warn("Sidecar /screen returned empty body for job {} (task={})", jobId, task);
                 return null;
             }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> b = (Map<String, Object>) response.getBody();
 
             double approx = toDouble(b.get("approx_area_mm2"));
             double confidence = toDouble(b.get("confidence"));

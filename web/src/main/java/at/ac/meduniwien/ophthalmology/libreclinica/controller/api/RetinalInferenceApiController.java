@@ -20,6 +20,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -112,7 +113,7 @@ public class RetinalInferenceApiController {
      * a GPU host exist. {@code bm} (Bruch's membrane) and {@code layers} (the full
      * IOWA surface stack) run through the same async worker path.
      */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers");
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers", "sdretinanet");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
@@ -141,6 +142,14 @@ public class RetinalInferenceApiController {
      */
     private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
             retinalAutoPopulator;
+
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
 
     @Autowired(required = false)
     public void setRetinalAutoPopulator(
@@ -226,6 +235,20 @@ public class RetinalInferenceApiController {
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
         }
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "uploading scans to a CRF");
+        if (roleRefusal != null) {
+            return roleRefusal;
+        }
+        // Denied outright when de-identification is required. This endpoint has
+        // no caller in the SPA (the upload page uses /ingest/upload/commit),
+        // takes no patient label, no SHA-256 confirmation and no neutral
+        // filename, and keeps the multipart name as given: verifying it to the
+        // same standard would mean duplicating the staff route for a path
+        // nobody uses, so the one place a file can come in is the one that checks.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.response(403, List.of("directOctUploadClosed"));
+        }
 
         // ---- request-shape gates ------------------------------------------------
         if (file == null || file.isEmpty()) {
@@ -261,6 +284,11 @@ public class RetinalInferenceApiController {
         if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(
+                dataSource, currentStudy, ss, null, ecb, "uploading a scan");
+        if (closed != null) {
+            return closed;
         }
 
         // ---- persist the upload to disk ----------------------------------------

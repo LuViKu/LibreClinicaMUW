@@ -16,6 +16,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinit
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 
 /**
  * Processes request to change CRF ordinals in a study event definition
@@ -53,6 +54,22 @@ public class ChangeDefinitionCRFOrdinalServlet extends ChangeOrdinalServlet {
             request.setAttribute("id", Integer.valueOf(definitionId).toString());
             forwardPage(Page.VIEW_EVENT_DEFINITION_SERVLET);
         }
+    }
+
+    /**
+     * The event definition and the two of its CRFs swapped must be ones the
+     * current study schedules from; the definition's CRF ordinals are also
+     * renumbered when they collide.
+     */
+    @Override
+    protected boolean inCurrentStudy(StudyTreeScope scope, FormProcessor fp) {
+        int definitionId = fp.getInt("id");
+        return (definitionId <= 0 || scope.containsEventDefinition(currentStudy, definitionId))
+                && crfInStudy(scope, fp.getInt("current")) && crfInStudy(scope, fp.getInt("previous"));
+    }
+
+    private boolean crfInStudy(StudyTreeScope scope, int eventDefinitionCrfId) {
+        return eventDefinitionCrfId <= 0 || scope.containsEventDefinitionCrf(currentStudy, eventDefinitionCrfId);
     }
 
     /**

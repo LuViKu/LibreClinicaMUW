@@ -16,6 +16,8 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
@@ -127,6 +129,12 @@ public class AddNewSubjectServlet extends SecureController {
     SubjectBean updateSubject = new SubjectBean();
 
     // YW >>
+
+    /** GET shows the form; adding the subject (submitted) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !new FormProcessor(request).isSubmitted();
+    }
 
     /*
      * (non-Javadoc)
@@ -295,7 +303,7 @@ public class AddNewSubjectServlet extends SecureController {
             // Id
             SubjectBean subjectWithSameId = new SubjectBean();
             boolean showExistingRecord = false;
-            if (!uniqueIdentifier.equals("")) {
+            if (!uniqueIdentifier.isEmpty()) {
                 boolean subjectWithSameIdInCurrentStudyTree = false;
                 // checks whether there is a subject with same id inside current
                 // study/site

@@ -38,10 +38,8 @@ public class Pair<T,U> {
 		if (!(obj instanceof Pair)) return false;
 		Pair<?,?> that = (Pair<?,?>) obj;
 
-		return (first == null && that.first == null
-			||  first.equals(that.first))
-			&& (second == null && that.second == null
-			|| second.equals(that.second));
+		return java.util.Objects.equals(first, that.first)
+			&& java.util.Objects.equals(second, that.second);
 	}
 
 	@Override

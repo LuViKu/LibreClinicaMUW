@@ -125,7 +125,10 @@ public class PasswordRequirementsDao {
 		return getBoolProperty(PWD_CHARS_SPECIALS);
 	}
 	public boolean changeRequired() {
-	    return getBoolProperty(PWD_CHANGE_REQUIRED);
+	    // Stored as an int, 1 or 0 (intConfigKeys, setChangeRequired), which
+	    // Boolean.parseBoolean reads as false either way.
+	    String value = this.configurationDao.findByKey(PWD_CHANGE_REQUIRED).getValue();
+	    return value != null && ("1".equals(value.trim()) || Boolean.parseBoolean(value.trim()));
 	}
 	public int minLength() {
 		return getIntProperty(PWD_CHARS_MIN);

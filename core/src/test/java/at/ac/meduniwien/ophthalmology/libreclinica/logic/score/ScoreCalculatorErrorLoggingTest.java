@@ -83,16 +83,16 @@ public class ScoreCalculatorErrorLoggingTest {
         totalItem.setId(7);
         totalItem.setName("TOTAL");
 
-        try (MockedConstruction<ItemFormMetadataDAO> ifm = mockConstruction(ItemFormMetadataDAO.class, (m, c) -> {
+        try (MockedConstruction<ItemFormMetadataDAO> ifm = mockConstruction(ItemFormMetadataDAO.class, (m, _) -> {
                 when(m.findAllByCRFVersionIdAndResponseTypeId(anyInt(), eq(ResponseType.CALCULATION.getId())))
                         .thenReturn(calculated);
                 when(m.findAllByCRFVersionIdAndResponseTypeId(anyInt(), eq(ResponseType.GROUP_CALCULATION.getId())))
                         .thenReturn(new ArrayList<>());
             });
             MockedConstruction<ItemDAO> items = mockConstruction(ItemDAO.class,
-                    (m, c) -> when(m.findByPK(7)).thenReturn(totalItem));
+                    (m, _) -> when(m.findByPK(7)).thenReturn(totalItem));
             MockedConstruction<ItemDataDAO> data = mockConstruction(ItemDataDAO.class,
-                    (m, c) -> when(m.findByItemIdAndEventCRFIdAndOrdinal(anyInt(), anyInt(), anyInt()))
+                    (m, _) -> when(m.findByItemIdAndEventCRFIdAndOrdinal(anyInt(), anyInt(), anyInt()))
                             .thenReturn(new ItemDataBean()))) {
 
             SessionManager sm = mock(SessionManager.class);

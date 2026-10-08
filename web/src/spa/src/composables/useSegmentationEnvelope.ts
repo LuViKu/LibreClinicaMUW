@@ -12,16 +12,29 @@
  *       {@code (z, cols) uint8}.</li>
  *   <li>{@code kind="surface_y"} — onl/pr: per-A-scan surface row
  *       index {@code (z, cols) float32}.</li>
+ *   <li>{@code kind="lesion_packed"} — sdretinanet {@code ?part=lesions}:
+ *       per-pixel packed lesion byte {@code (z, rows, cols) uint8}, same
+ *       layout as {@code volume}. Decoded by {@link lesionPackedLayout} +
+ *       {@link decodeLesionPackedValue}.</li>
  * </ul>
  *
- * <p>The composable caches the result by jobId so the BscanViewer can
- * scrub through slices without re-decoding. One fetch per job.
+ * <p>The composable caches the result by jobId (and part) so the
+ * BscanViewer can scrub through slices without re-decoding. One fetch
+ * per job and part.
  */
-import { ref, watch, type Ref } from 'vue'
+import { isRef, ref, watch, type Ref } from 'vue'
+
+/**
+ * Optional second envelope a task serves next to its default one. Only
+ * sdretinanet has one today: {@code lesions} (the default part is its
+ * 12 boundary surfaces). The backend ignores {@code part} for every
+ * other task.
+ */
+export type SegmentationPart = 'lesions'
 
 export interface SegmentationEnvelope {
   task: string
-  kind: 'volume' | 'binary_2d' | 'surface_y'
+  kind: 'volume' | 'binary_2d' | 'surface_y' | 'lesion_packed'
   dtype: 'uint8' | 'float32'
   shape: number[]
   labels: string[]
@@ -39,7 +52,67 @@ export interface SegmentationEnvelope {
   correctedSurfaceIndices: number[]
 }
 
-const cache = new Map<number, Promise<SegmentationEnvelope | null>>()
+/**
+ * How to read a {@code lesion_packed} byte, derived from the envelope's
+ * labels. The header lists the main lesions first, then the overlay
+ * lesions with a {@code +} prefix (e.g.
+ * {@code Cyst,SRF,PED,SHRM,Pseudodrusen,ORT,+HRF}). Main lesions are
+ * mutually exclusive and share the low bits as an id; each overlay owns
+ * one high bit, so a pixel can carry a main lesion AND an overlay (HRF
+ * inside a cyst).
+ */
+export interface LesionPackedLayout {
+  /** Main lesion labels as the backend names them; id i+1 ↔ mainLabels[i]. */
+  mainLabels: string[]
+  /** Overlay labels with the {@code +} stripped; overlay k ↔ bit (7 - k). */
+  overlayLabels: string[]
+  /** Selects the main id from a byte: {@code (1 << (8 - K)) - 1}, K = overlay count. */
+  mainMask: number
+}
+
+export function lesionPackedLayout(labels: readonly string[]): LesionPackedLayout {
+  const mainLabels: string[] = []
+  const overlayLabels: string[] = []
+  for (const label of labels) {
+    if (label.startsWith('+')) overlayLabels.push(label.slice(1))
+    else mainLabels.push(label)
+  }
+  // A byte has 8 bits; more than 8 overlays cannot be encoded, and the
+  // shift below would go negative. Clamp so a malformed header yields
+  // "no main lesion" instead of garbage.
+  const k = Math.min(overlayLabels.length, 8)
+  return { mainLabels, overlayLabels, mainMask: (1 << (8 - k)) - 1 }
+}
+
+/**
+ * Decode one packed byte. {@code mainIndex} is an index into
+ * {@code layout.mainLabels} (null for "no main lesion", and for an id the
+ * header has no label for); {@code overlayIndices} index into
+ * {@code layout.overlayLabels}.
+ */
+export function decodeLesionPackedValue(
+  value: number,
+  layout: LesionPackedLayout,
+): { mainIndex: number | null; overlayIndices: number[] } {
+  const mainId = value & layout.mainMask
+  const mainIndex = mainId > 0 && mainId <= layout.mainLabels.length ? mainId - 1 : null
+  const overlayIndices: number[] = []
+  const k = Math.min(layout.overlayLabels.length, 8)
+  for (let i = 0; i < k; i++) {
+    if (value & (1 << (7 - i))) overlayIndices.push(i)
+  }
+  return { mainIndex, overlayIndices }
+}
+
+/**
+ * Cache key: the job id alone for the default part (unchanged from
+ * before parts existed), {@code <jobId>:<part>} for a named part.
+ */
+function cacheKey(jobId: number, part: SegmentationPart | null): string {
+  return part ? `${jobId}:${part}` : String(jobId)
+}
+
+const cache = new Map<string, Promise<SegmentationEnvelope | null>>()
 
 /**
  * 2026-06-26 user-feedback round — bust the module-level cache for
@@ -63,11 +136,18 @@ const refreshTick = ref(0)
 
 export function clearSegmentationEnvelopeCache(jobId: number | null | undefined): void {
   if (jobId == null) return
-  cache.delete(jobId)
+  // Every part of the job — a re-run or correction can change any of them.
+  const prefix = `${jobId}:`
+  for (const key of Array.from(cache.keys())) {
+    if (key === String(jobId) || key.startsWith(prefix)) cache.delete(key)
+  }
   refreshTick.value += 1
 }
 
-async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null> {
+async function fetchEnvelope(
+  jobId: number,
+  part: SegmentationPart | null = null,
+): Promise<SegmentationEnvelope | null> {
   // /LibreClinica is the WAR context path the Vite dev proxy
   // forwards to Tomcat — `apiGet` in @/api/client prepends it
   // implicitly, but this composable uses raw fetch (we need the
@@ -80,7 +160,8 @@ async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null
   // HTTP-cached body would paint stale data even after a hard
   // refresh. `cache: 'no-store'` forces the browser to fetch fresh
   // and skip writing to the HTTP cache.
-  const url = `/LibreClinica/pages/api/v1/retinal-jobs/${encodeURIComponent(String(jobId))}/segmentation`
+  const base = `/LibreClinica/pages/api/v1/retinal-jobs/${encodeURIComponent(String(jobId))}/segmentation`
+  const url = part ? `${base}?part=${encodeURIComponent(part)}` : base
   const resp = await fetch(url, {
     headers: { Accept: 'application/octet-stream' },
     credentials: 'same-origin',
@@ -131,8 +212,14 @@ async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null
  * the task isn't wired); errors are surfaced via the {@code error}
  * ref so the viewer can degrade gracefully without throwing into the
  * caller's render cycle.
+ *
+ * <p>{@code part} selects a task's second envelope (sdretinanet's
+ * {@code lesions}); omit it for the default envelope.
  */
-export function useSegmentationEnvelope(jobId: Ref<number | null>): {
+export function useSegmentationEnvelope(
+  jobId: Ref<number | null>,
+  part: Ref<SegmentationPart | null> | SegmentationPart | null = null,
+): {
   envelope: Ref<SegmentationEnvelope | null>
   loading: Ref<boolean>
   error: Ref<string | null>
@@ -140,9 +227,11 @@ export function useSegmentationEnvelope(jobId: Ref<number | null>): {
   const envelope = ref<SegmentationEnvelope | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const partRef: Ref<SegmentationPart | null> = isRef(part) ? part : ref(part)
 
   async function refresh(): Promise<void> {
     const id = jobId.value
+    const p = partRef.value
     // 2026-07-10 — also reject NaN, not just null. RetinalMetricsView resolves
     // the per-subject deep link (/subjects/{label}/jobs/{n}) asynchronously and
     // uses NaN as its "unresolved jobId" sentinel; NaN passes a bare `== null`
@@ -155,14 +244,15 @@ export function useSegmentationEnvelope(jobId: Ref<number | null>): {
     loading.value = true
     error.value = null
     try {
-      let pending = cache.get(id)
+      const key = cacheKey(id, p)
+      let pending = cache.get(key)
       if (!pending) {
-        pending = fetchEnvelope(id)
-        cache.set(id, pending)
+        pending = fetchEnvelope(id, p)
+        cache.set(key, pending)
       }
       envelope.value = await pending
     } catch (e) {
-      cache.delete(id)
+      cache.delete(cacheKey(id, p))
       envelope.value = null
       error.value = e instanceof Error ? e.message : 'Failed to fetch segmentation envelope'
     } finally {
@@ -179,6 +269,6 @@ export function useSegmentationEnvelope(jobId: Ref<number | null>): {
   // clearSegmentationEnvelopeCache() drives when an external
   // signal (SSE done push, manual reset) wants every live
   // consumer to drop its cached null and re-poll the endpoint.
-  watch([jobId, refreshTick], () => { void refresh() }, { immediate: true })
+  watch([jobId, partRef, refreshTick], () => { void refresh() }, { immediate: true })
   return { envelope, loading, error }
 }

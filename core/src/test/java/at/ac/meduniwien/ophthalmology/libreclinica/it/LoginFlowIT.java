@@ -12,7 +12,6 @@ import java.util.Date;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
@@ -51,7 +50,7 @@ import org.dbunit.operation.DatabaseOperation;
  * here as a {@code findByUserName} returning an empty bean.
  *
  * <p><strong>Phase B.5 gate:</strong> the audit-row assertion path goes
- * through {@link AuditUserLoginFilter#execute} which uses the Hibernate
+ * through {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginFilter#execute} which uses the Hibernate
  * {@code Criteria} API. Hibernate 6 removes that API entirely; the
  * cross-reference is already pinned by {@code AuditUserLoginDaoTest}, so
  * this test deliberately uses the simpler {@code saveOrUpdate} +

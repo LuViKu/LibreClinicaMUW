@@ -52,6 +52,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RulesPostImportC
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import java.time.Duration;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -326,7 +327,7 @@ public class TestRuleServlet extends SecureController {
                 ItemBean item = getExpressionService().getItemBeanFromExpression(entry.getKey());
                 List<ItemFormMetadataBean> itemFormMetadataBeans = getItemFormMetadataDAO().findAllByItemId(item.getId());
                 ItemFormMetadataBean itemFormMetadataBean = itemFormMetadataBeans.size() > 0 ? itemFormMetadataBeans.get(0) : null;
-                if (!entry.getValue().equals("") && NullValue.getByName(entry.getValue()) == NullValue.INVALID) {
+                if (!entry.getValue().isEmpty() && NullValue.getByName(entry.getValue()) == NullValue.INVALID) {
                     if (itemFormMetadataBean != null) {
                         if (itemFormMetadataBean.getResponseSet().getResponseType() == ResponseType.SELECTMULTI
                             || itemFormMetadataBean.getResponseSet().getResponseType() == ResponseType.CHECKBOX) {
@@ -459,15 +460,16 @@ else
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         locale = LocaleResolver.getLocale(request);
-        if (ub.isSysAdmin()) {
-            return;
-        }
         Role r = currentRole.getRole();
-        if (r.equals(Role.STUDYDIRECTOR) || r.equals(Role.COORDINATOR)) {
-            return;
+        if (!ub.isSysAdmin() && !r.equals(Role.STUDYDIRECTOR) && !r.equals(Role.COORDINATOR)) {
+            addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
         }
-        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
+        // An existing rule set rule is named by id: it must be the current study's.
+        int ruleSetRuleId = new FormProcessor(request).getInt("ruleSetRuleId");
+        if (ruleSetRuleId != 0 && !new StudyTreeScope(sm.getDataSource()).containsRuleSetRule(currentStudy, ruleSetRuleId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
     }
 
     private RuleSetRuleDao getRuleSetRuleDao() {

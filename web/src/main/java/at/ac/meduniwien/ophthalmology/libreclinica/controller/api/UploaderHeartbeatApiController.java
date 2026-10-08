@@ -110,6 +110,7 @@ public class UploaderHeartbeatApiController {
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = HeartbeatDoc.class))))
+    @SuppressWarnings("resource") // the servlet container owns and closes the request stream
     @PostMapping(value = "/heartbeat", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> recordHeartbeat(HttpServletRequest request) {
         if (!enabled()) {

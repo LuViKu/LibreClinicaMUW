@@ -14,6 +14,8 @@ import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHel
 import java.io.IOException;
 import java.util.ArrayList;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.GroupClassType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -35,9 +37,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 @SuppressWarnings("all")
 public class CreateSubjectGroupClassServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 8536912009639036567L;
 
 	@Override
@@ -58,6 +57,13 @@ public class CreateSubjectGroupClassServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.SUBJECT_GROUP_CLASS_LIST_SERVLET, resexception.getString("not_study_director"), "1");
 
+    }
+
+    /** GET shows the form; the confirmation and creating the group class take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override
@@ -90,8 +96,6 @@ public class CreateSubjectGroupClassServlet extends SecureController {
     /**
      * Validates the first section of study inputs and save it into study bean
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmGroup() throws Exception {

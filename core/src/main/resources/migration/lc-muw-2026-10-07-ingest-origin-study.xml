@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      Cross-site isolation of the ingest inbox.
+
+      An unbound or dismissed ingest item is not tied to any subject, so the
+      subject's study cannot say which site may see it. origin_study_id records
+      the study the signed-in uploader was working in; the authenticated staff
+      upload sets it, anonymous and device ingress leave it NULL. NULL keeps the
+      inbox's historical cross-study behaviour (the internal clinic, where
+      devices upload without a session); a non-NULL value restricts the item to
+      users who can see that study. Nullable on purpose: existing rows stay NULL.
+    -->
+    <changeSet id="2026-10-07-ingest-item-origin-study" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="origin_study_id"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.origin_study_id — the uploader's session study; NULL for anonymous/device ingress.</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="origin_study_id" type="INTEGER">
+                <constraints nullable="true"
+                             foreignKeyName="fk_ingest_item_origin_study"
+                             references="study(study_id)"/>
+            </column>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="origin_study_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

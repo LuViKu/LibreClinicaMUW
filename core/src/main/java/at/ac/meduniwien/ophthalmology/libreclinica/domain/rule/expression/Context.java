@@ -64,6 +64,7 @@ public enum Context implements CodedEnum {
         return operators.get(Integer.valueOf(code));
     }
 
+    @Override
     public Integer getCode() {
         return code;
     }

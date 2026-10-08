@@ -15,6 +15,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Set;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
@@ -103,22 +105,13 @@ public class UpdateJobImportServlet extends SecureController {
         }
         // System.out.println("found list of studies: " + finalList.toString());
         addEntityList("studies", finalList, respage.getString("a_user_cannot_be_created_no_study_as_active"), Page.ADMIN_SYSTEM);
-        // tbh >>
-        // HashMap presetValues = new HashMap();
-        // Calendar calendar = new GregorianCalendar();
-        // calendar.setTime(jobDate);
-        // presetValues.put(CreateJobImportServlet.DATE_START_JOB + "Hour",
-        // calendar.get(Calendar.HOUR_OF_DAY));
-        // presetValues.put(CreateJobImportServlet.DATE_START_JOB + "Minute",
-        // calendar.get(Calendar.MINUTE));
-        // // TODO this will have to match l10n formatting
-        // presetValues.put(CreateJobImportServlet.DATE_START_JOB + "Date",
-        // (calendar.get(Calendar.MONTH) + 1) + "/" +
-        // calendar.get(Calendar.DATE) + "/"
-        // + calendar.get(Calendar.YEAR));
-        // fp2.setPresetValues(presetValues);
-        // setPresetValues(fp2.getPresetValues());
 
+    }
+
+    /** GET shows the form; rescheduling the job (action=confirmall) takes a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        return !"confirmall".equalsIgnoreCase(request.getParameter("action"));
     }
 
     @Override

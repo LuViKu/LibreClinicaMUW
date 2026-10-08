@@ -168,6 +168,8 @@ public class RemidioGatewayClient {
 
     /** Why a call failed, coarsely — the caller decides whether to retry or give up. */
     public static final class RemidioException extends Exception {
+        private static final long serialVersionUID = 1L;
+
         public enum Reason {
             /** A {@code core.remidio.*} key is missing. */
             UNCONFIGURED,
@@ -292,6 +294,7 @@ public class RemidioGatewayClient {
      *
      * @return the body stream; the caller closes it
      */
+    @SuppressWarnings("resource") // ownership passes on: the returned body is closed by the caller; the HttpClient lives for the life of the transport lambda
     public InputStream download(String signedUrl) throws RemidioException {
         URI uri;
         try {
@@ -579,6 +582,7 @@ public class RemidioGatewayClient {
                 .build();
     }
 
+    @SuppressWarnings("resource") // ownership passes on: the returned body is closed by the caller; the HttpClient lives for the life of the transport lambda
     static Transport defaultTransport() {
         HttpClient http = newHttp();
         return (method, uri, headers, body, timeout) -> {
@@ -595,6 +599,7 @@ public class RemidioGatewayClient {
         };
     }
 
+    @SuppressWarnings("resource") // ownership passes on: the returned body is closed by the caller; the HttpClient lives for the life of the transport lambda
     static Downloader defaultDownloader() {
         HttpClient http = newHttp();
         return (uri, timeout) -> {

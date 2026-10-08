@@ -318,6 +318,49 @@ export const useDatasetsStore = defineStore('datasets', () => {
   }
 
   /**
+   * R1-export — the caller's export jobs still queued or running for the
+   * listed datasets, scheduled runs included, so a row shows its job (and
+   * can cancel it) after a reload, not only right after Export now. The
+   * list is the caller's own jobs; a sysadmin's is everyone's.
+   */
+  async function loadActiveJobs(): Promise<void> {
+    try {
+      const page = await apiGet<{ jobs: ExportJobDto[] }>('/pages/api/v1/exports?pageSize=100')
+      const listed = new Set(rows.value.map((r) => r.id))
+      // newest first on the wire: walk oldest first so the newest per dataset wins
+      for (const j of [...(page?.jobs ?? [])].reverse()) {
+        if ((j.status === 'queued' || j.status === 'running') && listed.has(j.datasetId)) rememberJob(j)
+      }
+    } catch {
+      // The page works without it; the next export shows its own job.
+    }
+  }
+
+  /**
+   * R1-export — cancel an export job. A queued job is cancelled at once. A
+   * running one stops at its next checkpoint, so the answer can still say
+   * running, with cancelRequested, and polling carries on until it ends.
+   */
+  async function cancelJob(jobId: number): Promise<ExportJobDto | null> {
+    error.value = null
+    try {
+      const job = await apiPost<ExportJobDto>(`/pages/api/v1/exports/${jobId}/cancel`, {})
+      rememberJob(job)
+      return job
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Abbruch fehlgeschlagen (HTTP ${e.status}).`
+      } else if (e instanceof ApiNetworkError) {
+        error.value = 'Backend nicht erreichbar — Abbruch fehlgeschlagen.'
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Abbruch.'
+      }
+      return null
+    }
+  }
+
+  /**
    * Trigger the one-click full-study ODM export. Reloads the dataset
    * list on success so the new ad-hoc Quick_ODM_… entry surfaces in
    * the table.
@@ -699,6 +742,8 @@ export const useDatasetsStore = defineStore('datasets', () => {
     triggerExport,
     enqueueBundle,
     refreshActiveJobs,
+    loadActiveJobs,
+    cancelJob,
     quickOdm,
     /* Phase 2 — event tree + wizard draft */
     eventTree,

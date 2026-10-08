@@ -43,7 +43,7 @@ const RetinalCorrectionFullscreen = defineAsyncComponent(
   () => import('@/components/RetinalCorrectionFullscreen.vue'),
 )
 import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
-import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
+import type { FluidPayload, GaPayload, ThicknessPayload, SdRetinaNetPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -72,6 +72,21 @@ const canCorrectLayers = computed<boolean>(
   () => auth.hasRole('Investigator')
     || auth.hasRole('Data Manager')
     || auth.hasRole('Administrator'),
+)
+
+/**
+ * Gate for Retry and "Re-run as". A run writes its results into the
+ * visit's CRF, so the server allows both only to a binding that enters
+ * data (ClinicalWriteAuthorization.roleMayEnterData) and refuses a
+ * Monitor. /me says whether the session's binding does; without that,
+ * the roles that enter data.
+ */
+const canRerun = computed<boolean>(
+  () => auth.permits('enterData') ?? (
+    auth.hasRole('Investigator')
+    || auth.hasRole('CRC')
+    || auth.hasRole('Data Manager')
+    || auth.hasRole('Administrator')),
 )
 
 /** Layer-correction fullscreen open state + KI-Maske mirror. */
@@ -292,6 +307,7 @@ const isGa = computed(() => job.value?.task === 'ga')
 const isOnl = computed(() => job.value?.task === 'onl')
 const isPr = computed(() => job.value?.task === 'pr')
 const isThickness = computed(() => isOnl.value || isPr.value)
+const isSdRetinaNet = computed(() => job.value?.task === 'sdretinanet')
 
 const fluidPayload = computed<FluidPayload | null>(() => {
   if (!isFluid.value || !job.value) return null
@@ -304,6 +320,10 @@ const gaPayload = computed<GaPayload | null>(() => {
 const thicknessPayload = computed<ThicknessPayload | null>(() => {
   if (!isThickness.value || !job.value) return null
   return job.value.outputPayload as unknown as ThicknessPayload
+})
+const sdPayload = computed<SdRetinaNetPayload | null>(() => {
+  if (!isSdRetinaNet.value || !job.value) return null
+  return job.value.outputPayload as unknown as SdRetinaNetPayload
 })
 
 interface KpiTile {
@@ -395,7 +415,76 @@ const kpiTiles = computed<KpiTile[]>(() => {
       },
     ]
   }
+  if (sdPayload.value) {
+    // sdretinanet — CRT (central 1 mm ILM–BM) next to the three
+    // exudative lesion volumes, matching the fluid strip's IRF / SRF /
+    // PED tiles. The other lesion classes (SHRM, SDD, ORT, HRF) and the
+    // ETDRS layer table stay in the raw-payload tree for now.
+    const sp = sdPayload.value
+    const lesions = sp.lesions ?? {}
+    const totalSlices = totalBscanCount.value
+    function sdSubtitle(label: 'irf' | 'srf' | 'ped', value: number | null | undefined): string {
+      if (value == null || !Number.isFinite(value)) return ''
+      if (value <= 0) return t('retinal.kpi.subtitle.notDetected')
+      if (totalSlices > 0) {
+        return t('retinal.kpi.subtitle.affected', {
+          count: affectedBscanCount(label),
+          total: totalSlices,
+        })
+      }
+      return ''
+    }
+    return [
+      {
+        label: t('retinal.kpi.crt'),
+        value: formatNumber(sp.crt_um),
+        unit: 'µm',
+        subtitle: t('retinal.kpi.subtitle.crtCentral'),
+        tone: 'thickness',
+      },
+      {
+        label: t('retinal.kpi.irf'),
+        value: formatNumber(lesions.IRF?.volume_mm3),
+        unit: 'mm³',
+        subtitle: sdSubtitle('irf', lesions.IRF?.volume_mm3),
+        tone: 'irf',
+      },
+      {
+        label: t('retinal.kpi.srf'),
+        value: formatNumber(lesions.SRF?.volume_mm3),
+        unit: 'mm³',
+        subtitle: sdSubtitle('srf', lesions.SRF?.volume_mm3),
+        tone: 'srf',
+      },
+      {
+        label: t('retinal.kpi.ped'),
+        value: formatNumber(lesions.PED?.volume_mm3),
+        unit: 'mm³',
+        subtitle: sdSubtitle('ped', lesions.PED?.volume_mm3),
+        tone: 'ped',
+      },
+    ]
+  }
   return []
+})
+
+/**
+ * sdretinanet — reasons the CRT / ETDRS numbers need a human look. The
+ * runner centres the ETDRS grid on the fovea it detects; when it could
+ * not (no pixel geometry, a fovea it flags for review, or a grid that
+ * fell back to the scan centre) the numbers are still shown, but the
+ * operator must see why they may be off-centre or missing.
+ */
+const sdCautions = computed<string[]>(() => {
+  const sp = sdPayload.value
+  if (!sp) return []
+  const out: string[] = []
+  if (sp.geometry === 'missing') out.push(t('retinal.sdretinanet.caution.geometryMissing'))
+  if (sp.fovea?.needs_review) out.push(t('retinal.sdretinanet.caution.foveaNeedsReview'))
+  if (sp.grid_center?.source === 'scan_center_fallback') {
+    out.push(t('retinal.sdretinanet.caution.gridCenterFallback'))
+  }
+  return out
 })
 
 /* -------- ETDRS sub-totals table ------------------------------------ */
@@ -595,7 +684,9 @@ const etdrsRowGroups = computed<{ type: 'circle' | 'ring'; rows: EtdrsRow[] }[]>
 
 const overlayTask = computed<FundusOverlayTask>(() => {
   const t = job.value?.task
-  if (t === 'fluid' || t === 'onl' || t === 'pr' || t === 'ga') return t
+  // sdretinanet passes through so the overlay does not look for fluid
+  // projection PNGs; it draws only the ETDRS grid + B-scan positions.
+  if (t === 'fluid' || t === 'onl' || t === 'pr' || t === 'ga' || t === 'sdretinanet') return t
   return 'fluid'
 })
 
@@ -793,7 +884,8 @@ const lateralityLongText = computed<string>(() => {
  * since the subtitle is informational only.
  */
 function affectedBscanCount(label: 'irf' | 'srf' | 'ped'): number {
-  const series = (fluidPayload.value?.per_bscan_mm2 ?? {})[label]
+  // sdretinanet emits the same lower-case per-B-scan keys as fluid.
+  const series = (fluidPayload.value?.per_bscan_mm2 ?? sdPayload.value?.per_bscan_mm2 ?? {})[label]
   if (!Array.isArray(series)) return 0
   return series.reduce<number>((n, v) => (Number(v) > 1e-9 ? n + 1 : n), 0)
 }
@@ -891,9 +983,11 @@ async function onRetry(): Promise<void> {
 // 2026-06-25 — `layers` returns the IOWA 11-surface stack + BM in
 // one job (feeds the BscanViewer layers overlay + the CRT compute).
 // `bm` is intentionally NOT here; `layers` already covers it.
+// `sdretinanet` returns SD-RetinaNet's 12 boundaries + 7 lesion classes
+// (read-only — no layer-correction fullscreen).
 // Mirrors ALLOWED_RERUN_TASKS in RetinalResultsApiController.java.
-type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr' | 'layers'
-const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr', 'layers'] as const
+type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr' | 'layers' | 'sdretinanet'
+const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr', 'layers', 'sdretinanet'] as const
 const rerunMenuOpen = ref(false)
 const rerunning = computed<boolean>(() => !!store.rerunAsInflight[jobId.value])
 
@@ -1118,6 +1212,7 @@ onBeforeUnmount(stopInflightPoll)
             </div>
             <div class="flex items-center gap-2.5 shrink-0">
               <button
+                v-if="canRerun"
                 type="button"
                 class="px-3.5 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="retrying"
@@ -1135,7 +1230,7 @@ onBeforeUnmount(stopInflightPoll)
                    posts to /rerun-as and routes the operator to the
                    new job's metrics view. Closes on outside-click via
                    the document-level handler in onMounted. -->
-              <div class="relative" data-testid="retinal-view-rerun-as">
+              <div v-if="canRerun" class="relative" data-testid="retinal-view-rerun-as">
                 <button
                   type="button"
                   class="px-3.5 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1304,6 +1399,19 @@ onBeforeUnmount(stopInflightPoll)
             data-testid="retinal-view-kpis"
           >
             {{ t('retinal.empty.noKpi') }}
+          </div>
+
+          <!-- sdretinanet — fovea / grid-centre caution. Sits right under
+               the KPI strip because it qualifies the CRT tile. -->
+          <div
+            v-if="!armGate.hideAi.value && sdCautions.length"
+            class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+            role="note"
+            data-testid="retinal-view-sd-caution"
+          >
+            <ul class="list-disc pl-4 space-y-0.5">
+              <li v-for="msg in sdCautions" :key="msg">{{ msg }}</li>
+            </ul>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5 items-stretch">

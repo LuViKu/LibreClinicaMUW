@@ -44,6 +44,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#getCreatedDate()
      */
     @Column(name = "date_created", updatable = false)
+    @Override
     public Date getCreatedDate() {
         if (createdDate != null) {
             return createdDate;
@@ -54,6 +55,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     /* (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#setCreatedDate(java.util.Date)
      */
+    @Override
     public void setCreatedDate(Date createdDate) {
         this.createdDate = createdDate;
     }
@@ -62,6 +64,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#getUpdatedDate()
      */
     @Column(name = "date_updated", insertable = false)
+    @Override
     public Date getUpdatedDate() {
         return updatedDate;
     }
@@ -74,6 +77,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     /* (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#setUpdatedDate(java.util.Date)
      */
+    @Override
     public void setUpdatedDate(Date updatedDate) {
         this.updatedDate = updatedDate;
     }
@@ -82,6 +86,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#getOwner()
      */
     @Transient
+    @Override
     public UserAccountBean getOwner() {
         return owner;
     }
@@ -89,6 +94,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     /* (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#setOwner(at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean)
      */
+    @Override
     public void setOwner(UserAccountBean owner) {
         if (this.owner != null) {
             this.ownerId = owner.getId();
@@ -100,6 +106,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#getUpdater()
      */
     @Transient
+    @Override
     public UserAccountBean getUpdater() {
         return updater;
     }
@@ -107,6 +114,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     /* (non-Javadoc)
      * @see at.ac.meduniwien.ophthalmology.libreclinica.domain.AuditableMutableDomainObject#setUpdater(at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean)
      */
+    @Override
     public void setUpdater(UserAccountBean updater) {
         if (this.updater != null) {
             this.updateId = updater.getId();
@@ -126,6 +134,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
      */
     @Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.StatusType.class)
     @Column(name = "status_id")
+    @Override
     public Status getStatus() {
         if (status != null) {
             return status;
@@ -136,6 +145,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     /**
      * @param status the status to set
      */
+    @Override
     public void setStatus(Status status) {
         this.status = status;
     }

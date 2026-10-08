@@ -236,7 +236,6 @@ public class AddCRFToDefinitionServlet extends SecureController {
 
             StudyEventDefinitionBean sed = (StudyEventDefinitionBean) session.getAttribute("definition");
             String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
-            if (participateFormStatus.equals("enabled")) baseUrl();
             
             request.setAttribute("participateFormStatus",participateFormStatus );
 

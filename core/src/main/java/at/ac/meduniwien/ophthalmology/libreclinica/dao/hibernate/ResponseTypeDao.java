@@ -13,18 +13,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseType;
 import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
 
     @Override
@@ -39,12 +28,11 @@ public class ResponseTypeDao extends AbstractDomainDao<ResponseType> {
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings("rawtypes")
     public ResponseType findByItemFormMetaDataId(Integer itemFormMetadataId) {
         String query = "select rt.* from response_type rt, response_set rs, item_form_metadata ifm where ifm.response_set_id=rs.response_set_id"
                 + " and rs.response_type_id=rt.response_type_id and ifm.item_form_metadata_id = " + String.valueOf(itemFormMetadataId);
-        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ResponseType.class);
-        return (ResponseType) q.getSingleResultOrNull();
+        NativeQuery<ResponseType> q = getCurrentSession().createNativeQuery(query, ResponseType.class);
+        return q.getSingleResultOrNull();
     }
 
 }

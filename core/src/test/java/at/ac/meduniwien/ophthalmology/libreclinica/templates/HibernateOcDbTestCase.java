@@ -107,7 +107,9 @@ public abstract class HibernateOcDbTestCase extends DataSourceBasedDBTestCase {
 
     @Override
     protected IDataSet getDataSet() throws Exception {
-        return new FlatXmlDataSet(HibernateOcDbTestCase.class.getResourceAsStream(getTestDataFilePath()));
+        try (java.io.InputStream in = HibernateOcDbTestCase.class.getResourceAsStream(getTestDataFilePath())) {
+            return new FlatXmlDataSet(in);
+        }
     }
 
     @Override
@@ -127,7 +129,9 @@ public abstract class HibernateOcDbTestCase extends DataSourceBasedDBTestCase {
 
     public static void loadProperties() {
         try {
-            properties.load(HibernateOcDbTestCase.class.getResourceAsStream(getPropertiesFilePath()));
+            try (java.io.InputStream in = HibernateOcDbTestCase.class.getResourceAsStream(getPropertiesFilePath())) {
+                properties.load(in);
+            }
         } catch (Exception ioExc) {
             logger.error("Hibernate property loading is not working properly: ", ioExc);
         }

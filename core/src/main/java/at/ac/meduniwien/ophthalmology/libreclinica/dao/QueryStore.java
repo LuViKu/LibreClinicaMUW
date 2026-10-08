@@ -90,6 +90,7 @@ public class QueryStore implements Serializable, ResourceLoaderAware {
         }
     }
 
+    @Override
     public void setResourceLoader(ResourceLoader resourceLoader) {
         this.resourceLoader = resourceLoader;
     }

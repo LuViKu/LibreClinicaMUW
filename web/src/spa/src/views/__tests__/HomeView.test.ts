@@ -18,6 +18,10 @@ import { createI18n } from 'vue-i18n'
 // Stub the API client so the per-store .load() actions resolve to
 // empty arrays. The landing doesn't assert on the badge counts —
 // only on which cards render — so we don't need a richer stub.
+vi.mock('@/api/download', () => ({
+  apiDownload: vi.fn().mockResolvedValue({ filename: 'metadata.xml', bytes: 1 }),
+}))
+
 vi.mock('@/api/client', () => ({
   apiGet: vi.fn().mockResolvedValue([]),
   apiPost: vi.fn().mockResolvedValue({}),
@@ -27,6 +31,7 @@ vi.mock('@/api/client', () => ({
   ApiNetworkError: class ApiNetworkError extends Error {},
 }))
 
+import { apiDownload } from '@/api/download'
 import HomeView from '@/views/HomeView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSdvStore } from '@/stores/sdv'
@@ -80,13 +85,14 @@ function makeRouter() {
       { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
       { path: '/ingest-inbox', name: 'ingest-inbox', component: { template: '<div />' } },
       { path: '/due-visits', name: 'due-visits', component: { template: '<div />' } },
+      { path: '/admin/studies', name: 'admin-studies', component: { template: '<div />' } },
     ],
   })
 }
 
 type Role = 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
 
-function mountWith(roles: Role[] | null) {
+function mountWith(roles: Role[] | null, userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore()
@@ -110,6 +116,7 @@ function mountWith(roles: Role[] | null) {
       timezone: null,
       mustChangePassword: false,
       passwordChangeReason: null,
+      userType,
       activeStudy: {
         id: 1,
         oid: 'S_DEFAULTS1',
@@ -171,6 +178,17 @@ describe('HomeView role-aware catalogue', () => {
     expect(ids).toContain('sign-queue')
     expect(ids).toContain('todays-crfs')
     expect(ids).toContain('notes')
+  })
+
+  it('shows a CRC the study-build cards the backend lets a coordinator open', async () => {
+    const w = mountWith(['CRC'])
+    await w.vm.$nextTick()
+    const ids = cardIds(w)
+    for (const id of ['build-study', 'rules', 'sites', 'data-export', 'audit-log', 'import-crf-data']) {
+      expect(ids, id).toContain(id)
+    }
+    expect(ids).not.toContain('manage-users')
+    expect(ids).not.toContain('study-create')
   })
 
   it('renders the Monitor catalogue for a pure Monitor', async () => {
@@ -319,7 +337,7 @@ describe('HomeView dashboard', () => {
     expect(inv.get('[data-card-id="sign-queue"]').get('[data-testid="queue-count"]').text()).toBe('0')
   })
 
-  it('does not hand a CRC the patient overview — the route does not admit the role', async () => {
+  it('does not hand a CRC the patient overview card — the route lists no CRC role of its own', async () => {
     const w = mountWith(['CRC'])
     await w.vm.$nextTick()
     expect(cardIds(w)).not.toContain('patients-overview')
@@ -338,6 +356,18 @@ describe('HomeView dashboard', () => {
     expect(ids).toContain('due-visits')
   })
 
+  it('gives a system administrator the list of every study, and a study-level Administrator not', async () => {
+    const sysadmin = mountWith(['Administrator'], 'SYSADMIN')
+    await sysadmin.vm.$nextTick()
+    expect(cardIds(sysadmin)).toContain('admin-studies')
+    // A system administrator can open any study, so switching is offered with one binding too.
+    expect(cardIds(sysadmin)).toContain('switch-study')
+
+    const studyAdmin = mountWith(['Administrator'], 'USER')
+    await studyAdmin.vm.$nextTick()
+    expect(cardIds(studyAdmin)).not.toContain('admin-studies')
+  })
+
   it('shows the platform section only when there is something in it', async () => {
     const crc = mountWith(['CRC'])
     await crc.vm.$nextTick()
@@ -345,5 +375,46 @@ describe('HomeView dashboard', () => {
     const admin = mountWith(['Administrator'])
     await admin.vm.$nextTick()
     expect(admin.find('[data-testid="home-platform-workspaces"]').exists()).toBe(true)
+  })
+})
+
+/**
+ * The study metadata download: the study's design as CDISC ODM, which the
+ * legacy Download Study Metadata page gives. Offered to the roles the
+ * endpoint admits, on the study the operator is working in.
+ */
+describe('HomeView study metadata', () => {
+  it('offers the download to every role that may view the study data', async () => {
+    for (const role of ['Investigator', 'CRC', 'Monitor', 'Data Manager'] as Role[]) {
+      const w = mountWith([role])
+      await flushPromises()
+      expect(w.find('[data-testid="home-study-metadata"]').exists(), role).toBe(true)
+      w.unmount()
+    }
+  })
+
+  it('does not offer it to a study-level Administrator, and offers it to a system administrator', async () => {
+    const w = mountWith(['Administrator'])
+    await flushPromises()
+    expect(w.find('[data-testid="home-study-metadata"]').exists()).toBe(false)
+    w.unmount()
+
+    const w2 = mountWith(['Administrator'], 'SYSADMIN')
+    await flushPromises()
+    expect(w2.find('[data-testid="home-study-metadata"]').exists()).toBe(true)
+    w2.unmount()
+  })
+
+  it('downloads the metadata of the active study', async () => {
+    vi.mocked(apiDownload).mockClear()
+    const w = mountWith(['Monitor'])
+    await flushPromises()
+    await w.find('[data-testid="home-study-metadata"]').trigger('click')
+    await flushPromises()
+    expect(apiDownload).toHaveBeenCalledWith(
+      '/pages/api/v1/studies/S_DEFAULTS1/metadata',
+      'S_DEFAULTS1_metadata.xml',
+    )
+    w.unmount()
   })
 })

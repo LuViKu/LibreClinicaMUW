@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.TermType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -39,14 +41,18 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 public class RequestAccountServlet extends SecureController {
     // private UserAccountBean ubForm = new UserAccountBean();
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 3325716744930832723L;
 
 	@Override
     public void mayProceed() throws InsufficientPermissionException {
 
+    }
+
+    /** GET shows the form; the confirmation and the request mail take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     @Override
@@ -82,11 +88,6 @@ public class RequestAccountServlet extends SecureController {
 
     }
 
-    /**
-     *
-     * @param request
-     * @param response
-     */
     private void confirmAccount() throws Exception {
         Validator v = new Validator(request);
         v.addValidation("name", Validator.NO_BLANKS);
@@ -137,8 +138,6 @@ public class RequestAccountServlet extends SecureController {
     /**
      * Gets user basic info and set email to the administrator
      *
-     * @param request
-     * @param response
      */
     private void submitAccount() throws Exception {
         String otherStudy = request.getParameter("otherStudy");
@@ -172,7 +171,6 @@ public class RequestAccountServlet extends SecureController {
     /**
      * Constructs userbean from request
      *
-     * @param request
      * @return
      */
     private UserAccountBean getUserBean() {

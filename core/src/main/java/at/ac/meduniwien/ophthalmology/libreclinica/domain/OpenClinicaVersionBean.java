@@ -33,9 +33,6 @@ import org.hibernate.annotations.Parameter;
 @SuppressWarnings("all")
 public class OpenClinicaVersionBean extends AbstractMutableDomainObject {
 
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = -1980137452185565907L;
 	private String name;
     private String build_number;
@@ -63,10 +60,6 @@ public class OpenClinicaVersionBean extends AbstractMutableDomainObject {
         return build_number;
     }
 
-    /**
-     * @param test_path
-     *            the test_path to set
-     */
     public void setBuild_number(String build_number) {
         this.build_number = build_number;
     }

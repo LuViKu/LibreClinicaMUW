@@ -17,6 +17,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemFormMetadataBean;
 import org.apache.commons.collections.CollectionUtils;
+import org.hibernate.query.MutationQuery;
+import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,12 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
  */
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-// per-call typed-form migration needs each query's expected result
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-// is intentional and isolated to this DAO.
-@SuppressWarnings("all")
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemFormMetadataBean> {
 
     protected static final Logger LOG = LoggerFactory.getLogger(DynamicsItemFormMetadataDao.class);
@@ -52,9 +49,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         q.setParameter("event_crf_id", eventCrfBean.getId());
         q.setParameter("item_data_id", itemDataBean.getId());
         List<DynamicsItemFormMetadataBean> list = q.getResultList();
-        /* TODO use uniqueResult (or something similar), if the
-         * query returns multiple (equivalent results) use distinct also
-         */
+        // Deliberately not uniqueResult: duplicate rows may exist, and the newest (order by id desc) wins.
         return list.size() !=0 ? list.get(0) : null;
     }
 
@@ -172,11 +167,12 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
      * @param crfVersionId crfVersionId
      * @return list of IDs
      */
-    @SuppressWarnings("rawtypes")
     protected List<Integer> queryForIDs(String postgresQuery, Integer groupId, Integer sectionId,
             Integer eventCrfId, Integer crfVersionId) {
 
-        Query q = getCurrentSession().createNativeQuery(postgresQuery);
+        // Object: the rows come back as whatever numeric type the driver
+        // gives the id column, and HibernateUtil turns them into Integers.
+        NativeQuery<Object> q = getCurrentSession().createNativeQuery(postgresQuery, Object.class);
         if (groupId != null) {
             q.setParameter("groupId", groupId);
         }
@@ -195,7 +191,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
     @Transactional
     public void delete(int eventCrfId) {
         String query = "delete from " + getDomainClassName() + " metadata where metadata.eventCrfId = :eventCrfId";
-        Query<?> q = getCurrentSession().createQuery(query);
+        MutationQuery q = getCurrentSession().createMutationQuery(query);
         q.setParameter("eventCrfId", eventCrfId);
         q.executeUpdate();
     }

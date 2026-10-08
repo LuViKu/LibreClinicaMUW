@@ -18,25 +18,16 @@ import org.hibernate.query.NativeQuery;
 import org.hibernate.query.Query;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
+import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-// 2026-06-28 — Session.createQuery(String) / createNativeQuery(String)
-
-// were deprecated in Hibernate 6.5 in favour of typed overloads. The
-
-// per-call typed-form migration needs each query's expected result
-
-// type reviewed manually — deferred B.5 follow-up. Suppression here
-
-// is intentional and isolated to this DAO.
-
-@SuppressWarnings("all")
-
+@SuppressWarnings("resource") // Session comes from the JPA EntityManager (getCurrentSession); the transaction manager closes it
 public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements ApplicationEventPublisherAware{
 
 	private ApplicationEventPublisher eventPublisher;
 
+	@Override
 	public Class<StudyEvent> domainClass(){
 		return StudyEvent.class;
 	}
@@ -70,11 +61,10 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
         return q.getSingleResultOrNull();
     }
 
-    @SuppressWarnings("rawtypes")
 	public Integer findMaxOrdinalByStudySubjectStudyEventDefinition(int studySubjectId, int studyEventDefinitionId) {
         String query = "select max(sample_ordinal) from study_event where study_subject_id = " + studySubjectId + " and study_event_definition_id = " + studyEventDefinitionId;
-        NativeQuery q = getCurrentSession().createNativeQuery(query);
-        Number result = (Number) q.getSingleResultOrNull();
+        NativeQuery<Integer> q = getCurrentSession().createNativeQuery(query, Integer.class);
+        Integer result = q.getSingleResultOrNull();
         if (result == null) return 0;
         else return result.intValue();
     }
@@ -104,7 +94,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 
 	@Override
 	public void setApplicationEventPublisher(
-			ApplicationEventPublisher applicationEventPublisher) {
+			@NonNull ApplicationEventPublisher applicationEventPublisher) {
  this.eventPublisher = applicationEventPublisher;
 	}
 

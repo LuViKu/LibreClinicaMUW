@@ -1,0 +1,24 @@
+# Eclipse JDT compiler options for VS Code (redhat.java), applied to every
+# project via "java.settings.url" in .vscode/settings.json. Only options that
+# are deliberately different from the defaults belong here.
+#
+# The workspace runs annotation-based null analysis in "automatic" mode, which
+# picks up Spring's org.springframework.lang.NonNull/Nullable/NonNullApi. Spring
+# marks its whole API non-null by default, so every call from this codebase
+# (which has no null annotations of its own) into Spring was reported as
+# "Null type safety ... needs unchecked conversion to conform to @NonNull":
+# about 1,000 warnings, 80% of them in test code, none of them actionable.
+# Real null-specification violations (passing null, dropping @NonNull on an
+# override) are still reported.
+org.eclipse.jdt.core.compiler.problem.nullUncheckedConversion=ignore
+
+# Report potential resource leaks, as the ecj inventory behind #394 did, so a
+# new unclosed stream or JDBC statement shows up in the editor. The tree has
+# none left: each remaining case carries @SuppressWarnings("resource") naming
+# the owner that closes it.
+org.eclipse.jdt.core.compiler.problem.potentialUnclosedCloseable=warning
+# Without this, each @SuppressWarnings("resource") or ("null") is reported as
+# "not analysed due to a compiler option being ignored" (about 170 infos):
+# JDT cannot tell whether a token is needed while any option of its category
+# is off. It is a note about the analysis, not about the code.
+org.eclipse.jdt.core.compiler.problem.suppressWarningsNotFullyAnalysed=ignore

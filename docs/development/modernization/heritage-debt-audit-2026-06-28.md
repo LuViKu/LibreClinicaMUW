@@ -112,13 +112,13 @@ The 6 JAXB-namespace + 3 missing-POM warnings all trace to two unmaintained tran
 | PR | Scope | Files | Effort | Status |
 |---|---|---|---|---|
 | **audit-doc** | This document | 1 | — | in progress |
-| **p0-error-handling** | P0-1 … P0-10 silent-error fixes | ~10 | 2 days | TBD |
-| **b5-prep-manifest** | Drop `@SuppressWarnings("deprecation")` from `dao/hibernate/`, count + classify the warnings, file as B.5 manifest | 23 DAOs + 1 doc | 1 day | TBD |
-| **lint-core** | Categories 1+3+6 mechanical cleanup in `core/` | ~50 | 1 day | TBD |
-| **lint-web** | Same in `web/` | ~80 | 1-2 days | TBD |
-| **structural-base** | `serial-cleanup` + `this-escape-finals` | ~30 | 1 day | TBD |
-| **retire-mockrunner-and-dead-code** | Drop mockrunner deps + delete 4 dead heritage classes | `web/pom.xml` + 4 | 0.5 day | TBD |
-| **statusid-migration** | Migrate `setStatusId(int)` → `setStatus(Status)` callers | ~20 | 1 day | TBD |
+| **p0-error-handling** | P0-1 … P0-10 silent-error fixes | ~10 | 2 days | ✅ #267 (`a3268c61b`) |
+| **b5-prep-manifest** | Drop `@SuppressWarnings("deprecation")` from `dao/hibernate/`, count + classify the warnings, file as B.5 manifest | 23 DAOs + 1 doc | 1 day | ✅ #263 ([manifest](phase-b5-hibernate6-manifest.md)) |
+| **lint-core** | Categories 1+3+6 mechanical cleanup in `core/` | ~50 | 1 day | ✅ #265 |
+| **lint-web** | Same in `web/` | ~80 | 1-2 days | ✅ #266 |
+| **structural-base** | `serial-cleanup` + `this-escape-finals` | ~30 | 1 day | ✅ #269 (`d707818a5`) |
+| **retire-mockrunner-and-dead-code** | Drop mockrunner deps + delete 4 dead heritage classes | `web/pom.xml` + 4 | 0.5 day | ✅ #264 |
+| **statusid-migration** | Migrate `setStatusId(int)` → `setStatus(Status)` callers | ~20 | 1 day | open — 23 `setStatusId(int)` callers remain (2026-09-30) |
 
 After `b5-prep-manifest` + `lint-core` + `lint-web` + `structural-base` land, `mvn compile` should drop from 203 warnings to a single-digit count — real Phase B.5 / Phase C deprecations will stand out instead of getting lost in chaff.
 

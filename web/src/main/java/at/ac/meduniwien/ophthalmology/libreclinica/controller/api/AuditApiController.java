@@ -17,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -105,9 +106,13 @@ import org.springframework.web.bind.annotation.RestController;
  * subject and visit, ingest rows their file, and failures their operation
  * and error ({@link AuditRowContext}).
  *
- * <p>Server-side filters narrow by actor / variant / subjectId so
- * the response stays small on noisy studies. The SPA additionally
- * runs the same filters client-side once loaded.
+ * <p>The database filters, counts and pages the whole trail
+ * ({@link AuditLogQuery}): actor, variant, subject, item and a date
+ * range. The rows come newest first, ties broken by {@code audit_id},
+ * one page at a time with the total count
+ * ({@link AuditPageDto}); the export reads every matching row. Until
+ * 2026-09-30 both read the newest 500 rows of the study and filtered
+ * those, so older rows of a subject, user or item could not be reached.
  */
 @RestController
 @RequestMapping("/api/v1/audit")
@@ -116,53 +121,56 @@ public class AuditApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuditApiController.class);
 
+    /** The columns {@link AuditRowContext.Row#read} reads. */
+    private static final String AUDIT_COLUMNS = """
+            SELECT
+              a.audit_id, a.audit_date, a.audit_table, a.entity_id,
+              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
+              a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
+              a.user_id, ua.user_name, alet.name AS type_name,
+              alet.display_name AS type_display_name
+            """;
+
     /**
-     * Template for the single-pass SQL that returns every audit row
-     * scoped to a set of study_ids. The literal {@code __IN__} token
-     * is replaced at call time with a placeholder list of the right
-     * arity ({@code (?, ?, …)} repeated five times — one IN per
-     * audit-table branch). Until A4, the SQL had a literal {@code = ?}
+     * The tables every audit read joins: the actor's name and the type's
+     * name and visibility. The study scope and the filters refer to both.
+     */
+    private static final String AUDIT_FROM = """
+            FROM audit_log_event a
+            LEFT JOIN user_account ua ON ua.user_id = a.user_id
+            LEFT JOIN audit_log_event_type alet
+              ON alet.audit_log_event_type_id = a.audit_log_event_type_id
+            """;
+
+    /**
+     * Newest first; {@code audit_id} orders rows of the same instant, so
+     * pages neither repeat nor skip a row. Served by
+     * {@code i_audit_log_event_date_id} (lc-muw-2026-09-30-audit-log-event-date-index.xml).
+     */
+    private static final String NEWEST_FIRST = " ORDER BY a.audit_date DESC, a.audit_id DESC";
+
+    /** Rows per page when the caller does not say, and the most it may ask for. */
+    static final int DEFAULT_PAGE_SIZE = 100;
+    static final int MAX_PAGE_SIZE = 500;
+
+    /** Rows the export reads per round trip; it reads until none are left. */
+    static final int EXPORT_BATCH = 1000;
+
+    /**
+     * The rows of a set of studies: the {@code WHERE} predicate of every
+     * study-scoped read. The literal {@code __IN__} token is replaced at
+     * call time with a placeholder list of the right arity, one IN per
+     * audit-table branch. Until A4, the SQL had a literal {@code = ?}
      * per branch; A4 generalises to per-site visibility — Monitor with
      * a single site grant under a multi-site study now sees only that
      * site's rows.
-     */
-    /**
-     * Phase E hardening B (sysadmin audit UI) — system-wide audit SQL.
      *
-     * <p>Same shape as {@link #STUDY_SCOPED_AUDIT_SQL_TEMPLATE} but
-     * <strong>without</strong> the {@code is_user_visible=true} filter
-     * (so {@code OPERATION_FAILED(61)} + {@code JOB_FAILED(62)} rows are
-     * returned for §11.10(e) compliance review) and without the
-     * per-study scoping IN clauses (so all studies are surfaced — this
-     * endpoint is sysadmin-only). LIMIT 500 newest rows mirrors the
-     * per-study endpoint's volume cap.
+     * <p>The system log (sysadmin only) reads every row instead: no
+     * {@code is_user_visible=true} filter, so {@code OPERATION_FAILED(61)}
+     * and {@code JOB_FAILED(62)} rows are there for §11.10(e) review, and
+     * no study scope.
      */
-    private static final String SYSTEM_WIDE_AUDIT_SQL = """
-            SELECT
-              a.audit_id, a.audit_date, a.audit_table, a.entity_id,
-              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
-              a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
-              a.user_id, ua.user_name, alet.name AS type_name,
-              alet.display_name AS type_display_name
-            FROM audit_log_event a
-            LEFT JOIN user_account ua ON ua.user_id = a.user_id
-            LEFT JOIN audit_log_event_type alet
-              ON alet.audit_log_event_type_id = a.audit_log_event_type_id
-            ORDER BY a.audit_date DESC, a.audit_id DESC
-            LIMIT 500
-            """;
-
-    private static final String STUDY_SCOPED_AUDIT_SQL_TEMPLATE = """
-            SELECT
-              a.audit_id, a.audit_date, a.audit_table, a.entity_id,
-              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
-              a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
-              a.user_id, ua.user_name, alet.name AS type_name,
-              alet.display_name AS type_display_name
-            FROM audit_log_event a
-            LEFT JOIN user_account ua ON ua.user_id = a.user_id
-            LEFT JOIN audit_log_event_type alet
-              ON alet.audit_log_event_type_id = a.audit_log_event_type_id
+    private static final String STUDY_SCOPE_TEMPLATE = """
             -- Phase A1 (2026-06-10) — hide OPERATION_FAILED / JOB_FAILED
             -- rows from the per-study investigator view. They are
             -- recorded for §11.10(e) compliance + sysadmin / compliance
@@ -172,7 +180,7 @@ public class AuditApiController {
             -- audit-log endpoint drops this clause to see everything.
             -- COALESCE keeps the historical rows that pre-date the
             -- audit_log_event_type lookup join (NULL type id) visible.
-            WHERE COALESCE(alet.is_user_visible, true) = true
+            COALESCE(alet.is_user_visible, true) = true
             AND (
               ( a.audit_table = 'item_data'
                 AND a.audit_log_event_type_id IS DISTINCT FROM 129
@@ -243,12 +251,10 @@ public class AuditApiController {
                     JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
                   WHERE ss.study_id IN __IN__))
             )
-            ORDER BY a.audit_date DESC, a.audit_id DESC
-            LIMIT 500
             """;
 
     /** How many visibility IN-lists the per-study template has; each binds the visible ids. */
-    static final int STUDY_SCOPED_IN_SLOTS = countOccurrences(STUDY_SCOPED_AUDIT_SQL_TEMPLATE, "__IN__");
+    static final int STUDY_SCOPED_IN_SLOTS = countOccurrences(STUDY_SCOPE_TEMPLATE, "__IN__");
 
     private static int countOccurrences(String text, String token) {
         int n = 0;
@@ -275,13 +281,30 @@ public class AuditApiController {
      */
     static final int AUDIT_TYPE_AUDIT_LOG_EXPORTED = 55;
 
+    /**
+     * One page of the study's audit trail, newest first, with the number of
+     * rows that match. The filters narrow in the database, so a page and its
+     * total cover the whole trail.
+     *
+     * @param itemFilter item OID: the rows about its values
+     * @param fromDay    first day, {@code yyyy-MM-dd} (UTC), inclusive
+     * @param toDay      last day, {@code yyyy-MM-dd} (UTC), inclusive
+     * @param page       0-based page number
+     * @param pageSize   rows per page, {@value #DEFAULT_PAGE_SIZE} by default,
+     *                   at most {@value #MAX_PAGE_SIZE}
+     */
     @GetMapping
     @ApiResponse(responseCode = "200",
-                 content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
+                 content = @Content(schema = @Schema(implementation = AuditPageDto.class)))
     public ResponseEntity<?> list(
             @RequestParam(value = "actor", required = false) String actorFilter,
             @RequestParam(value = "variant", required = false) String variantFilter,
             @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            @RequestParam(value = "item", required = false) String itemFilter,
+            @RequestParam(value = "from", required = false) String fromDay,
+            @RequestParam(value = "to", required = false) String toDay,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
             HttpSession session) {
 
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
@@ -294,10 +317,19 @@ public class AuditApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!mayViewStudyAudit(ub, currentStudy, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reading the study audit log"));
+        }
+        AuditFilter filter;
         try {
-            return ResponseEntity.ok(
-                    collectFilteredRows(ub, currentStudy, currentRole,
-                            actorFilter, variantFilter, subjectIdFilter));
+            filter = AuditFilter.of(actorFilter, variantFilter, subjectIdFilter, itemFilter, fromDay, toDay);
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", BAD_DAY));
+        }
+        try (Connection c = dataSource.getConnection()) {
+            return ResponseEntity.ok(readPage(c,
+                    studyQuery(c, ub, currentStudy, currentRole, filter), page, pageSize));
         } catch (SQLException e) {
             LOG.error("Failed to load audit-log rows for study_id={}", currentStudy.getId(), e);
             return ResponseEntity.status(500).body(Map.of("message",
@@ -306,9 +338,45 @@ public class AuditApiController {
     }
 
     /**
-     * Phase E.6 — XLSX hand-off of the audit log. Mirrors the same
-     * filter set as {@link #list} so sponsor / inspector downloads
-     * match the on-screen row count exactly. Emits one
+     * The values the study log's actor and subject filters offer: every
+     * actor in the study's trail and every subject of the study, not only
+     * those on the page shown.
+     */
+    @GetMapping("/facets")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = AuditFacetsDto.class)))
+    public ResponseEntity<?> facets(HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!mayViewStudyAudit(ub, currentStudy, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reading the study audit log"));
+        }
+        List<Integer> visible = visibleStudyIds(ub, currentStudy, currentRole);
+        try (Connection c = dataSource.getConnection()) {
+            return ResponseEntity.ok(new AuditFacetsDto(
+                    actors(c, AuditLogQuery.study(STUDY_SCOPE_TEMPLATE, STUDY_SCOPED_IN_SLOTS, visible)),
+                    subjectLabels(c, visible)));
+        } catch (SQLException e) {
+            LOG.error("Failed to load audit-log facets for study_id={}", currentStudy.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load audit log filters: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Phase E.6 — XLSX hand-off of the audit log. Takes the same filters as
+     * {@link #list} and writes every matching row, read in batches of
+     * {@value #EXPORT_BATCH} newest first, so sponsor / inspector downloads
+     * hold what the view pages through. Emits one
      * {@code audit_log_event} row (type 55) per successful download
      * so the GxP audit trail records who took the egress + which
      * filters were active.
@@ -326,6 +394,9 @@ public class AuditApiController {
             @RequestParam(value = "actor", required = false) String actorFilter,
             @RequestParam(value = "variant", required = false) String variantFilter,
             @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            @RequestParam(value = "item", required = false) String itemFilter,
+            @RequestParam(value = "from", required = false) String fromDay,
+            @RequestParam(value = "to", required = false) String toDay,
             HttpSession session) {
 
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
@@ -338,37 +409,51 @@ public class AuditApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-
-        List<AuditEventDto> rows;
+        if (!mayViewStudyAudit(ub, currentStudy, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reading the study audit log"));
+        }
+        AuditFilter filter;
         try {
-            rows = collectFilteredRows(ub, currentStudy, currentRole,
-                    actorFilter, variantFilter, subjectIdFilter);
+            filter = AuditFilter.of(actorFilter, variantFilter, subjectIdFilter, itemFilter, fromDay, toDay);
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", BAD_DAY));
+        }
+
+        byte[] xlsx;
+        int rowCount = 0;
+        try (Connection c = dataSource.getConnection();
+             XlsxWorkbookBuilder b = new XlsxWorkbookBuilder("Audit log")) {
+            b.writeHeader("When (UTC)", "Actor", "Variant", "Title",
+                    "Subject", "Scope", "Details", "Before", "After", "Reason");
+            AuditLogQuery q = studyQuery(c, ub, currentStudy, currentRole, filter);
+            Integer after = null;
+            while (true) {
+                List<AuditRowContext.Row> batch = readBatch(c, q, after);
+                for (AuditEventDto r : toDtos(batch)) {
+                    b.writeRow(
+                            nz(r.occurredAt()),
+                            nz(r.actor()),
+                            nz(r.variant()),
+                            nz(r.title()),
+                            nz(r.subjectId()),
+                            nz(r.scope()),
+                            nz(r.details()),
+                            nz(r.before()),
+                            nz(r.after()),
+                            nz(r.reason()));
+                    rowCount++;
+                }
+                if (batch.size() < EXPORT_BATCH) break;
+                after = batch.get(batch.size() - 1).auditId();
+            }
+            b.autoSize();
+            xlsx = b.toByteArray();
         } catch (SQLException e) {
             LOG.error("Failed to load audit-log rows for study_id={} during export",
                     currentStudy.getId(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to load audit log for export: " + e.getMessage()));
-        }
-
-        byte[] xlsx;
-        try (XlsxWorkbookBuilder b = new XlsxWorkbookBuilder("Audit log")) {
-            b.writeHeader("When (UTC)", "Actor", "Variant", "Title",
-                    "Subject", "Scope", "Details", "Before", "After", "Reason");
-            for (AuditEventDto r : rows) {
-                b.writeRow(
-                        nz(r.occurredAt()),
-                        nz(r.actor()),
-                        nz(r.variant()),
-                        nz(r.title()),
-                        nz(r.subjectId()),
-                        nz(r.scope()),
-                        nz(r.details()),
-                        nz(r.before()),
-                        nz(r.after()),
-                        nz(r.reason()));
-            }
-            b.autoSize();
-            xlsx = b.toByteArray();
         } catch (IOException e) {
             LOG.error("Failed to render audit-export workbook for study_id={}",
                     currentStudy.getId(), e);
@@ -376,8 +461,7 @@ public class AuditApiController {
                     "Failed to render audit-export workbook: " + e.getMessage()));
         }
 
-        String filterSummary = describeFilters(actorFilter, variantFilter, subjectIdFilter, rows.size());
-        emitExportAudit(ub.getId(), currentStudy, AUDIT_TYPE_AUDIT_LOG_EXPORTED, filterSummary);
+        emitExportAudit(ub.getId(), currentStudy, AUDIT_TYPE_AUDIT_LOG_EXPORTED, filter.describe(rowCount));
 
         String filename = "audit_" + safeOid(currentStudy.getOid()) + "_"
                 + LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE)
@@ -408,16 +492,21 @@ public class AuditApiController {
      * the convention used by every other admin-only endpoint in this
      * controller family (UsersApiController create / disable / etc.).
      *
-     * <p>Same query parameters as {@link #list} so the SPA filter
-     * components can drop in without bespoke wiring.
+     * <p>Same query parameters and page shape as {@link #list} so the
+     * SPA filter components can drop in without bespoke wiring.
      */
     @GetMapping("/system")
     @ApiResponse(responseCode = "200",
-                 content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
+                 content = @Content(schema = @Schema(implementation = AuditPageDto.class)))
     public ResponseEntity<?> listSystem(
             @RequestParam(value = "actor", required = false) String actorFilter,
             @RequestParam(value = "variant", required = false) String variantFilter,
             @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            @RequestParam(value = "item", required = false) String itemFilter,
+            @RequestParam(value = "from", required = false) String fromDay,
+            @RequestParam(value = "to", required = false) String toDay,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
             HttpSession session) {
 
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
@@ -428,9 +517,14 @@ public class AuditApiController {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit system audit-log access — sysadmin only"));
         }
+        AuditFilter filter;
         try {
-            return ResponseEntity.ok(
-                    collectSystemWideRows(actorFilter, variantFilter, subjectIdFilter));
+            filter = AuditFilter.of(actorFilter, variantFilter, subjectIdFilter, itemFilter, fromDay, toDay);
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", BAD_DAY));
+        }
+        try (Connection c = dataSource.getConnection()) {
+            return ResponseEntity.ok(readPage(c, systemQuery(c, filter), page, pageSize));
         } catch (SQLException e) {
             LOG.error("Failed to load system-wide audit-log rows for user_id={}",
                     ub.getId(), e);
@@ -439,89 +533,216 @@ public class AuditApiController {
         }
     }
 
-    /**
-     * Phase E hardening B — read every audit row (no
-     * {@code is_user_visible} filter, no per-study scoping). Mirrors
-     * {@link #collectFilteredRows} for everything else (subject /
-     * scope hydration, actor / variant / subject filters, prettify,
-     * details derivation).
-     */
-    private List<AuditEventDto> collectSystemWideRows(
-            String actorFilter, String variantFilter, String subjectIdFilter)
-            throws SQLException {
-        List<AuditRowContext.Row> rows = new ArrayList<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(SYSTEM_WIDE_AUDIT_SQL);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) rows.add(AuditRowContext.Row.read(rs));
+    /** The system log's filter values: every actor in the trail and every subject label. */
+    @GetMapping("/system/facets")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = AuditFacetsDto.class)))
+    public ResponseEntity<?> systemFacets(HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        return toDtos(rows, actorFilter, variantFilter, subjectIdFilter);
+        if (!UserAdminAuthorization.roleMayAdministerUsers(ub)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit system audit-log access — sysadmin only"));
+        }
+        try (Connection c = dataSource.getConnection()) {
+            return ResponseEntity.ok(new AuditFacetsDto(actors(c, AuditLogQuery.all()), subjectLabels(c, null)));
+        } catch (SQLException e) {
+            LOG.error("Failed to load system audit-log facets for user_id={}", ub.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load system audit log filters: " + e.getMessage()));
+        }
+    }
+
+    private static final String BAD_DAY = "from and to are days in the form yyyy-MM-dd";
+
+    /** The filters of one read, as the request gave them. */
+    record AuditFilter(String actor, String variant, String subject, String item, LocalDate from, LocalDate to) {
+
+        /** @throws DateTimeParseException for a day that is not {@code yyyy-MM-dd} */
+        static AuditFilter of(String actor, String variant, String subject, String item,
+                              String from, String to) {
+            return new AuditFilter(actor, variant, subject, item, day(from), day(to));
+        }
+
+        private static LocalDate day(String s) {
+            return s == null || s.isBlank() ? null : LocalDate.parse(s.trim());
+        }
+
+        /** The {@code new_value} of an export's audit row: the rows written and the filters applied. */
+        String describe(int rowCount) {
+            StringBuilder sb = new StringBuilder(describeFilters(actor, variant, subject, rowCount));
+            if (item != null && !item.isBlank()) sb.append(" item=").append(item);
+            if (from != null) sb.append(" from=").append(from);
+            if (to != null) sb.append(" to=").append(to);
+            return sb.toString();
+        }
     }
 
     /**
-     * Shared row collection — used by both {@link #list} and
-     * {@link #exportXlsx}. Pulls the SQL pass through the per-site
-     * visibility filter, hydrates the per-row subject / scope
-     * lookups, and applies the actor / variant / subject filters
-     * server-side. The returned list is newest-first.
+     * A4 — per-site visibility. The scope embeds the visible ids as a
+     * parameterised IN clause, one per audit_table branch. An empty set
+     * would build an invalid {@code IN ()} clause; we fall back to the bare
+     * currentStudy.id in that defensive case so the endpoint still produces
+     * a result.
      */
-    private List<AuditEventDto> collectFilteredRows(
-            UserAccountBean ub, StudyBean currentStudy, StudyUserRoleBean currentRole,
-            String actorFilter, String variantFilter, String subjectIdFilter)
-            throws SQLException {
+    private List<Integer> visibleStudyIds(UserAccountBean ub, StudyBean currentStudy,
+                                          StudyUserRoleBean currentRole) {
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(ub, currentStudy, currentRole);
+        if (visible.isEmpty()) visible = Set.of(currentStudy.getId());
+        return new ArrayList<>(visible);
+    }
 
-        int studyId = currentStudy.getId();
-
-        // A4 — per-site visibility. The audit SQL embeds the visible
-        // ids as a parameterised IN clause (one of {n placeholders}
-        // per audit_table branch, six branches → 6n binds total). An
-        // empty visible set would build an invalid `IN ()` clause; we
-        // fall back to the bare currentStudy.id in that defensive
-        // case so the endpoint still produces a result.
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                ub, currentStudy, currentRole);
-        if (visibleStudyIds.isEmpty()) visibleStudyIds = Set.of(studyId);
-        String inClause = buildInClause(visibleStudyIds.size());
-        String sql = STUDY_SCOPED_AUDIT_SQL_TEMPLATE.replace("__IN__", inClause);
-
-        List<AuditRowContext.Row> rows = new ArrayList<>();
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            // One IN-clause slot per branch × n ids each (item_data, event_crf,
-            // study_subject, subject, study_event, study, dataset,
-            // eye_cohort_transition[source], eye_cohort_transition[target],
-            // auto-tick CRF, ingest visit) —
-            // the study branch was added Phase E.6 / 2026-06-03 for
-            // identity edits, dataset added Phase E.6 / 2026-06-05
-            // for dataset-export audit events, eye_cohort_transition
-            // added Phase E.6 follow-up 2026-06-11 (two slots — the
-            // row is visible from BOTH source-study and target-study
-            // side, so the WHERE clause ORs the two IN tests).
-            // The count comes from the template, so adding a branch cannot
-            // leave a slot unbound.
-            int bindIdx = 1;
-            for (int branch = 0; branch < STUDY_SCOPED_IN_SLOTS; branch++) {
-                for (Integer sid : visibleStudyIds) {
-                    ps.setInt(bindIdx++, sid);
-                }
+    /**
+     * Who may read the study audit log: a system administrator, or a user
+     * whose role on the active study (or on its parent, for a site) is
+     * director, coordinator or monitor. Legacy parity:
+     * {@code StudyAuditLogServlet.mayProceed}. The session role is tried first;
+     * a user with several bindings on the study (Investigator and Data Manager,
+     * say) may have the session role land on the weaker one, so every active
+     * binding is walked before refusing. Fails closed.
+     */
+    private boolean mayViewStudyAudit(UserAccountBean ub, StudyBean currentStudy,
+                                      StudyUserRoleBean currentRole) {
+        if (ub.isSysAdmin()) return true;
+        if (currentRole != null && roleMayViewStudyAudit(currentRole.getRole())) return true;
+        try {
+            List<StudyUserRoleBean> bindings =
+                    new at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO(dataSource)
+                            .findAllRolesByUserName(ub.getName());
+            if (bindings == null) return false;
+            for (StudyUserRoleBean b : bindings) {
+                if (b == null || b.getRole() == null) continue;
+                if (b.getStatus() == null
+                        || b.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) continue;
+                boolean onStudy = b.getStudyId() == currentStudy.getId()
+                        || (currentStudy.getParentStudyId() > 0 && b.getStudyId() == currentStudy.getParentStudyId());
+                if (onStudy && roleMayViewStudyAudit(b.getRole())) return true;
             }
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return false;
+    }
+
+    static boolean roleMayViewStudyAudit(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role r) {
+        return r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.ADMIN
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.COORDINATOR
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR;
+    }
+
+    private AuditLogQuery studyQuery(Connection c, UserAccountBean ub, StudyBean currentStudy,
+                                     StudyUserRoleBean currentRole, AuditFilter f) throws SQLException {
+        List<Integer> visible = visibleStudyIds(ub, currentStudy, currentRole);
+        return AuditLogQuery.study(STUDY_SCOPE_TEMPLATE, STUDY_SCOPED_IN_SLOTS, visible)
+                .actor(f.actor())
+                .variant(f.variant())
+                .subject(f.subject(), AuditLogQuery.studySubjectIds(c, f.subject(), visible))
+                .item(f.item())
+                .from(f.from())
+                .to(f.to());
+    }
+
+    private AuditLogQuery systemQuery(Connection c, AuditFilter f) throws SQLException {
+        return AuditLogQuery.all()
+                .actor(f.actor())
+                .variant(f.variant())
+                .subject(f.subject(), AuditLogQuery.studySubjectIds(c, f.subject(), null))
+                .item(f.item())
+                .from(f.from())
+                .to(f.to());
+    }
+
+    /** The count of matching rows and one page of them. */
+    private AuditPageDto readPage(Connection c, AuditLogQuery q, Integer page, Integer pageSize)
+            throws SQLException {
+        int size = pageSize == null || pageSize < 1 ? DEFAULT_PAGE_SIZE : Math.min(pageSize, MAX_PAGE_SIZE);
+        int number = page == null || page < 0 ? 0 : page;
+        long total;
+        try (PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) " + AUDIT_FROM + q.where())) {
+            q.bind(ps);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                total = rs.getLong(1);
+            }
+        }
+        List<AuditRowContext.Row> rows = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(
+                AUDIT_COLUMNS + AUDIT_FROM + q.where() + NEWEST_FIRST + " LIMIT ? OFFSET ?")) {
+            int idx = q.bind(ps);
+            ps.setInt(idx++, size);
+            ps.setLong(idx, (long) number * size);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) rows.add(AuditRowContext.Row.read(rs));
             }
         }
-        return toDtos(rows, actorFilter, variantFilter, subjectIdFilter);
+        return new AuditPageDto(total, number, size, toDtos(rows));
     }
 
     /**
-     * Rows to DTOs, shared by both collectors: label each row by what it
-     * records, resolve its subject, visit and file, prettify its values, and
-     * apply the actor / variant / subject filters. Subject and scope lookups
-     * that existed before stay as they were; the rest fills what they left
-     * empty.
+     * The next {@value #EXPORT_BATCH} matching rows older than the row with
+     * id {@code afterAuditId} (none: the newest). Rows written while the
+     * export runs are newer, so they neither shift nor repeat a batch.
      */
-    private List<AuditEventDto> toDtos(List<AuditRowContext.Row> rows,
-                                       String actorFilter, String variantFilter, String subjectIdFilter)
+    private List<AuditRowContext.Row> readBatch(Connection c, AuditLogQuery q, Integer afterAuditId)
             throws SQLException {
+        String keyset = afterAuditId == null ? ""
+                : " AND (a.audit_date, a.audit_id) < "
+                        + "(SELECT x.audit_date, x.audit_id FROM audit_log_event x WHERE x.audit_id = ?)";
+        List<AuditRowContext.Row> rows = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(
+                AUDIT_COLUMNS + AUDIT_FROM + q.where() + keyset + NEWEST_FIRST + " LIMIT ?")) {
+            int idx = q.bind(ps);
+            if (afterAuditId != null) ps.setInt(idx++, afterAuditId);
+            ps.setInt(idx, EXPORT_BATCH);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) rows.add(AuditRowContext.Row.read(rs));
+            }
+        }
+        return rows;
+    }
+
+    /** Every actor name the scope's rows show, {@code system} for rows without a named user. */
+    private static List<String> actors(Connection c, AuditLogQuery scope) throws SQLException {
+        List<String> out = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT DISTINCT CASE WHEN ua.user_name IS NULL OR btrim(ua.user_name) = '' "
+                        + "THEN 'system' ELSE ua.user_name END AS actor "
+                        + AUDIT_FROM + scope.where() + " ORDER BY 1")) {
+            scope.bind(ps);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1));
+            }
+        }
+        return out;
+    }
+
+    /** The labels of the subjects in the given studies, or of every subject when null. */
+    private static List<String> subjectLabels(Connection c, List<Integer> studyIds) throws SQLException {
+        List<String> out = new ArrayList<>();
+        String sql = "SELECT DISTINCT label FROM study_subject WHERE label IS NOT NULL"
+                + (studyIds == null ? "" : " AND study_id IN " + buildInClause(studyIds.size()))
+                + " ORDER BY label";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            int idx = 1;
+            if (studyIds != null) for (Integer id : studyIds) ps.setInt(idx++, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Rows to DTOs, shared by the pages and the export: label each row by
+     * what it records, resolve its subject, visit and file, and prettify its
+     * values. Subject and scope lookups that existed before stay as they
+     * were; the rest fills what they left empty. The filters ran in the
+     * database ({@link AuditLogQuery}), asking what this method shows.
+     */
+    private List<AuditEventDto> toDtos(List<AuditRowContext.Row> rows) {
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         EventCRFDAO ecDao = new EventCRFDAO(dataSource);
         ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
@@ -572,14 +793,6 @@ public class AuditApiController {
                 if (scope == null) scope = visit.label();
             }
 
-            // Apply server-side filters before serialising.
-            if (actorFilter != null && !actorFilter.isBlank()
-                    && !actorFilter.equalsIgnoreCase(actor)) continue;
-            if (variantFilter != null && !variantFilter.isBlank()
-                    && !variantFilter.equalsIgnoreCase(variant)) continue;
-            if (subjectIdFilter != null && !subjectIdFilter.isBlank()
-                    && (subjectLabel == null || !subjectIdFilter.equalsIgnoreCase(subjectLabel)))
-                continue;
 
             Timestamp ts = r.auditDate();
             String occurredAt = ts == null ? null
@@ -634,7 +847,8 @@ public class AuditApiController {
      *
      * <ul>
      *   <li>Study, user and dataset rows: the entity name, which holds the
-     *       changed column or the export label (Phase E.6).</li>
+     *       changed column or the export label (Phase E.6); configuration
+     *       rows: the key of the setting that changed (2026-09-30).</li>
      *   <li>Failures: the operation that failed.</li>
      *   <li>Ingest rows: the file's reference. Rows written before the
      *       reference was recorded hold a bare column marker; for those it is
@@ -648,7 +862,7 @@ public class AuditApiController {
             if (!AuditRowLabels.isBareMarker(entityName)) return entityName.trim();
             return r.entityId() > 0 ? context.file(r.entityId()) : null;
         }
-        if ((r.on("study") || r.on("user_account") || r.on("dataset"))
+        if ((r.on("study") || r.on("user_account") || r.on("dataset") || r.on("configuration"))
                 && entityName != null && !entityName.isBlank()) {
             return entityName;
         }
@@ -668,6 +882,8 @@ public class AuditApiController {
             // 2026-09-27); rows written before read as 140 too.
             case 140 -> "reason-for-change";
             case 31 -> "signed";
+            // A CRF signature removed when the CRF moved to another version (144).
+            case AuditTypeIds.EVENT_CRF_SIGNATURE_REMOVED -> "signed";
             case 32 -> "sdv";
             // Subject-group-map lifecycle (types 28 + 29 — "added to
             // group" + "moved between groups"). Phase E.5 #2 follow-up:
@@ -710,7 +926,12 @@ public class AuditApiController {
                  101, 102, 103, 104, 105,
             // Extract-job execution (106-107). Backfill catch-all (108,
             // hidden) routes to admin for the sysadmin view.
-                 106, 107, 108 -> "admin";
+                 106, 107, 108,
+            // Password-policy and lockout settings (145, 2026-09-30).
+                 145,
+            // CRF name / description edit (142) and a batch move of event
+            // CRFs to another CRF version (143, one row per run).
+                 AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
@@ -719,6 +940,9 @@ public class AuditApiController {
             // CRF reopened (138) and restored (139), a dismissed file
             // restored (137) — 2026-09-27.
                  137, 138, 139,
+            // An event CRF removed with its CRF or with its CRF version
+            // (190-191); its restore is 139.
+                 AuditTypeIds.EVENT_CRF_REMOVED_WITH_CRF, AuditTypeIds.EVENT_CRF_REMOVED_WITH_VERSION,
             // Eye-cohort transition (57) — per-subject clinical event,
             // not admin config. Discrepancy-note threading + create
             // (71-74) and the subject-demographics update (100) also

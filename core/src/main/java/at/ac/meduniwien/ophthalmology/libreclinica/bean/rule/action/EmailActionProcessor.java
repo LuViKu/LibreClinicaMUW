@@ -36,6 +36,7 @@ public class EmailActionProcessor implements ActionProcessor {
         this.ds = ds;
     }
 
+    @Override
     public void execute(RuleActionBean ruleAction, int itemDataBeanId, String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
         HashMap<String, String> arg0 = asHashMap(arguments[0], String.class, String.class);
         sendEmail(ruleAction, ub, arg0.get("body"), arg0.get("subject"));

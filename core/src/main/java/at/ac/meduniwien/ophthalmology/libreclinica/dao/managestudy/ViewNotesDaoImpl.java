@@ -206,7 +206,7 @@ public class ViewNotesDaoImpl extends NamedParameterJdbcDaoSupport implements Vi
             }
         }
 
-        if (filter.getPageNumber() != null && filter.getPageSize() != null) {
+        if (filter != null && filter.getPageNumber() != null && filter.getPageSize() != null) {
             if (queryStore.hasQuery(QUERYSTORE_FILE, "findAllDiscrepancyNotes.paginationPrefix")) {
                 terms.add(0, queryStore.query(QUERYSTORE_FILE, "findAllDiscrepancyNotes.paginationPrefix"));
                 terms.add(queryStore.query(QUERYSTORE_FILE, "findAllDiscrepancyNotes.paginationSuffix"));

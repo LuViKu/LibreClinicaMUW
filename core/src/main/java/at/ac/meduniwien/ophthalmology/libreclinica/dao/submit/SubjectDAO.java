@@ -203,6 +203,7 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
     /**
      * getEntityFromHashMap, the method that gets the object from the database query.
      */
+    @Override
     public SubjectBean getEntityFromHashMap(HashMap<String, Object> hm) {
         SubjectBean eb = new SubjectBean();
         super.setEntityAuditInformation(eb, hm);
@@ -221,6 +222,7 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return eb;
     }
 
+    @Override
     public ArrayList<SubjectBean> findAll() {
         return findAllByLimit(false);
     }
@@ -281,10 +283,12 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
 
     /**
      */
+    @Override
     public ArrayList<SubjectBean> findAll(String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
+    @Override
     public SubjectBean findByPK(int ID) {
     	String queryName = "findByPK";
         HashMap<Integer, Object> variables = variables(ID);
@@ -350,6 +354,7 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
      *
      * @return sb, an updated study bean.
      */
+    @Override
     public SubjectBean update(SubjectBean sb) {
         HashMap<Integer, Object> variables = new HashMap<>();
 		HashMap<Integer, Integer> nullVars = new HashMap<>();
@@ -393,12 +398,14 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
 
     /**
      */
+    @Override
     public ArrayList<SubjectBean> findAllByPermission(Object objCurrentUser, int intActionType, String strOrderByColumn, boolean blnAscendingSort, String strSearchPhrase) {
         throw new RuntimeException("Not implemented");
     }
 
     /**
      */
+    @Override
     public ArrayList<SubjectBean> findAllByPermission(Object objCurrentUser, int intActionType) {
     	throw new RuntimeException("Not implemented");
     }

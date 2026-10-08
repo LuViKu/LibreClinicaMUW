@@ -214,6 +214,7 @@ public class DisplayItemGroupBean implements Comparable<DisplayItemGroupBean> {
         this.index = index;
     }
 
+    @Override
     public int compareTo(DisplayItemGroupBean o) {
         return getOrdinal() - o.getOrdinal();
     }

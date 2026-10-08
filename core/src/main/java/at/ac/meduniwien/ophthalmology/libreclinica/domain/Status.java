@@ -88,6 +88,7 @@ public enum Status implements CodedEnum {
         return this.name();
     }
 
+    @Override
     public Integer getCode() {
         return code;
     }

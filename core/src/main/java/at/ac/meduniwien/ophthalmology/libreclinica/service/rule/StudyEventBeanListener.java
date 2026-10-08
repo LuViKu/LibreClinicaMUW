@@ -68,13 +68,13 @@ public class StudyEventBeanListener implements Observer,ApplicationContextAware 
 		
 		Integer studyEventDefId = studyEventBeanContainer.getEvent().getStudyEventDefinitionId();
 //		Integer studySubjectId = studyEventBeanContainer.getEvent().getStudySubjectId();
-		Integer userId = studyEventBeanContainer.getEvent().getUpdaterId();
+		int userId = studyEventBeanContainer.getEvent().getUpdaterId();
 		Integer studyEventOrdinal = studyEventBeanContainer.getEvent().getSampleOrdinal();
 		if(userId==0) userId = studyEventBeanContainer.getEvent().getOwnerId();
 		StudyEventBean studyEvent = studyEventBeanContainer.getEvent();
         
 		
-		ArrayList<RuleSetBean> ruleSets = (ArrayList<RuleSetBean>) createRuleSet(studyEventDefId);
+		List<RuleSetBean> ruleSets = createRuleSet(studyEventDefId);
 		for (RuleSetBean ruleSet : ruleSets) {
 			ArrayList<RuleSetBean> ruleSetBeans = new ArrayList<>();		
 			ExpressionBean eBean = new ExpressionBean();

@@ -39,6 +39,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
@@ -149,7 +150,7 @@ class DatasetBundleExportDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private SynchronousExportMaterializer materializer() {
         RuleSetRuleDao rules = Mockito.mock(RuleSetRuleDao.class);
-        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(Mockito.anyInt()))
+        Mockito.when(rules.findByRuleSetStudyIdAndStatusAvail(ArgumentMatchers.anyInt()))
                 .thenReturn(new ArrayList<>());
         return new SynchronousExportMaterializer(DATA_SOURCE, Mockito.mock(CoreResources.class), rules);
     }

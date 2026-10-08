@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useNotesStore } from '../notes'
+import { useAuthStore } from '../auth'
 
 /**
  * Phase E.6 — covers the SPA's `exportCsv()` action:
@@ -86,10 +87,11 @@ describe('useNotesStore.exportCsv', () => {
     expect(url.searchParams.get('subjectId')).toBe('M-001')
   })
 
-  it('only ships assignedTo when "only mine" is on', async () => {
+  it('only ships assignedTo when "only mine" is on, naming the signed-in user', async () => {
     mockFetch(okCsv())
+    useAuthStore().user = { username: 'manual_monitor', role: 'Monitor', activeStudy: null } as unknown as
+      ReturnType<typeof useAuthStore>['user']
     const store = useNotesStore()
-    store.me = 'monitor_demo'
     // off → no assignedTo
     await store.exportCsv()
     expect(new URL(calls[0].url, 'http://localhost').searchParams.get('assignedTo'))
@@ -98,6 +100,6 @@ describe('useNotesStore.exportCsv', () => {
     store.onlyAssignedToMe = true
     await store.exportCsv()
     expect(new URL(calls[1].url, 'http://localhost').searchParams.get('assignedTo'))
-      .toBe('monitor_demo')
+      .toBe('manual_monitor')
   })
 })

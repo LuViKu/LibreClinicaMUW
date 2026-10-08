@@ -38,6 +38,7 @@ public class StudySubjectSDVFilter implements CriteriaCommand {
         filters.add(new Filter(property, value));
     }
 
+    @Override
     public String execute(String criteria) {
         String theCriteria = "";
         for (Filter filter : filters) {

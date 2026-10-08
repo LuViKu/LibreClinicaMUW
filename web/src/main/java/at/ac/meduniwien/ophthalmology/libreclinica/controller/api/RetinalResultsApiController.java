@@ -8,12 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -28,51 +23,37 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata.EventCrfEnsurer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.CacheControl;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-import java.time.Duration;
 
 /**
  * Phase E.7 / P3.6 — retinal inference jobs: reading them, and moving them
@@ -120,8 +101,6 @@ public class RetinalResultsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultsApiController.class);
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
 
@@ -135,6 +114,18 @@ public class RetinalResultsApiController {
     private StudyResourceAccess access() {
         if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
         return access;
+    }
+
+    private IngestItemVisibility itemVisibility;
+
+    /**
+     * A parked job (no visit yet) belongs to the pool of its ingest item: visible
+     * when that item is (origin study of a staff upload), open to every reconciler
+     * when it has none (anonymous portal), like the ingest inbox itself.
+     */
+    private boolean mayWorkOnJob(long jobId, HttpSession session) {
+        if (itemVisibility == null) itemVisibility = new IngestItemVisibility(dataSource, access());
+        return itemVisibility.canSeeJob(jobId, session);
     }
 
     /** P3.6 — the job row, its visibility and its files, shared with the split-out controllers. */
@@ -778,6 +769,11 @@ public class RetinalResultsApiController {
                                            HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        // Filing a scan under a visit is reconciliation, gated like the
+        // ingest inbox's bind.
+        if (!IngestBindAuthorization.roleMayReconcile(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("binding scans to visits");
+        }
 
         if (body == null || body.eventCrfId() <= 0) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -801,6 +797,11 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(403).body(Map.of("message", ctx.errorMessage()));
         }
 
+        if (!mayWorkOnJob(jobId, session)) {
+            // Before any state check: a foreign parked job is "not found", not "already bound".
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
         BindOutcome outcome = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                 eventCrfId, ctx.currentUser(), ctx.currentStudy());
         return switch (outcome.status()) {
@@ -899,6 +900,9 @@ public class RetinalResultsApiController {
                                                 HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        if (!IngestBindAuthorization.roleMayReconcile(ClinicalWriteAuthorization.roleIdOf(session))) {
+            return ClinicalWriteAuthorization.forbidden("binding scans to visits");
+        }
 
         if (body == null || body.jobIds() == null || body.jobIds().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -942,6 +946,9 @@ public class RetinalResultsApiController {
             if (batchForbidden) {
                 out = new BindOutcome(jobId, BindOutcomeStatus.FORBIDDEN,
                         null, ctx.errorMessage());
+            } else if (!mayWorkOnJob(jobId, session)) {
+                out = new BindOutcome(jobId, BindOutcomeStatus.NOT_FOUND, null,
+                        "No retinal_inference_job with id " + jobId);
             } else {
                 out = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
                         eventCrfId, ctx.currentUser(), ctx.currentStudy());
@@ -1039,7 +1046,6 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return BindContext.forbidden(
@@ -1175,6 +1181,10 @@ public class RetinalResultsApiController {
                                       HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        // A finished job writes its metrics into the visit's CRF.
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "running retinal analyses");
+        if (roleRefusal != null) return roleRefusal;
 
         FailedJob job;
         try (Connection c = dataSource.getConnection()) {
@@ -1194,10 +1204,8 @@ public class RetinalResultsApiController {
         // (e.g. planned-visit binding before the dispatch gate was
         // relaxed) — same end state regardless of which way they got
         // there, same fix.
-        if (!"failed".equals(job.status) && !"remote_pending".equals(job.status)) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
-        }
+        // (The status check follows the visibility check below: answered first,
+        // a 409 would tell a caller the status of a job of a study they cannot see.)
         // 2026-06-23 — accept either binding path. Planned-visit jobs
         // have event_crf_id=null + a valid study_event_id; resolve the
         // owning study_subject via whichever is set.
@@ -1228,11 +1236,14 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Job " + jobId + " belongs to a different study"));
+        }
+        if (!"failed".equals(job.status) && !"remote_pending".equals(job.status)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
         }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
@@ -1311,7 +1322,7 @@ public class RetinalResultsApiController {
      *  `bm` is intentionally absent — `layers` already covers it.
      *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
     private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
-            java.util.Set.of("fluid", "ga", "onl", "pr", "layers");
+            java.util.Set.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet");
 
     /**
      * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})
@@ -1339,6 +1350,10 @@ public class RetinalResultsApiController {
                                      HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
+        // A finished job writes its metrics into the visit's CRF.
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "running retinal analyses");
+        if (roleRefusal != null) return roleRefusal;
 
         String newTask = body == null ? null : body.get("task");
         if (newTask != null) newTask = newTask.trim().toLowerCase(java.util.Locale.ROOT);
@@ -1393,16 +1408,8 @@ public class RetinalResultsApiController {
                     "message", "Source job " + sourceJobId + " has no visit binding — "
                             + "park it to a visit first via /bind"));
         }
-        if (newTask.equals(source.task)) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", "Source job is already task=" + newTask
-                            + "; use /retry to re-dispatch the same task"));
-        }
-        if (sourceSha256 == null || sourceSha256.isBlank()) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Source job is missing e2e_sha256 — predates the "
-                            + "dedup gate; cannot rerun-as safely"));
-        }
+        // (The task and sha256 state checks follow the visibility check below, so
+        // a job of a study the caller cannot see answers 403 and not a state oracle.)
 
         // ---- visibility check via the source job's binding -----------
         // Prefer event_crf when available (already-opened-CRF flow). Fall
@@ -1447,11 +1454,20 @@ public class RetinalResultsApiController {
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = access().visibleStudyIds(session);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Source job " + sourceJobId + " belongs to a different study"));
+        }
+        if (newTask.equals(source.task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Source job is already task=" + newTask
+                            + "; use /retry to re-dispatch the same task"));
+        }
+        if (sourceSha256 == null || sourceSha256.isBlank()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Source job is missing e2e_sha256 — predates the "
+                            + "dedup gate; cannot rerun-as safely"));
         }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
@@ -1796,7 +1812,6 @@ public class RetinalResultsApiController {
     /** Inline state-only row carrier — bridges JDBC ResultSet to DTO assembly. */
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
     private static final class ParkedJob {
-        long jobId;
         String status;
     }
 
@@ -1807,7 +1822,6 @@ public class RetinalResultsApiController {
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
                 ParkedJob job = new ParkedJob();
-                job.jobId = rs.getLong("job_id");
                 job.status = rs.getString("status");
                 return job;
             }

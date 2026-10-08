@@ -93,8 +93,12 @@ public class ViewItemDetailServlet extends SecureController {
         // finds each item metadata for each version
         for (int i = 0; i < versions.size(); i++) {
             Integer versionId = (Integer) versions.get(i);
-            CRFVersionBean version = (CRFVersionBean) cvdao.findByPK(versionId.intValue());
+            // The lookup used to unbox versionId before the guard on the next
+            // line tested it for null, so a null entry in the version list
+            // threw instead of being skipped. Moving it inside the guard also
+            // saves a DAO round trip for ids the loop then ignores.
             if (versionId != null && versionId.intValue() > 0) {
+                CRFVersionBean version = (CRFVersionBean) cvdao.findByPK(versionId.intValue());
                 // YW 08-22-2007
                 if (igmdao.versionIncluded(versionId)) {
                     imfBean = ifmdao.findByItemIdAndCRFVersionId(item.getId(), versionId.intValue());

@@ -453,6 +453,12 @@ public final class AuditTypeIds {
     public static final int EVENT_CRF_REOPENED               = 138;
     /** A removed CRF restored. */
     public static final int EVENT_CRF_RESTORED               = 139;
+    /**
+     * A CRF removed, with the reason given for it; 139 is its inverse.
+     * Written by {@code EventCrfRemovalApiController}, seeded by
+     * {@code lc-muw-2026-09-30-audit-type-event-crf-removed.xml}.
+     */
+    public static final int EVENT_CRF_REMOVED                = 155;
     /** The reason given for changing a value after the CRF was completed; carries the reason. */
     public static final int ITEM_DATA_REASON_FOR_CHANGE      = 140;
 
@@ -465,4 +471,89 @@ public final class AuditTypeIds {
      * {@code lc-muw-2026-12-09-ingest-item-pixel-fingerprint.xml}.
      */
     public static final int INGEST_DUPLICATE_HELD            = 141;
+
+    /**
+     * R1.2 (2026-09-30) — a security setting changed on the password-policy
+     * page: one of the password rules, or the account lockout the legacy
+     * {@code /Configure} page edited. Writer:
+     * {@code AdminApiController.putPasswordPolicy}, one row per changed key;
+     * audit_table = {@code configuration}, entity_id = the row's id,
+     * entity_name = the key, old and new value as stored. Seeded by
+     * {@code lc-muw-2026-09-30-audit-type-system-setting.xml}.
+     */
+    public static final int SYSTEM_SETTING_CHANGED           = 145;
+
+    /**
+     * A clean second pass of double data entry given back the
+     * {@code date_validate_completed} the pass itself cleared before
+     * 1.5.0-beta.16-muw. Written only by
+     * {@code lc-muw-2026-09-30-dde-second-pass-date.xml}, which seeds it,
+     * one row per restored event CRF.
+     */
+    public static final int DDE_SECOND_PASS_DATE_RESTORED    = 150;
+
+    /**
+     * A CRF's name or description changed ({@code PUT /crfs/{oid}}); one row
+     * per field, {@code entity_name} naming it, old and new value. Seeded by
+     * {@code lc-muw-2026-09-30-audit-type-crf-field-updated.xml}.
+     */
+    public static final int CRF_FIELD_UPDATED                = 142;
+
+    /*
+     * 143-144 (lc-muw-2026-09-30-audit-types-event-crf-migration.xml), moving
+     * existing event CRFs to another version of their CRF.
+     */
+
+    /**
+     * A batch move of existing event CRFs to another version of their CRF.
+     * One row per run on the {@code crf} row; {@code new_value} packs the
+     * study, both versions and the counts. Each event CRF's own change is in
+     * the rows the {@code event_crf} triggers write (33 version, 32 SDV).
+     */
+    public static final int EVENT_CRF_BATCH_MIGRATION        = 143;
+    /**
+     * A signed event CRF's signature removed because it moved to another
+     * version: {@code status_id} from signed back to its unsigned status. The
+     * {@code event_crf} trigger does not audit that transition.
+     */
+    public static final int EVENT_CRF_SIGNATURE_REMOVED      = 144;
+
+    /*
+     * 190-191 (lc-muw-2026-09-30-audit-types-crf-lifecycle-cascade.xml): an
+     * event CRF that the removal of its CRF, or of its CRF version, took with
+     * it. One row per event CRF, on the event CRF, in the event_crf trigger's
+     * shape (column "Status", status ids as values), so the change is in the
+     * study's and the subject's audit log. The restore writes
+     * EVENT_CRF_RESTORED (139) per event CRF. CrfLifecycleCascade reads the
+     * latest of these rows to tell which removal holds an event CRF.
+     */
+
+    /** An event CRF auto-removed with its CRF. */
+    public static final int EVENT_CRF_REMOVED_WITH_CRF       = 190;
+    /** An event CRF auto-removed with its CRF version. */
+    public static final int EVENT_CRF_REMOVED_WITH_VERSION   = 191;
+
+    /*
+     * 192-194 (lc-muw-2026-10-07-audit-types-deidentification.xml): the
+     * server-side de-identification check of uploaded files on a deployment
+     * that requires it ({@code DeidUploadGate}, {@code DeidentificationScanner}).
+     * None carries a value read from a file: field names and a SHA-256 only.
+     */
+
+    /**
+     * An accepted upload's de-identification confirmation: written against the
+     * new {@code ingest_item}, by the uploading user; {@code new_value} is
+     * {@code sha256=<hex>;confirmed_by=<user id>}, {@code audit_date} the time.
+     */
+    public static final int DEID_UPLOAD_CONFIRMED            = 192;
+    /**
+     * An upload refused for not being de-identified: {@code entity_name} is
+     * {@code DEID_REQUIRED: <field names>}, {@code new_value} the file's SHA-256.
+     */
+    public static final int DEID_UPLOAD_REJECTED             = 193;
+    /**
+     * A stored file, or an ingest row, found by the nightly scan to carry
+     * something the upload check would have refused; field names and SHA-256 only.
+     */
+    public static final int DEID_SCAN_FINDING                = 194;
 }

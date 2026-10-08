@@ -23,6 +23,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -51,9 +53,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
  */
 @SuppressWarnings("all")
 public class CreateStudyServlet extends SecureController {
-    /**
-	 * 
-	 */
 	private static final long serialVersionUID = 6458728290365303810L;
 
 	public static final String INPUT_START_DATE = "startDate";
@@ -254,9 +253,6 @@ public class CreateStudyServlet extends SecureController {
      * timingMap.put("Prospective", "Prospective"); }
      */
 
-    /**
-     *
-     */
     @Override
     public void mayProceed() throws InsufficientPermissionException {
         if (ub.isSysAdmin()) {
@@ -266,6 +262,13 @@ public class CreateStudyServlet extends SecureController {
         addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
         throw new InsufficientPermissionException(Page.STUDY_LIST_SERVLET, resexception.getString("not_admin"), "1");
 
+    }
+
+    /** GET shows the form; the wizard steps and creating the study take a POST. */
+    @Override
+    protected boolean acceptsGet(HttpServletRequest request) {
+        String action = request.getParameter("action");
+        return action == null || action.trim().isEmpty();
     }
 
     /**
@@ -368,8 +371,6 @@ public class CreateStudyServlet extends SecureController {
     /**
      * Validates the first section of study and save it into study bean
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy1() throws Exception {
@@ -621,8 +622,6 @@ public class CreateStudyServlet extends SecureController {
     /**
      * Validates the forth section of study and save it into study bean
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy4() throws Exception {
@@ -676,8 +675,6 @@ public class CreateStudyServlet extends SecureController {
     /**
      * Validates the forth section of study and save it into study bean
      *
-     * @param request
-     * @param response
      * @throws Exception
      */
     private void confirmStudy5() throws Exception {
@@ -896,7 +893,6 @@ public class CreateStudyServlet extends SecureController {
     /**
      * Constructs study bean from the first section
      *
-     * @param request
      * @return
      */
     private StudyBean createStudyBean() {
@@ -921,7 +917,6 @@ public class CreateStudyServlet extends SecureController {
     /**
      * Updates the study bean with inputs from the second section
      *
-     * @param request
      * @return true if study type is Interventional, otherwise false
      */
     private boolean updateStudy2() {
@@ -1011,7 +1006,6 @@ public class CreateStudyServlet extends SecureController {
     /**
      * Sets map in request for different JSP pages
      *
-     * @param request
      * @param isInterventional
      */
     private void setMaps(boolean isInterventional) {

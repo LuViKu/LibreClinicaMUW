@@ -250,7 +250,7 @@ public class StudyController {
 			errorObjects.add(errorOBject);
 		}
 
-		if (status != null && !status.equalsIgnoreCase("available") && !status.equalsIgnoreCase("design") && !status.equals("")) {
+		if (status != null && !status.equalsIgnoreCase("available") && !status.equalsIgnoreCase("design") && !status.isEmpty()) {
 			ErrorObject errorOBject = createErrorObject("Study Object", "Status Field Should have 'Available' or 'Design' Status only, If left empty , will default to 'Design' Mode", "Status");
 			errorObjects.add(errorOBject);
 		}
@@ -1046,7 +1046,7 @@ public class StudyController {
 	public StudyDTO buildStudyDTO(String uniqueProtocolID, String name, String briefSummary, String principalInvestigator, String sponsor, String expectedTotalEnrollment, String protocolType,
 			String status, String startDate, ArrayList<UserRole> userList) {
 		if (status != null) {
-			if (status.equals(""))
+			if (status.isEmpty())
 				status = "design";
 		}
 
@@ -1103,7 +1103,7 @@ public class StudyController {
 		ResourceBundle resword = at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider.getWordsBundle();
 		if (resword.getString("available").equalsIgnoreCase(status))
 			study.setStatus(Status.AVAILABLE);
-		else if (resword.getString("design").equalsIgnoreCase(status) || status.equals(""))
+		else if (resword.getString("design").equalsIgnoreCase(status) || status.isEmpty())
 			study.setStatus(Status.PENDING);
 
 		study.setIdentifier(uniqueProtocolId);

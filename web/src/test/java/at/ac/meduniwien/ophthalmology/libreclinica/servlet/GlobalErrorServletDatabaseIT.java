@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Objects;
 
 import javax.sql.DataSource;
 
@@ -75,6 +76,7 @@ import jakarta.servlet.ServletException;
  * {@code audit_log_event} table + the OPERATION_FAILED lookup row
  * the A1 changeset seeds.
  */
+@SuppressWarnings("resource") // the web application context lives as long as the servlet context it is attached to
 class GlobalErrorServletDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /* ====================================================================== */
@@ -227,7 +229,7 @@ class GlobalErrorServletDatabaseIT extends AbstractApiControllerDatabaseIT {
         Assertions.assertEquals(500, resp.getStatus(),
                 "Expected HTTP 500");
         Assertions.assertTrue(resp.getContentType() != null
-                        && resp.getContentType().startsWith("text/html"),
+                        && Objects.requireNonNull(resp.getContentType()).startsWith("text/html"),
                 "Expected text/html Content-Type; got " + resp.getContentType());
 
         // MockServletContext doesn't render JSPs; we assert on the

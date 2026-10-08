@@ -527,10 +527,10 @@ public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
     // private int builtinIndex(String itemName) {
     // for (int i = 0; i < list.size(); i++) {
     // String attribute = (String) list.get(i);
-    private int builtinIndex(String itemName, String[] attributes) {
+    int builtinIndex(String itemName, String[] attributes) {
         for (int i = 0; i < attributes.length; ++i) {
             logger.debug("itemName[" + itemName + "] attribute[" + attributes[i] + "]");
-            if (itemName != null & itemName.startsWith(attributes[i])) {
+            if (itemName != null && itemName.startsWith(attributes[i])) {
                 return i;
             }
         }

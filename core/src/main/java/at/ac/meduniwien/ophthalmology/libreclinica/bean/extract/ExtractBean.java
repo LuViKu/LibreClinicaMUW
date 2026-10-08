@@ -299,7 +299,7 @@ public class ExtractBean {
         answer.nextRow();
 
         String siteName = getSiteName();
-        if (!siteName.equals("")) {
+        if (!siteName.isEmpty()) {
             answer.nextCell("Site Name");
             answer.nextCell(siteName);
             answer.nextRow();
@@ -944,25 +944,6 @@ public class ExtractBean {
             subjects.add(sub);
         }// for
     }// addStudySubjectData
-
-    /*
-     * public void addStudySubjectData(Integer studySubjectId, String
-     * studySubjectLabel, Date dateOfBirth, String gender, Integer
-     * subjectStatusId, Boolean dobCollected, String uniqueIdentifier, String
-     * subjectSecondaryLabel) { if (!subjectsAdded.containsKey(studySubjectId))
-     * { StudySubjectBean sub = new StudySubjectBean();
-     * sub.setId(studySubjectId.intValue()); sub.setLabel(studySubjectLabel);
-     *
-     * sub.setDateOfBirth(dateOfBirth); if (gender != null && gender.length() >
-     * 0) { sub.setGender(gender.charAt(0)); } else { sub.setGender(' '); }
-     * sub.setStatus(Status.get(subjectStatusId.intValue())); //
-     * sub.setSecondaryLabel(secondaryID);//????
-     * sub.setUniqueIdentifier(uniqueIdentifier);
-     * sub.setSecondaryLabel(subjectSecondaryLabel); //
-     * sub.setEnrollmentDate(enrollmentDate); // TODO need to find enrollment
-     * date, later, tbh subjects.add(sub); subjectsAdded.put(studySubjectId,
-     * Boolean.TRUE); } }
-     */
 
     /**
      * @vbc 08/06/2008 NEW EXTRACT DATA IMPLEMENTATION Combines the two HashMaps
@@ -1668,14 +1649,17 @@ public class ExtractBean {
     }
 
     protected String getCRFCompletionDate(int h, int i, int j) {
-        StudyEventBean seb = getEvent(h, i, j);
+        return crfCompletionDate(getEvent(h, i, j), sdf);
+    }
 
-        EventCRFBean eventCRF = null;
-        if (seb.getEventCRFs().size() > 0) {
-            eventCRF = (EventCRFBean) seb.getEventCRFs().get(0);
+    /** The completion date of the event's first CRF, formatted with {@code sdf}. */
+    static String crfCompletionDate(StudyEventBean seb, SimpleDateFormat sdf) {
+        if (seb.getEventCRFs().isEmpty()) {
+            return "";
         }
-
-        return eventCRF.getDateValidateCompleted() == null ? sdf.format(eventCRF.getDateCompleted()) : sdf.format(eventCRF.getDateValidateCompleted());// need
+        EventCRFBean eventCRF = (EventCRFBean) seb.getEventCRFs().get(0);
+        java.util.Date completed = eventCRF.getDateValidateCompleted() != null ? eventCRF.getDateValidateCompleted() : eventCRF.getDateCompleted();
+        return completed == null ? "" : sdf.format(completed);// need
         // to
         // be
         // fixed?
@@ -2635,7 +2619,7 @@ public class ExtractBean {
             itemDescription = pitemDescription;
             itemName = pitemName;
 
-            if(pitemDatatypeId==9) {
+            if(pitemDatatypeId != null && pitemDatatypeId == 9) {
                 SimpleDateFormat sdf = new SimpleDateFormat(ApplicationConstants.getDateFormatInItemData());
                 sdf.setLenient(false);
                 try {

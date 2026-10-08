@@ -56,6 +56,7 @@ public class SqlProcessingFunction extends ProcessingFunction implements Seriali
      * in extract, we do not try datainfo (it has to be correct somewhere)
      * 
      */
+    @Override
     public ProcessingResultType run() {
         Connection conn = null;
         ProcessingResultType resultError = null;
