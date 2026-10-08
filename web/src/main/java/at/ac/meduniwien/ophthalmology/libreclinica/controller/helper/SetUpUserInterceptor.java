@@ -44,7 +44,7 @@ public class SetUpUserInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(@NonNull HttpServletRequest httpServletRequest, @NonNull HttpServletResponse httpServletResponse, @NonNull Object o) throws Exception {
 
-        Locale locale = ResourceBundleProvider.localeMap.get(Thread.currentThread());
+        Locale locale = ResourceBundleProvider.getLocale();
         if (locale == null) {
             ResourceBundleProvider.updateLocale(LocaleResolver.getLocale(httpServletRequest));
         }
