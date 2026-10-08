@@ -347,6 +347,9 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
                         + ",\"eventCrfId\":" + f.eventCrf + "}")))
                 .write().ownOk(x -> x.ok() && !x.body.contains("\"bound\":[]"))
                 .alsoRefused(x -> x.ok() && x.body.contains("\"bound\":[]"));
+        c("IngestInboxApiController#startAnalysis", f -> json(post(i + f.ingestOct + "/analyses"),
+                "{\"task\":\"fluid\"}")).write()
+                .ownOk(x -> x.status == 202 && x.body.contains("\"jobId\""));
         c("IngestInboxApiController#unbind", f -> json(post(i + f.ingestBound + "/unbind"), "{\"dismiss\":false}")).write();
         c("IngestInboxApiController#dismiss", f -> json(post(i + f.ingestUnbound + "/dismiss"), "{\"reason\":\"x\"}")).write();
         c("IngestInboxApiController#restore", f -> post(i + f.ingestDismissed + "/restore")).write();

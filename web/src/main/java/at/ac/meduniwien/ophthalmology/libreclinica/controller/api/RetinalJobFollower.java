@@ -93,6 +93,31 @@ public final class RetinalJobFollower {
     /* Pure logic                                                          */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * The tasks an operator may start by hand: rerun-as, "start an analysis"
+     * on a filed scan, and a visit definition's default tasks. One list, so
+     * a task added to the runner is offered everywhere at once. {@code bm}
+     * is absent on purpose, {@code layers} covers it. Mirrors
+     * {@code RERUN_TASKS} in RetinalMetricsView.vue and the CHECK constraint
+     * on {@code event_definition_retinal_task}.
+     */
+    public static final List<String> STARTABLE_TASKS =
+            List.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet");
+
+    public static boolean isStartableTask(String task) {
+        return task != null && STARTABLE_TASKS.contains(task);
+    }
+
+    /**
+     * Whether a file of this kind can be analysed at all: today an OCT volume
+     * ({@code kind = 'e2e'}). The SOP class is taken so that a DICOM OCT
+     * volume can be admitted here, in one place, once the runner reads one;
+     * it is not consulted yet.
+     */
+    public static boolean isAnalysable(String kind, String sopClassUid) {
+        return "e2e".equalsIgnoreCase(kind);
+    }
+
     /** What is already there for one task of the scan. */
     public record ExistingJob(long jobId, String task, String status) {}
 
@@ -210,7 +235,7 @@ public final class RetinalJobFollower {
         try (Connection c = dataSource.getConnection()) {
             Scan scan = readScan(c, ingestItemId);
             if (scan == null) return Ensured.skipped("no such ingest_item");
-            if (!"e2e".equalsIgnoreCase(scan.kind())) return Ensured.skipped("not an OCT volume");
+            if (!isAnalysable(scan.kind(), null)) return Ensured.skipped("not an OCT volume");
             if (scan.boundStudyEventId() == null && scan.boundEventCrfId() == null) {
                 return Ensured.skipped("not bound to a visit");
             }
@@ -329,6 +354,99 @@ public final class RetinalJobFollower {
             }
         }
         return new CatchUp(items.size(), attached, revived, enqueued, failed);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* start                                                               */
+    /* ------------------------------------------------------------------ */
+
+    /** What {@link #start} did, or why it did nothing. */
+    public enum StartOutcome {
+        STARTED, NOT_FOUND, NOT_BOUND, NOT_ANALYSABLE, INFERENCE_DISABLED, DUPLICATE, NO_DISPATCHER
+    }
+
+    /**
+     * @param jobId the new job for {@code STARTED}, the job already there for
+     *              {@code DUPLICATE}, else null
+     */
+    public record Started(StartOutcome outcome, Long jobId, String status) {
+        static Started not(StartOutcome why) {
+            return new Started(why, null, null);
+        }
+    }
+
+    /**
+     * Start one task on one filed scan, because an operator asked for it.
+     *
+     * <p>The imaging plan decides what a bind starts; this is for the scan the
+     * plan did not cover, or the task somebody wants in addition. The same job
+     * row a plan would have written, dispatched the same way. The caller has
+     * already checked the role, the item's visibility, the record's state and
+     * that the file is on disk; this checks what only the scan and its jobs can
+     * say.
+     *
+     * <p>A task that already has a job that is not cancelled is not started
+     * again: {@code DUPLICATE} names that job, which is where a retry belongs.
+     * The partial unique index on {@code (ingest_item_id, task)} catches two
+     * requests that cross.
+     */
+    public Started start(long ingestItemId, String task, IngestBindService.Actor actor) throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            Scan scan = readScan(c, ingestItemId);
+            if (scan == null) return Started.not(StartOutcome.NOT_FOUND);
+            if (scan.boundStudyEventId() == null && scan.boundEventCrfId() == null) {
+                return Started.not(StartOutcome.NOT_BOUND);
+            }
+            if (!isAnalysable(scan.kind(), null)) return Started.not(StartOutcome.NOT_ANALYSABLE);
+
+            Integer studyId = VisitImagingPlan.studyOfBinding(c, scan.boundEventCrfId(), scan.boundStudyEventId());
+            if (studyId == null || !new StudySettingService(dataSource)
+                    .isEnabled(studyId, StudySettingService.INFERENCE_ENABLED)) {
+                return Started.not(StartOutcome.INFERENCE_DISABLED);
+            }
+            ExistingJob live = liveJobFor(existingJobs(c, scan), task);
+            if (live != null) return new Started(StartOutcome.DUPLICATE, live.jobId(), live.status());
+            // As in ensure: a 'queued' row nobody hands on would be drained by
+            // the local placeholder worker.
+            if (!canDispatch()) return Started.not(StartOutcome.NO_DISPATCHER);
+
+            String status = initialStatus();
+            long jobId;
+            try {
+                jobId = insertJob(c, scan, task, status);
+            } catch (SQLException e) {
+                if (!"23505".equals(e.getSQLState())) throw e;
+                // Another request started the same task in between.
+                ExistingJob raced = liveJobFor(existingJobs(c, scan), task);
+                if (raced == null) throw e;
+                return new Started(StartOutcome.DUPLICATE, raced.jobId(), raced.status());
+            }
+            auditStart(jobId, task, actor, visitOf(c, ingestItemId));
+            LOG.info("ingest_item {}: retinal task {} started by hand as job {}", ingestItemId, task, jobId);
+            dispatchAsync(scan, List.of(jobInfo(jobId, task)), actor);
+            return new Started(StartOutcome.STARTED, jobId, status);
+        }
+    }
+
+    /**
+     * The scan's jobs that are not cancelled, oldest first: what the visit
+     * page lists beside the file, and what makes a task "already there".
+     */
+    public List<ExistingJob> liveJobs(long ingestItemId) throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            Scan scan = readScan(c, ingestItemId);
+            if (scan == null) return List.of();
+            String cancelled = RetinalInferenceJobStatus.CANCELLED.dbValue();
+            return existingJobs(c, scan).stream().filter(j -> !cancelled.equals(j.status())).toList();
+        }
+    }
+
+    private static ExistingJob liveJobFor(List<ExistingJob> jobs, String task) {
+        String cancelled = RetinalInferenceJobStatus.CANCELLED.dbValue();
+        for (ExistingJob j : jobs) {
+            if (task.equals(j.task()) && !cancelled.equals(j.status())) return j;
+        }
+        return null;
     }
 
     /* ------------------------------------------------------------------ */
@@ -543,6 +661,25 @@ public final class RetinalJobFollower {
                     oldValue, newValue, null, visit);
         } catch (RuntimeException e) {
             LOG.warn("could not audit {} of ingest_item {}: {}", label, ingestItemId, e.getMessage());
+        }
+    }
+
+    /**
+     * One row per job started by hand, on the job, so the subject's audit log
+     * shows who asked for which analysis; {@code visit} places it there.
+     */
+    private void auditStart(long jobId, String task, IngestBindService.Actor actor, Integer visit) {
+        if (jobId <= 0 || jobId > Integer.MAX_VALUE) {
+            LOG.warn("could not audit the start of job {}: id out of the audit column's range", jobId);
+            return;
+        }
+        try {
+            EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                    AuditTypeIds.RETINAL_INFERENCE_ENQUEUED, actor.user(), actor.study(), null,
+                    "Retinal analysis started by hand — task=" + task,
+                    "retinal_inference_job", (int) jobId, "task", "", task, null, visit);
+        } catch (RuntimeException e) {
+            LOG.warn("could not audit the start of job {}: {}", jobId, e.getMessage());
         }
     }
 

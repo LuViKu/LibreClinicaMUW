@@ -173,6 +173,8 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         int ingestUnbound;
         int ingestFresh;
         int ingestDismissed;
+        /** An OCT volume filed to the visit, its file on disk, with no job yet. */
+        int ingestOct;
         int dataset;
         int archivedFile;
         long exportJob;
@@ -451,6 +453,16 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
                             + "'upload', '" + site.tag.toLowerCase() + "-cam', '" + dismissed.toString().replace('\\', '/')
                             + "', '" + site.tag.toLowerCase() + "-" + n + "-dismissed.jpg', 'OD', now(), 'DISMISSED', '"
                             + f.pid + "', '" + sha(site, n, 7) + "', 20, " + site.id + ") RETURNING ingest_item_id");
+
+            Path octFile = dir.resolve("filed.e2e");
+            Files.write(octFile, (f.label + " filed scan").getBytes(StandardCharsets.UTF_8));
+            f.ingestOct = LifecycleFixtures.insertOne(c,
+                    "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
+                            + "laterality, received_at, status, bound_study_subject_id, bound_study_event_id, "
+                            + "patient_id, sha256, scan_index, byte_size) VALUES ('e2e', 'upload', '"
+                            + site.tag.toLowerCase() + "-oct', '" + octFile.toString().replace('\\', '/') + "', '"
+                            + site.tag.toLowerCase() + "-" + n + "-filed.e2e', 'OD', now(), 'BOUND', " + f.ss + ", "
+                            + f.event + ", '" + f.pid + "', '" + sha(site, n, 9) + "', 0, 20) RETURNING ingest_item_id");
 
             // A parked OCT job: no visit yet; its ingest item (origin = the uploader's study) is what places it.
             Path parkedFile = dir.resolve("parked.e2e");

@@ -78,4 +78,20 @@ class RetinalJobFollowerTest {
                 List.of(new ExistingJob(7, "fluid", "done"), new ExistingJob(9, "fluid", "cancelled")));
         assertEquals(List.of(new Step(Action.ATTACH, "fluid", 7L)), steps);
     }
+
+    @Test
+    void onlyOctVolumesAreAnalysable() {
+        assertTrue(RetinalJobFollower.isAnalysable("e2e", null));
+        assertTrue(RetinalJobFollower.isAnalysable("E2E", null));
+        assertTrue(!RetinalJobFollower.isAnalysable("image", null));
+        assertTrue(!RetinalJobFollower.isAnalysable("dicom", "1.2.840.10008.5.1.4.1.1.77.1.5.4"));
+        assertTrue(!RetinalJobFollower.isAnalysable(null, null));
+    }
+
+    @Test
+    void theStartableTasksAreTheRerunList() {
+        assertEquals(List.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet"), RetinalJobFollower.STARTABLE_TASKS);
+        assertTrue(!RetinalJobFollower.isStartableTask("bm"), "layers covers bm");
+        assertTrue(!RetinalJobFollower.isStartableTask(null));
+    }
 }

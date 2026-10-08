@@ -1315,14 +1315,6 @@ public class RetinalResultsApiController {
         return ResponseEntity.accepted().body(resp);
     }
 
-    /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
-     *  runner profiles + the FUNDUS overlay's recognised task discriminator.
-     *  2026-06-25: `layers` added — returns the full IOWA 11-surface stack
-     *  + BM in one job (feeds the BscanViewer overlay + CRT compute).
-     *  `bm` is intentionally absent — `layers` already covers it.
-     *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
-    private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
-            java.util.Set.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet");
 
     /**
      * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})
@@ -1357,18 +1349,20 @@ public class RetinalResultsApiController {
 
         String newTask = body == null ? null : body.get("task");
         if (newTask != null) newTask = newTask.trim().toLowerCase(java.util.Locale.ROOT);
-        if (newTask == null || !ALLOWED_RERUN_TASKS.contains(newTask)) {
+        // The rerun-as dropdown's tasks: RetinalJobFollower.STARTABLE_TASKS.
+        if (!RetinalJobFollower.isStartableTask(newTask)) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "task must be one of " + ALLOWED_RERUN_TASKS));
+                    "message", "task must be one of " + RetinalJobFollower.STARTABLE_TASKS));
         }
 
         FailedJob source;
         Integer sourceStudyEventId;
         String sourceSha256;
+        Long sourceIngestItemId;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT status, status_message, event_crf_id, study_event_id, task, "
-                             + "       e2e_path, eye_laterality, scan_index, e2e_sha256 "
+                             + "       e2e_path, eye_laterality, scan_index, e2e_sha256, ingest_item_id "
                              + "  FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, sourceJobId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -1388,6 +1382,8 @@ public class RetinalResultsApiController {
                 source.eyeLaterality = rs.getString("eye_laterality");
                 source.scanIndex = rs.getInt("scan_index");
                 sourceSha256 = rs.getString("e2e_sha256");
+                long itemId = rs.getLong("ingest_item_id");
+                sourceIngestItemId = rs.wasNull() ? null : itemId;
             }
         } catch (SQLException sqlEx) {
             LOG.error("Failed to fetch source retinal job {} for rerun-as: {}",
@@ -1485,27 +1481,9 @@ public class RetinalResultsApiController {
         }
 
         // ---- dedup gate: prefer surfacing an existing twin row over a 500 -
-        long existingTwinJobId = -1;
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT job_id FROM retinal_inference_job "
-                             + "WHERE e2e_sha256 = ? AND scan_index = ? AND task = ?")) {
-            ps.setString(1, sourceSha256);
-            ps.setInt(2, source.scanIndex);
-            ps.setString(3, newTask);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) existingTwinJobId = rs.getLong(1);
-            }
-        } catch (SQLException sqlEx) {
-            // Non-fatal — fall through to the INSERT and let the unique
-            // constraint catch any race.
-            LOG.warn("rerun-as dedup probe failed for job {}: {}", sourceJobId, sqlEx.getMessage());
-        }
+        long existingTwinJobId = rerunTwin(sourceIngestItemId, sourceSha256, source.scanIndex, newTask, sourceJobId);
         if (existingTwinJobId > 0) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "A job already exists for this scan + task — "
-                            + "navigate there instead",
-                    "existingJobId", existingTwinJobId));
+            return rerunTwinConflict(existingTwinJobId);
         }
 
         // 2026-06-24 — also threads study_event_id so a
@@ -1513,13 +1491,16 @@ public class RetinalResultsApiController {
         // a child job with the same planned-visit binding. Without
         // this the new job would land orphaned (both bindings null)
         // and silently drop off the timeline endpoints.
+        // 2026-10-09 — and ingest_item_id: the scan's jobs are found by it
+        // (unbind detaches and cancels by it, the visit page lists by it),
+        // so a re-run without it was invisible to all of that.
         long newJobId;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO retinal_inference_job ("
                              + "event_crf_id, study_event_id, task, e2e_path, "
-                             + "eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
-                             + ") VALUES (?, ?, ?, ?, ?, 'remote_pending', ?, ?, ?)",
+                             + "eye_laterality, status, scan_index, enqueued_at, e2e_sha256, ingest_item_id"
+                             + ") VALUES (?, ?, ?, ?, ?, 'remote_pending', ?, ?, ?, ?)",
                      Statement.RETURN_GENERATED_KEYS)) {
             if (source.eventCrfId == null) ps.setNull(1, java.sql.Types.INTEGER);
             else ps.setInt(1, source.eventCrfId);
@@ -1531,6 +1512,8 @@ public class RetinalResultsApiController {
             ps.setInt(6, source.scanIndex);
             ps.setTimestamp(7, Timestamp.from(Instant.now()));
             ps.setString(8, sourceSha256);
+            if (sourceIngestItemId == null) ps.setNull(9, java.sql.Types.BIGINT);
+            else ps.setLong(9, sourceIngestItemId);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (!keys.next()) {
@@ -1539,6 +1522,11 @@ public class RetinalResultsApiController {
                 newJobId = keys.getLong(1);
             }
         } catch (SQLException sqlEx) {
+            if ("23505".equals(sqlEx.getSQLState())) {
+                // Another request started the same task on this scan in between.
+                long raced = rerunTwin(sourceIngestItemId, sourceSha256, source.scanIndex, newTask, sourceJobId);
+                if (raced > 0) return rerunTwinConflict(raced);
+            }
             LOG.error("Failed to insert rerun-as job (source={}, task={}): {}",
                     sourceJobId, newTask, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
@@ -1586,6 +1574,43 @@ public class RetinalResultsApiController {
         resp.put("task", newTask);
         resp.put("status", "remote_pending");
         return ResponseEntity.accepted().body(resp);
+    }
+
+    /**
+     * The job a rerun-as would duplicate: one of the same task on the same
+     * scan that is not cancelled — by the scan's ingest item, as the unique
+     * index {@code ux_retinal_job_ingest_item_task} counts, and by digest and
+     * scan index for rows from before jobs had one. A cancelled job does not
+     * count; the index lets a cancelled task run again. -1 when there is none
+     * or the probe failed (the INSERT's unique index then decides).
+     */
+    private long rerunTwin(Long ingestItemId, String sha256, int scanIndex, String task, long sourceJobId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT job_id FROM retinal_inference_job "
+                             + " WHERE task = ? AND status <> 'cancelled' "
+                             + "   AND ((ingest_item_id IS NOT NULL AND ingest_item_id = ?) "
+                             + "        OR (e2e_sha256 = ? AND scan_index = ?)) "
+                             + " ORDER BY job_id LIMIT 1")) {
+            ps.setString(1, task);
+            if (ingestItemId == null) ps.setNull(2, java.sql.Types.BIGINT);
+            else ps.setLong(2, ingestItemId);
+            ps.setString(3, sha256);
+            ps.setInt(4, scanIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : -1;
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("rerun-as dedup probe failed for job {}: {}", sourceJobId, sqlEx.getMessage());
+            return -1;
+        }
+    }
+
+    private static ResponseEntity<?> rerunTwinConflict(long existingJobId) {
+        return ResponseEntity.status(409).body(Map.of(
+                "message", "A job already exists for this scan + task — "
+                        + "navigate there instead",
+                "existingJobId", existingJobId));
     }
 
     /** Slim row carrier for the failed-job retry handoff. */

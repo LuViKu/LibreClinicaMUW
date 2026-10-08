@@ -31,6 +31,12 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
@@ -117,6 +123,7 @@ public class IngestInboxApiController {
     private final RetinalInferenceApiController inferenceController;
 
     private StudyResourceAccess access;
+    private RetinalJobFollower follower;
     private IngestBindService binds;
     private IngestItemVisibility visibility;
 
@@ -156,11 +163,13 @@ public class IngestInboxApiController {
         return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
     }
 
+    private RetinalJobFollower follower() {
+        if (follower == null) follower = new RetinalJobFollower(dataSource, remoteClient, inferenceController);
+        return follower;
+    }
+
     private IngestBindService binds() {
-        if (binds == null) {
-            binds = new IngestBindService(dataSource,
-                    new RetinalJobFollower(dataSource, remoteClient, inferenceController));
-        }
+        if (binds == null) binds = new IngestBindService(dataSource, follower());
         return binds;
     }
 
@@ -185,7 +194,22 @@ public class IngestInboxApiController {
                            String modality, String originalFilename, Long byteSize,
                            Integer scanIndex, String receivedAt,
                            String previewUrl, boolean hasPreview,
-                           Suggestion suggestion, Twin twin) {}
+                           Suggestion suggestion, Twin twin,
+                           boolean analysable, List<ScanAnalysis> analyses) {
+
+        /** The same row with the scan's analyses filled in (the visit page's list). */
+        InboxRow withAnalyses(List<ScanAnalysis> list) {
+            return new InboxRow(id, kind, sourceKind, device, patientId, laterality, acquisitionDate,
+                    acquisitionDateSource, modality, originalFilename, byteSize, scanIndex, receivedAt,
+                    previewUrl, hasPreview, suggestion, twin, analysable, list);
+        }
+    }
+
+    /**
+     * A retinal analysis of a scan that is not cancelled, for the visit page:
+     * which tasks the scan already has, and where each one's results are.
+     */
+    public record ScanAnalysis(long jobId, String task, String status) {}
 
     /**
      * DR-036 — an earlier file that shows the same picture as this one.
@@ -422,6 +446,22 @@ public class IngestInboxApiController {
         } catch (SQLException e) {
             LOG.error("ingest by-event list failed for study_event {}: {}", studyEventId, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "could not list the visit's images"));
+        }
+        // What each scan has been analysed for, so the page can show the
+        // results and offer only the tasks it lacks.
+        try {
+            for (int i = 0; i < rows.size(); i++) {
+                InboxRow row = rows.get(i);
+                if (!row.analysable()) continue;
+                List<ScanAnalysis> analyses = new ArrayList<>();
+                for (RetinalJobFollower.ExistingJob j : follower().liveJobs(row.id())) {
+                    analyses.add(new ScanAnalysis(j.jobId(), j.task(), j.status()));
+                }
+                rows.set(i, row.withAnalyses(analyses));
+            }
+        } catch (SQLException e) {
+            // The files still list; a row left without analyses (null) offers nothing to start.
+            LOG.warn("retinal job lookup failed for study_event {}: {}", studyEventId, e.getMessage());
         }
         // Files that carry this subject's label but are not filed anywhere —
         // after "remove from visit: wrong visit", or a capture the resolver
@@ -763,6 +803,136 @@ public class IngestInboxApiController {
         return bindResponse(binds().dismiss(id, reason, actor(session)), id, "DISMISSED");
     }
 
+    // ----- POST /{id}/analyses -----
+
+    public record StartAnalysisRequest(String task) {}
+
+    /**
+     * Start one retinal analysis on a filed OCT scan.
+     *
+     * <p>A bind starts what the visit's imaging plan asks for, and rerun-as
+     * needs a job to start from. A filed scan that the plan did not cover had
+     * no way to be analysed at all; this is that way, one task at a time.
+     *
+     * <p>Answers, in this order: 403 for a role that may not enter data; 400
+     * for a task that is not offered; 404 for a file the caller cannot see
+     * (never 403, so a foreign id says nothing); 409 {@code NOT_BOUND} for a
+     * file not filed to a visit, {@code NOT_ANALYSABLE} for a file that is not
+     * an OCT volume, the {@link ClinicalRecordGuard} codes for a closed
+     * record, {@code SCAN_FILE_MISSING} for a file no longer on disk,
+     * {@code INFERENCE_DISABLED} for a study that runs no inference, and
+     * {@code ANALYSIS_EXISTS} with {@code existingJobId} for a task the scan
+     * already has; 202 with {@code jobId} otherwise.
+     */
+    @PostMapping(value = "/{id:[0-9]+}/analyses",
+                 consumes = MediaType.APPLICATION_JSON_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> startAnalysis(@PathVariable("id") long id,
+                                           @RequestBody StartAnalysisRequest req,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = access().guardSession(session);
+        if (guard != null) return guard;
+        // A finished job writes its metrics into the visit's CRF, as for a re-run.
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "running retinal analyses");
+        if (roleRefusal != null) return roleRefusal;
+
+        String task = req == null || req.task() == null ? null : req.task().trim().toLowerCase(Locale.ROOT);
+        if (!RetinalJobFollower.isStartableTask(task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "task must be one of " + RetinalJobFollower.STARTABLE_TASKS));
+        }
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
+
+        String kind;
+        String sopClassUid;
+        String storedPath;
+        Integer subjectId;
+        Integer studyEventId;
+        Integer eventCrfId;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT kind, sop_class_uid, stored_path, status, bound_study_subject_id, "
+                             + "       bound_study_event_id, bound_event_crf_id "
+                             + "  FROM ingest_item WHERE ingest_item_id = ?")) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+                }
+                kind = rs.getString("kind");
+                sopClassUid = rs.getString("sop_class_uid");
+                storedPath = rs.getString("stored_path");
+                boolean bound = "BOUND".equals(rs.getString("status"));
+                subjectId = intOrNull(rs, "bound_study_subject_id");
+                studyEventId = intOrNull(rs, "bound_study_event_id");
+                eventCrfId = intOrNull(rs, "bound_event_crf_id");
+                if (!bound || subjectId == null || (studyEventId == null && eventCrfId == null)) {
+                    return ClinicalRecordGuard.conflict("NOT_BOUND",
+                            "This file is not filed to a visit; file it before starting an analysis.");
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("ingest item lookup failed for {}: {}", id, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "lookup failed"));
+        }
+        if (!RetinalJobFollower.isAnalysable(kind, sopClassUid)) {
+            return ClinicalRecordGuard.conflict("NOT_ANALYSABLE", "Only OCT volumes can be analysed.");
+        }
+
+        StudySubjectBean ss = (StudySubjectBean) new StudySubjectDAO(dataSource).findByPK(subjectId);
+        StudyEventBean event = studyEventId == null ? null
+                : (StudyEventBean) new StudyEventDAO(dataSource).findByPK(studyEventId);
+        EventCRFBean ecb = eventCrfId == null ? null : new EventCRFDAO(dataSource).findByPK(eventCrfId);
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource,
+                (StudyBean) session.getAttribute("study"), ss, event, ecb, "starting a retinal analysis");
+        if (closed != null) return closed;
+
+        if (RetinalJobAccess.scanFileMissing(storedPath)) {
+            return ClinicalRecordGuard.conflict("SCAN_FILE_MISSING", RetinalJobAccess.SCAN_FILE_MISSING);
+        }
+
+        RetinalJobFollower.Started r;
+        try {
+            r = follower().start(id, task, actor(session));
+        } catch (SQLException e) {
+            LOG.error("starting task {} on ingest_item {} failed: {}", task, id, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "the analysis could not be started"));
+        }
+        return switch (r.outcome()) {
+            case STARTED -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("jobId", r.jobId());
+                body.put("task", task);
+                body.put("status", r.status());
+                yield ResponseEntity.accepted().body(body);
+            }
+            case DUPLICATE -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("code", "ANALYSIS_EXISTS");
+                body.put("message", "This scan already has a " + task + " analysis — open it instead.");
+                body.put("existingJobId", r.jobId());
+                yield ResponseEntity.status(409).body(body);
+            }
+            case INFERENCE_DISABLED -> ClinicalRecordGuard.conflict("INFERENCE_DISABLED",
+                    "Retinal analyses are switched off for this study.");
+            case NO_DISPATCHER -> ResponseEntity.status(503).body(Map.of(
+                    "message", "Starting analyses is unavailable on this server."));
+            // The file changed between the checks above and the start.
+            case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+            case NOT_BOUND -> ClinicalRecordGuard.conflict("NOT_BOUND",
+                    "This file is not filed to a visit; file it before starting an analysis.");
+            case NOT_ANALYSABLE -> ClinicalRecordGuard.conflict("NOT_ANALYSABLE",
+                    "Only OCT volumes can be analysed.");
+        };
+    }
+
+    private static Integer intOrNull(ResultSet rs, String column) throws SQLException {
+        int v = rs.getInt(column);
+        return rs.wasNull() ? null : v;
+    }
+
     // ----- guards / helpers -----
 
     /** Authenticated, with an active study, in a role that may reconcile. */
@@ -836,7 +1006,10 @@ public class IngestInboxApiController {
                 "/pages/api/v1/ingest/" + id + "/preview",
                 rs.getString("preview_png_path") != null,
                 buildSuggestion(patientId, acquisitionDate, visible),
-                twin);
+                twin,
+                RetinalJobFollower.isAnalysable(rs.getString("kind"), null),
+                // Looked up for the visit page only (byEvent); the inbox has no use for it.
+                null);
     }
 
     /**
