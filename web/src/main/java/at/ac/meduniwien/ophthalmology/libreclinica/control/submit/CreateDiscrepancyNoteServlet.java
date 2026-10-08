@@ -113,8 +113,17 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
 
     public static final String FLAG_DISCREPANCY_RFC ="flagDNRFC";
 
-    public String exceptionName = resexception.getString("no_permission_to_create_discrepancy_note");
-    public String noAccessMessage = respage.getString("you_may_not_create_discrepancy_note") + respage.getString("change_study_contact_sysadmin");
+    // Read at request time, never in a field initialiser: resexception and respage
+    // are static bundles that SecureController.process sets, and they are still
+    // null when this is the first servlet instantiated after a start. The NPE
+    // there made Tomcat mark the servlet unavailable (404 until restart).
+    private String exceptionName() {
+        return resexception.getString("no_permission_to_create_discrepancy_note");
+    }
+
+    private String noAccessMessage() {
+        return respage.getString("you_may_not_create_discrepancy_note") + respage.getString("change_study_contact_sysadmin");
+    }
 
     /*
      * (non-Javadoc)
@@ -130,8 +139,8 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
             return;
         }
 
-        addPageMessage(noAccessMessage);
-        throw new InsufficientPermissionException(Page.MENU, exceptionName, "1");
+        addPageMessage(noAccessMessage());
+        throw new InsufficientPermissionException(Page.MENU, exceptionName(), "1");
     }
 
     /**
@@ -437,8 +446,8 @@ public class CreateDiscrepancyNoteServlet extends SecureController {
                     parentStudyForSubject = studyBeanSub.getParentStudyId();
                 }
                 if (ssub.getStudyId() != currentStudy.getId() && currentStudy.getId() != parentStudyForSubject) {
-                    addPageMessage(noAccessMessage);
-                    throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName, "1");
+                    addPageMessage(noAccessMessage());
+                    throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName(), "1");
                 }
             }
 
