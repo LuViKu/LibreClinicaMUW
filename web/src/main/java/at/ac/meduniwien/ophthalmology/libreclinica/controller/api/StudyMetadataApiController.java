@@ -97,6 +97,9 @@ public class StudyMetadataApiController {
                 .contentType(new MediaType("application", "xml", java.nio.charset.StandardCharsets.UTF_8))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + fileStem + "_metadata_" + LocalDate.now() + ".xml\"")
-                .body(xml);
+                // bytes, not the String: the pages dispatcher's converter list has no
+                // StringHttpMessageConverter, so a String body with an XML content type
+                // answers 500 (see WebMvcConfig#apiMessageConverters).
+                .body(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

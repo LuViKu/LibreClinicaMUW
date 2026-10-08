@@ -1145,9 +1145,14 @@ public class CrfsApiController {
     public ResponseEntity<?> uploadVersion(
             @PathVariable("crfOid") String crfOid,
             @RequestPart("file") MultipartFile file,
-            @RequestPart(value = "versionName") String versionName,
-            @RequestPart(value = "versionDescription", required = false) String versionDescription,
-            @RequestPart(value = "revisionNotes", required = false) String revisionNotes,
+            // The form's text fields are request parameters, not @RequestPart: a
+            // @RequestPart String needs a converter that reads text/plain (a browser
+            // sends the field with no content type), and the pages dispatcher's list
+            // has none (see WebMvcConfig#apiMessageConverters). A missing versionName
+            // reaches the blank check below and answers 400 with a field error.
+            @RequestParam(value = "versionName", required = false) String versionName,
+            @RequestParam(value = "versionDescription", required = false) String versionDescription,
+            @RequestParam(value = "revisionNotes", required = false) String revisionNotes,
             @org.springframework.web.bind.annotation.RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
                     String acceptLanguage,
             HttpSession session) {
