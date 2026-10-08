@@ -198,6 +198,9 @@ class Settings(BaseSettings):
     # writes them (bind-mounted read-only into the container).
     sdretinanet_sif: str | None = None
     sdretinanet_formatter: Path | None = None
+    # The image's own /app/aot_models_spectralis is not readable for other users
+    # (checked 2026-10-08), so a readable copy of model0..4.pt2 is bound over it.
+    sdretinanet_models: Path | None = None
     sdretinanet_tta_level: int = 2
     sdretinanet_threshold: str = "0.5"
 

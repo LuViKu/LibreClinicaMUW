@@ -99,6 +99,7 @@ def _configure(monkeypatch, formatter: str | None = "/ri/sdretinanet_formatter.p
         monkeypatch.setattr(_config.settings, f"{task}_sif", None, raising=False)
     monkeypatch.setattr(_config.settings, "sdretinanet_sif", "/sif/retinanet.sif", raising=False)
     monkeypatch.setattr(_config.settings, "sdretinanet_formatter", formatter, raising=False)
+    monkeypatch.setattr(_config.settings, "sdretinanet_models", "/ri/sdretinanet_aot_models", raising=False)
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.0039, 0.0116, 0.12))
     import pydicom
     monkeypatch.setattr(pydicom, "dcmread", lambda *a, **k: types.SimpleNamespace(NumberOfFrames=3))
@@ -138,6 +139,7 @@ def test_handler_runs_the_sif_and_ships_one_archive(monkeypatch, tmp_path) -> No
     binds = cmd[cmd.index("--bind") + 1]
     assert "/ri/sdretinanet_formatter.py:/opt/ri/sdretinanet_formatter.py:ro" in binds
     assert "sdretinanet_native.py:/opt/ri/sdretinanet_native.py:ro" in binds
+    assert "/ri/sdretinanet_aot_models:/app/aot_models_spectralis:ro" in binds
     assert res.artifact_names == ["sdretinanet.zip"]
     assert res.output_payload == {"segmentation_file": "sdretinanet.zip", "n_bscans": 3}
 
@@ -151,9 +153,18 @@ def test_handler_runs_the_sif_and_ships_one_archive(monkeypatch, tmp_path) -> No
                            + [f"lesions/{b:03d}.png" for b in range(3)])
 
 
+def test_supported_only_with_sif_models_and_formatter(monkeypatch) -> None:
+    _configure(monkeypatch)
+    assert ap.ApptainerAdapter().supports("sdretinanet")
+    for missing in ("sdretinanet_sif", "sdretinanet_models", "sdretinanet_formatter"):
+        _configure(monkeypatch)
+        monkeypatch.setattr(_config.settings, missing, None, raising=False)
+        assert not ap.ApptainerAdapter().supports("sdretinanet"), missing
+
+
 def test_handler_fails_closed_without_native_output(monkeypatch, tmp_path) -> None:
-    # e.g. no formatter configured: main.py writes only its csv/npy defaults
-    _configure(monkeypatch, formatter=None)
+    # the run produced no native files (e.g. the formatter crashed)
+    _configure(monkeypatch)
     monkeypatch.setattr(ap, "_exec", lambda cmd, env=None: "")
     with pytest.raises(RuntimeError, match="no layers"):
         ap.ApptainerAdapter().full_volume("sdretinanet", _dcm_dir(tmp_path), "OD",

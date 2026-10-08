@@ -17,7 +17,9 @@ main.py <input_path|glob> <output_folder> [--tta_level 2] [--output_formats csv 
         [--threshold 0.5] [--output_formatter file.py] [--output_probabilities]
 ```
 
-It reads DICOM, NIfTI, MHA/MHD, `.npy` or PNG/JPG. It opens `fold_0.json` and `aot_models_spectralis/` relative to the working directory. Both are baked into `/app`, so the image must run with `--pwd /app`, which the handler passes. By default it writes layer positions and standard deviations as CSV/npy and the lesion maps as npy.
+It reads DICOM, NIfTI, MHA/MHD, `.npy` or PNG/JPG. It opens `fold_0.json` and `aot_models_spectralis/` relative to the working directory. Both are baked into `/app`, so the image must run with `--pwd /app`, which the handler passes.
+
+The image's `/app/aot_models_spectralis` cannot be read by other users (checked 2026-10-08). Copy `model0.pt2` … `model4.pt2` from the readable host folder `lesions-layerseg-standalone/aot_models_spectralis` to `$RI_HOME/ri/sdretinanet_aot_models/` (`RI_SDRETINANET_MODELS`). The handler binds that copy over the image's folder. The task is offered only when the `.sif`, the models and the formatter are all present. By default it writes layer positions and standard deviations as CSV/npy and the lesion maps as npy.
 
 ## What the eCRF stores
 

@@ -150,6 +150,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
     def supports(self, task: TaskName) -> bool:
         if task not in SUPPORTED_TASKS:
             return False
+        # sdretinanet needs the readable model copy and the formatter as well.
+        if task == "sdretinanet":
+            s = _config.settings
+            return bool(s.sdretinanet_sif and s.sdretinanet_models and s.sdretinanet_formatter)
         # BM is host-native (venv, no .sif) — gate it on its code/python instead.
         if task == "bm":
             s = _config.settings
@@ -561,6 +565,8 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         out = work / "out"
         out.mkdir(parents=True, exist_ok=True)
         binds = [f"{dcm_dir}:/in", f"{out}:/out"]
+        if s.sdretinanet_models:
+            binds.append(f"{s.sdretinanet_models}:/app/aot_models_spectralis:ro")
         args = ["/in/bscan.dcm", "/out",
                 "--tta_level", str(s.sdretinanet_tta_level),
                 "--threshold", str(s.sdretinanet_threshold)]

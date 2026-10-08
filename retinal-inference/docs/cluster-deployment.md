@@ -86,7 +86,7 @@ ships for `sese_pr`). Resolved canonical paths:
 | fluid | `$PI/sese_retinsight_fluid/code/v2.5.0/fluid_segmentation.sif` | — (baked) | — (baked) |
 | onl | `$PI/sese_onl/singularity/sese_onl.sif` | `$PI/sese_onl/code/outernuclearlayer-segmentation` | `$PI/sese_onl/weights/cross_val_ga` (5-fold ensemble; single-model alt `…/weights/onl_seg_vanilla_unet.pth`) |
 | pr | **build** from `runners/pr/apptainer.def` → `/scratch/$USER/ri/pr.sif` | `$PI/sese_pr/code/photoreceptors-segmentation` | `$PI/sese_pr/weights/u2net-cross-entropy` |
-| sdretinanet | copy `/home/optima/bfazekas03/singularity-images/lesions-layerseg-standalone/retinanet-spectralis_main.sif` → `$RI_HOME/ri/` | — (baked) | — (baked, AOT) |
+| sdretinanet | copy `/home/optima/bfazekas03/singularity-images/lesions-layerseg-standalone/retinanet-spectralis_main.sif` → `$RI_HOME/ri/` | — (baked) | copy `…/lesions-layerseg-standalone/aot_models_spectralis/model*.pt2` → `$RI_HOME/ri/sdretinanet_aot_models/` (the image's copy is unreadable) |
 | ga (gated) | `$PI/sese_ga/pytorch_optima_dl.v4.sif` | `$PI/sese_ga/code` (`common/`+`prepare_data/` are empty on disk — the real ones live inside the `.sif`) | `$PI/sese_ga/weights/filly_checkpoints` (5× `w.ckpt`) |
 
 > **GA's IOWA step (binary located).** GA needs an 11-layer IOWA segmentation as

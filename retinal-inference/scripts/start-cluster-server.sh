@@ -178,6 +178,9 @@ fi
 # Optional: when either file is missing the task is left out (see preflight).
 : "${RI_SDRETINANET_SIF:=$RI_HOME/ri/retinanet-spectralis_main.sif}"
 : "${RI_SDRETINANET_FORMATTER:=$RI_REPO/runners/sdretinanet/format_output.py}"
+# model0..4.pt2: the image's own copy is unreadable for other users, so a
+# readable copy (from lesions-layerseg-standalone/aot_models_spectralis) is bound over it
+: "${RI_SDRETINANET_MODELS:=$RI_HOME/ri/sdretinanet_aot_models}"
 
 # ----------------------------- BM_LD_LIBRARY_PATH -----------------------------
 # The BM venv python needs the LMOD module lib dirs (libpython3.8.so et al).
@@ -233,15 +236,16 @@ EXPECTED_TASKS="$ALL_TASKS"
 
 # sdretinanet needs both its .sif and its formatter. Without them it is left out
 # and the server starts degraded, like bm/layers below; it never costs the others.
-if [ -r "$RI_SDRETINANET_SIF" ] && [ -r "$RI_SDRETINANET_FORMATTER" ]; then
+if [ -r "$RI_SDRETINANET_SIF" ] && [ -r "$RI_SDRETINANET_FORMATTER" ] && [ -r "$RI_SDRETINANET_MODELS/model0.pt2" ]; then
   export RETINAL_INFERENCE_SDRETINANET_SIF="$RI_SDRETINANET_SIF"
   export RETINAL_INFERENCE_SDRETINANET_FORMATTER="$RI_SDRETINANET_FORMATTER"
+  export RETINAL_INFERENCE_SDRETINANET_MODELS="$RI_SDRETINANET_MODELS"
 else
   if [ "$STRICT" = 1 ] || [ "$MODE" = "--check" ]; then
-    die "sdretinanet: need $RI_SDRETINANET_SIF and $RI_SDRETINANET_FORMATTER (set RI_SDRETINANET_SIF / RI_SDRETINANET_FORMATTER)"
+    die "sdretinanet: need $RI_SDRETINANET_SIF, $RI_SDRETINANET_FORMATTER and $RI_SDRETINANET_MODELS/model*.pt2 (set RI_SDRETINANET_SIF / _FORMATTER / _MODELS)"
   fi
-  warn "DEGRADED: starting WITHOUT 'sdretinanet' — $RI_SDRETINANET_SIF or $RI_SDRETINANET_FORMATTER is missing"
-  unset RETINAL_INFERENCE_SDRETINANET_SIF RETINAL_INFERENCE_SDRETINANET_FORMATTER
+  warn "DEGRADED: starting WITHOUT 'sdretinanet' — its .sif, formatter or models ($RI_SDRETINANET_MODELS) are missing"
+  unset RETINAL_INFERENCE_SDRETINANET_SIF RETINAL_INFERENCE_SDRETINANET_FORMATTER RETINAL_INFERENCE_SDRETINANET_MODELS
   EXPECTED_TASKS="bm fluid ga layers onl pr"
 fi
 

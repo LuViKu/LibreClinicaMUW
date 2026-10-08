@@ -376,7 +376,7 @@ Do this outside clinic hours. The restart takes a few minutes, and everyone sign
 - **SPA annotations stored as "New"** before #390 are not migrated. Migrating them would be an audited data change.
 - **The retinal sidecar's audit insert** names a column `audit_log_event` does not have, so its rows land in its fallback table `retinal_inference_audit`.
 - **SD-RetinaNet on the cluster.** Three things before a study enables it:
-  - Copy `retinanet-spectralis_main.sif` to `$RI_HOME/ri/` on the cluster.
+  - Copy `retinanet-spectralis_main.sif` to `$RI_HOME/ri/`, and its models `model0..4.pt2` to `$RI_HOME/ri/sdretinanet_aot_models/`. The image's own copy of the models cannot be read by other users.
   - Validate the output on a volume the SWITCHER study also segmented, file by file and against its ETDRS numbers. The output formatter gives an overlapped pixel to the most probable main lesion class, and the step that produced the SWITCHER files may not have done that ([runners/sdretinanet/README.md](../../retinal-inference/runners/sdretinanet/README.md)).
   - Check whether the image runs on Ampere nodes. Until then the global `gpu:nv2080ti:1` request keeps it on the 2080 Ti nodes.
 - **PostgreSQL 14 reaches end of life on 2026-11-12.** Plan the move with [postgresql-17-upgrade.md](postgresql-17-upgrade.md).
