@@ -22,6 +22,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import { listSubjectJobs } from '@/api/retinal'
 import type { RetinalJobSummary } from '@/api/retinal'
+import { jobRoute } from '@/lib/retinalJobs'
 
 interface Props {
   /** Numeric study_subject_id — the trends + jobs endpoints take this. */
@@ -38,9 +39,7 @@ const props = defineProps<Props>()
  * (e.g. older payloads without subjectSeq).
  */
 function jobLink(row: RetinalJobSummary): string {
-  return row.subjectSeq != null
-    ? `/subjects/${encodeURIComponent(props.subjectLabel)}/jobs/${row.subjectSeq}`
-    : `/retinal-jobs/${row.jobId}`
+  return jobRoute({ jobId: row.jobId, subjectLabel: props.subjectLabel, subjectSeq: row.subjectSeq })
 }
 
 const { t } = useI18n()

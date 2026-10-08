@@ -35,6 +35,7 @@ import {
   rerunRetinalJobAs,
   type GeometryJson,
   type RetinalJobDetail,
+  type RetinalJobRerunAsResponse,
   type RetinalJobSummary,
 } from '@/api/retinal'
 
@@ -177,11 +178,11 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
   async function rerunJobAs(
     sourceJobId: number,
     task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers' | 'sdretinanet',
-  ): Promise<number> {
+  ): Promise<RetinalJobRerunAsResponse> {
     rerunAsInflight.value = { ...rerunAsInflight.value, [sourceJobId]: true }
     try {
-      const resp = await rerunRetinalJobAs(sourceJobId, task)
-      return resp.jobId
+      // The whole response: it carries the new job's canonical address.
+      return await rerunRetinalJobAs(sourceJobId, task)
     } finally {
       const next = { ...rerunAsInflight.value }
       delete next[sourceJobId]

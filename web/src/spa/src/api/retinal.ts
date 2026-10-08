@@ -92,6 +92,28 @@ export interface RetinalJobDetail {
    * null falls through to the existing rendering.
    */
   subjectArm: 'AI_SHOWN' | 'AI_HIDDEN' | null
+  /**
+   * 2026-10-09 — where the job lives: the subject's label and the job's
+   * number under it (its canonical address, see lib/retinalJobs.jobRoute),
+   * the visit's id, name and ISO date. All null when the scan is filed to
+   * no visit. Optional so older fixtures need not carry them.
+   */
+  subjectLabel?: string | null
+  subjectSeq?: number | null
+  studyEventId?: number | null
+  visitName?: string | null
+  visitDate?: string | null
+  /** Every live analysis of the same scan, this one included, oldest first. */
+  siblings?: RetinalJobSibling[]
+}
+
+/** Another analysis of the scan a job read. */
+export interface RetinalJobSibling {
+  jobId: number
+  /** Its number under the subject; null when it has no visit. */
+  subjectSeq: number | null
+  task: RetinalTask
+  status: RetinalJobStatus
 }
 
 /**
@@ -683,11 +705,17 @@ export interface RetinalJobRerunAsResponse {
   jobId: number
   task: string
   status: string
+  /** 2026-10-09 — the new job's canonical address; absent when it has no visit. */
+  subjectLabel?: string
+  subjectSeq?: number
 }
 
 export interface RetinalJobRerunAsConflict {
   message: string
   existingJobId: number
+  /** 2026-10-09 — the existing job's canonical address; absent when it has no visit. */
+  subjectLabel?: string
+  subjectSeq?: number
 }
 
 export function rerunRetinalJobAs(
