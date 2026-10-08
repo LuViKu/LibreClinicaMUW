@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.OCServletFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.CrossSiteRequestFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.UnparseablePathFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.RequestIdFilter;
@@ -45,6 +46,7 @@ import org.springframework.beans.factory.annotation.Value;
  * <strong>Filters (preserve legacy chain order):</strong>
  * {@code requestIdFilter} → {@code legacyServletTelemetryFilter} →
  * {@code crossSiteRequestFilter} ({@link CrossSiteRequestFilter}) →
+ * {@code unparseablePathFilter} ({@link UnparseablePathFilter}) →
  * {@code encodingFilter} → {@code localeFilter} → {@code springSecurityFilterChain}
  * (auto-registered by Boot's {@code SecurityFilterAutoConfiguration} once
  * {@link SecurityConfig} provides the {@code SecurityFilterChain} bean) →
@@ -203,6 +205,22 @@ public class ServletInfraConfig {
                 new FilterRegistrationBean<>(new CrossSiteRequestFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
+        reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * Answers 400, not 500, to a request whose path Spring 7 cannot parse
+     * ({@code /%70ages/...}); see {@link UnparseablePathFilter}. It has to sit
+     * ahead of the security chain, whose first filter is where the parse fails,
+     * and it decides nothing about access.
+     */
+    @Bean
+    public FilterRegistrationBean<UnparseablePathFilter> unparseablePathFilter() {
+        FilterRegistrationBean<UnparseablePathFilter> reg =
+                new FilterRegistrationBean<>(new UnparseablePathFilter());
+        reg.addUrlPatterns("/*");
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 3);
         reg.setAsyncSupported(true);
         return reg;
     }
