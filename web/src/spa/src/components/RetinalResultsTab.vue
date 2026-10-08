@@ -6,7 +6,7 @@
  *
  * Calls {@code listSubjectJobs} (or {@code listEventCrfJobs} when
  * given an event-CRF id) through the {@link useRetinalJobStore}; each
- * row links into the {@code /retinal-jobs/:jobId} viewer.
+ * row links into the job viewer at its canonical address (lib/retinalJobs.jobRoute).
  *
  * <p>The component is intentionally tiny — it's a section embedded
  * inside SubjectDetailView, not a full view. The viewer route does
@@ -22,11 +22,14 @@ import { useRetinalJobStore } from '@/stores/retinalJob'
 import { useAuthStore } from '@/stores/auth'
 import { userMayViewRetinalMetrics } from '@/lib/retinalAccess'
 import type { RetinalJobSummary, RetinalJobStatus } from '@/api/retinal'
+import { jobRoute } from '@/lib/retinalJobs'
 
 interface Props {
   /** Either a subject id OR an event-CRF id MUST be supplied. */
   studySubjectId?: number | null
   eventCrfId?: number | null
+  /** 2026-10-09 — the subject's label, for each job's canonical address (lib/retinalJobs.jobRoute). */
+  subjectLabel?: string | null
 }
 
 const { t } = useI18n()
@@ -165,7 +168,7 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
         <td class="px-5 py-2.5 text-right text-xs">
           <RouterLink
             v-if="mayOpenMetrics"
-            :to="`/retinal-jobs/${job.jobId}`"
+            :to="jobRoute({ jobId: job.jobId, subjectLabel: props.subjectLabel, subjectSeq: job.subjectSeq })"
             class="text-muw-blue hover:underline"
             data-testid="retinal-results-view-link"
           >

@@ -3221,6 +3221,13 @@
           "optional": "missing – optional"
         },
         "blocksSigning": "{n} required image(s) missing. The subject cannot be signed until they are filed against the visit."
+      },
+      "analyses": {
+        "none": "No analysis yet",
+        "start": "Start analysis",
+        "starting": "Starting…",
+        "menuHeader": "Missing analysis",
+        "error": "The analysis could not be started."
       }
     }
   },
@@ -4394,6 +4401,12 @@
       "bindSuccess": "Scan assigned to a visit.",
       "bindConflict": "Scan was already assigned by another session.",
       "bindError": "Assignment failed."
+    },
+    "trail": {
+      "unassigned": "not assigned"
+    },
+    "siblings": {
+      "label": "Analyses of this scan"
     }
   },
   "bugReport": {

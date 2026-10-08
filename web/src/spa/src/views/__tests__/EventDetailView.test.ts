@@ -425,3 +425,47 @@ describe('EventDetailView — queries on the visit date', () => {
     }))
   })
 })
+
+/*
+ * 2026-10-09 — "Auswertung starten" on a filed OCT scan: offered to a role
+ * that enters data on an open visit, not to a Monitor, not on a signed visit.
+ */
+describe('EventDetailView — analyses of a filed scan', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+    apiPostMock.mockReset()
+  })
+
+  async function mountWithScan(role: UserRole, status: EventDetailDto['status'] = 'scheduled') {
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/ingest/by-event/')
+        ? Promise.resolve({
+            items: [{ id: 6, kind: 'e2e', sourceKind: 'upload', device: null, patientId: null,
+              laterality: 'OD', acquisitionDate: null, acquisitionDateSource: null, modality: null,
+              originalFilename: null, byteSize: null, scanIndex: 0, receivedAt: null,
+              previewUrl: '/pages/api/v1/ingest/6/preview', hasPreview: false, suggestion: null, twin: null,
+              analysable: true, analyses: [{ jobId: 9, subjectSeq: 2, task: 'fluid', status: 'done' }] }],
+            studyEventId: 42, pendingForSubject: 0, plan: [],
+          })
+        : Promise.resolve({ ...TWO_ROWS, status }),
+    )
+    return mountAt(42, { role })
+  }
+
+  it('lists the scan\'s analyses and offers the missing ones to an Investigator', async () => {
+    const w = await mountWithScan('Investigator')
+    expect(w.find('[data-testid="scan-analyses-6"]').exists()).toBe(true)
+    expect(w.find('[data-testid="scan-analyses-start"]').exists()).toBe(true)
+  })
+
+  it('offers no start to a Monitor', async () => {
+    const w = await mountWithScan('Monitor')
+    expect(w.find('[data-testid="scan-analyses-6"]').exists()).toBe(true)
+    expect(w.find('[data-testid="scan-analyses-start"]').exists()).toBe(false)
+  })
+
+  it('offers no start on a signed visit', async () => {
+    const w = await mountWithScan('Investigator', 'signed')
+    expect(w.find('[data-testid="scan-analyses-start"]').exists()).toBe(false)
+  })
+})
