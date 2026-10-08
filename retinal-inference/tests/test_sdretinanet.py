@@ -130,6 +130,9 @@ def test_handler_runs_the_sif_and_ships_one_archive(monkeypatch, tmp_path) -> No
 
     cmd = captured["cmd"]
     assert cmd[1] == "run" and "/sif/retinanet.sif" in cmd
+    # main.py reads fold_0.json + aot_models_spectralis/ from the working dir
+    assert cmd[cmd.index("--pwd") + 1] == "/app"
+    assert cmd.index("--pwd") < cmd.index("/sif/retinanet.sif")
     assert cmd[cmd.index("/sif/retinanet.sif") + 1:][:2] == ["/in/bscan.dcm", "/out"]
     assert "--output_formatter" in cmd
     binds = cmd[cmd.index("--bind") + 1]

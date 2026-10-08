@@ -219,10 +219,13 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         return srun
 
     def _apptainer(
-        self, verb: str, sif: str, binds: list[str], args: list[str], task: str = "task"
+        self, verb: str, sif: str, binds: list[str], args: list[str], task: str = "task",
+        pwd: str | None = None,
     ) -> list[str]:
         s = _config.settings
         cmd = [s.apptainer_bin, verb, "-e", "--nv", "--no-home"]
+        if pwd:
+            cmd += ["--pwd", pwd]
         if binds:
             cmd += ["--bind", ",".join(binds)]
         cmd += [sif, *args]
@@ -567,7 +570,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             binds.append(f"{s.sdretinanet_formatter}:/opt/ri/sdretinanet_formatter.py:ro")
             binds.append(f"{Path(native.__file__)}:/opt/ri/sdretinanet_native.py:ro")
             args += ["--output_formatter", "/opt/ri/sdretinanet_formatter.py"]
-        cmd = self._apptainer("run", s.sdretinanet_sif or "", binds, args, task="sdretinanet")
+        # main.py opens fold_0.json and aot_models_spectralis/ relative to the
+        # working directory; both are baked into /app (checked 2026-10-08).
+        cmd = self._apptainer("run", s.sdretinanet_sif or "", binds, args, task="sdretinanet",
+                              pwd="/app")
         _exec(cmd, self._gpu_env("sdretinanet"))
         n_frames = int(getattr(pydicom.dcmread(str(dcm), stop_before_pixels=True),
                                "NumberOfFrames", 1))

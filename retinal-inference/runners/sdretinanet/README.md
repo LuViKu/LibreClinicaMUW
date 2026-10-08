@@ -17,7 +17,7 @@ main.py <input_path|glob> <output_folder> [--tta_level 2] [--output_formats csv 
         [--threshold 0.5] [--output_formatter file.py] [--output_probabilities]
 ```
 
-It reads DICOM, NIfTI, MHA/MHD, `.npy` or PNG/JPG. By default it writes layer positions and standard deviations as CSV/npy and the lesion maps as npy.
+It reads DICOM, NIfTI, MHA/MHD, `.npy` or PNG/JPG. It opens `fold_0.json` and `aot_models_spectralis/` relative to the working directory. Both are baked into `/app`, so the image must run with `--pwd /app`, which the handler passes. By default it writes layer positions and standard deviations as CSV/npy and the lesion maps as npy.
 
 ## What the eCRF stores
 
