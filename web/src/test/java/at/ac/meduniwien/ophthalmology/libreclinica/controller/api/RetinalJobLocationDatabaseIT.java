@@ -173,6 +173,32 @@ class RetinalJobLocationDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
+    void theVisitsJobListNumbersEachJobForItsAddress() throws Exception {
+        Scan s = scan(1);
+        job(s, "fluid", "done", true, true, 30);
+        int ecrf;
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            ecrf = LifecycleFixtures.insertEventCrf(c, s.event(), s.subject(), 1, 1);
+        }
+        long onCrf;
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_job (event_crf_id, task, e2e_path, eye_laterality, status, "
+                             + "enqueued_at, scan_index) VALUES (?, 'layers', '/nowhere.e2e', 'OS', 'done', now(), 1) "
+                             + "RETURNING job_id")) {
+            ps.setInt(1, ecrf);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                onCrf = rs.getLong(1);
+            }
+        }
+        JsonNode list = getJson("/api/v1/event-crfs/" + ecrf + "/retinal-jobs", investigator(), 200);
+        assertEquals(1, list.size(), list.toString());
+        assertEquals(onCrf, list.get(0).get("jobId").asLong());
+        assertEquals(2, list.get(0).get("subjectSeq").asInt(), "second of the subject's jobs: " + list);
+    }
+
+    @Test
     void aCancelledJobStillListsItself() throws Exception {
         Scan s = scan(1);
         long done = job(s, "fluid", "done", true, true, 20);

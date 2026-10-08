@@ -276,7 +276,13 @@ public class RetinalResultsApiController {
              * Only the per-subject list query computes it; null elsewhere
              * (e.g. the event-CRF-scoped list).
              */
-            Integer subjectSeq) { }
+            Integer subjectSeq) {
+
+        RetinalJobSummaryDto withSubjectSeq(Integer seq) {
+            return new RetinalJobSummaryDto(jobId, task, laterality, status, modelVersion, completedAt,
+                    visitDate, acquisitionDate, studyEventId, primaryMetric, seq);
+        }
+    }
 
     /**
      * Wave 2A — longitudinal trends row. One point per completed job
@@ -556,6 +562,18 @@ public class RetinalResultsApiController {
                     eventCrfId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to list retinal jobs: " + sqlEx.getMessage()));
+        }
+        // 2026-10-09 — each job's number under its subject, so the visit page
+        // links the canonical /subjects/{label}/jobs/{n} address too.
+        try (Connection c = dataSource.getConnection()) {
+            Map<Long, RetinalJobAccess.JobAddress> addresses =
+                    RetinalJobAccess.addressesOf(c, out.stream().map(RetinalJobSummaryDto::jobId).toList());
+            out.replaceAll(s -> {
+                RetinalJobAccess.JobAddress a = addresses.get(s.jobId());
+                return a == null ? s : s.withSubjectSeq(a.subjectSeq());
+            });
+        } catch (SQLException sqlEx) {
+            LOG.warn("job numbers for event_crf {} failed: {}", eventCrfId, sqlEx.getMessage());
         }
         return ResponseEntity.ok(out);
     }
