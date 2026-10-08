@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -219,6 +220,24 @@ class PublicOctUploadRateLimitFilterTest {
             assertEquals(200, invokeInContext(filter, "10.0.0.20").getStatus());
         }
         assertEquals(429, invokeInContext(filter, "10.0.0.20").getStatus());
+    }
+
+    @Test
+    void theInternalDeploymentIsNeverThrottled() throws Exception {
+        // Off unless internet-facing: the acquisition-PC uploaders resolve every
+        // capture and file it without a visit on a 429.
+        PublicOctUploadRateLimitFilter filter = new PublicOctUploadRateLimitFilter(false);
+        for (int i = 0; i < 10 * PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invokeInContext(filter, "10.0.0.30").getStatus(), "request " + i);
+        }
+    }
+
+    @Test
+    void theBeanThrottlesOnlyWhenInternetFacing() {
+        at.ac.meduniwien.ophthalmology.libreclinica.config.ServletInfraConfig config =
+                new at.ac.meduniwien.ophthalmology.libreclinica.config.ServletInfraConfig();
+        assertTrue(config.publicOctUploadRateLimitFilter(true).isEnabled());
+        assertFalse(config.publicOctUploadRateLimitFilter(false).isEnabled());
     }
 
     private static MockHttpServletResponse invokeInContext(PublicOctUploadRateLimitFilter filter,
