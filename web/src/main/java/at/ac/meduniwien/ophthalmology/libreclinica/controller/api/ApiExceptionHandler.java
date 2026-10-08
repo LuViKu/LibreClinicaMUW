@@ -14,14 +14,18 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -83,11 +87,22 @@ public class ApiExceptionHandler {
     })
     public ResponseEntity<ValidationErrorBody> handleBadRequest(Exception e) {
         LOG.debug("API 400 bad request: {}", e.getMessage());
+        // Fixed messages for the framework exceptions: Spring's text for an
+        // empty body embeds the controller method signature and Jackson's
+        // embeds parser internals; neither belongs on the wire.
+        String message;
+        if (e instanceof HttpMessageNotReadableException) {
+            message = "Malformed or missing request body.";
+        } else if (e instanceof MethodArgumentTypeMismatchException mm) {
+            message = "Invalid value for parameter '" + mm.getName() + "'.";
+        } else if (e instanceof MissingServletRequestParameterException mp) {
+            message = "Missing required request parameter: '" + mp.getParameterName() + "'.";
+        } else {
+            message = e.getMessage() == null ? "Bad request" : e.getMessage();
+        }
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(new ValidationErrorBody(
-                        e.getMessage() == null ? "Bad request" : e.getMessage(),
-                        List.of()));
+                .body(new ValidationErrorBody(message, List.of()));
     }
 
     /** SQL failures from the DAO layer (connection issues, constraint violations, etc.). */
@@ -196,9 +211,34 @@ public class ApiExceptionHandler {
      */
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<ValidationErrorBody> handleUnexpected(Throwable e) {
+        // Exceptions that already carry their own HTTP status keep it. This
+        // advice runs ahead of ResponseStatusExceptionResolver and
+        // DefaultHandlerExceptionResolver, so without these branches every
+        // 404/405/415 (ErrorResponse: ResponseStatusException,
+        // HttpRequestMethodNotSupportedException, ...) and every
+        // @ResponseStatus exception would collapse into a 500.
+        if (e instanceof ErrorResponse er) {
+            return statusBody(er.getStatusCode(), er.getBody().getDetail(), e);
+        }
+        ResponseStatus rs = AnnotatedElementUtils.findMergedAnnotation(e.getClass(), ResponseStatus.class);
+        if (rs != null) {
+            return statusBody(rs.code(), rs.reason().isEmpty() ? null : rs.reason(), e);
+        }
         LOG.error("API 500 unexpected: {}", e.getMessage(), e);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ValidationErrorBody("Internal server error.", List.of()));
+    }
+
+    private static ResponseEntity<ValidationErrorBody> statusBody(HttpStatusCode status, String detail, Throwable e) {
+        if (status.is5xxServerError()) {
+            LOG.error("API {} from {}: {}", status.value(), e.getClass().getSimpleName(), e.getMessage(), e);
+        } else {
+            LOG.debug("API {} from {}: {}", status.value(), e.getClass().getSimpleName(), e.getMessage());
+        }
+        String message = detail != null && !detail.isBlank()
+                ? detail
+                : (status instanceof HttpStatus hs ? hs.getReasonPhrase() : "Request failed");
+        return ResponseEntity.status(status).body(new ValidationErrorBody(message, List.of()));
     }
 }
