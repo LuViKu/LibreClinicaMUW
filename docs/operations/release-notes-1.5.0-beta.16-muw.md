@@ -218,6 +218,27 @@ The GPU sidecar can run each task as an `srun` job on a SLURM cluster:
 
 This concerns the GPU host only. Direct mode is unchanged. Section 4 of [retinal-inference/docs/cluster-deployment.md](../../retinal-inference/docs/cluster-deployment.md) describes the setup.
 
+The sidecar's `/health` now lists only the tasks the node can run, not every task the code knows. A task whose model is not configured shows as missing, so the launcher and the app VM's cluster monitor report the node as degraded. Before this, that alarm could not fire.
+
+### SD-RetinaNet: layers and lesions in one task (`sdretinanet`)
+
+A seventh retinal task runs SD-RetinaNet (Fazekas et al., [arXiv 2509.20864](https://arxiv.org/abs/2509.20864)). It segments, per B-scan:
+
+- 12 layer boundaries, ILM to the choroid–sclera boundary;
+- 7 lesion classes: IRF, SRF, PED, SHRM, SDD, ORT and HRF.
+
+The output is stored in the OPTIMA group's native formats (layerlib `.yml`, lesionlib `.png`), the same files the SWITCHER study and iamd-ws read.
+
+- **Metrics** are a port of the SWITCHER quantification, and a test holds the Java code to the Python reference's numbers on a shared fixture:
+  - the fovea, from the inner-retina pit; a doubtful pit falls back to the scan centre and is flagged;
+  - 18 layer thicknesses and volumes, and lesion volume, area and height, over the central 1, 3 and 6 mm discs and the 1–3 and 3–6 mm rings;
+  - CRT (ILM–BM, central 1 mm).
+- **Left out on purpose:**
+  - The ETDRS quadrant sectors. They depend on the B-scan order and A-scan direction of the app's own `.e2e` conversion, which is not verified yet.
+  - CRF items. The task fills none, so it cannot overwrite the fluid task's values. Which numbers feed a CRF is a clinical decision.
+- **Viewer:** the B-scan viewer shows the 12 boundaries and the lesion masks. Both are read-only.
+- **Off until configured.** A study enables the task in its visit imaging plan. The cluster runs it once the model image is copied into place (see [Still open](#still-open-at-this-release)); until then the node reports the task as missing.
+
 ### Smaller repairs
 
 - **`/ViewStudy`** answered 500 for every study and works again. `/ConfigurePasswordRequirements` rendered blank. A session displaced by a second login answered 500 and now redirects. The export-job list failed whenever a cron trigger existed.
@@ -242,7 +263,7 @@ This concerns the GPU host only. Direct mode is unchanged. Section 4 of [retinal
 
 ## Migrations
 
-Fifteen new changelog files. All are additive, apart from the one-time lockout default:
+Sixteen new changelog files. All are additive, apart from the one-time lockout default:
 
 | Changelog | What it does |
 |---|---|
@@ -258,6 +279,7 @@ Fifteen new changelog files. All are additive, apart from the one-time lockout d
 | `lc-muw-2026-10-06-account-lockout.xml` | lockout on, 5 attempts, only where the seeded "off" is still set |
 | `lc-muw-2026-10-07-audit-types-deidentification.xml` | audit types 192–194 |
 | `lc-muw-2026-10-07-ingest-origin-study.xml` | `ingest_item.origin_study_id` (nullable) |
+| `lc-muw-2026-10-07-retinal-task-sdretinanet.xml` | allows `sdretinanet` in the per-event-definition retinal task list |
 
 On top of these, **the first start under Liquibase 4 rewrites every stored checksum from `8:` to `9:`.** That rewrite is what makes the rollback a restore.
 
@@ -353,5 +375,9 @@ Do this outside clinic hours. The restart takes a few minutes, and everyone sign
 - **Administrative correction of signed data.** Legacy allowed it and withdrew the signature. Both UIs now refuse it. Decide whether that correction path is needed.
 - **SPA annotations stored as "New"** before #390 are not migrated. Migrating them would be an audited data change.
 - **The retinal sidecar's audit insert** names a column `audit_log_event` does not have, so its rows land in its fallback table `retinal_inference_audit`.
+- **SD-RetinaNet on the cluster.** Three things before a study enables it:
+  - Copy `retinanet-spectralis_main.sif` to `$RI_HOME/ri/` on the cluster.
+  - Validate the output on a volume the SWITCHER study also segmented, file by file and against its ETDRS numbers. The output formatter gives an overlapped pixel to the most probable main lesion class, and the step that produced the SWITCHER files may not have done that ([runners/sdretinanet/README.md](../../retinal-inference/runners/sdretinanet/README.md)).
+  - Check whether the image runs on Ampere nodes. Until then the global `gpu:nv2080ti:1` request keeps it on the 2080 Ti nodes.
 - **PostgreSQL 14 reaches end of life on 2026-11-12.** Plan the move with [postgresql-17-upgrade.md](postgresql-17-upgrade.md).
 - **The internet-facing deployment's go-live gates** are open questions for MUW IT, the DPO and the clinical lead: [multicenter-internet-readiness.md](multicenter-internet-readiness.md).
