@@ -75,10 +75,9 @@ export interface IngestItem {
   analyses?: ScanAnalysis[] | null
 }
 
-/** One retinal analysis of a filed scan. `subjectSeq` is its number under the subject. */
+/** One retinal analysis of a filed scan. */
 export interface ScanAnalysis {
   jobId: number
-  subjectSeq: number | null
   task: string
   status: string
 }
@@ -275,13 +274,12 @@ export interface StartedAnalysis {
   task: string
   status: string
   subjectLabel?: string
-  subjectSeq?: number
 }
 
 /**
  * 2026-10-09 — start one retinal analysis on a filed OCT scan
  * ("Auswertung starten"). 409 with `existingJobId` (and that job's
- * `subjectLabel` / `subjectSeq`) when the scan already has the task; other
+ * `subjectLabel`) when the scan already has the task; other
  * 409s carry a `code` and a `message` the error toast shows.
  */
 export function startScanAnalysis(id: number, task: string): Promise<StartedAnalysis> {

@@ -53,8 +53,8 @@ function label(kind: 'task' | 'status', value: string): string {
   return translated === key ? value : translated
 }
 
-function linkOf(jobId: number, subjectSeq: number | null): string {
-  return jobRoute({ jobId, subjectLabel: props.subjectLabel, subjectSeq })
+function linkOf(jobId: number): string {
+  return jobRoute({ jobId, subjectLabel: props.subjectLabel })
 }
 
 async function start(task: StartableTask): Promise<void> {
@@ -66,13 +66,12 @@ async function start(task: StartableTask): Promise<void> {
   } catch (e) {
     const err = e as { status?: number; body?: unknown }
     const body = err.body && typeof err.body === 'object'
-      ? (err.body as { existingJobId?: number; subjectLabel?: string; subjectSeq?: number; message?: string })
+      ? (err.body as { existingJobId?: number; subjectLabel?: string; message?: string })
       : null
     if (typeof body?.existingJobId === 'number' && body.existingJobId > 0) {
       await router.push(jobRoute({
         jobId: body.existingJobId,
         subjectLabel: body.subjectLabel ?? props.subjectLabel,
-        subjectSeq: body.subjectSeq,
       }))
       return
     }
@@ -95,7 +94,7 @@ async function start(task: StartableTask): Promise<void> {
       <li v-for="a in analyses" :key="a.jobId" class="flex items-baseline gap-1">
         <RouterLink
           v-if="canOpen"
-          :to="linkOf(a.jobId, a.subjectSeq)"
+          :to="linkOf(a.jobId)"
           class="text-muw-blue hover:underline"
           :data-testid="`scan-analysis-link-${a.jobId}`"
         >{{ label('task', a.task) }}</RouterLink>

@@ -37,7 +37,7 @@ function item(overrides: Partial<IngestItem> = {}): IngestItem {
     byteSize: 1, scanIndex: 0, receivedAt: null, previewUrl: '/x', hasPreview: false,
     suggestion: null, twin: null,
     analysable: true,
-    analyses: [{ jobId: 9, subjectSeq: 4, task: 'fluid', status: 'done' }],
+    analyses: [{ jobId: 9, task: 'fluid', status: 'done' }],
     ...overrides,
   }
 }
@@ -50,7 +50,7 @@ async function mountCard(props: { item: IngestItem; canStart?: boolean; canOpen?
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div />' } },
-      { path: '/subjects/:label/jobs/:seq', component: { template: '<div />' } },
+      { path: '/subjects/:label/jobs/:jobId', component: { template: '<div />' } },
       { path: '/retinal-jobs/:id', component: { template: '<div />' } },
     ],
   })
@@ -70,7 +70,7 @@ describe('ScanAnalyses', () => {
   it('lists the scan\'s analyses, linked to their subject address', async () => {
     const w = await mountCard({ item: item() })
     const link = w.find('[data-testid="scan-analysis-link-9"]')
-    expect(link.attributes('href')).toBe('/subjects/EIAMD150/jobs/4')
+    expect(link.attributes('href')).toBe('/subjects/EIAMD150/jobs/9')
     expect(link.text()).toBe('Flüssigkeit')
     expect(w.find('[data-testid="scan-analyses-list"]').text()).toContain('Abgeschlossen')
   })
@@ -101,31 +101,31 @@ describe('ScanAnalyses', () => {
 
   it('offers nothing when the scan already has every task', async () => {
     const all = ['fluid', 'ga', 'onl', 'pr', 'layers', 'sdretinanet']
-      .map((task, i) => ({ jobId: i + 1, subjectSeq: i + 1, task, status: 'done' }))
+      .map((task, i) => ({ jobId: i + 1, task, status: 'done' }))
     const w = await mountCard({ item: item({ analyses: all }) })
     expect(w.find('[data-testid="scan-analyses-start"]').exists()).toBe(false)
   })
 
   it('starts the task and goes to the new job at its subject address', async () => {
-    startMock.mockResolvedValue({ jobId: 31, task: 'ga', status: 'queued', subjectLabel: 'EIAMD150', subjectSeq: 5 })
+    startMock.mockResolvedValue({ jobId: 31, task: 'ga', status: 'queued', subjectLabel: 'EIAMD150' })
     const w = await mountCard({ item: item() })
     await w.find('[data-testid="scan-analyses-start"] button').trigger('click')
     await w.find('[data-testid="scan-analyses-task-ga"]').trigger('click')
     await flushPromises()
     expect(startMock).toHaveBeenCalledWith(55, 'ga')
-    expect(router.currentRoute.value.fullPath).toBe('/subjects/EIAMD150/jobs/5')
+    expect(router.currentRoute.value.fullPath).toBe('/subjects/EIAMD150/jobs/31')
   })
 
   it('goes to the existing job when the server says the task is already there', async () => {
     startMock.mockImplementation(async () => { throw Object.assign(new Error('409'), {
       status: 409,
-      body: { code: 'ANALYSIS_EXISTS', existingJobId: 12, subjectLabel: 'EIAMD150', subjectSeq: 2, message: 'x' },
+      body: { code: 'ANALYSIS_EXISTS', existingJobId: 12, subjectLabel: 'EIAMD150', message: 'x' },
     }) })
     const w = await mountCard({ item: item() })
     await w.find('[data-testid="scan-analyses-start"] button').trigger('click')
     await w.find('[data-testid="scan-analyses-task-onl"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.fullPath).toBe('/subjects/EIAMD150/jobs/2')
+    expect(router.currentRoute.value.fullPath).toBe('/subjects/EIAMD150/jobs/12')
     expect(useErrorsStore().recent.length).toBe(0)
   })
 

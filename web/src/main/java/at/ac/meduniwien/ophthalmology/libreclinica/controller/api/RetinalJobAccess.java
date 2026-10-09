@@ -172,43 +172,32 @@ final class RetinalJobAccess {
     /* ------------------------------------------------------------------ */
 
     /**
-     * A job's canonical address in the SPA, {@code /subjects/{label}/jobs/{seq}}.
-     * {@code seq} is the number {@code GET /subjects/{label}/retinal-jobs/{seq}}
-     * resolves: the job's place among every job filed to a visit of a subject
-     * with that label, by enqueue time then id.
+     * A job's canonical address in the SPA is {@code /subjects/{label}/jobs/{jobId}};
+     * this is the subject part. A job has one only when it is filed to a visit.
      */
-    record JobAddress(String subjectLabel, int subjectSeq) {}
+    record JobAddress(String subjectLabel) {}
 
-    /** The addresses of these jobs; a job with no visit has none and is absent. */
+    /** The subjects of these jobs; a job with no visit is absent. */
     static Map<Long, JobAddress> addressesOf(Connection c, java.util.Collection<Long> jobIds) throws SQLException {
         Map<Long, JobAddress> out = new java.util.HashMap<>();
         if (jobIds == null || jobIds.isEmpty()) return out;
-        String visitJoin = "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+        String sql = "SELECT j.job_id, ss.label FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
-                + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id ";
-        String sql = "SELECT t.job_id, t.label, t.seq FROM ("
-                + " SELECT j.job_id, ss.label, "
-                + "        ROW_NUMBER() OVER (PARTITION BY ss.label ORDER BY j.enqueued_at ASC, j.job_id ASC) AS seq "
-                + "   FROM retinal_inference_job j " + visitJoin
-                + "  WHERE ss.label IN (SELECT ss.label FROM retinal_inference_job j " + visitJoin
-                + "                      WHERE j.job_id = ANY(?))) t "
-                + " WHERE t.job_id = ANY(?)";
+                + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                + " WHERE j.job_id = ANY(?)";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
-            java.sql.Array ids = c.createArrayOf("bigint", jobIds.toArray(new Long[0]));
-            ps.setArray(1, ids);
-            ps.setArray(2, ids);
+            ps.setArray(1, c.createArrayOf("bigint", jobIds.toArray(new Long[0])));
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    out.put(rs.getLong(1), new JobAddress(rs.getString(2), rs.getInt(3)));
-                }
+                while (rs.next()) out.put(rs.getLong(1), new JobAddress(rs.getString(2)));
             }
         }
         return out;
     }
 
     /**
-     * Adds {@code subjectLabel} and {@code subjectSeq} of the job to a
-     * response body, so the SPA can go to its canonical address; nothing when
+     * Adds the job's {@code subjectLabel} to a response body, so the SPA can
+     * go to its canonical address; nothing when
      * the job has no visit or the lookup fails (the SPA then falls back to
      * {@code /retinal-jobs/{id}}, which redirects).
      */
@@ -217,7 +206,6 @@ final class RetinalJobAccess {
             JobAddress a = addressOf(c, jobId);
             if (a == null) return;
             body.put("subjectLabel", a.subjectLabel());
-            body.put("subjectSeq", a.subjectSeq());
         } catch (SQLException e) {
             LOG.warn("address lookup failed for job {}: {}", jobId, e.getMessage());
         }

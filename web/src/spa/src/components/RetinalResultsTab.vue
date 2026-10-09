@@ -168,7 +168,7 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
         <td class="px-5 py-2.5 text-right text-xs">
           <RouterLink
             v-if="mayOpenMetrics"
-            :to="jobRoute({ jobId: job.jobId, subjectLabel: props.subjectLabel, subjectSeq: job.subjectSeq })"
+            :to="jobRoute({ jobId: job.jobId, subjectLabel: props.subjectLabel })"
             class="text-muw-blue hover:underline"
             data-testid="retinal-results-view-link"
           >

@@ -209,7 +209,7 @@ public class IngestInboxApiController {
      * A retinal analysis of a scan that is not cancelled, for the visit page:
      * which tasks the scan already has, and where each one's results are.
      */
-    public record ScanAnalysis(long jobId, Integer subjectSeq, String task, String status) {}
+    public record ScanAnalysis(long jobId, String task, String status) {}
 
     /**
      * DR-036 — an earlier file that shows the same picture as this one.
@@ -450,27 +450,12 @@ public class IngestInboxApiController {
         // What each scan has been analysed for, so the page can show the
         // results and offer only the tasks it lacks.
         try {
-            Map<Long, List<RetinalJobFollower.ExistingJob>> byItem = new LinkedHashMap<>();
-            List<Long> jobIds = new ArrayList<>();
-            for (InboxRow row : rows) {
-                if (!row.analysable()) continue;
-                List<RetinalJobFollower.ExistingJob> live = follower().liveJobs(row.id());
-                byItem.put(row.id(), live);
-                for (RetinalJobFollower.ExistingJob j : live) jobIds.add(j.jobId());
-            }
-            // Each job's number under the subject, for its canonical address.
-            Map<Long, RetinalJobAccess.JobAddress> addresses;
-            try (Connection c = dataSource.getConnection()) {
-                addresses = RetinalJobAccess.addressesOf(c, jobIds);
-            }
             for (int i = 0; i < rows.size(); i++) {
                 InboxRow row = rows.get(i);
-                List<RetinalJobFollower.ExistingJob> live = byItem.get(row.id());
-                if (live == null) continue;
+                if (!row.analysable()) continue;
                 List<ScanAnalysis> analyses = new ArrayList<>();
-                for (RetinalJobFollower.ExistingJob j : live) {
-                    RetinalJobAccess.JobAddress a = addresses.get(j.jobId());
-                    analyses.add(new ScanAnalysis(j.jobId(), a == null ? null : a.subjectSeq(), j.task(), j.status()));
+                for (RetinalJobFollower.ExistingJob j : follower().liveJobs(row.id())) {
+                    analyses.add(new ScanAnalysis(j.jobId(), j.task(), j.status()));
                 }
                 rows.set(i, row.withAnalyses(analyses));
             }

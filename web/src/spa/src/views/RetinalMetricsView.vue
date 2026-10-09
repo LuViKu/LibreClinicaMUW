@@ -119,11 +119,11 @@ function onCorrectionSaveError(message: string): void {
   )
 }
 
-// This view serves two routes:
-//   /retinal-jobs/:jobId               — canonical, by global job id
-//   /subjects/:subjectLabel/jobs/:seq  — per-subject deep link (2026-06-26)
-// For the deep link we resolve (label, seq) → jobId once via the backend
-// resolver; everything below keys off the resolved jobId exactly as before.
+// This view serves two routes, both keyed on the job id:
+//   /subjects/:subjectLabel/jobs/:jobId — canonical (2026-10-09: the job id,
+//                                         no longer a per-subject number)
+//   /retinal-jobs/:jobId                — old bookmarks; replaced by the
+//                                         canonical address once loaded
 const routeJobId = computed<number | null>(() => {
   const j = route.params.jobId
   return typeof j === 'string' && j !== '' ? Number(j) : null
@@ -132,22 +132,19 @@ const subjectLabelParam = computed<string | null>(() => {
   const l = route.params.subjectLabel
   return typeof l === 'string' && l !== '' ? l : null
 })
-const subjectSeqParam = computed<number | null>(() => {
-  const s = route.params.seq
-  return typeof s === 'string' && s !== '' ? Number(s) : null
-})
 const resolvedJobId = ref<number | null>(null)
 const resolving = ref(false)
 const resolveError = ref<string | null>(null)
 /**
- * NaN is the "not resolved yet" sentinel: on the per-subject deep link
- * (/subjects/{label}/jobs/{n}) there is no jobId until the backend resolver
- * returns. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
+ * NaN is the "not resolved yet" sentinel: on the canonical address
+ * (/subjects/{label}/jobs/{jobId}) the id in the URL is not trusted until the
+ * server has confirmed it belongs to that subject. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
  * ANY consumer that turns this into a request URL must guard with
  * `Number.isFinite(jobId.value)` — NaN passes a bare `!= null` check and we
  * shipped GET /retinal-jobs/NaN/segmentation for exactly that reason.
  */
-const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
+const jobId = computed<number>(() =>
+  (subjectLabelParam.value == null ? routeJobId.value : null) ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
 const geometry = computed(() => {
@@ -196,7 +193,7 @@ const siblingTabs = computed(() => {
     return {
       jobId: s.jobId,
       label: translated === key ? String(s.task).toUpperCase() : translated,
-      to: jobRoute({ jobId: s.jobId, subjectLabel: j.subjectLabel, subjectSeq: s.subjectSeq }),
+      to: jobRoute({ jobId: s.jobId, subjectLabel: j.subjectLabel }),
       current: s.jobId === j.jobId,
     }
   })
@@ -278,26 +275,26 @@ function onHoverBscan(z: number | null) {
 
 async function load() {
   try {
-    if (routeJobId.value != null) {
-      // Canonical by-id route.
+    if (routeJobId.value != null && subjectLabelParam.value == null) {
+      // The by-id address.
       resolvedJobId.value = routeJobId.value
       await store.loadJob(routeJobId.value, true)
       // 2026-10-09 — an old bookmark or a link that knew only the id: show
       // the job at its canonical address, replacing this history entry.
       const loaded = store.jobs[routeJobId.value]
-      if (loaded?.subjectLabel && loaded.subjectSeq != null) {
+      if (loaded?.subjectLabel) {
         await router.replace(jobRoute(loaded))
         return
       }
-    } else if (subjectLabelParam.value != null && subjectSeqParam.value != null) {
-      // Per-subject deep link — resolve (label, seq) → jobId first. Keeps a
-      // separate resolving/resolveError state because there's no jobId to key
-      // the store's per-job loading/error maps on until the resolve returns.
+    } else if (subjectLabelParam.value != null && routeJobId.value != null) {
+      // The canonical address: the server answers the job only when it
+      // belongs to this subject. Keeps its own resolving/resolveError state,
+      // as a 404 here is about the pair, not the job.
       resolving.value = true
       resolveError.value = null
       try {
-        const detail = await store.loadJobBySubjectSeq(
-          subjectLabelParam.value, subjectSeqParam.value)
+        const detail = await store.loadJobBySubject(
+          subjectLabelParam.value, routeJobId.value)
         resolvedJobId.value = detail?.jobId ?? null
         if (detail == null) resolveError.value = 'not found'
       } catch (e) {
@@ -337,7 +334,7 @@ function closeRerunMenuOnEscape(ev: KeyboardEvent): void {
 // route params (not jobId) because jobId is itself derived from the resolve —
 // watching it would loop on the per-subject path.
 watch(
-  () => [routeJobId.value, subjectLabelParam.value, subjectSeqParam.value],
+  () => [routeJobId.value, subjectLabelParam.value],
   () => { void load() },
 )
 
@@ -1071,13 +1068,13 @@ async function onRerunAs(task: RerunTask): Promise<void> {
     // own message text for the rest so the toast prefix is actionable.
     const apiErr = e as {
       status?: number
-      body?: { existingJobId?: number; subjectLabel?: string; subjectSeq?: number; message?: string } | string | null
+      body?: { existingJobId?: number; subjectLabel?: string; message?: string } | string | null
     }
     const body = (apiErr.body && typeof apiErr.body === 'object') ? apiErr.body : null
     const existing = body?.existingJobId
     if (typeof existing === 'number' && existing > 0) {
       outcome = { kind: 'duplicate', task, jobId: existing }
-      await router.push(jobRoute({ jobId: existing, subjectLabel: body?.subjectLabel, subjectSeq: body?.subjectSeq }))
+      await router.push(jobRoute({ jobId: existing, subjectLabel: body?.subjectLabel }))
     } else {
       const status = apiErr.status
       const serverMsg = body?.message ?? (typeof apiErr.body === 'string' ? apiErr.body : '')

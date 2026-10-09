@@ -179,7 +179,7 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
 
         assertEquals(202, a.status(), a.body().toString());
         long jobId = a.body().get("jobId").asLong();
-        assertEquals(1, a.body().get("subjectSeq").asInt(), "the subject's first job: " + a.body());
+        assertTrue(a.body().get("subjectSeq") == null, "no per-subject number: " + a.body());
         assertTrue(a.body().get("subjectLabel").asText().startsWith("SA-"), a.body().toString());
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
@@ -224,7 +224,7 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(scan.get("analysable").asBoolean());
         assertEquals(1, scan.get("analyses").size(), "the cancelled job is not listed: " + scan);
         assertEquals(done, scan.get("analyses").get(0).get("jobId").asLong());
-        assertEquals(1, scan.get("analyses").get(0).get("subjectSeq").asInt());
+        assertTrue(scan.get("analyses").get(0).get("subjectSeq") == null, "the job id is the one number");
         assertEquals("fluid", scan.get("analyses").get(0).get("task").asText());
         assertEquals("done", scan.get("analyses").get(0).get("status").asText());
         assertEquals(false, image.get("analysable").asBoolean());
@@ -391,6 +391,7 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(409, again.getStatus(), again.getContentAsString());
         JsonNode twin = JSON.readTree(again.getContentAsString());
         assertEquals(rerun, twin.get("existingJobId").asLong());
-        assertEquals(2, twin.get("subjectSeq").asInt(), "the re-run is the subject's second job: " + twin);
+        assertTrue(twin.get("subjectLabel").asText().startsWith("SA-"), "the twin's subject: " + twin);
+        assertTrue(twin.get("subjectSeq") == null, "no per-subject number: " + twin);
     }
 }

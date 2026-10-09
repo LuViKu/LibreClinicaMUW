@@ -270,7 +270,10 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     private static void retinal() {
         String r = V1 + "/retinal-jobs/";
         c("RetinalResultsApiController#getJob", f -> get(r + f.job));
-        c("RetinalResultsApiController#getJobBySubjectSeq", f -> get(V1 + "/subjects/" + f.label + "/retinal-jobs/1"));
+        c("RetinalResultsApiController#getJobBySubject", f -> get(V1 + "/subjects/" + f.label + "/retinal-jobs/" + f.job));
+        c("RetinalResultsApiController#getJobBySubject|foreign-job", f -> get(V1 + "/subjects/" + f.label + "/retinal-jobs/" + f.job))
+                .mixed((own, foreign) -> get(V1 + "/subjects/" + own.label + "/retinal-jobs/" + foreign.job))
+                .note("the caller's own subject in the path, another site's job id");
         c("RetinalResultsApiController#listByEventCrf", f -> get(V1 + "/event-crfs/" + f.eventCrf + "/retinal-jobs")).list()
                 .ownContains(f -> "\"jobId\":" + f.job);
         c("RetinalResultsApiController#listByStudySubject", f -> get(V1 + "/study-subjects/" + f.ss + "/retinal-jobs")).list()

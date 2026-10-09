@@ -2522,14 +2522,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/subjects/{subjectLabel}/retinal-jobs/{seq}": {
+    "/api/v1/subjects/{subjectLabel}/retinal-jobs/{jobId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getJobBySubjectSeq"];
+        get: operations["getJobBySubject"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11232,13 +11232,13 @@ export interface operations {
             };
         };
     };
-    getJobBySubjectSeq: {
+    getJobBySubject: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 subjectLabel: string;
-                seq: number;
+                jobId: number;
             };
             cookie?: never;
         };

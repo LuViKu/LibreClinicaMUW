@@ -38,7 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifa
 /**
  * The job page's location: where a job lives (subject, its number under the
  * subject, visit) and the other analyses of the same scan, on
- * {@code GET /retinal-jobs/{id}}. The number is the one the subject-scoped
+ * {@code GET /retinal-jobs/{id}}. The address is the subject and the job id:
  * address resolves, so the SPA can link every job canonically; a caller who
  * may not see the job learns none of it.
  */
@@ -156,7 +156,7 @@ class RetinalJobLocationDatabaseIT extends AbstractApiControllerDatabaseIT {
         JsonNode d = getJson("/api/v1/retinal-jobs/" + layers, investigator(), 200);
 
         assertEquals(s.label(), d.get("subjectLabel").asText());
-        assertEquals(2, d.get("subjectSeq").asInt(), "the second job filed for this subject");
+        assertTrue(d.get("subjectSeq") == null, "the job id is the one number in an address");
         assertEquals(s.event(), d.get("studyEventId").asInt());
         assertEquals(visitName(), d.get("visitName").asText());
         assertEquals("2026-03-04", d.get("visitDate").asText());
@@ -164,38 +164,68 @@ class RetinalJobLocationDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "the same scan's live analyses, legacy row included, cancelled one left out");
         assertFalse(ids(d.get("siblings")).contains(cancelled));
         for (JsonNode sib : d.get("siblings")) {
-            // Each sibling's number is the one its own address resolves.
+            // Each sibling resolves at its own address: the subject and its id.
             JsonNode resolved = getJson("/api/v1/subjects/" + s.label() + "/retinal-jobs/"
-                    + sib.get("subjectSeq").asInt(), investigator(), 200);
+                    + sib.get("jobId").asLong(), investigator(), 200);
             assertEquals(sib.get("jobId").asLong(), resolved.get("jobId").asLong());
             assertEquals(sib.get("task").asText(), resolved.get("task").asText());
         }
     }
 
     @Test
-    void theVisitsJobListNumbersEachJobForItsAddress() throws Exception {
+    void aJobOfAnotherSubjectIsNotFoundUnderThisLabel() throws Exception {
+        Scan mine = scan(1);
+        Scan other = scan(1);
+        job(mine, "fluid", "done", true, true, 20);
+        long theirs = job(other, "fluid", "done", true, true, 10);
+        MockHttpServletResponse r = mvc().perform(get("/api/v1/subjects/" + mine.label() + "/retinal-jobs/" + theirs)
+                .session(investigator())).andReturn().getResponse();
+        assertEquals(404, r.getStatus(), r.getContentAsString());
+        assertFalse(r.getContentAsString().contains(other.label()), "no word of the other subject");
+        assertFalse(r.getContentAsString().contains("siblings"));
+        // Its own subject's address answers it.
+        assertEquals(theirs, getJson("/api/v1/subjects/" + other.label() + "/retinal-jobs/" + theirs,
+                investigator(), 200).get("jobId").asLong());
+    }
+
+    @Test
+    void anUnknownJobIdIsNotFound() throws Exception {
         Scan s = scan(1);
-        job(s, "fluid", "done", true, true, 30);
-        int ecrf;
+        job(s, "fluid", "done", true, true, 10);
+        MockHttpServletResponse r = mvc().perform(get("/api/v1/subjects/" + s.label() + "/retinal-jobs/987654321")
+                .session(investigator())).andReturn().getResponse();
+        assertEquals(404, r.getStatus(), r.getContentAsString());
+    }
+
+    /**
+     * The defect the per-subject number had: it counted only jobs filed to a
+     * visit, so taking an earlier scan off its visit renumbered every later
+     * job and a saved address opened another one. An address is the job id.
+     */
+    @Test
+    void detachingAnEarlierJobDoesNotMoveAnyOtherJobsAddress() throws Exception {
+        Scan s = scan(1);
+        long first = job(s, "fluid", "done", true, true, 30);
+        long second = job(s, "layers", "done", true, true, 20);
+        long third = job(s, "onl", "done", true, true, 10);
+        String addrSecond = address(getJson("/api/v1/retinal-jobs/" + second, investigator(), 200));
+        String addrThird = address(getJson("/api/v1/retinal-jobs/" + third, investigator(), 200));
+        assertEquals(second, getJson(addrSecond, investigator(), 200).get("jobId").asLong());
+
         try (Connection c = DATA_SOURCE.getConnection()) {
-            ecrf = LifecycleFixtures.insertEventCrf(c, s.event(), s.subject(), 1, 1);
+            CrossSiteIsolationSupport.exec(c, "UPDATE retinal_inference_job SET study_event_id = NULL WHERE job_id = " + first);
         }
-        long onCrf;
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO retinal_inference_job (event_crf_id, task, e2e_path, eye_laterality, status, "
-                             + "enqueued_at, scan_index) VALUES (?, 'layers', '/nowhere.e2e', 'OS', 'done', now(), 1) "
-                             + "RETURNING job_id")) {
-            ps.setInt(1, ecrf);
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                onCrf = rs.getLong(1);
-            }
-        }
-        JsonNode list = getJson("/api/v1/event-crfs/" + ecrf + "/retinal-jobs", investigator(), 200);
-        assertEquals(1, list.size(), list.toString());
-        assertEquals(onCrf, list.get(0).get("jobId").asLong());
-        assertEquals(2, list.get(0).get("subjectSeq").asInt(), "second of the subject's jobs: " + list);
+
+        assertEquals(second, getJson(addrSecond, investigator(), 200).get("jobId").asLong(), "the second job's address");
+        assertEquals(third, getJson(addrThird, investigator(), 200).get("jobId").asLong(), "the third job's address");
+        assertEquals(addrSecond, address(getJson("/api/v1/retinal-jobs/" + second, investigator(), 200)),
+                "the address the job reports is unchanged");
+    }
+
+    /** The resolver address the SPA's jobRoute builds from a detail. */
+    private static String address(JsonNode detail) {
+        return "/api/v1/subjects/" + detail.get("subjectLabel").asText() + "/retinal-jobs/"
+                + (detail.hasNonNull("subjectSeq") ? detail.get("subjectSeq").asLong() : detail.get("jobId").asLong());
     }
 
     @Test
@@ -238,12 +268,14 @@ class RetinalJobLocationDatabaseIT extends AbstractApiControllerDatabaseIT {
         long a = job(s, "fluid", "done", true, true, 20);
         job(s, "layers", "done", true, true, 10);
 
-        MockHttpServletResponse r = mvc().perform(get("/api/v1/retinal-jobs/" + a).session(investigator()))
-                .andReturn().getResponse();
-        assertTrue(r.getStatus() == 403 || r.getStatus() == 404, r.getContentAsString());
-        String body = r.getContentAsString();
-        assertFalse(body.contains(s.label()), "no subject label: " + body);
-        assertFalse(body.contains("siblings"), "no sibling list: " + body);
-        assertFalse(body.contains("visitName"), "no visit: " + body);
+        for (String path : new String[] {"/api/v1/retinal-jobs/" + a,
+                "/api/v1/subjects/" + s.label() + "/retinal-jobs/" + a}) {
+            MockHttpServletResponse r = mvc().perform(get(path).session(investigator())).andReturn().getResponse();
+            assertTrue(r.getStatus() == 403 || r.getStatus() == 404, path + ": " + r.getContentAsString());
+            String body = r.getContentAsString();
+            assertFalse(body.contains("subjectLabel"), "no subject: " + body);
+            assertFalse(body.contains("siblings"), "no sibling list: " + body);
+            assertFalse(body.contains("visitName"), "no visit: " + body);
+        }
     }
 }

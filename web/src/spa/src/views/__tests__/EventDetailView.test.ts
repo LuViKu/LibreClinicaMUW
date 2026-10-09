@@ -444,7 +444,7 @@ describe('EventDetailView — analyses of a filed scan', () => {
               laterality: 'OD', acquisitionDate: null, acquisitionDateSource: null, modality: null,
               originalFilename: null, byteSize: null, scanIndex: 0, receivedAt: null,
               previewUrl: '/pages/api/v1/ingest/6/preview', hasPreview: false, suggestion: null, twin: null,
-              analysable: true, analyses: [{ jobId: 9, subjectSeq: 2, task: 'fluid', status: 'done' }] }],
+              analysable: true, analyses: [{ jobId: 9, task: 'fluid', status: 'done' }] }],
             studyEventId: 42, pendingForSubject: 0, plan: [],
           })
         : Promise.resolve({ ...TWO_ROWS, status }),
