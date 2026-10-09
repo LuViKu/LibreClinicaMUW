@@ -8,7 +8,9 @@ import numpy as np
 from pydicom.dataset import Dataset
 
 # DICOM Laterality (0020,0060) / Image Laterality (0020,0062) → ophthalmic OD/OS/OU.
-_LATERALITY = {"R": "OD", "L": "OS", "B": "OU"}
+# OD/OS/OU are accepted as written too: a third-party .e2e -> DICOM converter
+# puts Laterality = "OD" (not the DICOM code R) and no ImageLaterality.
+_LATERALITY = {"R": "OD", "L": "OS", "B": "OU", "OD": "OD", "OS": "OS", "OU": "OU"}
 
 
 def _s(ds: Dataset, name: str) -> str | None:
@@ -94,6 +96,33 @@ def extract(ds: Dataset, source_ae: str) -> dict:
     }
 
 
+# Ophthalmic Tomography Image Storage (PS3.4 B.5) — the OCT volume SOP class.
+OPT_SOP_CLASS_UID = "1.2.840.10008.5.1.4.1.1.77.1.5.4"
+
+
+def number_of_frames(ds: Dataset) -> int | None:
+    """NumberOfFrames (0028,0008) as an int; None when absent or malformed."""
+    try:
+        raw = _s(ds, "NumberOfFrames")
+        if raw is None:
+            return None
+        n = int(float(raw))
+    except (TypeError, ValueError):  # a malformed IS fails on access
+        return None
+    return n if n >= 1 else None
+
+
+def is_oct_volume(ds: Dataset) -> bool:
+    """An OCT volume: the OPT SOP class or Modality OPT, with more than one frame.
+
+    A single OPT frame (a line scan) is not a volume: the app's volume
+    analyses need a stack of B-scans.
+    """
+    is_opt = _s(ds, "SOPClassUID") == OPT_SOP_CLASS_UID or (_s(ds, "Modality") or "").upper() == "OPT"
+    n = number_of_frames(ds)
+    return bool(is_opt and n is not None and n > 1)
+
+
 def describe(ds: Dataset) -> dict:
     """What the describe endpoint (DR-029) answers for an uploaded file.
 
@@ -117,5 +146,7 @@ def describe(ds: Dataset) -> dict:
         "transferSyntaxUid": transfer_syntax or None,
         "rows": getattr(ds, "Rows", None),
         "columns": getattr(ds, "Columns", None),
+        "numberOfFrames": number_of_frames(ds),
+        "octVolume": is_oct_volume(ds),
         "pixelSha256": pixel_sha256(ds),
     }

@@ -118,12 +118,36 @@ def _resolve_dcm(path: Path) -> tuple[Path, Path]:
 
 
 def _spacing_mm(dcm_file: Path) -> tuple[float, float, float]:
-    """(axial, lateral, slice) mm from the bscan.dcm."""
+    """(axial, lateral, slice) mm from the bscan.dcm.
+
+    The preprocess sidecar writes the spacing at the top level; a multi-frame
+    OPT export that reaches here unnormalised keeps it in the Pixel Measures
+    functional group instead, so both are read (``dicom_geometry``). Every
+    handler uses only the axial / lateral value; a missing slice spacing keeps
+    the historic slice = lateral fallback. A missing PixelSpacing raises a
+    ValueError naming it, rather than an AttributeError deep in a task.
+    """
     import pydicom
 
+    from retinal_inference.dicom_geometry import (
+        SpacingUnavailable,
+        pixel_spacing_mm,
+        slice_spacing_mm,
+    )
+
     ds = pydicom.dcmread(str(dcm_file), stop_before_pixels=True)
-    axial, lateral = float(ds.PixelSpacing[0]), float(ds.PixelSpacing[1])
-    slice_mm = float(getattr(ds, "SpacingBetweenSlices", lateral))
+    try:
+        # Resolves which stored value is axial (a third-party e2e->DICOM
+        # converter was seen writing [lateral, axial]); ambiguous -> ValueError.
+        # The cluster only receives the bscan.dcm our preprocess step wrote,
+        # so its own-writer marker is trusted here (and only here).
+        axial, lateral, _src, _order = pixel_spacing_mm(ds, trust_own_writer=True)
+    except SpacingUnavailable as e:
+        raise ValueError(f"{Path(dcm_file).name}: cannot read PixelSpacing: {e}") from e
+    try:
+        slice_mm, _src = slice_spacing_mm(ds)
+    except SpacingUnavailable:
+        slice_mm = lateral
     return axial, lateral, slice_mm
 
 

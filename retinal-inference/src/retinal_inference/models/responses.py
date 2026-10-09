@@ -73,6 +73,15 @@ class ScreenResponse(BaseModel):
     model_version: str
 
 
+class TaskDevice(BaseModel):
+    """One task's device declaration on ``/health`` (see ``devices.py``)."""
+
+    label: str
+    manufacturers: list[str]
+    models: list[str]
+    model_required: bool = False
+
+
 class HealthResponse(BaseModel):
     """200 response from GET /health.
 
@@ -98,6 +107,12 @@ class HealthResponse(BaseModel):
     max_concurrent_runs: int = 1
     slurm_partition: str | None = None
     slurm_gres: str | None = None
+    # Vendor gating (``retinal_inference.devices``): per task, the devices its
+    # model was trained on. ``/run`` refuses a DICOM from any other device with
+    # 422 ``unsupported_device``. Keys are task names; each value carries
+    # ``label``, ``manufacturers`` / ``models`` (case-insensitive substrings)
+    # and ``model_required``.
+    task_devices: dict[str, TaskDevice] = {}
 
 
 class JobStatusResponse(BaseModel):

@@ -250,6 +250,8 @@ def _two_runs(monkeypatch, tmp_path, limit, slurm_on) -> int:
     monkeypatch.setattr(run_module, "get_adapter", lambda: adapter)
     run_module._idempotency_cache.clear()
 
+    from tests.oct_dicom_factory import make_opt
+
     async def go():
         from retinal_inference.main import app
 
@@ -258,7 +260,8 @@ def _two_runs(monkeypatch, tmp_path, limit, slurm_on) -> int:
             async def one(i):
                 return await c.post(
                     "/run",
-                    files={"file": ("bscan.dcm", b"x" * 10)},
+                    # A readable Spectralis DICOM: /run gates DICOM inputs by device.
+                    files={"file": ("bscan.dcm", make_opt())},
                     data={"task": "fluid", "laterality": "OD"},
                     headers={"X-MUW-Inference-Token": "tok", "Idempotency-Key": f"k{i}"},
                 )

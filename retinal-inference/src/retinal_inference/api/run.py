@@ -42,6 +42,7 @@ from retinal_inference.inference.artifact_collector import (
     collect_artifacts,
     rewrite_payload_paths,
 )
+from retinal_inference.devices import device_supported, unsupported_message
 from retinal_inference.models.run import RunEnvelope
 from retinal_inference.security import token_matches
 from retinal_inference.tasks import SUPPORTED_TASKS, TaskName
@@ -98,6 +99,48 @@ def _is_dicom(filename: str | None, body: bytes) -> bool:
         return True
     # DICOM Part-10: 128-byte preamble followed by the "DICM" magic.
     return len(body) >= 132 and body[128:132] == b"DICM"
+
+
+def _check_device(task: str, body: bytes) -> None:
+    """Refuse a DICOM whose device the task's model was not trained on (422).
+
+    Only the header is parsed. An ``.e2e`` input is not gated: it is always a
+    Heidelberg Spectralis export (and has no DICOM header to read). An
+    unreadable DICOM is refused here too, before any model runs on it.
+    """
+    import io
+
+    import pydicom
+    from pydicom.errors import InvalidDicomError
+
+    try:
+        ds = pydicom.dcmread(io.BytesIO(body), stop_before_pixels=True)
+        if "SOPClassUID" not in ds and "Modality" not in ds:
+            # pydicom reads a bare preamble + "DICM" as an empty dataset.
+            raise InvalidDicomError("no SOP Class UID and no Modality")
+        manufacturer = str(getattr(ds, "Manufacturer", "") or "").strip()
+        model = str(getattr(ds, "ManufacturerModelName", "") or "").strip()
+    except (InvalidDicomError, ValueError, TypeError, EOFError, OSError, AttributeError,
+            KeyError, IndexError) as e:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_dicom",
+                "message": f"The uploaded DICOM cannot be read: {type(e).__name__}",
+            },
+        ) from e
+    if not device_supported(task, manufacturer, model):  # type: ignore[arg-type]
+        LOG.warning("/run refused task=%s for device %r / %r", task, manufacturer, model)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "unsupported_device",
+                "message": unsupported_message(task, manufacturer, model),
+                "task": task,
+                "manufacturer": manufacturer or None,
+                "model": model or None,
+            },
+        )
 
 
 def _materialize_input(tempdir: Path, filename: str | None, body: bytes) -> Path:
@@ -206,6 +249,8 @@ async def _run_locked(
     body = await file.read()
     if not body:
         raise HTTPException(status_code=400, detail="file part is empty")
+    if _is_dicom(file.filename, body):
+        _check_device(task, body)
 
     # 2026-06-24 — preserve the tempdir on FAILURE so post-mortem can run
     # the (host-native) IOWA binary by hand against the prepared bscan.dcm.
