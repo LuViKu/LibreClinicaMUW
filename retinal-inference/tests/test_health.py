@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from retinal_inference.api import health as health_api
 from retinal_inference.api.health import parse_gpu_name
 
 
@@ -42,3 +43,16 @@ def test_parse_gpu_name_is_none_when_unpinned_absent_or_multi() -> None:
     assert parse_gpu_name("7", LISTING) is None
     assert parse_gpu_name("0,1", LISTING) is None
     assert parse_gpu_name("0", "") is None
+
+
+def test_health_lists_only_the_tasks_the_adapter_can_run(app_client, monkeypatch) -> None:
+    # An unconfigured model must read as missing, or the degraded alarm never fires.
+    class Partial:
+        model_version = "partial-v1"
+
+        def supports(self, task):
+            return task in {"fluid", "sdretinanet"}
+
+    monkeypatch.setattr(health_api, "get_adapter", lambda: Partial())
+    body = app_client.get("/health").json()
+    assert body["supported_tasks"] == ["fluid", "sdretinanet"]

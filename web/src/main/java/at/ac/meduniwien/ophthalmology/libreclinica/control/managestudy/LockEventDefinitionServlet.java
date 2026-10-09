@@ -156,7 +156,7 @@ public class LockEventDefinitionServlet extends SecureController {
                         item.setStatus(Status.LOCKED);
                         item.setUpdater(ub);
                         item.setUpdatedDate(new Date());
-                        iddao.update(item);
+                        iddao.updateStatusOnly(item);
                     }
                 }
             }

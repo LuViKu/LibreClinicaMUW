@@ -14,6 +14,7 @@ import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
 import { useCrfPreviewStore } from '@/stores/crfPreview'
 import { useAuthStore } from '@/stores/auth'
+import { mayBuildStudy, maySysadminOnly } from '@/lib/studyBuildAccess'
 import { useConfirm } from '@/composables/useConfirm'
 import type { Crf, CrfVersion } from '@/types/crfLibrary'
 
@@ -38,10 +39,7 @@ const lib = useCrfLibraryStore()
 const auth = useAuthStore()
 const confirm = useConfirm()
 
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager' || role === 'CRC'
-})
+const canManage = computed(() => mayBuildStudy(auth.user?.role))
 const includeRemoved = ref(false)
 
 onMounted(() => lib.loadCrfs(includeRemoved.value))
@@ -260,7 +258,7 @@ async function onDisableVersion(crf: Crf, versionOid: string, versionName: strin
 // will replace the hard-remove flow with a structured modal that
 // renders the VersionUsageReport on 409.
 
-const isSysadmin = computed(() => auth.user?.role === 'Administrator')
+const isSysadmin = computed(() => maySysadminOnly(auth.user?.role))
 
 async function onLockVersion(crf: Crf, versionOid: string, versionName: string) {
   if (!(await confirm({ message: t('crfLibrary.lockConfirm', { name: crf.name, version: versionName }), danger: true }))) return

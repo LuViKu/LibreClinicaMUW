@@ -174,6 +174,8 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         int ingestUnbound;
         int ingestFresh;
         int ingestDismissed;
+        /** An OCT volume filed to the visit, its file on disk, with no job yet. */
+        int ingestOct;
         int dataset;
         int archivedFile;
         long exportJob;
@@ -215,6 +217,20 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
 
     static RetinalArtifactStorageService artifactStore;
 
+    /** The DATAINFO this class found, restored after it so the next class sees no change. */
+    private static java.util.Properties savedDatainfo;
+
+    @org.junit.jupiter.api.AfterAll
+    static void restoreDatainfo() throws Exception {
+        java.lang.reflect.Field dataInfo = CoreResources.class.getDeclaredField("DATAINFO");
+        dataInfo.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) dataInfo.get(null);
+        if (live != null && savedDatainfo != null) {
+            live.clear();
+            live.putAll(savedDatainfo);
+        }
+    }
+
     @BeforeAll
     static void seedWorld() throws Exception {
         // Another class of the same JVM left a MockMvc, sessions and fixtures bound to its own database.
@@ -225,6 +241,23 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         CrossSiteIsolationMatrix.reset();
         fileRoot = Files.createTempDirectory("isolation-it-");
         bscanRoot = Files.createDirectories(fileRoot.resolve("bscan-store"));
+        // The direct OCT upload and the staff upload write to
+        // core.retinalInference.e2eUploadsPath and core.ingest.storePath, which
+        // otherwise fall back to /var/lib/libreclinica. Other IT classes set and
+        // restore them, so without this the own-site controls depended on which
+        // class ran before (the OCT one failed on the CI runner).
+        java.lang.reflect.Field dataInfo = CoreResources.class.getDeclaredField("DATAINFO");
+        dataInfo.setAccessible(true);
+        java.util.Properties live = (java.util.Properties) dataInfo.get(null);
+        savedDatainfo = new java.util.Properties();
+        if (live != null) {
+            savedDatainfo.putAll(live);
+            live.setProperty("core.retinalInference.e2eUploadsPath",
+                    Files.createDirectories(fileRoot.resolve("e2e-uploads")).toString());
+            // Same for the staff upload's artifact store (default /var/lib/libreclinica/ingest).
+            live.setProperty(at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore.CONFIG_KEY_STORE_PATH,
+                    Files.createDirectories(fileRoot.resolve("ingest-store")).toString());
+        }
         final String bscanRootStr = bscanRoot.toString();
         artifactStore = new RetinalArtifactStorageService() {
             @Override
@@ -421,6 +454,16 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
                             + "'upload', '" + site.tag.toLowerCase() + "-cam', '" + dismissed.toString().replace('\\', '/')
                             + "', '" + site.tag.toLowerCase() + "-" + n + "-dismissed.jpg', 'OD', now(), 'DISMISSED', '"
                             + f.pid + "', '" + sha(site, n, 7) + "', 20, " + site.id + ") RETURNING ingest_item_id");
+
+            Path octFile = dir.resolve("filed.e2e");
+            Files.write(octFile, (f.label + " filed scan").getBytes(StandardCharsets.UTF_8));
+            f.ingestOct = LifecycleFixtures.insertOne(c,
+                    "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
+                            + "laterality, received_at, status, bound_study_subject_id, bound_study_event_id, "
+                            + "patient_id, sha256, scan_index, byte_size) VALUES ('e2e', 'upload', '"
+                            + site.tag.toLowerCase() + "-oct', '" + octFile.toString().replace('\\', '/') + "', '"
+                            + site.tag.toLowerCase() + "-" + n + "-filed.e2e', 'OD', now(), 'BOUND', " + f.ss + ", "
+                            + f.event + ", '" + f.pid + "', '" + sha(site, n, 9) + "', 0, 20) RETURNING ingest_item_id");
 
             // A parked OCT job: no visit yet; its ingest item (origin = the uploader's study) is what places it.
             Path parkedFile = dir.resolve("parked.e2e");

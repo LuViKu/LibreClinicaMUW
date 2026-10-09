@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd">
+
+    <!--
+        2026-10-07 — allow the `sdretinanet` retinal task (SD-RetinaNet:
+        12 layer boundaries + 7 lesion classes per B-scan) in the legacy
+        per-event-definition task table. The visit imaging plan column and
+        the job/result task columns have no CHECK, so this is the only
+        constraint that names the tasks. Nothing is seeded: a study turns the
+        task on in its imaging plan.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-07-retinal-task-check-sdretinanet" dbms="postgresql">
+        <comment>Relax CHECK to include sdretinanet.</comment>
+        <sql>
+            ALTER TABLE event_definition_retinal_task
+            DROP CONSTRAINT IF EXISTS ck_event_def_retinal_task_allowed;
+            ALTER TABLE event_definition_retinal_task
+            ADD CONSTRAINT ck_event_def_retinal_task_allowed
+            CHECK (task IN ('fluid','ga','onl','pr','layers','sdretinanet'));
+        </sql>
+        <rollback>
+            <sql>
+                DELETE FROM event_definition_retinal_task WHERE task = 'sdretinanet';
+                ALTER TABLE event_definition_retinal_task
+                DROP CONSTRAINT IF EXISTS ck_event_def_retinal_task_allowed;
+                ALTER TABLE event_definition_retinal_task
+                ADD CONSTRAINT ck_event_def_retinal_task_allowed
+                CHECK (task IN ('fluid','ga','onl','pr','layers'));
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

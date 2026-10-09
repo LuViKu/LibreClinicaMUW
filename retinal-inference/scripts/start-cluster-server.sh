@@ -8,7 +8,7 @@
 #
 # WHY THIS EXISTS
 #   The env block used to live in an untracked ~/start_sidecar.sh with
-#   `BM_LD_LIBRARY_PATH` left as a TODO comment. Any restart therefore came up
+#   `BM_LD_LIBRARY_PATH` left as a placeholder comment. Any restart therefore came up
 #   silently missing the `bm` AND `layers` tasks (the BM venv python can't find
 #   libpython3.8.so without it). This script:
 #     * derives BM_LD_LIBRARY_PATH from the LMOD modules instead of hardcoding
@@ -38,6 +38,9 @@
 #     RI_SLURM_EXCLUDE      optional, nodes to avoid: recommended vn1,vn2,cn5
 #                           (vn1/vn2 unvalidated, cn5 DOWN)
 #     RI_SLURM_NODELIST     optional, restrict GPU jobs to these nodes
+#     RI_SLURM_SDRETINANET_GRES      default gpu:nva6000:1 -- sdretinanet's models
+#                           are compiled for sm_80 and fail on the 2080 Ti nodes
+#     RI_SLURM_SDRETINANET_NODELIST  optional; RI_SLURM_NODELIST does not apply to it
 #     RI_SLURM_IOWA_CPUS / RI_SLURM_IOWA_MEM  optional sizing of the CPU-only
 #                           IOWA job (ga/layers); it runs under srun, no gres
 #     RI_MAX_CONCURRENT     default 4 (direct mode: 1)
@@ -124,6 +127,8 @@ if [ "$RI_SLURM" = 1 ]; then
   [ -z "${RI_SLURM_CONSTRAINT:-}" ] || export RETINAL_INFERENCE_APPTAINER_SLURM_CONSTRAINT="$RI_SLURM_CONSTRAINT"
   [ -z "${RI_SLURM_EXCLUDE:-}" ]    || export RETINAL_INFERENCE_APPTAINER_SLURM_EXCLUDE="$RI_SLURM_EXCLUDE"
   [ -z "${RI_SLURM_NODELIST:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_NODELIST="$RI_SLURM_NODELIST"
+  export RETINAL_INFERENCE_APPTAINER_SLURM_SDRETINANET_GRES="${RI_SLURM_SDRETINANET_GRES:-gpu:nva6000:1}"
+  [ -z "${RI_SLURM_SDRETINANET_NODELIST:-}" ] || export RETINAL_INFERENCE_APPTAINER_SLURM_SDRETINANET_NODELIST="$RI_SLURM_SDRETINANET_NODELIST"
   [ -z "${RI_SLURM_IOWA_CPUS:-}" ]  || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_CPUS_PER_TASK="$RI_SLURM_IOWA_CPUS"
   [ -z "${RI_SLURM_IOWA_MEM:-}" ]   || export RETINAL_INFERENCE_APPTAINER_SLURM_IOWA_MEM="$RI_SLURM_IOWA_MEM"
   export RETINAL_INFERENCE_MAX_CONCURRENT_RUNS="${RI_MAX_CONCURRENT:-4}"
@@ -171,6 +176,16 @@ export RETINAL_INFERENCE_BM_CODE="$RI_SHARED/Processor_Implementations/sese_bm_f
 if [ "$RI_SLURM" != 1 ]; then
   export RETINAL_INFERENCE_BM_GPU_DEVICE="${RETINAL_INFERENCE_BM_GPU_DEVICE:-$RETINAL_INFERENCE_APPTAINER_GPU_DEVICE}"
 fi
+
+# sdretinanet — the SD-RetinaNet standalone .sif (copied out of
+# bfazekas03/singularity-images/lesions-layerseg-standalone) and the
+# --output_formatter that makes it write the native layers/ + lesions/ files.
+# Optional: when either file is missing the task is left out (see preflight).
+: "${RI_SDRETINANET_SIF:=$RI_HOME/ri/retinanet-spectralis_main.sif}"
+: "${RI_SDRETINANET_FORMATTER:=$RI_REPO/runners/sdretinanet/format_output.py}"
+# model0..4.pt2: the image's own copy is unreadable for other users, so a
+# readable copy (from lesions-layerseg-standalone/aot_models_spectralis) is bound over it
+: "${RI_SDRETINANET_MODELS:=$RI_HOME/ri/sdretinanet_aot_models}"
 
 # ----------------------------- BM_LD_LIBRARY_PATH -----------------------------
 # The BM venv python needs the LMOD module lib dirs (libpython3.8.so et al).
@@ -221,8 +236,25 @@ if [ -z "${RETINAL_INFERENCE_BM_LD_LIBRARY_PATH:-}" ]; then
 fi
 
 # ----------------------------- preflight --------------------------------------
-ALL_TASKS="bm fluid ga layers onl pr"
+ALL_TASKS="bm fluid ga layers onl pr sdretinanet"
 EXPECTED_TASKS="$ALL_TASKS"
+
+# sdretinanet needs its .sif, formatter and models, and SLURM mode: the models
+# are compiled for sm_80 and the server's own Turing GPU cannot run them. Without
+# any of these it is left out and the server starts degraded, like bm/layers
+# below; it never costs the others.
+if [ "$RI_SLURM" = 1 ] && [ -r "$RI_SDRETINANET_SIF" ] && [ -r "$RI_SDRETINANET_FORMATTER" ] && [ -r "$RI_SDRETINANET_MODELS/model0.pt2" ]; then
+  export RETINAL_INFERENCE_SDRETINANET_SIF="$RI_SDRETINANET_SIF"
+  export RETINAL_INFERENCE_SDRETINANET_FORMATTER="$RI_SDRETINANET_FORMATTER"
+  export RETINAL_INFERENCE_SDRETINANET_MODELS="$RI_SDRETINANET_MODELS"
+else
+  if [ "$STRICT" = 1 ] || [ "$MODE" = "--check" ]; then
+    die "sdretinanet: needs SLURM mode plus $RI_SDRETINANET_SIF, $RI_SDRETINANET_FORMATTER and $RI_SDRETINANET_MODELS/model*.pt2 (set RI_SDRETINANET_SIF / _FORMATTER / _MODELS)"
+  fi
+  warn "DEGRADED: starting WITHOUT 'sdretinanet' — it needs SLURM mode plus its .sif, formatter and models ($RI_SDRETINANET_MODELS)"
+  unset RETINAL_INFERENCE_SDRETINANET_SIF RETINAL_INFERENCE_SDRETINANET_FORMATTER RETINAL_INFERENCE_SDRETINANET_MODELS
+  EXPECTED_TASKS="bm fluid ga layers onl pr"
+fi
 
 # A missing BM_LD_LIBRARY_PATH costs us `bm` and `layers`. It must NOT cost us
 # the other four.
@@ -250,7 +282,9 @@ if [ -z "$RETINAL_INFERENCE_BM_LD_LIBRARY_PATH" ]; then
   # Unset rather than export empty: the adapter keys capability off the var
   # being absent, and an empty string is not reliably falsy on the Python side.
   unset RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
-  EXPECTED_TASKS="fluid ga onl pr"
+  EXPECTED_TASKS="$(printf '%s
+' $EXPECTED_TASKS | grep -vx -e bm -e layers | tr '
+' ' ' | sed 's/ $//')"
 else
   export RETINAL_INFERENCE_BM_LD_LIBRARY_PATH
 fi
@@ -295,7 +329,10 @@ assert_tasks() {
   if [ "$EXPECTED_TASKS" = "$ALL_TASKS" ]; then
     log "all tasks registered: $EXPECTED_TASKS"
   else
-    warn "DEGRADED but serving: registered [$EXPECTED_TASKS]; bm + layers absent"
+    warn "DEGRADED but serving: registered [$EXPECTED_TASKS]; absent: $(printf '%s
+' $ALL_TASKS | grep -vxF "$(printf '%s
+' $EXPECTED_TASKS)" | tr '
+' ' ')"
   fi
   log "health: $health"
 }

@@ -753,7 +753,7 @@ public class DatasetsApiController {
             }
             case EXCEL -> {
                 // The legacy /ExportDataset Excel branch doesn't actually
-                // emit a binary .xls (TODO in the servlet since 2009);
+                // emit a binary .xls;
                 // it streams a generated tab file with a .xls
                 // Content-Disposition. Replicate by reusing the tab
                 // pipeline — operators get a .xls Excel can open

@@ -740,7 +740,7 @@ public class CoreResources implements ResourceLoaderAware {
                                 + " removed from this release. The extract itself still runs; no PDF is produced.", i, whichFunction);
                         epbean.setPostProcessing(null);
                     }
-                    // since the database is the last option TODO: think about custom post processing options
+                    // the database is the last option: any other postProcessor value is treated as a SQL target
                     else {
                         SqlProcessingFunction function = new SqlProcessingFunction(epbean);
     

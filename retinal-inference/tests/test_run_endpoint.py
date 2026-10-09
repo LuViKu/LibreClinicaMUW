@@ -190,7 +190,11 @@ def test_materialize_input_names_by_kind(tmp_path) -> None:
 
 def test_run_accepts_dicom_upload(client) -> None:
     # A DICOM upload (Part-10 magic) must be accepted and routed like a .e2e.
-    files = {"file": ("bscan.dcm", b"\x00" * 128 + b"DICM" + b"x", "application/dicom")}
+    # It has to be a readable header from a supported device: /run gates DICOM
+    # inputs by device (test_device_gating.py covers the refusals).
+    from tests.oct_dicom_factory import make_opt
+
+    files = {"file": ("bscan.dcm", make_opt(), "application/dicom")}
     data = {"task": "onl", "laterality": "OD"}
     headers = {"X-MUW-Inference-Token": "secret-test-token"}
     r = client.post("/run", files=files, data=data, headers=headers)

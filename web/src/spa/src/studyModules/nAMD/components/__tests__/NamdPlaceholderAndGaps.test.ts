@@ -4,10 +4,10 @@
  * values, and the warning in the printed report; (2) unknown volumes are gaps
  * in the fluid trend chart, never a flat zero that reads as "dry".
  */
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import NamdPlaceholderBanner from '../NamdPlaceholderBanner.vue'
 import NamdSegCards from '../NamdSegCards.vue'
 import NamdFluidTrendChart from '../NamdFluidTrendChart.vue'
@@ -16,6 +16,11 @@ import NamdReportTab from '../../views/NamdReportTab.vue'
 import de from '../../locales/de.json'
 import en from '../../locales/en.json'
 import type { NamdVisit, NamdWorkspaceData } from '../../types'
+
+// Several tests mount without keeping the wrapper. Unmount them all after each
+// test, so no re-render of a still-mounted chart lands after the environment is
+// torn down ("window is not defined" from vue-i18n on a slow CI runner).
+enableAutoUnmount(afterEach)
 
 function i18n(locale: 'de' | 'en' = 'de') {
   return createI18n({

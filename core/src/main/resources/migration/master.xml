@@ -130,5 +130,8 @@
   <include  file="migration/lc-muw-2026-10-06-account-lockout.xml"/>
   <include  file="migration/lc-muw-2026-10-07-audit-types-deidentification.xml"/>
   <include  file="migration/lc-muw-2026-10-07-ingest-origin-study.xml"/>
+  <include  file="migration/lc-muw-2026-10-07-retinal-task-sdretinanet.xml"/>
+  <include  file="migration/lc-muw-2026-10-09-dicom-oct-volume.xml"/>
+  <include  file="migration/lc-muw-2026-10-09-imaging-modality-oct-marker.xml"/>
 </databaseChangeLog>
 

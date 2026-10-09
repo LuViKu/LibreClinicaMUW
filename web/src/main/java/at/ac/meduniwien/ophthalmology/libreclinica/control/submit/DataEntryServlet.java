@@ -4569,7 +4569,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                 DisplayItemBean displayItemBean = new DisplayItemBean();
                 ItemFormMetadataBean ifm = ifmdao.findByItemIdAndCRFVersionId(itBean.getId(), ecb.getCRFVersionId());
-               // itBean.setItemMeta(ifm);//TODO:remove this or the one down displayItemBean.setMetadata(ifm);
                 displayItemBean.setMetadata(ifm);
                 displayItemBean.setItem(itBean);
                 ItemDataBean itemData =  dataMap.get(itBean.getId()+","+i);

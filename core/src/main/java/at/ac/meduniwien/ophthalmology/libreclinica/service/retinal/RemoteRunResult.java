@@ -46,7 +46,28 @@ public record RemoteRunResult(String modelVersion,
                               String laterality,
                               PixelGeometry geometry,
                               String e2eUuid,
-                              String acquisitionDate) {
+                              String acquisitionDate,
+                              ScanSource source) {
+
+    /**
+     * DR-039 — the ctor before {@code source}: what the preprocess sidecar
+     * reported about the scan's format and device (null when the step was
+     * skipped or the sidecar predates the headers).
+     */
+    public RemoteRunResult(String modelVersion,
+                           double primaryMetricValue,
+                           String primaryMetricUnit,
+                           Map<String, Object> outputPayload,
+                           double confidence,
+                           List<Artifact> artifacts,
+                           String task,
+                           String laterality,
+                           PixelGeometry geometry,
+                           String e2eUuid,
+                           String acquisitionDate) {
+        this(modelVersion, primaryMetricValue, primaryMetricUnit, outputPayload,
+                confidence, artifacts, task, laterality, geometry, e2eUuid, acquisitionDate, null);
+    }
 
     /** Back-compat ctor for existing callers that don't carry geometry yet. */
     public RemoteRunResult(String modelVersion,
@@ -58,7 +79,7 @@ public record RemoteRunResult(String modelVersion,
                            String task,
                            String laterality) {
         this(modelVersion, primaryMetricValue, primaryMetricUnit, outputPayload,
-                confidence, artifacts, task, laterality, null, null, null);
+                confidence, artifacts, task, laterality, null, null, null, null);
     }
 
     /**
@@ -78,7 +99,7 @@ public record RemoteRunResult(String modelVersion,
                            PixelGeometry geometry,
                            String e2eUuid) {
         this(modelVersion, primaryMetricValue, primaryMetricUnit, outputPayload,
-                confidence, artifacts, task, laterality, geometry, e2eUuid, null);
+                confidence, artifacts, task, laterality, geometry, e2eUuid, null, null);
     }
 
     /**

@@ -36,6 +36,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.PixelGeometry;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactKey;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 
 /**
@@ -273,7 +274,7 @@ public class CrtComputeService {
      *                 "pixel_lateral_mm": ..., "pixel_slice_mm": ...}}</pre>
      */
     private PixelGeometry loadGeometry(JobRef job) {
-        String e2eUuid = e2eUuidFromPath(job.e2ePath);
+        String e2eUuid = RetinalArtifactKey.of(job.e2ePath);
         if (e2eUuid == null) {
             throw new MetricComputationException(
                     "Job " + job.jobId + " has no e2e_path; cannot resolve geometry.json");
@@ -304,18 +305,6 @@ public class CrtComputeService {
             throw new MetricComputationException(
                     "Failed to parse geometry.json for job " + job.jobId + ": " + ioEx.getMessage(), ioEx);
         }
-    }
-
-    /** Mirror of {@code RetinalResultsApiController.e2eUuidFromPath}.
-     *  Kept local so this service can run without pulling the
-     *  web-module controller as a dependency. */
-    private static String e2eUuidFromPath(String e2ePath) {
-        if (e2ePath == null) return null;
-        String base = Paths.get(e2ePath).getFileName().toString();
-        if (base.toLowerCase().endsWith(".e2e")) {
-            base = base.substring(0, base.length() - 4);
-        }
-        return base;
     }
 
     /**

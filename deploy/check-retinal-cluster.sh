@@ -37,7 +37,7 @@ STATE="${RETINAL_CLUSTER_STATE_FILE:-/var/lib/libreclinica/monitor/retinal-clust
 # With a */5 cron this re-mails roughly hourly while the outage persists.
 REMIND_EVERY="${RETINAL_CLUSTER_REMIND_EVERY:-12}"
 TIMEOUT="${RETINAL_CLUSTER_TIMEOUT:-10}"
-EXPECTED_TASKS="bm fluid ga layers onl pr"
+EXPECTED_TASKS="bm fluid ga layers onl pr sdretinanet"
 
 fail=""
 body="$(curl -sS -m "$TIMEOUT" "$URL" 2>&1)" || fail="unreachable — $body"

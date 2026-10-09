@@ -290,6 +290,30 @@ class ImagingModalitiesApiControllerDatabaseIT extends AbstractApiControllerData
                 .andExpect(status().isBadRequest());
     }
 
+    /** DR-039 — an administrator marks a modality as an OCT one. */
+    @Test
+    void anAdministratorCanMarkAModalityAsAnOctOne() throws Exception {
+        int id = createModality("IT_OCT");
+        mockMvc().perform(put(BASE + "/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"IT_OCT\",\"labelDe\":\"OCT\",\"labelEn\":\"OCT\","
+                                + "\"device\":\"cirrus\",\"kindsAccepted\":\"dicom, OCT\","
+                                + "\"lateralityRequired\":true,\"ordinal\":5}")
+                        .session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kindsAccepted").value("dicom,oct"));
+    }
+
+    @Test
+    void theOctMarkerNeedsAKindAVolumeCanArriveAs() throws Exception {
+        mockMvc().perform(post(BASE)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"IT_OCTONLY\",\"labelDe\":\"x\",\"labelEn\":\"x\","
+                        + "\"kindsAccepted\":\"image,oct\"}")
+                .session(dm()))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void anUnknownFileKindIsRefused() throws Exception {
         mockMvc().perform(post(BASE)

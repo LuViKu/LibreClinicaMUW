@@ -65,13 +65,17 @@ public class DicomDescribeClient {
      * @param pixelSha256 DR-036 — SHA-256 of the decoded pixel array, the
      *                    file's picture without its tags; null when the
      *                    sidecar predates it or could not decode the pixels
+     * @param numberOfFrames DR-039 — NumberOfFrames, null when absent or
+     *                    the sidecar predates it
+     * @param octVolume   DR-039 — the sidecar's verdict "OPT and more than
+     *                    one frame", null when it predates it
      */
     public record Description(String sopInstanceUid, String sopClassUid, String studyInstanceUid,
                               String seriesInstanceUid, String modality, String laterality,
                               LocalDate studyDate, LocalDate acquisitionDate,
                               String manufacturer, String manufacturerModelName,
                               String previewPngPath, boolean identityRemoved, int changedTags,
-                              String pixelSha256) {}
+                              String pixelSha256, Integer numberOfFrames, Boolean octVolume) {}
 
     /** Why a description could not be had, so the caller can pick a status code. */
     public static class DescribeException extends Exception {
@@ -206,7 +210,11 @@ public class DicomDescribeClient {
                 text(n, "previewPngPath"),
                 n.path("identityRemoved").asBoolean(false),
                 n.path("changedTags").asInt(0),
-                text(n, "pixelSha256"));
+                text(n, "pixelSha256"),
+                n.hasNonNull("numberOfFrames") && n.get("numberOfFrames").canConvertToInt()
+                        ? Integer.valueOf(n.get("numberOfFrames").asInt()) : null,
+                n.hasNonNull("octVolume") && n.get("octVolume").isBoolean()
+                        ? Boolean.valueOf(n.get("octVolume").asBoolean()) : null);
     }
 
     /**

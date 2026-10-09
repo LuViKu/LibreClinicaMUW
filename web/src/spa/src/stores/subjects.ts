@@ -32,8 +32,8 @@ import type {
  * Auth errors (401/403) still propagate untouched so the router-level
  * guard can redirect to /login.
  *
- * `add()` remains optimistic-append for now (Add Subject swap lands in
- * Phase E.4 M4 — see TODO inside).
+ * `add()` enrols the subject via the backend (Phase E.4 M4) and prepends
+ * the returned row to `rows`.
  *
  * Filter state lives in the store so navigating away from the matrix
  * and back keeps the user's filter context (the existing JSP also does

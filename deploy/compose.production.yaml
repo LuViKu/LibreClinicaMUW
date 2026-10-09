@@ -71,6 +71,16 @@ services:
       - ${LIBRECLINICA_NGINX_REALIP_CONF:-./deploy/nginx/empty.conf}:/etc/nginx/ecrf-realip.conf:ro
       - ${LIBRECLINICA_NGINX_EDGE_HTTP_CONF:-./deploy/nginx/empty.conf}:/etc/nginx/ecrf-edge-http.conf:ro
       - /etc/libreclinica/tls:/etc/libreclinica/tls:ro
+      # Server blocks for other apps on this VM (DR-038). The setup script puts
+      # a block here only once its certificate exists; empty is fine.
+      - /etc/libreclinica/nginx-sites:/etc/nginx/sites:ro
+    # `default` MUST stay listed: once `networks:` is set, Compose stops
+    # attaching the service to the project network implicitly, and without it
+    # nginx cannot reach libreclinica:8080. `edge` is the external network
+    # shared with other apps' compose projects (DutyPlan, DR-038).
+    networks:
+      - default
+      - edge
 
   libreclinica:
     image: ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG:-latest}
@@ -295,3 +305,9 @@ services:
     volumes:
       - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest
       - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
+
+networks:
+  # Created by setup-ubuntu-host.sh and by the systemd unit's ExecStartPre;
+  # external, so `compose down` never removes it.
+  edge:
+    external: true

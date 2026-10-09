@@ -72,3 +72,79 @@ export const IOWA_LAYER_LABELS: readonly string[] = [
  * {@code bscan-layers-visible-${jobId}}.
  */
 export const IOWA_DEFAULT_VISIBLE: readonly number[] = [0, 9, 11] as const
+
+/**
+ * SD-RetinaNet surface palette (sdretinanet task).
+ *
+ * 12 boundaries in anatomical order, ILM at index 0 down to HL-S
+ * (choroid–sclera boundary) at index 11. Boundaries SD-RetinaNet shares
+ * with IOWA keep the IOWA colour so an operator switching between the
+ * two tasks reads the same line in the same colour; OB_ELM and HL-S are
+ * new.
+ */
+export const SDRETINANET_LAYER_COLORS: readonly string[] = [
+  '#FF3030', // 00 ILM      — bright red
+  '#FF9F1C', // 01 RNFL-GCL — orange
+  '#FFD60A', // 02 GCL-IPL  — yellow
+  '#34D399', // 03 IPL-INL  — green
+  '#0EA5E9', // 04 INL-OPL  — sky-blue
+  '#3B82F6', // 05 OPL-HFL  — blue
+  '#14B8A6', // 06 OB_ELM   — teal (external limiting membrane)
+  '#8B5CF6', // 07 BMEIS    — violet
+  '#92400E', // 08 IB_RPE   — dark-brown (RPE upper edge)
+  '#7F1D1D', // 09 OB_RPE   — wine (RPE lower edge)
+  '#DB2777', // 10 BM       — magenta (Bruch's membrane)
+  '#84CC16', // 11 HL-S     — lime (choroid–sclera boundary)
+] as const
+
+/**
+ * SD-RetinaNet boundary labels — exactly the backend's
+ * {@code X-MUW-Seg-Labels} order for the default (surface) part. Used
+ * as a fallback when the header is empty.
+ */
+export const SDRETINANET_LAYER_LABELS: readonly string[] = [
+  'ILM', 'RNFL-GCL', 'GCL-IPL', 'IPL-INL', 'INL-OPL', 'OPL-HFL',
+  'OB_ELM', 'BMEIS', 'IB_RPE', 'OB_RPE', 'BM', 'HL-S',
+] as const
+
+/**
+ * Default-visible boundaries — the same CRT trio as IOWA:
+ * ILM = 0, IB_RPE = 8, BM = 10.
+ */
+export const SDRETINANET_DEFAULT_VISIBLE: readonly number[] = [0, 8, 10] as const
+
+/**
+ * SD-RetinaNet lesion colours, keyed by DISPLAY label (see
+ * {@link sdRetinaNetLesionDisplayLabel}). Painted at ~35 % alpha over
+ * the B-scan, so they are deliberately saturated.
+ */
+export const SDRETINANET_LESION_COLORS: Readonly<Record<string, string>> = {
+  IRF: '#3fa7ff',
+  SRF: '#ffd23f',
+  PED: '#ff6b3f',
+  SHRM: '#c04fff',
+  SDD: '#4fff9a',
+  ORT: '#ff3fa7',
+  HRF: '#ffffff',
+}
+
+/** Swatch for a lesion label the palette does not know (slate-400). */
+export const SDRETINANET_LESION_FALLBACK_COLOR = '#94a3b8'
+
+/**
+ * Model lesion name → the name clinicians and the result payload use.
+ * SD-RetinaNet calls intraretinal fluid "Cyst" and subretinal drusenoid
+ * deposits "Pseudodrusen"; everything else is already the clinical name.
+ */
+const SDRETINANET_LESION_DISPLAY: Readonly<Record<string, string>> = {
+  Cyst: 'IRF',
+  Pseudodrusen: 'SDD',
+}
+
+export function sdRetinaNetLesionDisplayLabel(raw: string): string {
+  return SDRETINANET_LESION_DISPLAY[raw] ?? raw
+}
+
+export function sdRetinaNetLesionColor(displayLabel: string): string {
+  return SDRETINANET_LESION_COLORS[displayLabel] ?? SDRETINANET_LESION_FALLBACK_COLOR
+}

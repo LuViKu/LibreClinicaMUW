@@ -126,6 +126,34 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
+     * Whether the filter throttles at all. Only the internet-facing deployment
+     * turns it on ({@code libreclinica.deployment.internet-facing}; see
+     * ServletInfraConfig). On the internal deployment the acquisition-PC
+     * uploaders (Export Watcher, Optomed Bridge) look up the visit of every
+     * capture through {@code /public/upload/resolve} and file the capture
+     * without a visit when refused, so a 30/hour budget would leave captures
+     * unbound on a busy clinic day. That deployment is reachable only from the
+     * MUW network, and the limiter had never engaged there before the context
+     * path fix, so off keeps its behaviour unchanged.
+     */
+    private final boolean enabled;
+
+    /** A filter that throttles: the unit tests' and the internet-facing case. */
+    public PublicOctUploadRateLimitFilter() {
+        this(true);
+    }
+
+    /** @param enabled false passes every request through untouched */
+    public PublicOctUploadRateLimitFilter(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    /** Whether this filter throttles (test seam). */
+    boolean isEnabled() {
+        return enabled;
+    }
+
+    /**
      * Token-bucket carrier. Atomics avoid the per-bucket lock that a
      * dedicated synchronization block would introduce; the contention
      * profile here is read-modify-write so AtomicInteger is enough.
@@ -184,6 +212,10 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain)
             throws ServletException, IOException {
+        if (!enabled) {
+            chain.doFilter(request, response);
+            return;
+        }
         String uri = request.getRequestURI();
         // The guarded prefixes are context-relative; the app runs under
         // /LibreClinica, so getRequestURI() carries that prefix and would

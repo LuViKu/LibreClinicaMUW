@@ -59,9 +59,7 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
         q.setParameter("crfVersionId", crfVersionId);
         q.setParameter("sectionId", sectionId);
         q.setParameter("crfVersionId", crfVersionId);
-        /* TODO use uniqueResult (or something similar), if the
-         * query returns multiple (equivalent results) use distinct also
-         */
+        // Existence check only: the query is limited to one row, so uniqueResult would add nothing.
         return q.getResultList() != null && q.getResultList().size() > 0;
     }
 

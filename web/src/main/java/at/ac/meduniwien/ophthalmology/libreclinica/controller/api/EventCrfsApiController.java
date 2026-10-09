@@ -2742,7 +2742,8 @@ public class EventCrfsApiController {
             idb.setStatus(Status.DELETED);
             idb.setUpdater(currentUser);
             idb.setUpdaterId(currentUser.getId());
-            idDAO.update(idb);
+            // Hides the row; the value and its provenance stay, so not update().
+            idDAO.updateStatusOnly(idb);
             ItemBean ib = (ItemBean) itemDAO.findByPK(ifm.getItemId());
             String itemOid = ib != null ? ib.getOid() : "";
             writeAuditEvent(auditDAO, /* type=13 Item value deleted */ 13,

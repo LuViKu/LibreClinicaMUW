@@ -78,11 +78,157 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
 
     @AfterEach
     void cleanIngestRows() throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM retinal_inference_job WHERE ingest_item_id IN "
+                            + "(SELECT ingest_item_id FROM ingest_item WHERE sop_instance_uid LIKE ?)")) {
+                ps.setString(1, UID_PREFIX + "%");
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM ingest_item WHERE sop_instance_uid LIKE ?")) {
+                ps.setString(1, UID_PREFIX + "%");
+                ps.executeUpdate();
+            }
+            CrossSiteIsolationSupport.exec(c, "DELETE FROM event_definition_imaging WHERE imaging_modality_id IN "
+                    + "(SELECT imaging_modality_id FROM imaging_modality WHERE code = 'CSTORE_OCT_IT')");
+            CrossSiteIsolationSupport.exec(c, "DELETE FROM imaging_modality WHERE code = 'CSTORE_OCT_IT'");
+        }
+    }
+
+    /** As {@link #mockMvc()}, with the inference dispatch wired (no GPU host: jobs land queued). */
+    private MockMvc mockMvcDispatching() {
+        DicomIngestApiController controller = new DicomIngestApiController(DATA_SOURCE);
+        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient remote =
+                org.mockito.Mockito.mock(
+                        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
+        org.mockito.Mockito.when(remote.isConfigured()).thenReturn(false);
+        controller.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
+        return MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+    }
+
+    /**
+     * An OCT modality the camera classifies itself into (its AE title), on
+     * the plan of study_event 3's visit definition with these tasks.
+     */
+    private static void octPlanForVisit3(String tasks) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            int sed = LifecycleFixtures.intQuery(
+                    "SELECT study_event_definition_id FROM study_event WHERE study_event_id = 3");
+            int modality = LifecycleFixtures.insertOne(c,
+                    "INSERT INTO imaging_modality (study_id, code, label_de, label_en, device, kinds_accepted, "
+                            + "laterality_required, auto_match_ae_title, ordinal, status_id, created_by_user_id) "
+                            + "VALUES (1, 'CSTORE_OCT_IT', 'OCT', 'OCT', 'optomedlumo', 'dicom,oct', false, "
+                            + "'OPTOMEDLUMO', 95, 1, 1) RETURNING imaging_modality_id");
+            CrossSiteIsolationSupport.exec(c, "INSERT INTO event_definition_imaging (study_event_definition_id, "
+                    + "imaging_modality_id, requirement, laterality, retinal_tasks, created_by_user_id) VALUES ("
+                    + sed + ", " + modality + ", 'optional', NULL, '" + tasks + "', 1)");
+        }
+    }
+
+    private static String octPayload(String sopUid, String accession) {
+        return payload(sopUid, accession)
+                .replace("\"modality\":\"OP\",", "\"modality\":\"OPT\",\"numberOfFrames\":49,\"octVolume\":true,"
+                        + "\"manufacturer\":\"Heidelberg Engineering\",\"manufacturerModelName\":\"SPECTRALIS\",")
+                .replace("1.2.840.10008.5.1.4.1.1.77.1.5.1", "1.2.840.10008.5.1.4.1.1.77.1.5.4");
+    }
+
+    private static String tasksOf(String sopUid) throws Exception {
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "DELETE FROM ingest_item WHERE sop_instance_uid LIKE ?")) {
-            ps.setString(1, UID_PREFIX + "%");
-            ps.executeUpdate();
+                     "SELECT string_agg(j.task || ':' || j.status, ',' ORDER BY j.task) "
+                             + "  FROM retinal_inference_job j JOIN ingest_item ii ON ii.ingest_item_id = j.ingest_item_id "
+                             + " WHERE ii.sop_instance_uid = ?")) {
+            ps.setString(1, sopUid);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    /** DR-039 — a worklist-bound OCT volume starts the visit plan's analyses on arrival. */
+    @Test
+    void ingest_aWorklistBoundOctVolumeStartsThePlansAnalyses() throws Exception {
+        octPlanForVisit3("fluid,ga");
+        String uid = UID_PREFIX + "octworklist";
+        mockMvcDispatching().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(octPayload(uid, "LC3")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("BOUND"));
+        assertEquals("fluid:queued,ga:queued", tasksOf(uid));
+    }
+
+    /** De-identification required: the hand-off is still refused, so nothing is kept or started. */
+    @Test
+    void ingest_anOctVolumeIsRefusedWhenDeidentificationIsRequired() throws Exception {
+        octPlanForVisit3("fluid");
+        String uid = UID_PREFIX + "octdeid";
+        DicomIngestApiController controller = new DicomIngestApiController(DATA_SOURCE);
+        controller.setDeidentificationPolicy(new DeidentificationPolicy(true));
+        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient remote =
+                org.mockito.Mockito.mock(
+                        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
+        controller.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
+        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new ApiExceptionHandler()).build()
+                .perform(post("/api/v1/internal/dicom-ingest")
+                        .header("X-MUW-Dicom-Token", TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(octPayload(uid, "LC3")))
+                .andExpect(status().isForbidden());
+        assertEquals(0, LifecycleFixtures.intQuery(
+                "SELECT count(*) FROM ingest_item WHERE sop_instance_uid = '" + uid + "'"));
+    }
+
+    @Test
+    void ingest_aWorklistBoundFundusImageStartsNothing() throws Exception {
+        octPlanForVisit3("fluid");
+        String uid = UID_PREFIX + "fundusworklist";
+        mockMvcDispatching().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(uid, "LC3")))
+                .andExpect(status().isCreated());
+        assertNull(tasksOf(uid));
+    }
+
+    @Test
+    void ingest_anUnboundOctVolumeStartsNothing() throws Exception {
+        octPlanForVisit3("fluid");
+        String uid = UID_PREFIX + "octunbound";
+        mockMvcDispatching().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(octPayload(uid, "729555114864694")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("UNBOUND"));
+        assertNull(tasksOf(uid));
+    }
+
+    @Test
+    void ingest_aStudyWithInferenceOffStartsNothing() throws Exception {
+        octPlanForVisit3("fluid");
+        new at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService(DATA_SOURCE)
+                .put(1, at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService.INFERENCE_ENABLED,
+                        "false", 1);
+        try {
+            String uid = UID_PREFIX + "octoff";
+            mockMvcDispatching().perform(post("/api/v1/internal/dicom-ingest")
+                    .header("X-MUW-Dicom-Token", TOKEN)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(octPayload(uid, "LC3")))
+                    .andExpect(status().isCreated());
+            assertNull(tasksOf(uid));
+        } finally {
+            try (Connection c = DATA_SOURCE.getConnection()) {
+                CrossSiteIsolationSupport.exec(c, "DELETE FROM study_setting WHERE setting_key = '"
+                        + at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService.INFERENCE_ENABLED
+                        + "'");
+            }
         }
     }
 
@@ -240,6 +386,51 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         assertNull(row.matchPolicy());
         assertNull(row.ss());
         assertNull(row.se());
+    }
+
+    /** DR-039 — what the sidecar says about the device and the volume lands on the row. */
+    private String[] classification(String sopUid) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT oct_volume, manufacturer, manufacturer_model FROM ingest_item WHERE sop_instance_uid = ?")) {
+            ps.setString(1, sopUid);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                return new String[] { rs.getString(1), rs.getString(2), rs.getString(3) };
+            }
+        }
+    }
+
+    @Test
+    void ingest_anOctVolumeIsClassifiedOnArrival() throws Exception {
+        String uid = UID_PREFIX + "octvolume";
+        String body = payload(uid, null).replace("\"modality\":\"OP\",",
+                        "\"modality\":\"OPT\",\"numberOfFrames\":49,\"octVolume\":true,"
+                                + "\"manufacturer\":\"Heidelberg Engineering\",\"manufacturerModelName\":\"SPECTRALIS\",")
+                .replace("1.2.840.10008.5.1.4.1.1.77.1.5.1", "1.2.840.10008.5.1.4.1.1.77.1.5.4");
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isCreated());
+        String[] row = classification(uid);
+        assertTrue(row[0].startsWith("t"), "oct_volume: " + row[0]);
+        assertEquals("Heidelberg Engineering", row[1]);
+        assertEquals("SPECTRALIS", row[2]);
+    }
+
+    @Test
+    void ingest_withoutAVerdictTheSopClassDecides() throws Exception {
+        // An older sidecar sends no octVolume: a fundus photograph is still known not to be one.
+        String uid = UID_PREFIX + "noverdict";
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(uid, null)))
+                .andExpect(status().isCreated());
+        String[] row = classification(uid);
+        assertTrue(row[0].startsWith("f"), "oct_volume: " + row[0]);
+        assertNull(row[1]);
     }
 
     /** An accession shaped like ours but pointing at no live visit stays unbound. */

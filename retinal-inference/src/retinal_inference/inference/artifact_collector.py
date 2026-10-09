@@ -31,6 +31,7 @@ _MEDIA_TYPES: dict[str, str] = {
     ".npz": "application/octet-stream",
     ".png": "image/png",
     ".json": "application/json",
+    ".zip": "application/zip",  # sdretinanet: native layers/ + lesions/ in one archive
 }
 
 # Skip the source bscan.dcm — it was synthesised by the sidecar and the bytes

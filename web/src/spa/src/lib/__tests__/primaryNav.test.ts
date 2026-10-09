@@ -15,11 +15,11 @@ const ROUTE_ROLES: Record<string, UserRole[]> = {
   '/due-visits': ['Data Manager', 'Investigator', 'Monitor', 'Administrator'],
   '/ingest-inbox': ['Data Manager', 'Investigator', 'Administrator'],
   '/sdv': ['Monitor', 'Data Manager', 'Administrator'],
-  '/audit-log': ['Monitor', 'Data Manager', 'Administrator'],
-  '/build-study': ['Data Manager', 'Administrator'],
-  '/export': ['Data Manager', 'Administrator', 'Monitor'],
+  '/audit-log': ['Monitor', 'Data Manager', 'CRC', 'Administrator'],
+  '/build-study': ['Data Manager', 'CRC', 'Administrator'],
+  '/export': ['Data Manager', 'CRC', 'Administrator', 'Monitor'],
   '/manage-users': ['Administrator'],
-  '/sites': ['Data Manager', 'Administrator'],
+  '/sites': ['Data Manager', 'CRC', 'Administrator'],
 }
 
 describe('primaryNavFor', () => {
@@ -38,10 +38,16 @@ describe('primaryNavFor', () => {
     expect(inv.map((i) => i.to)).toEqual(['/', '/subjects', '/notes', '/due-visits', '/ingest-inbox'])
   })
 
-  it('gives a CRC neither the inbox nor due visits — they have no route there', () => {
+  it('gives a CRC neither the inbox nor due visits link — their routes list no CRC role of their own', () => {
     const paths = primaryNavFor(['CRC']).map((i) => i.to)
     expect(paths).not.toContain('/ingest-inbox')
     expect(paths).not.toContain('/due-visits')
+  })
+
+  it('links a CRC to the study build and the export, which the backend lets a coordinator do', () => {
+    const paths = primaryNavFor(['CRC']).map((i) => i.to)
+    expect(paths).toContain('/build-study')
+    expect(paths).toContain('/export')
   })
 
   it('unions a multi-role operator’s destinations, strongest role first, without repeats, capped', () => {

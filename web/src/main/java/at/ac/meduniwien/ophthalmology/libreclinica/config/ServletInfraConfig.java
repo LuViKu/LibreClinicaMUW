@@ -346,8 +346,12 @@ public class ServletInfraConfig {
      */
     @Bean
     public at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter
-            publicOctUploadRateLimitFilter() {
-        return new at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter();
+            publicOctUploadRateLimitFilter(
+                    // Throttles only on the internet-facing deployment; on the
+                    // internal one it passes everything through (see the filter's
+                    // `enabled` field for why).
+                    @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing) {
+        return new at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter(internetFacing);
     }
 
     /**

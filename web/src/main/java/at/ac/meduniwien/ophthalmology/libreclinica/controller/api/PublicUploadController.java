@@ -32,6 +32,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 /**
@@ -78,6 +79,15 @@ public class PublicUploadController {
 
     /** Null (hand-built controllers) reads as "not required". */
     private DeidentificationPolicy deidPolicy;
+
+    /**
+     * DR-039 — a DICOM OCT volume uploaded to a visit starts its plan's
+     * analyses; absent (hand-built controllers), it starts none.
+     */
+    @Autowired(required = false)
+    void setRetinalDispatch(RemoteRetinalInferenceClient remote, RetinalInferenceApiController inference) {
+        uploads.useRetinalDispatch(remote, inference);
+    }
 
     @Autowired(required = false)
     void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {

@@ -12,6 +12,7 @@ import EventCrfAssignmentsDialog from '@/components/EventCrfAssignmentsDialog.vu
 
 import { useEventDefinitionsStore } from '@/stores/eventDefinitions'
 import { useAuthStore } from '@/stores/auth'
+import { mayBuildStudy, maySysadminOnly } from '@/lib/studyBuildAccess'
 import { useImagingModalitiesStore } from '@/stores/imagingModalities'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useConfirm } from '@/composables/useConfirm'
@@ -25,6 +26,7 @@ import type {
 import {
   RETINAL_TASK_OPTIONS,
   buildPlanRows,
+  requiredFor,
   requiredTasksOf,
   toWriteEntries,
   toggleTask,
@@ -65,15 +67,12 @@ function modalityLabel(row: { labelDe: string; labelEn: string }): string {
 }
 const REQUIREMENT_OPTIONS: readonly ImagingRequirement[] = ['optional', 'required'] as const
 const LATERALITY_OPTIONS: ReadonlyArray<ImagingLaterality | ''> = ['', 'OU', 'OD', 'OS'] as const
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager'
-})
+const canManage = computed(() => mayBuildStudy(auth.user?.role))
 // Phase E.6 — lock + unlock are sysadmin-only on the backend (matches
 // the legacy UnlockEventDefinitionServlet mayProceed guard). Gating the
 // buttons client-side avoids surfacing them to roles that would only
 // see a 403 on click.
-const canLifecycle = computed(() => auth.user?.role === 'Administrator')
+const canLifecycle = computed(() => maySysadminOnly(auth.user?.role))
 
 onMounted(() => {
   if (studyOid.value) {
@@ -183,7 +182,7 @@ async function openEdit(row: EventDefinition) {
 }
 
 function togglePlanTask(row: PlanRow, task: string): void {
-  toggleTask(row, task, requiredTasks.value)
+  toggleTask(row, task, requiredFor(row, requiredTasks.value))
 }
 
 /*
@@ -639,17 +638,17 @@ function openAssignments(row: EventDefinition) {
                     </select>
                   </td>
                   <td class="py-1.5">
-                    <div v-if="row.acceptsE2e" class="flex flex-wrap gap-1.5">
+                    <div v-if="row.acceptsOctVolumes" class="flex flex-wrap gap-1.5">
                       <button
                         v-for="task in RETINAL_TASK_OPTIONS"
                         :key="`${row.modalityId}-${task}`"
                         type="button"
                         :data-testid="`ed-edit-plan-${row.code}-task-${task}`"
-                        :aria-pressed="row.tasks.includes(task) || requiredTasks.includes(task)"
-                        :disabled="!row.included || requiredTasks.includes(task)"
-                        :title="requiredTasks.includes(task) ? t('eventDefinitions.imagingPlan.requiredByModule') : undefined"
+                        :aria-pressed="row.tasks.includes(task) || requiredFor(row, requiredTasks).includes(task)"
+                        :disabled="!row.included || requiredFor(row, requiredTasks).includes(task)"
+                        :title="requiredFor(row, requiredTasks).includes(task) ? t('eventDefinitions.imagingPlan.requiredByModule') : undefined"
                         class="inline-flex items-center gap-1 rounded-full text-[11px] font-semibold px-2.5 py-0.5 border transition disabled:cursor-not-allowed"
-                        :class="row.tasks.includes(task) || requiredTasks.includes(task)
+                        :class="row.tasks.includes(task) || requiredFor(row, requiredTasks).includes(task)
                           ? 'bg-muw-sky-50 border-muw-sky-300 text-muw-sky-700'
                           : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50'"
                         @click="togglePlanTask(row, task)"

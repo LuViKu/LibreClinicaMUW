@@ -91,6 +91,27 @@ public class DicomDescribeClientTest {
         assertTrue(lastBody.get().contains("\"pseudonym\":\"HAE-001\""));
     }
 
+    /** DR-039 — the frame count and the sidecar's OCT-volume verdict, and their absence. */
+    @Test
+    public void aDescriptionCarriesTheFrameCountAndTheOctVerdict() throws Exception {
+        answer = "{\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.4\",\"modality\":\"OPT\","
+                + "\"numberOfFrames\":49,\"octVolume\":true,\"manufacturer\":\"Heidelberg Engineering\"}";
+        DicomDescribeClient.Description d = new DicomDescribeClient(url(), "secret")
+                .describe(Path.of("/store/v.dcm"), null);
+        assertEquals(Integer.valueOf(49), d.numberOfFrames());
+        assertEquals(Boolean.TRUE, d.octVolume());
+
+        answer = "{\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.1\",\"numberOfFrames\":null,"
+                + "\"octVolume\":false}";
+        d = new DicomDescribeClient(url(), "secret").describe(Path.of("/store/f.dcm"), null);
+        assertNull(d.numberOfFrames());
+        assertEquals(Boolean.FALSE, d.octVolume());
+
+        answer = "{\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.4\"}";
+        d = new DicomDescribeClient(url(), "secret").describe(Path.of("/store/o.dcm"), null);
+        assertNull("an older sidecar says nothing", d.octVolume());
+    }
+
     @Test
     public void anUnfiledUploadSendsNoPseudonym() throws Exception {
         answer = "{\"sopInstanceUid\":\"1\"}";

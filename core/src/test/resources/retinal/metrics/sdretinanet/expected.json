@@ -1,0 +1,2347 @@
+{
+ "fovea": {
+  "fovea_x_mm": 3.5675000000000003,
+  "fovea_y_mm": 3.48,
+  "fovea_offset_mm": 0.6869179354187808,
+  "fovea_inner_retina_um": 19.815232953602234,
+  "fovea_pit_depth_um": 71.71646254976274,
+  "fovea_at_search_edge": false,
+  "fovea_needs_review": false
+ },
+ "grid_center": {
+  "x_mm": 3.5675000000000003,
+  "y_mm": 3.48,
+  "source": "detected"
+ },
+ "regions": [
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "RNFL",
+   "metric": "thickness_um",
+   "value": 10.5
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "RNFL",
+   "metric": "volume_mm3",
+   "value": 0.008246680715673207
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "GCL",
+   "metric": "thickness_um",
+   "value": 8.454545454545455
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "GCL",
+   "metric": "volume_mm3",
+   "value": 0.006640184472360244
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "IPL",
+   "metric": "thickness_um",
+   "value": 6.954545454545454
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "IPL",
+   "metric": "volume_mm3",
+   "value": 0.005462087227264072
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "INL",
+   "metric": "thickness_um",
+   "value": 8.590909090909092
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "INL",
+   "metric": "volume_mm3",
+   "value": 0.006747284221914443
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "OPL",
+   "metric": "thickness_um",
+   "value": 48.40909090909091
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "OPL",
+   "metric": "volume_mm3",
+   "value": 0.03802041109174011
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ONL_HFL",
+   "metric": "thickness_um",
+   "value": 59.59090909090909
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ONL_HFL",
+   "metric": "volume_mm3",
+   "value": 0.046802590555184306
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ELM_EZ",
+   "metric": "thickness_um",
+   "value": 18.681818181818183
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ELM_EZ",
+   "metric": "volume_mm3",
+   "value": 0.014672665688925059
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "EZ_RPE",
+   "metric": "thickness_um",
+   "value": 29.727272727272727
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "EZ_RPE",
+   "metric": "volume_mm3",
+   "value": 0.023347745402815052
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "RPE",
+   "metric": "thickness_um",
+   "value": 17.181818181818183
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "RPE",
+   "metric": "volume_mm3",
+   "value": 0.013494568443828885
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "RPE_BM",
+   "metric": "thickness_um",
+   "value": 7.636363636363637
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "RPE_BM",
+   "metric": "volume_mm3",
+   "value": 0.005997585975035059
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "Choroid",
+   "metric": "thickness_um",
+   "value": 96.27272727272727
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "Choroid",
+   "metric": "volume_mm3",
+   "value": 0.07561242318526341
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "GCIPL",
+   "metric": "thickness_um",
+   "value": 15.409090909090908
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "GCIPL",
+   "metric": "volume_mm3",
+   "value": 0.012102271699624316
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "GCC",
+   "metric": "thickness_um",
+   "value": 25.90909090909091
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "GCC",
+   "metric": "volume_mm3",
+   "value": 0.020348952415297526
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "InnerRetina",
+   "metric": "thickness_um",
+   "value": 34.5
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "InnerRetina",
+   "metric": "volume_mm3",
+   "value": 0.027096236637211966
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "OuterRetina",
+   "metric": "thickness_um",
+   "value": 181.22727272727272
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "OuterRetina",
+   "metric": "volume_mm3",
+   "value": 0.14233556715752846
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "Photoreceptors",
+   "metric": "thickness_um",
+   "value": 48.40909090909091
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "Photoreceptors",
+   "metric": "volume_mm3",
+   "value": 0.03802041109174011
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "thickness_um",
+   "value": 190.9090909090909
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "volume_mm3",
+   "value": 0.1499396493758765
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "TotalRetina",
+   "metric": "thickness_um",
+   "value": 215.72727272727272
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "TotalRetina",
+   "metric": "volume_mm3",
+   "value": 0.16943180379474043
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "IRF",
+   "metric": "volume_mm3",
+   "value": 0.008447400000000002
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "IRF",
+   "metric": "area_mm2",
+   "value": 0.4693
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "IRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SRF",
+   "metric": "volume_mm3",
+   "value": 0.012671100000000001
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SRF",
+   "metric": "area_mm2",
+   "value": 0.70395
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "PED",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "PED",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "PED",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SHRM",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SHRM",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SHRM",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SDD",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SDD",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "SDD",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ORT",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ORT",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "ORT",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "HRF",
+   "metric": "volume_mm3",
+   "value": 0.0002166
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "HRF",
+   "metric": "area_mm2",
+   "value": 0.0361
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "HRF",
+   "metric": "max_height_um",
+   "value": 6.0
+  },
+  {
+   "region": "C1",
+   "coverage": 1.0,
+   "n_ascans": 44,
+   "biomarker": "HRF",
+   "metric": "foci_n",
+   "value": 2
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "RNFL",
+   "metric": "thickness_um",
+   "value": 21.566326530612244
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "RNFL",
+   "metric": "volume_mm3",
+   "value": 0.15244337923535267
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "GCL",
+   "metric": "thickness_um",
+   "value": 19.989795918367346
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "GCL",
+   "metric": "volume_mm3",
+   "value": 0.1412995410087797
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "IPL",
+   "metric": "thickness_um",
+   "value": 20.3265306122449
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "IPL",
+   "metric": "volume_mm3",
+   "value": 0.1436797782998924
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "INL",
+   "metric": "thickness_um",
+   "value": 21.260204081632654
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "INL",
+   "metric": "volume_mm3",
+   "value": 0.15027952715252296
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "OPL",
+   "metric": "thickness_um",
+   "value": 48.16836734693877
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "OPL",
+   "metric": "volume_mm3",
+   "value": 0.340482125233254
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ONL_HFL",
+   "metric": "thickness_um",
+   "value": 59.464285714285715
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ONL_HFL",
+   "metric": "volume_mm3",
+   "value": 0.4203282670896701
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ELM_EZ",
+   "metric": "thickness_um",
+   "value": 18.413265306122447
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ELM_EZ",
+   "metric": "volume_mm3",
+   "value": 0.13015570278220673
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "EZ_RPE",
+   "metric": "thickness_um",
+   "value": 29.663265306122447
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "EZ_RPE",
+   "metric": "volume_mm3",
+   "value": 0.20967726682619836
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "RPE",
+   "metric": "thickness_um",
+   "value": 17.403061224489797
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "RPE",
+   "metric": "volume_mm3",
+   "value": 0.1230149909088687
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "RPE_BM",
+   "metric": "thickness_um",
+   "value": 7.668367346938775
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "RPE_BM",
+   "metric": "volume_mm3",
+   "value": 0.05420449467488409
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "Choroid",
+   "metric": "thickness_um",
+   "value": 95.38775510204081
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "Choroid",
+   "metric": "volume_mm3",
+   "value": 0.6742563090097359
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "GCIPL",
+   "metric": "thickness_um",
+   "value": 40.316326530612244
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "GCIPL",
+   "metric": "volume_mm3",
+   "value": 0.28497931930867204
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "GCC",
+   "metric": "thickness_um",
+   "value": 61.88265306122449
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "GCC",
+   "metric": "volume_mm3",
+   "value": 0.4374226985440247
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "InnerRetina",
+   "metric": "thickness_um",
+   "value": 83.14285714285714
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "InnerRetina",
+   "metric": "volume_mm3",
+   "value": 0.5877022256965477
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "OuterRetina",
+   "metric": "thickness_um",
+   "value": 180.78061224489795
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "OuterRetina",
+   "metric": "volume_mm3",
+   "value": 1.277862847515082
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "Photoreceptors",
+   "metric": "thickness_um",
+   "value": 48.076530612244895
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "Photoreceptors",
+   "metric": "volume_mm3",
+   "value": 0.33983296960840503
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "thickness_um",
+   "value": 238.85204081632654
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "volume_mm3",
+   "value": 1.688345587627877
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "TotalRetina",
+   "metric": "thickness_um",
+   "value": 263.9234693877551
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "TotalRetina",
+   "metric": "volume_mm3",
+   "value": 1.8655650732116298
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "IRF",
+   "metric": "volume_mm3",
+   "value": 0.009097200000000001
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "IRF",
+   "metric": "area_mm2",
+   "value": 0.5054
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "IRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SRF",
+   "metric": "volume_mm3",
+   "value": 0.024367500000000007
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SRF",
+   "metric": "area_mm2",
+   "value": 1.35375
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "PED",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "PED",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "PED",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SHRM",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SHRM",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SHRM",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SDD",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SDD",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "SDD",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ORT",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ORT",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "ORT",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "HRF",
+   "metric": "volume_mm3",
+   "value": 0.0002166
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "HRF",
+   "metric": "area_mm2",
+   "value": 0.0361
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "HRF",
+   "metric": "max_height_um",
+   "value": 6.0
+  },
+  {
+   "region": "C3",
+   "coverage": 1.0,
+   "n_ascans": 392,
+   "biomarker": "HRF",
+   "metric": "foci_n",
+   "value": 2
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "RNFL",
+   "metric": "thickness_um",
+   "value": 23.288617886178862
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "RNFL",
+   "metric": "volume_mm3",
+   "value": 0.6584701577713142
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "GCL",
+   "metric": "thickness_um",
+   "value": 23.085365853658537
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "GCL",
+   "metric": "volume_mm3",
+   "value": 0.6527233419415769
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "IPL",
+   "metric": "thickness_um",
+   "value": 22.747967479674795
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "IPL",
+   "metric": "volume_mm3",
+   "value": 0.6431836276642127
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "INL",
+   "metric": "thickness_um",
+   "value": 23.5
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "INL",
+   "metric": "volume_mm3",
+   "value": 0.6644468462342412
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "OPL",
+   "metric": "thickness_um",
+   "value": 48.21951219512195
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "OPL",
+   "metric": "volume_mm3",
+   "value": 1.363374587446907
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ONL_HFL",
+   "metric": "thickness_um",
+   "value": 59.80487804878049
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ONL_HFL",
+   "metric": "volume_mm3",
+   "value": 1.6909430897419402
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ELM_EZ",
+   "metric": "thickness_um",
+   "value": 18.024390243902438
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ELM_EZ",
+   "metric": "volume_mm3",
+   "value": 0.5096276277811149
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "EZ_RPE",
+   "metric": "thickness_um",
+   "value": 29.857723577235774
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "EZ_RPE",
+   "metric": "volume_mm3",
+   "value": 0.844207245388428
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "RPE",
+   "metric": "thickness_um",
+   "value": 17.524390243902438
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "RPE",
+   "metric": "volume_mm3",
+   "value": 0.49549046083996084
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "RPE_BM",
+   "metric": "thickness_um",
+   "value": 7.451219512195122
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "RPE_BM",
+   "metric": "volume_mm3",
+   "value": 0.21067826831817404
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "Choroid",
+   "metric": "thickness_um",
+   "value": 95.1910569105691
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "Choroid",
+   "metric": "volume_mm3",
+   "value": 2.691463725699226
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "GCIPL",
+   "metric": "thickness_um",
+   "value": 45.833333333333336
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "GCIPL",
+   "metric": "volume_mm3",
+   "value": 1.2959069696057897
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "GCC",
+   "metric": "thickness_um",
+   "value": 69.1219512195122
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "GCC",
+   "metric": "volume_mm3",
+   "value": 1.9543771273771042
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "InnerRetina",
+   "metric": "thickness_um",
+   "value": 92.6219512195122
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "InnerRetina",
+   "metric": "volume_mm3",
+   "value": 2.6188239736113452
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "OuterRetina",
+   "metric": "thickness_um",
+   "value": 180.8821138211382
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "OuterRetina",
+   "metric": "volume_mm3",
+   "value": 5.114321279516525
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "Photoreceptors",
+   "metric": "thickness_um",
+   "value": 47.88211382113821
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "Photoreceptors",
+   "metric": "volume_mm3",
+   "value": 1.3538348731695429
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "thickness_um",
+   "value": 248.52845528455285
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "volume_mm3",
+   "value": 7.0269765239697355
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "TotalRetina",
+   "metric": "thickness_um",
+   "value": 273.5040650406504
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "TotalRetina",
+   "metric": "volume_mm3",
+   "value": 7.73314525312787
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "IRF",
+   "metric": "volume_mm3",
+   "value": 0.009097200000000005
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "IRF",
+   "metric": "area_mm2",
+   "value": 0.5054
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "IRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SRF",
+   "metric": "volume_mm3",
+   "value": 0.02436750000000001
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SRF",
+   "metric": "area_mm2",
+   "value": 1.35375
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "PED",
+   "metric": "volume_mm3",
+   "value": 0.010396800000000003
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "PED",
+   "metric": "area_mm2",
+   "value": 0.5776
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "PED",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SHRM",
+   "metric": "volume_mm3",
+   "value": 0.0012996000000000001
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SHRM",
+   "metric": "area_mm2",
+   "value": 0.0722
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SHRM",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SDD",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SDD",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "SDD",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ORT",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ORT",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "ORT",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "HRF",
+   "metric": "volume_mm3",
+   "value": 0.0003249
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "HRF",
+   "metric": "area_mm2",
+   "value": 0.054150000000000004
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "HRF",
+   "metric": "max_height_um",
+   "value": 6.0
+  },
+  {
+   "region": "C6",
+   "coverage": 0.9422609250812571,
+   "n_ascans": 1476,
+   "biomarker": "HRF",
+   "metric": "foci_n",
+   "value": 3
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "RNFL",
+   "metric": "thickness_um",
+   "value": 22.96551724137931
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "RNFL",
+   "metric": "volume_mm3",
+   "value": 0.14429660050281395
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "GCL",
+   "metric": "thickness_um",
+   "value": 21.448275862068964
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "GCL",
+   "metric": "volume_mm3",
+   "value": 0.13476349176088628
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "IPL",
+   "metric": "thickness_um",
+   "value": 22.017241379310345
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "IPL",
+   "metric": "volume_mm3",
+   "value": 0.13833840753910917
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "INL",
+   "metric": "thickness_um",
+   "value": 22.862068965517242
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "INL",
+   "metric": "volume_mm3",
+   "value": 0.14364661581586433
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "OPL",
+   "metric": "thickness_um",
+   "value": 48.13793103448276
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "OPL",
+   "metric": "volume_mm3",
+   "value": 0.3024595409938863
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ONL_HFL",
+   "metric": "thickness_um",
+   "value": 59.44827586206897
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ONL_HFL",
+   "metric": "volume_mm3",
+   "value": 0.37352453343371056
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ELM_EZ",
+   "metric": "thickness_um",
+   "value": 18.379310344827587
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ELM_EZ",
+   "metric": "volume_mm3",
+   "value": 0.11548061271471446
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "EZ_RPE",
+   "metric": "thickness_um",
+   "value": 29.655172413793103
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "EZ_RPE",
+   "metric": "volume_mm3",
+   "value": 0.1863289435922222
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "RPE",
+   "metric": "thickness_um",
+   "value": 17.43103448275862
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "RPE",
+   "metric": "volume_mm3",
+   "value": 0.10952241975100968
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "RPE_BM",
+   "metric": "thickness_um",
+   "value": 7.672413793103448
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "RPE_BM",
+   "metric": "volume_mm3",
+   "value": 0.04820719761542959
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "Choroid",
+   "metric": "thickness_um",
+   "value": 95.27586206896552
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "Choroid",
+   "metric": "volume_mm3",
+   "value": 0.598635896680593
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "GCIPL",
+   "metric": "thickness_um",
+   "value": 43.46551724137931
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "GCIPL",
+   "metric": "volume_mm3",
+   "value": 0.27310189929999545
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "GCC",
+   "metric": "thickness_um",
+   "value": 66.43103448275862
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "GCC",
+   "metric": "volume_mm3",
+   "value": 0.4173984998028094
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "InnerRetina",
+   "metric": "thickness_um",
+   "value": 89.29310344827586
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "InnerRetina",
+   "metric": "volume_mm3",
+   "value": 0.5610451156186738
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "OuterRetina",
+   "metric": "thickness_um",
+   "value": 180.72413793103448
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "OuterRetina",
+   "metric": "volume_mm3",
+   "value": 1.1355232481009727
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "Photoreceptors",
+   "metric": "thickness_um",
+   "value": 48.03448275862069
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "Photoreceptors",
+   "metric": "volume_mm3",
+   "value": 0.3018095563069367
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "thickness_um",
+   "value": 244.91379310344828
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "volume_mm3",
+   "value": 1.5388387463532074
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "TotalRetina",
+   "metric": "thickness_um",
+   "value": 270.01724137931035
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "TotalRetina",
+   "metric": "volume_mm3",
+   "value": 1.6965683637196465
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "IRF",
+   "metric": "volume_mm3",
+   "value": 0.0006498000000000001
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "IRF",
+   "metric": "area_mm2",
+   "value": 0.0361
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "IRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SRF",
+   "metric": "volume_mm3",
+   "value": 0.011696400000000004
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SRF",
+   "metric": "area_mm2",
+   "value": 0.6498
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SRF",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "PED",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "PED",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "PED",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SHRM",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SHRM",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SHRM",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SDD",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SDD",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "SDD",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ORT",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ORT",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "ORT",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "HRF",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "HRF",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "HRF",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R1_3",
+   "coverage": 0.9997158595374314,
+   "n_ascans": 348,
+   "biomarker": "HRF",
+   "metric": "foci_n",
+   "value": 0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "RNFL",
+   "metric": "thickness_um",
+   "value": 23.911439114391143
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "RNFL",
+   "metric": "volume_mm3",
+   "value": 0.5070600098450831
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "GCL",
+   "metric": "thickness_um",
+   "value": 24.20479704797048
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "GCL",
+   "metric": "volume_mm3",
+   "value": 0.5132808849658679
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "IPL",
+   "metric": "thickness_um",
+   "value": 23.623616236162363
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "IPL",
+   "metric": "volume_mm3",
+   "value": 0.5009565097265776
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "INL",
+   "metric": "thickness_um",
+   "value": 24.309963099630995
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "INL",
+   "metric": "volume_mm3",
+   "value": 0.5155110100091679
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "OPL",
+   "metric": "thickness_um",
+   "value": 48.2380073800738
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "OPL",
+   "metric": "volume_mm3",
+   "value": 1.022923144861088
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ONL_HFL",
+   "metric": "thickness_um",
+   "value": 59.928044280442805
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ONL_HFL",
+   "metric": "volume_mm3",
+   "value": 1.2708191496742398
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ELM_EZ",
+   "metric": "thickness_um",
+   "value": 17.883763837638377
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ELM_EZ",
+   "metric": "volume_mm3",
+   "value": 0.3792386323633018
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "EZ_RPE",
+   "metric": "thickness_um",
+   "value": 29.928044280442805
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "EZ_RPE",
+   "metric": "volume_mm3",
+   "value": 0.6346466373223066
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "RPE",
+   "metric": "thickness_um",
+   "value": 17.568265682656826
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "RPE",
+   "metric": "volume_mm3",
+   "value": 0.3725482572334014
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "RPE_BM",
+   "metric": "thickness_um",
+   "value": 7.372693726937269
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "RPE_BM",
+   "metric": "volume_mm3",
+   "value": 0.15634350303556732
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "Choroid",
+   "metric": "thickness_um",
+   "value": 95.119926199262
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "Choroid",
+   "metric": "volume_mm3",
+   "value": 2.0170894141638325
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "GCIPL",
+   "metric": "thickness_um",
+   "value": 47.82841328413284
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "GCIPL",
+   "metric": "volume_mm3",
+   "value": 1.0142373946924454
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "GCC",
+   "metric": "thickness_um",
+   "value": 71.73985239852398
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "GCC",
+   "metric": "volume_mm3",
+   "value": 1.5212974045375285
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "InnerRetina",
+   "metric": "thickness_um",
+   "value": 96.04981549815498
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "InnerRetina",
+   "metric": "volume_mm3",
+   "value": 2.0368084145466967
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "OuterRetina",
+   "metric": "thickness_um",
+   "value": 180.9188191881919
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "OuterRetina",
+   "metric": "volume_mm3",
+   "value": 3.836519324489905
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "Photoreceptors",
+   "metric": "thickness_um",
+   "value": 47.81180811808118
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "Photoreceptors",
+   "metric": "volume_mm3",
+   "value": 1.0138852696856084
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "thickness_um",
+   "value": 252.02767527675277
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "NeurosensoryRetina",
+   "metric": "volume_mm3",
+   "value": 5.344435978767633
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "TotalRetina",
+   "metric": "thickness_um",
+   "value": 276.9686346863469
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "TotalRetina",
+   "metric": "volume_mm3",
+   "value": 5.873327739036602
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "IRF",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "IRF",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "IRF",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SRF",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SRF",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SRF",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "PED",
+   "metric": "volume_mm3",
+   "value": 0.010396800000000001
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "PED",
+   "metric": "area_mm2",
+   "value": 0.5776
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "PED",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SHRM",
+   "metric": "volume_mm3",
+   "value": 0.0012996000000000001
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SHRM",
+   "metric": "area_mm2",
+   "value": 0.0722
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SHRM",
+   "metric": "max_height_um",
+   "value": 18.000000000000004
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SDD",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SDD",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "SDD",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ORT",
+   "metric": "volume_mm3",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ORT",
+   "metric": "area_mm2",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "ORT",
+   "metric": "max_height_um",
+   "value": 0.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "HRF",
+   "metric": "volume_mm3",
+   "value": 0.0001083
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "HRF",
+   "metric": "area_mm2",
+   "value": 0.01805
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "HRF",
+   "metric": "max_height_um",
+   "value": 6.0
+  },
+  {
+   "region": "R3_6",
+   "coverage": 0.9226836881554497,
+   "n_ascans": 1084,
+   "biomarker": "HRF",
+   "metric": "foci_n",
+   "value": 1
+  }
+ ],
+ "total_voxels": {
+  "Cyst": 84,
+  "SRF": 225,
+  "PED": 96,
+  "SHRM": 12,
+  "Pseudodrusen": 16,
+  "ORT": 0,
+  "HRF": 4
+ }
+}

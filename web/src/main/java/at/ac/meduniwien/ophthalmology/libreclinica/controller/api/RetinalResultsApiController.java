@@ -216,7 +216,35 @@ public class RetinalResultsApiController {
              * Null when the subject is in neither (non-T-and-E
              * studies pass through unchanged).
              */
-            String subjectArm) { }
+            String subjectArm,
+            /*
+             * 2026-10-09 — where the job lives, for the job page's trail and
+             * canonical address (/subjects/{subjectLabel}/jobs/{jobId}).
+             * All null when the scan is filed to no visit.
+             */
+            String subjectLabel,
+            Integer studyEventId,
+            /** The visit definition's name, " #n" appended for a repeating one. */
+            String visitName,
+            /** The visit's date, ISO yyyy-MM-dd. */
+            String visitDate,
+            /** Every analysis of the same scan, this one included, oldest first. */
+            List<JobSibling> siblings,
+            /** Why the job stopped (failed / cancelled), else null. */
+            String statusMessage,
+            /*
+             * DR-039 — what the preprocess sidecar reported about the scan:
+             * "e2e" / "dicom", the recording device, and how a DICOM's pixel
+             * spacing was read ("standard" / "swapped" / "standard-assumed").
+             * Null for jobs that ran before this was recorded.
+             */
+            String sourceFormat,
+            String deviceManufacturer,
+            String deviceModel,
+            String spacingOrder) { }
+
+    /** Another analysis of the scan a job read. */
+    public record JobSibling(long jobId, String task, String status) { }
 
     public record RetinalJobSummaryDto(
             long jobId,
@@ -250,16 +278,14 @@ public class RetinalResultsApiController {
              * (event_crf_id NULL).
              */
             Integer studyEventId,
-            PrimaryMetric primaryMetric,
-            /**
-             * 2026-06-26 — stable per-subject sequence number (1-based,
-             * ordered by enqueued_at then job_id so it is append-only and
-             * never renumbers existing jobs). Lets the SPA show "Job #n"
-             * per subject and deep-link via /subjects/{label}/jobs/{n}.
-             * Only the per-subject list query computes it; null elsewhere
-             * (e.g. the event-CRF-scoped list).
+            /*
+             * 2026-10-09 — the per-subject sequence number (subjectSeq) that
+             * stood here is gone: it counted only jobs filed to a visit, so
+             * detaching an earlier job renumbered the later ones and a link
+             * built from it could open another job. The job id is the one
+             * number in an address: /subjects/{label}/jobs/{jobId}.
              */
-            Integer subjectSeq) { }
+            PrimaryMetric primaryMetric) { }
 
     /**
      * Wave 2A — longitudinal trends row. One point per completed job
@@ -319,7 +345,7 @@ public class RetinalResultsApiController {
         ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
-        String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
+        String e2eUuid = RetinalJobAccess.artifactKey(row.e2ePath);
         List<String> artifactNames = jobs().listArtifactNames(row.bscanMasksDir);
         // 2026-06-19 — thread scan_index so multi-volume uploads
         // discover their companions under scan-N/.
@@ -362,6 +388,25 @@ public class RetinalResultsApiController {
             confidence = null;
         }
 
+        // Where the job lives and what else the scan was analysed for. Read
+        // after the visibility guard: a refused caller learns none of it.
+        RetinalJobAccess.JobAddress address = null;
+        RetinalJobAccess.JobVisit visit = null;
+        List<JobSibling> siblings = List.of();
+        try (Connection c = dataSource.getConnection()) {
+            visit = RetinalJobAccess.visitOf(c, jobId);
+            List<RetinalJobAccess.SiblingJob> sibs = RetinalJobAccess.siblingsOf(c, jobId);
+            address = RetinalJobAccess.addressOf(c, jobId);
+            List<JobSibling> list = new ArrayList<>();
+            for (RetinalJobAccess.SiblingJob sj : sibs) {
+                list.add(new JobSibling(sj.jobId(), sj.task(), sj.status()));
+            }
+            siblings = list;
+        } catch (SQLException sqlEx) {
+            // The page still shows the job; it loses its trail and switcher.
+            LOG.warn("location lookup failed for job {}: {}", jobId, sqlEx.getMessage());
+        }
+
         RetinalJobDetailDto dto = new RetinalJobDetailDto(
                 row.jobId,
                 row.eventCrfId,
@@ -380,69 +425,55 @@ public class RetinalResultsApiController {
                 fundusUrl,
                 geometryUrl,
                 bscanDcmUrl,
-                subjectArm);
+                subjectArm,
+                address == null ? null : address.subjectLabel(),
+                visit == null ? null : visit.studyEventId(),
+                visit == null ? null : visit.name(),
+                visit == null ? null : visit.date(),
+                siblings,
+                row.statusMessage,
+                row.sourceFormat,
+                row.deviceManufacturer,
+                row.deviceModel,
+                row.spacingOrder);
         return ResponseEntity.ok(dto);
     }
 
     /**
-     * 2026-06-26 — resolve a stable per-subject sequence number to a job
-     * and return its detail, so the SPA can address jobs via the
-     * human-friendly {@code /app/subjects/{label}/jobs/{n}} URL instead of
-     * the opaque global job_id. {@code seq} matches the {@code subjectSeq}
-     * exported by the per-subject list (same ROW_NUMBER ordering:
-     * enqueued_at then job_id, scoped to the subject). 404 when the
-     * (subject, seq) pair resolves to no job; visibility is enforced by the
-     * shared {@link #buildJobDetailResponse} (job → study → session scope).
+     * The job at its canonical address, {@code /subjects/{label}/jobs/{jobId}}.
+     *
+     * <p>2026-10-09 — this used to take a per-subject sequence number. That
+     * number counted only jobs filed to a visit, so taking an earlier scan off
+     * its visit renumbered every later job and a saved address opened another
+     * one. The job id never changes. The job is answered only when it is filed
+     * to a visit of a subject with this label; any other id — another
+     * subject's job included — is 404, so the address says nothing about jobs
+     * elsewhere. Visibility is then the shared {@link #buildJobDetailResponse}
+     * check (job → study → session scope).
      */
-    @GetMapping(path = "/subjects/{subjectLabel}/retinal-jobs/{seq:[0-9]+}",
+    @GetMapping(path = "/subjects/{subjectLabel}/retinal-jobs/{jobId:[0-9]+}",
                 produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> getJobBySubjectSeq(
+    public ResponseEntity<?> getJobBySubject(
             @PathVariable("subjectLabel") String subjectLabel,
-            @PathVariable("seq") int seq,
+            @PathVariable("jobId") long jobId,
             HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
 
-        Long jobId;
+        RetinalJobAccess.JobAddress address;
         try (Connection c = dataSource.getConnection()) {
-            jobId = resolveJobIdBySubjectSeq(c, subjectLabel, seq);
+            address = RetinalJobAccess.addressOf(c, jobId);
         } catch (SQLException sqlEx) {
-            LOG.error("Failed to resolve retinal job for subject {} seq {}: {}",
-                    subjectLabel, seq, sqlEx.getMessage());
+            LOG.error("Failed to resolve retinal job {} for subject {}: {}",
+                    jobId, subjectLabel, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to resolve retinal job: " + sqlEx.getMessage()));
         }
-        if (jobId == null) {
+        if (address == null || !address.subjectLabel().equals(subjectLabel)) {
             return ResponseEntity.status(404).body(Map.of(
-                    "message", "No retinal job #" + seq + " for subject " + subjectLabel));
+                    "message", "No retinal job " + jobId + " for this subject"));
         }
         return buildJobDetailResponse(jobId, session);
-    }
-
-    /**
-     * Resolve (subject label, 1-based sequence) → job_id. Mirrors the
-     * per-subject list's ROW_NUMBER ordering + COALESCE binding join so the
-     * seq is identical to the {@code subjectSeq} the list exports.
-     */
-    private Long resolveJobIdBySubjectSeq(Connection c, String subjectLabel, int seq)
-            throws SQLException {
-        String sql = "SELECT t.job_id FROM ("
-                + "  SELECT j.job_id, "
-                + "         ROW_NUMBER() OVER (ORDER BY j.enqueued_at ASC, j.job_id ASC) AS seq "
-                + "    FROM retinal_inference_job j "
-                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "    JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
-                + "    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
-                + "   WHERE ss.label = ?) t "
-                + " WHERE t.seq = ?";
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, subjectLabel);
-            ps.setInt(2, seq);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                return rs.getLong("job_id");
-            }
-        }
     }
 
     /**
@@ -556,13 +587,6 @@ public class RetinalResultsApiController {
                 + "       j.acquisition_date, "
                 // study_event_id surfaces so the SPA joins the BCVA timeline by event (see RetinalJobSummaryDto).
                 + "       se.study_event_id, "
-                // 2026-06-26 — stable 1-based per-subject sequence number.
-                // Ordered by enqueued_at then job_id (append-only: a new job
-                // gets the next number, existing numbers never shift), so it
-                // is safe to use in the /subjects/{label}/jobs/{n} deep link.
-                // Independent of the outer ORDER BY (which sorts the displayed
-                // rows by scan date).
-                + "       ROW_NUMBER() OVER (ORDER BY j.enqueued_at ASC, j.job_id ASC) AS subject_seq, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
@@ -602,7 +626,7 @@ public class RetinalResultsApiController {
                 out = out.stream().map(s -> new RetinalJobSummaryDto(
                         s.jobId(), s.task(), s.laterality(), s.status(), s.modelVersion(),
                         s.completedAt(), s.visitDate(), s.acquisitionDate(), s.studyEventId(),
-                        null, s.subjectSeq())).toList();
+                        null)).toList();
             }
         }
         return ResponseEntity.ok(out);
@@ -1315,14 +1339,6 @@ public class RetinalResultsApiController {
         return ResponseEntity.accepted().body(resp);
     }
 
-    /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
-     *  runner profiles + the FUNDUS overlay's recognised task discriminator.
-     *  2026-06-25: `layers` added — returns the full IOWA 11-surface stack
-     *  + BM in one job (feeds the BscanViewer overlay + CRT compute).
-     *  `bm` is intentionally absent — `layers` already covers it.
-     *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
-    private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
-            java.util.Set.of("fluid", "ga", "onl", "pr", "layers");
 
     /**
      * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})
@@ -1357,18 +1373,20 @@ public class RetinalResultsApiController {
 
         String newTask = body == null ? null : body.get("task");
         if (newTask != null) newTask = newTask.trim().toLowerCase(java.util.Locale.ROOT);
-        if (newTask == null || !ALLOWED_RERUN_TASKS.contains(newTask)) {
+        // The rerun-as dropdown's tasks: RetinalJobFollower.STARTABLE_TASKS.
+        if (!RetinalJobFollower.isStartableTask(newTask)) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "task must be one of " + ALLOWED_RERUN_TASKS));
+                    "message", "task must be one of " + RetinalJobFollower.STARTABLE_TASKS));
         }
 
         FailedJob source;
         Integer sourceStudyEventId;
         String sourceSha256;
+        Long sourceIngestItemId;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT status, status_message, event_crf_id, study_event_id, task, "
-                             + "       e2e_path, eye_laterality, scan_index, e2e_sha256 "
+                             + "       e2e_path, eye_laterality, scan_index, e2e_sha256, ingest_item_id "
                              + "  FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, sourceJobId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -1388,6 +1406,8 @@ public class RetinalResultsApiController {
                 source.eyeLaterality = rs.getString("eye_laterality");
                 source.scanIndex = rs.getInt("scan_index");
                 sourceSha256 = rs.getString("e2e_sha256");
+                long itemId = rs.getLong("ingest_item_id");
+                sourceIngestItemId = rs.wasNull() ? null : itemId;
             }
         } catch (SQLException sqlEx) {
             LOG.error("Failed to fetch source retinal job {} for rerun-as: {}",
@@ -1469,6 +1489,19 @@ public class RetinalResultsApiController {
                     "message", "Source job is missing e2e_sha256 — predates the "
                             + "dedup gate; cannot rerun-as safely"));
         }
+        if (RetinalJobAccess.scanFileMissing(source.e2ePath)) {
+            // Refuse up front rather than create a job that fails at dispatch.
+            return ResponseEntity.status(409).body(Map.of(
+                    "code", "SCAN_FILE_MISSING",
+                    "message", RetinalJobAccess.SCAN_FILE_MISSING));
+        }
+        // DR-039 — the scan must still be an OCT volume (RetinalJobFollower.isAnalysable),
+        // the same question the per-scan start and the bind ask.
+        if (sourceIngestItemId != null && !itemIsAnalysable(sourceIngestItemId)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "code", "NOT_ANALYSABLE",
+                    "message", "Only OCT volumes can be analysed."));
+        }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Remote GPU sidecar not configured — rerun-as unavailable"));
@@ -1479,27 +1512,9 @@ public class RetinalResultsApiController {
         }
 
         // ---- dedup gate: prefer surfacing an existing twin row over a 500 -
-        long existingTwinJobId = -1;
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT job_id FROM retinal_inference_job "
-                             + "WHERE e2e_sha256 = ? AND scan_index = ? AND task = ?")) {
-            ps.setString(1, sourceSha256);
-            ps.setInt(2, source.scanIndex);
-            ps.setString(3, newTask);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) existingTwinJobId = rs.getLong(1);
-            }
-        } catch (SQLException sqlEx) {
-            // Non-fatal — fall through to the INSERT and let the unique
-            // constraint catch any race.
-            LOG.warn("rerun-as dedup probe failed for job {}: {}", sourceJobId, sqlEx.getMessage());
-        }
+        long existingTwinJobId = rerunTwin(sourceIngestItemId, sourceSha256, source.scanIndex, newTask, sourceJobId);
         if (existingTwinJobId > 0) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "A job already exists for this scan + task — "
-                            + "navigate there instead",
-                    "existingJobId", existingTwinJobId));
+            return rerunTwinConflict(existingTwinJobId);
         }
 
         // 2026-06-24 — also threads study_event_id so a
@@ -1507,13 +1522,16 @@ public class RetinalResultsApiController {
         // a child job with the same planned-visit binding. Without
         // this the new job would land orphaned (both bindings null)
         // and silently drop off the timeline endpoints.
+        // 2026-10-09 — and ingest_item_id: the scan's jobs are found by it
+        // (unbind detaches and cancels by it, the visit page lists by it),
+        // so a re-run without it was invisible to all of that.
         long newJobId;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO retinal_inference_job ("
                              + "event_crf_id, study_event_id, task, e2e_path, "
-                             + "eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
-                             + ") VALUES (?, ?, ?, ?, ?, 'remote_pending', ?, ?, ?)",
+                             + "eye_laterality, status, scan_index, enqueued_at, e2e_sha256, ingest_item_id"
+                             + ") VALUES (?, ?, ?, ?, ?, 'remote_pending', ?, ?, ?, ?)",
                      Statement.RETURN_GENERATED_KEYS)) {
             if (source.eventCrfId == null) ps.setNull(1, java.sql.Types.INTEGER);
             else ps.setInt(1, source.eventCrfId);
@@ -1525,6 +1543,8 @@ public class RetinalResultsApiController {
             ps.setInt(6, source.scanIndex);
             ps.setTimestamp(7, Timestamp.from(Instant.now()));
             ps.setString(8, sourceSha256);
+            if (sourceIngestItemId == null) ps.setNull(9, java.sql.Types.BIGINT);
+            else ps.setLong(9, sourceIngestItemId);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (!keys.next()) {
@@ -1533,6 +1553,11 @@ public class RetinalResultsApiController {
                 newJobId = keys.getLong(1);
             }
         } catch (SQLException sqlEx) {
+            if ("23505".equals(sqlEx.getSQLState())) {
+                // Another request started the same task on this scan in between.
+                long raced = rerunTwin(sourceIngestItemId, sourceSha256, source.scanIndex, newTask, sourceJobId);
+                if (raced > 0) return rerunTwinConflict(raced);
+            }
             LOG.error("Failed to insert rerun-as job (source={}, task={}): {}",
                     sourceJobId, newTask, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
@@ -1579,7 +1604,65 @@ public class RetinalResultsApiController {
         resp.put("jobId", newJobId);
         resp.put("task", newTask);
         resp.put("status", "remote_pending");
+        RetinalJobAccess.putAddress(dataSource, newJobId, resp);
         return ResponseEntity.accepted().body(resp);
+    }
+
+    /** Whether the ingest item a job read is (still) an analysable OCT volume; false when it is gone. */
+    private boolean itemIsAnalysable(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT kind, oct_volume FROM ingest_item WHERE ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                String kind = rs.getString(1);
+                boolean oct = rs.getBoolean(2);
+                return RetinalJobFollower.isAnalysable(kind, rs.wasNull() ? null : oct);
+            }
+        } catch (SQLException e) {
+            LOG.warn("rerun-as: could not classify ingest_item {}: {}", ingestItemId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * The job a rerun-as would duplicate: one of the same task on the same
+     * scan that is not cancelled — by the scan's ingest item, as the unique
+     * index {@code ux_retinal_job_ingest_item_task} counts, and by digest and
+     * scan index for rows from before jobs had one. A cancelled job does not
+     * count; the index lets a cancelled task run again. -1 when there is none
+     * or the probe failed (the INSERT's unique index then decides).
+     */
+    private long rerunTwin(Long ingestItemId, String sha256, int scanIndex, String task, long sourceJobId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT job_id FROM retinal_inference_job "
+                             + " WHERE task = ? AND status <> 'cancelled' "
+                             + "   AND ((ingest_item_id IS NOT NULL AND ingest_item_id = ?) "
+                             + "        OR (e2e_sha256 = ? AND scan_index = ?)) "
+                             + " ORDER BY job_id LIMIT 1")) {
+            ps.setString(1, task);
+            if (ingestItemId == null) ps.setNull(2, java.sql.Types.BIGINT);
+            else ps.setLong(2, ingestItemId);
+            ps.setString(3, sha256);
+            ps.setInt(4, scanIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : -1;
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("rerun-as dedup probe failed for job {}: {}", sourceJobId, sqlEx.getMessage());
+            return -1;
+        }
+    }
+
+    private ResponseEntity<?> rerunTwinConflict(long existingJobId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("message", "A job already exists for this scan + task — navigate there instead");
+        body.put("existingJobId", existingJobId);
+        // The twin reads the same scan as the source the caller may see.
+        RetinalJobAccess.putAddress(dataSource, existingJobId, body);
+        return ResponseEntity.status(409).body(body);
     }
 
     /** Slim row carrier for the failed-job retry handoff. */
@@ -1915,19 +1998,10 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // study_event_id column not in this query — leave null.
         }
-        // 2026-06-26 — per-subject sequence number, only present in the
-        // per-subject list query; same defensive lookup as the columns above.
-        Integer subjectSeq = null;
-        try {
-            int seq = rs.getInt("subject_seq");
-            if (!rs.wasNull()) subjectSeq = seq;
-        } catch (SQLException ignoredColumnAbsent) {
-            // subject_seq column not in this query — leave null.
-        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
                 RetinalJobAccess.toIso(completedAt), visitDate, acquisitionDate, studyEventId,
-                primaryMetric(pv, pu), subjectSeq);
+                primaryMetric(pv, pu));
     }
 
 

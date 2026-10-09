@@ -317,6 +317,10 @@ public class AuditApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!mayViewStudyAudit(ub, currentStudy, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reading the study audit log"));
+        }
         AuditFilter filter;
         try {
             filter = AuditFilter.of(actorFilter, variantFilter, subjectIdFilter, itemFilter, fromDay, toDay);
@@ -352,6 +356,10 @@ public class AuditApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!mayViewStudyAudit(ub, currentStudy, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reading the study audit log"));
+        }
         List<Integer> visible = visibleStudyIds(ub, currentStudy, currentRole);
         try (Connection c = dataSource.getConnection()) {
             return ResponseEntity.ok(new AuditFacetsDto(
@@ -401,6 +409,10 @@ public class AuditApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!mayViewStudyAudit(ub, currentStudy, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reading the study audit log"));
+        }
         AuditFilter filter;
         try {
             filter = AuditFilter.of(actorFilter, variantFilter, subjectIdFilter, itemFilter, fromDay, toDay);
@@ -580,6 +592,45 @@ public class AuditApiController {
         Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(ub, currentStudy, currentRole);
         if (visible.isEmpty()) visible = Set.of(currentStudy.getId());
         return new ArrayList<>(visible);
+    }
+
+    /**
+     * Who may read the study audit log: a system administrator, or a user
+     * whose role on the active study (or on its parent, for a site) is
+     * director, coordinator or monitor. Legacy parity:
+     * {@code StudyAuditLogServlet.mayProceed}. The session role is tried first;
+     * a user with several bindings on the study (Investigator and Data Manager,
+     * say) may have the session role land on the weaker one, so every active
+     * binding is walked before refusing. Fails closed.
+     */
+    private boolean mayViewStudyAudit(UserAccountBean ub, StudyBean currentStudy,
+                                      StudyUserRoleBean currentRole) {
+        if (ub.isSysAdmin()) return true;
+        if (currentRole != null && roleMayViewStudyAudit(currentRole.getRole())) return true;
+        try {
+            List<StudyUserRoleBean> bindings =
+                    new at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO(dataSource)
+                            .findAllRolesByUserName(ub.getName());
+            if (bindings == null) return false;
+            for (StudyUserRoleBean b : bindings) {
+                if (b == null || b.getRole() == null) continue;
+                if (b.getStatus() == null
+                        || b.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) continue;
+                boolean onStudy = b.getStudyId() == currentStudy.getId()
+                        || (currentStudy.getParentStudyId() > 0 && b.getStudyId() == currentStudy.getParentStudyId());
+                if (onStudy && roleMayViewStudyAudit(b.getRole())) return true;
+            }
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return false;
+    }
+
+    static boolean roleMayViewStudyAudit(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role r) {
+        return r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.ADMIN
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.COORDINATOR
+                || r == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR;
     }
 
     private AuditLogQuery studyQuery(Connection c, UserAccountBean ub, StudyBean currentStudy,
