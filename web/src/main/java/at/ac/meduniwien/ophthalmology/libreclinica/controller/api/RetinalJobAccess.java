@@ -115,6 +115,13 @@ final class RetinalJobAccess {
          * {@link AiArmPolicy#armForEvent} needs both to find the arm.
          */
         Integer studyEventId;
+        /** Why the job stopped, when it did; null otherwise. */
+        String statusMessage;
+        /* DR-039 — what the preprocess sidecar reported about the scan; null before it ran. */
+        String sourceFormat;
+        String deviceManufacturer;
+        String deviceModel;
+        String spacingOrder;
     }
 
     /**
@@ -129,7 +136,8 @@ final class RetinalJobAccess {
     JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
-                + "       j.scan_index, j.study_event_id, "
+                + "       j.scan_index, j.study_event_id, j.status_message, "
+                + "       j.source_format, j.device_manufacturer, j.device_model, j.spacing_order, "
                 + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
                 + "       r.bscan_masks_dir, r.confidence, ss.study_id "
                 + "  FROM retinal_inference_job j "
@@ -163,6 +171,11 @@ final class RetinalJobAccess {
                 row.scanIndex = rs.getInt("scan_index");
                 int sev = rs.getInt("study_event_id");
                 row.studyEventId = rs.wasNull() ? null : sev;
+                row.statusMessage = rs.getString("status_message");
+                row.sourceFormat = rs.getString("source_format");
+                row.deviceManufacturer = rs.getString("device_manufacturer");
+                row.deviceModel = rs.getString("device_model");
+                row.spacingOrder = rs.getString("spacing_order");
                 return row;
             }
         }

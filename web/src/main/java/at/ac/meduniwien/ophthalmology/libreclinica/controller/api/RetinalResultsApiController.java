@@ -229,7 +229,19 @@ public class RetinalResultsApiController {
             /** The visit's date, ISO yyyy-MM-dd. */
             String visitDate,
             /** Every analysis of the same scan, this one included, oldest first. */
-            List<JobSibling> siblings) { }
+            List<JobSibling> siblings,
+            /** Why the job stopped (failed / cancelled), else null. */
+            String statusMessage,
+            /*
+             * DR-039 — what the preprocess sidecar reported about the scan:
+             * "e2e" / "dicom", the recording device, and how a DICOM's pixel
+             * spacing was read ("standard" / "swapped" / "standard-assumed").
+             * Null for jobs that ran before this was recorded.
+             */
+            String sourceFormat,
+            String deviceManufacturer,
+            String deviceModel,
+            String spacingOrder) { }
 
     /** Another analysis of the scan a job read. */
     public record JobSibling(long jobId, String task, String status) { }
@@ -418,7 +430,12 @@ public class RetinalResultsApiController {
                 visit == null ? null : visit.studyEventId(),
                 visit == null ? null : visit.name(),
                 visit == null ? null : visit.date(),
-                siblings);
+                siblings,
+                row.statusMessage,
+                row.sourceFormat,
+                row.deviceManufacturer,
+                row.deviceModel,
+                row.spacingOrder);
         return ResponseEntity.ok(dto);
     }
 
