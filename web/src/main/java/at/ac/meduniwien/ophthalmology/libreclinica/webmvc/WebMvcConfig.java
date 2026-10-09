@@ -121,6 +121,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 // component-scan; @Import wires it into the child where the rest of
 // springdoc lives.
 @Import({
+        PagesExceptionResolverConfig.class,
         OpenApiConfig.class,
         SpringDocConfiguration.class,
         SpringDocWebMvcConfiguration.class,

@@ -96,6 +96,7 @@ public class CreateSubStudyServlet extends SecureController {
 
     @Override
     public void processRequest() throws Exception {
+        CreateStudyServlet.ensureOptionMaps();
         FormProcessor fp = new FormProcessor(request);
         String action = request.getParameter("action");
         session.setAttribute("sdvOptions", this.setSDVOptions());
