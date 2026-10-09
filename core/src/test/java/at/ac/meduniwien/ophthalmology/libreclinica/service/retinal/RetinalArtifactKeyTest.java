@@ -58,6 +58,17 @@ public class RetinalArtifactKeyTest {
         assertEquals(key, UUID.fromString(key).toString());
     }
 
+    /**
+     * A fixed vector, so the rule cannot drift unnoticed, and so the
+     * comparison script (deploy/compare-oct-jobs.sh, which recomputes it in
+     * Python) has something to agree with.
+     */
+    @Test
+    public void theKeyOfAKnownPathIsFixed() {
+        assertEquals("6ff862cf-d3bf-3b45-a879-b5f1daa3e2f9", RetinalArtifactKey.of(
+                "/var/lib/libreclinica/ingest/dicom/5a1c7e2b-1111-4a2b-9c3d-0e4f5a6b7c8d.dcm"));
+    }
+
     @Test
     public void aCstoreHandoffPathWithoutExtensionGetsAKey() {
         String key = RetinalArtifactKey.of("/var/lib/dicom-ingest/1.2.840.113619.2.55/IMG0001");
