@@ -212,7 +212,24 @@ def test_cluster_trusts_the_order_of_our_own_normalised_file(client, tmp_path):
     write_bscan_dcm(bv, tmp_path)
     assert _spacing_mm(tmp_path / "bscan.dcm") == pytest.approx((0.00387, 0.0039, SLICE))
     ds = pydicom.dcmread(str(tmp_path / "bscan.dcm"), stop_before_pixels=True)
-    assert geo.pixel_spacing_mm(ds)[3] == "standard"
+    assert geo.pixel_spacing_mm(ds, trust_own_writer=True)[3] == "standard"
+    # Without the trust (the preprocess step's view) the value rule applies.
+    with pytest.raises(geo.SpacingAmbiguous):
+        geo.pixel_spacing_mm(ds)
+
+
+def test_preprocess_does_not_trust_the_own_writer_marker_on_an_upload(client):
+    # An uploaded file claiming our writer's marker must still pass the value
+    # rule: the marker is just a tag anyone can write.
+    import io
+
+    ds = read(make_opt(pixel_spacing=(0.00387, 0.0039)))
+    ds.DeidentificationMethod = geo.OWN_WRITER_MARKER
+    buf = io.BytesIO()
+    ds.save_as(buf, enforce_file_format=True)
+    r = _post(client, buf.getvalue())
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"]["error"] == "spacing_ambiguous"
 
 
 def test_unchanged_fixture_still_standard():

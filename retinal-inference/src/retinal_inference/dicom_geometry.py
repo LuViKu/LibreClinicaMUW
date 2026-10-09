@@ -204,11 +204,19 @@ def stored_pixel_spacing_mm(ds: Any) -> tuple[float, float, str]:
     )
 
 
-def pixel_spacing_mm(ds: Any) -> tuple[float, float, str, str]:
-    """(axial, lateral, source, order): the stored pair resolved physically."""
+def pixel_spacing_mm(ds: Any, trust_own_writer: bool = False) -> tuple[float, float, str, str]:
+    """(axial, lateral, source, order): the stored pair resolved physically.
+
+    ``trust_own_writer`` lets a file our own writer produced (its
+    DeidentificationMethod marker) resolve as standard without the value rule.
+    Only the cluster may pass it: it receives nothing but the normalised
+    bscan.dcm the preprocess step wrote. The preprocess step reads uploaded
+    files, and an upload carrying the marker must not switch the check off.
+    """
     first, second, source = stored_pixel_spacing_mm(ds)
     manufacturer = str(getattr(ds, "Manufacturer", "") or "")
-    own = str(getattr(ds, "DeidentificationMethod", "") or "") == OWN_WRITER_MARKER
+    own = trust_own_writer and (
+        str(getattr(ds, "DeidentificationMethod", "") or "") == OWN_WRITER_MARKER)
     axial, lateral, order = resolve_axial_lateral(first, second, manufacturer, own)
     return axial, lateral, source, order
 
@@ -308,11 +316,11 @@ def slice_spacing_mm(ds: Any, n_frames: int | None = None) -> tuple[float, str]:
     )
 
 
-def volume_spacing_mm(ds: Any) -> tuple[float, float, float, dict[str, str]]:
+def volume_spacing_mm(ds: Any, trust_own_writer: bool = False) -> tuple[float, float, float, dict[str, str]]:
     """(axial, lateral, slice, sources) — raises SpacingUnavailable.
 
     ``sources`` has ``pixel``, ``slice`` and the resolved ``order``.
     """
-    axial, lateral, px_src, order = pixel_spacing_mm(ds)
+    axial, lateral, px_src, order = pixel_spacing_mm(ds, trust_own_writer)
     slice_mm, sl_src = slice_spacing_mm(ds)
     return axial, lateral, slice_mm, {"pixel": px_src, "slice": sl_src, "order": order}
