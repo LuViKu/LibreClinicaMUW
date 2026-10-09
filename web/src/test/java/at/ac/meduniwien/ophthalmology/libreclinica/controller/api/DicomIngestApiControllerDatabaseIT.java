@@ -241,6 +241,51 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         assertNull(row.se());
     }
 
+    /** DR-039 — what the sidecar says about the device and the volume lands on the row. */
+    private String[] classification(String sopUid) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT oct_volume, manufacturer, manufacturer_model FROM ingest_item WHERE sop_instance_uid = ?")) {
+            ps.setString(1, sopUid);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                return new String[] { rs.getString(1), rs.getString(2), rs.getString(3) };
+            }
+        }
+    }
+
+    @Test
+    void ingest_anOctVolumeIsClassifiedOnArrival() throws Exception {
+        String uid = UID_PREFIX + "octvolume";
+        String body = payload(uid, null).replace("\"modality\":\"OP\",",
+                        "\"modality\":\"OPT\",\"numberOfFrames\":49,\"octVolume\":true,"
+                                + "\"manufacturer\":\"Heidelberg Engineering\",\"manufacturerModelName\":\"SPECTRALIS\",")
+                .replace("1.2.840.10008.5.1.4.1.1.77.1.5.1", "1.2.840.10008.5.1.4.1.1.77.1.5.4");
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isCreated());
+        String[] row = classification(uid);
+        assertTrue(row[0].startsWith("t"), "oct_volume: " + row[0]);
+        assertEquals("Heidelberg Engineering", row[1]);
+        assertEquals("SPECTRALIS", row[2]);
+    }
+
+    @Test
+    void ingest_withoutAVerdictTheSopClassDecides() throws Exception {
+        // An older sidecar sends no octVolume: a fundus photograph is still known not to be one.
+        String uid = UID_PREFIX + "noverdict";
+        mockMvc().perform(post("/api/v1/internal/dicom-ingest")
+                .header("X-MUW-Dicom-Token", TOKEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload(uid, null)))
+                .andExpect(status().isCreated());
+        String[] row = classification(uid);
+        assertTrue(row[0].startsWith("f"), "oct_volume: " + row[0]);
+        assertNull(row[1]);
+    }
+
     /** An accession shaped like ours but pointing at no live visit stays unbound. */
     @Test
     void ingest_withUnknownStudyEventAccession_landsUnbound() throws Exception {

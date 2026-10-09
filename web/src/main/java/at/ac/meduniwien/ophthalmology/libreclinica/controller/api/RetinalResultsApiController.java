@@ -1478,6 +1478,13 @@ public class RetinalResultsApiController {
                     "code", "SCAN_FILE_MISSING",
                     "message", RetinalJobAccess.SCAN_FILE_MISSING));
         }
+        // DR-039 — the scan must still be an OCT volume (RetinalJobFollower.isAnalysable),
+        // the same question the per-scan start and the bind ask.
+        if (sourceIngestItemId != null && !itemIsAnalysable(sourceIngestItemId)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "code", "NOT_ANALYSABLE",
+                    "message", "Only OCT volumes can be analysed."));
+        }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Remote GPU sidecar not configured — rerun-as unavailable"));
@@ -1582,6 +1589,24 @@ public class RetinalResultsApiController {
         resp.put("status", "remote_pending");
         RetinalJobAccess.putAddress(dataSource, newJobId, resp);
         return ResponseEntity.accepted().body(resp);
+    }
+
+    /** Whether the ingest item a job read is (still) an analysable OCT volume; false when it is gone. */
+    private boolean itemIsAnalysable(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT kind, oct_volume FROM ingest_item WHERE ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                String kind = rs.getString(1);
+                boolean oct = rs.getBoolean(2);
+                return RetinalJobFollower.isAnalysable(kind, rs.wasNull() ? null : oct);
+            }
+        } catch (SQLException e) {
+            LOG.warn("rerun-as: could not classify ingest_item {}: {}", ingestItemId, e.getMessage());
+            return false;
+        }
     }
 
     /**

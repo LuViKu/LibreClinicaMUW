@@ -24,6 +24,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
@@ -104,7 +105,14 @@ public class DicomIngestApiController {
             String sourceAeTitle,
             String dicomPath,        // path under the shared ingest store
             String previewPngPath,   // nullable
-            String pixelSha256       // DR-036 — SHA-256 of the decoded pixels; nullable
+            String pixelSha256,      // DR-036 — SHA-256 of the decoded pixels; nullable
+            // DR-039 — device and OCT-volume classification; all nullable (an
+            // older sidecar sends none, and the file is then classified from
+            // its SOP class and modality alone)
+            String manufacturer,
+            String manufacturerModelName,
+            Integer numberOfFrames,
+            Boolean octVolume
     ) {}
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -269,6 +277,10 @@ public class DicomIngestApiController {
                 .studyInstanceUid(r.studyInstanceUid())
                 .seriesInstanceUid(r.seriesInstanceUid())
                 .modality(r.modality())
+                // DR-039 — a C-STOREd OCT volume is analysable like an uploaded one.
+                .octVolume(r.octVolume() != null ? r.octVolume()
+                        : OctVolumes.classify(r.sopClassUid(), r.modality(), r.numberOfFrames()))
+                .manufacturer(r.manufacturer(), r.manufacturerModelName())
                 .sourceAeTitle(r.sourceAeTitle())
                 .pixelSha256(isBlank(r.pixelSha256()) ? null : r.pixelSha256().trim())
                 // P3.4 — a camera that identifies itself classifies its own

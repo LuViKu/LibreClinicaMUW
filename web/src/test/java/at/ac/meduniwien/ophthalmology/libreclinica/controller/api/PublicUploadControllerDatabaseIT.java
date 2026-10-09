@@ -312,8 +312,13 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         long id = idOf(r);
         try (Connection c = DATA_SOURCE.getConnection();
              ResultSet rs = row(c, id, "sop_instance_uid, modality, deidentified_at, preview_png_path, "
-                     + "content_type, laterality, acquisition_date, device, stored_path")) {
+                     + "content_type, laterality, acquisition_date, device, stored_path, "
+                     + "oct_volume, manufacturer, manufacturer_model")) {
             assertEquals(stubSop, rs.getString("sop_instance_uid"));
+            // DR-039 — classified on arrival: a fundus photograph is not an OCT volume.
+            assertEquals(Boolean.FALSE, rs.getObject("oct_volume"));
+            assertEquals("Carl Zeiss Meditec", rs.getString("manufacturer"));
+            assertEquals("CLARUS 700", rs.getString("manufacturer_model"));
             assertEquals("OP", rs.getString("modality"));
             assertNotNull(rs.getTimestamp("deidentified_at"));
             assertEquals("application/dicom", rs.getString("content_type"));

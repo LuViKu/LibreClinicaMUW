@@ -58,9 +58,13 @@ public final class VisitImagingPlan {
             return REQUIRED.equals(requirement);
         }
 
-        /** True when the catalogue entry accepts OCT volumes — the only kind inference runs on. */
-        public boolean acceptsE2e() {
-            return acceptsKind(kindsAccepted, "e2e");
+        /**
+         * True when an OCT volume — the only thing inference runs on — can
+         * arrive under this catalogue entry, as an {@code .e2e} or as a DICOM
+         * (DR-039). See {@link VisitImagingPlan#acceptsOctVolumes}.
+         */
+        public boolean acceptsOctVolumes() {
+            return VisitImagingPlan.acceptsOctVolumes(kindsAccepted);
         }
     }
 
@@ -127,6 +131,20 @@ public final class VisitImagingPlan {
             if (k.trim().equalsIgnoreCase(kind.trim())) return true;
         }
         return false;
+    }
+
+    /**
+     * DR-039 — whether OCT volumes can be filed under an entry that accepts
+     * these kinds: an {@code .e2e} always is one, and any DICOM-accepting
+     * entry can receive an Ophthalmic Tomography volume. Only such an entry
+     * can carry inference tasks; the tasks then run on the OCT volumes filed
+     * under it and on nothing else (a fundus DICOM is not analysable), and
+     * the device gate refuses a volume from a device a task is not validated
+     * for. Before DR-039 this was "accepts e2e"; every entry that qualified
+     * then still does.
+     */
+    public static boolean acceptsOctVolumes(String kindsAccepted) {
+        return acceptsKind(kindsAccepted, "e2e") || acceptsKind(kindsAccepted, "dicom");
     }
 
     public static List<String> splitTasks(String csv) {
@@ -241,9 +259,9 @@ public final class VisitImagingPlan {
     }
 
     /**
-     * The one active catalogue entry of a study that accepts OCT volumes, or
-     * null when there is none or more than one — a guess between two would be
-     * filed as a fact.
+     * The one active catalogue entry of a study that accepts {@code .e2e}
+     * files, or null when there is none or more than one — a guess between
+     * two would be filed as a fact.
      */
     public static Integer e2eModalityOf(Connection c, int studyId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
@@ -256,6 +274,56 @@ public final class VisitImagingPlan {
                 if (!rs.next()) return null;
                 int id = rs.getInt(1);
                 return rs.next() ? null : Integer.valueOf(id);
+            }
+        }
+    }
+
+    /**
+     * DR-039 — the catalogue entry an unclassified OCT volume is filed under,
+     * or null when that cannot be said without guessing.
+     *
+     * <ul>
+     *   <li>An {@code .e2e}: {@link #e2eModalityOf}, as always.</li>
+     *   <li>A DICOM OCT volume: the one active entry for the file's device
+     *       ({@code device}, e.g. {@code spectralis}) that accepts OCT
+     *       volumes; failing that, the study's {@code .e2e} entry — but only
+     *       when the file names no device or the same device, so a Spectralis
+     *       DICOM export lands where the Spectralis {@code .e2e} does, and a
+     *       Cirrus volume is never filed as a Spectralis acquisition.</li>
+     * </ul>
+     */
+    public static Integer octModalityOf(Connection c, int studyId, String kind, String device)
+            throws SQLException {
+        if (!"dicom".equalsIgnoreCase(kind)) return e2eModalityOf(c, studyId);
+        String dev = device == null ? "" : device.trim().toLowerCase(Locale.ROOT);
+        if (!dev.isEmpty()) {
+            Integer only = null;
+            int found = 0;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT imaging_modality_id, kinds_accepted FROM imaging_modality "
+                            + " WHERE study_id = ? AND COALESCE(status_id, 1) = 1 "
+                            + "   AND lower(COALESCE(device, '')) = ? "
+                            + " ORDER BY ordinal, code")) {
+                ps.setInt(1, studyId);
+                ps.setString(2, dev);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        if (!acceptsOctVolumes(rs.getString(2))) continue;
+                        found++;
+                        only = rs.getInt(1);
+                    }
+                }
+            }
+            if (found == 1) return only;
+            if (found > 1) return null;
+        }
+        Integer e2e = e2eModalityOf(c, studyId);
+        if (e2e == null || dev.isEmpty()) return e2e;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT lower(COALESCE(device, '')) FROM imaging_modality WHERE imaging_modality_id = ?")) {
+            ps.setInt(1, e2e);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && dev.equals(rs.getString(1)) ? e2e : null;
             }
         }
     }

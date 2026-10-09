@@ -34,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
@@ -348,6 +349,9 @@ final class IngestUploadService {
                             .studyInstanceUid(desc.studyInstanceUid())
                             .seriesInstanceUid(desc.seriesInstanceUid())
                             .modality(desc.modality())
+                            // DR-039 — an OCT volume is analysed whatever its format.
+                            .octVolume(OctVolumes.of(desc))
+                            .manufacturer(desc.manufacturer(), desc.manufacturerModelName())
                             .deidentifiedAt(desc.identityRemoved() ? Instant.now() : null);
                 }
                 if (target != null) {

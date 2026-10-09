@@ -28,6 +28,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
@@ -59,9 +60,9 @@ import org.slf4j.LoggerFactory;
  * because a configuration changed is not something a clinical system should do
  * quietly.
  *
- * <p>Only OCT volumes ({@code kind = 'e2e'}) are inferred on; every other kind
- * is a no-op here. The study's inference switch gates the enqueueing, as it
- * gates the portal's.
+ * <p>Only OCT volumes are inferred on — an {@code .e2e}, or a DICOM classified
+ * as one (DR-039, {@link #isAnalysable}); every other file is a no-op here.
+ * The study's inference switch gates the enqueueing, as it gates the portal's.
  */
 public final class RetinalJobFollower {
 
@@ -109,13 +110,20 @@ public final class RetinalJobFollower {
     }
 
     /**
-     * Whether a file of this kind can be analysed at all: today an OCT volume
-     * ({@code kind = 'e2e'}). The SOP class is taken so that a DICOM OCT
-     * volume can be admitted here, in one place, once the runner reads one;
-     * it is not consulted yet.
+     * Whether a file can be analysed at all: an OCT volume, i.e. an
+     * {@code .e2e}, or a DICOM whose {@code ingest_item.oct_volume} says it is
+     * an Ophthalmic Tomography volume of more than one frame (DR-039,
+     * {@link OctVolumes}). The one place this is decided: bind, catch-up, the
+     * per-scan start, rerun-as, the inbox and the visit page all ask here.
      */
-    public static boolean isAnalysable(String kind, String sopClassUid) {
-        return "e2e".equalsIgnoreCase(kind);
+    public static boolean isAnalysable(String kind, Boolean octVolume) {
+        return OctVolumes.isAnalysable(kind, octVolume);
+    }
+
+    /** The SQL form of {@link #isAnalysable}, over an {@code ingest_item} alias. */
+    static String analysablePredicate(String alias) {
+        return "(lower(" + alias + ".kind) = 'e2e' OR (lower(" + alias + ".kind) = 'dicom' AND "
+                + alias + ".oct_volume IS TRUE))";
     }
 
     /** What is already there for one task of the scan. */
@@ -222,7 +230,8 @@ public final class RetinalJobFollower {
     /** What {@link #ensure} reads about the scan. */
     private record Scan(long ingestItemId, String kind, String storedPath, String sha256,
                         int scanIndex, String laterality, Integer modalityId,
-                        Integer boundSubjectId, Integer boundStudyEventId, Integer boundEventCrfId) {}
+                        Integer boundSubjectId, Integer boundStudyEventId, Integer boundEventCrfId,
+                        Boolean octVolume, String device) {}
 
     /**
      * Attach what exists and start what the plan still wants, for a BOUND scan.
@@ -235,7 +244,7 @@ public final class RetinalJobFollower {
         try (Connection c = dataSource.getConnection()) {
             Scan scan = readScan(c, ingestItemId);
             if (scan == null) return Ensured.skipped("no such ingest_item");
-            if (!isAnalysable(scan.kind(), null)) return Ensured.skipped("not an OCT volume");
+            if (!isAnalysable(scan.kind(), scan.octVolume())) return Ensured.skipped("not an OCT volume");
             if (scan.boundStudyEventId() == null && scan.boundEventCrfId() == null) {
                 return Ensured.skipped("not bound to a visit");
             }
@@ -245,7 +254,7 @@ public final class RetinalJobFollower {
 
             Integer modalityId = scan.modalityId();
             if (modalityId == null) {
-                modalityId = VisitImagingPlan.e2eModalityOf(c, studyId);
+                modalityId = VisitImagingPlan.octModalityOf(c, studyId, scan.kind(), scan.device());
                 if (modalityId != null && !dryRun) stampModality(c, ingestItemId, modalityId);
             }
 
@@ -330,7 +339,7 @@ public final class RetinalJobFollower {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ii.ingest_item_id FROM ingest_item ii "
                              + "  JOIN study_event se ON se.study_event_id = ii.bound_study_event_id "
-                             + " WHERE ii.status = 'BOUND' AND ii.kind = 'e2e' "
+                             + " WHERE ii.status = 'BOUND' AND " + analysablePredicate("ii")
                              + "   AND se.study_event_definition_id = ? "
                              + " ORDER BY ii.ingest_item_id")) {
             ps.setInt(1, sedId);
@@ -397,7 +406,7 @@ public final class RetinalJobFollower {
             if (scan.boundStudyEventId() == null && scan.boundEventCrfId() == null) {
                 return Started.not(StartOutcome.NOT_BOUND);
             }
-            if (!isAnalysable(scan.kind(), null)) return Started.not(StartOutcome.NOT_ANALYSABLE);
+            if (!isAnalysable(scan.kind(), scan.octVolume())) return Started.not(StartOutcome.NOT_ANALYSABLE);
 
             Integer studyId = VisitImagingPlan.studyOfBinding(c, scan.boundEventCrfId(), scan.boundStudyEventId());
             if (studyId == null || !new StudySettingService(dataSource)
@@ -456,14 +465,18 @@ public final class RetinalJobFollower {
     private static Scan readScan(Connection c, long ingestItemId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT kind, stored_path, sha256, scan_index, laterality, imaging_modality_id, "
-                        + "       bound_study_subject_id, bound_study_event_id, bound_event_crf_id "
+                        + "       bound_study_subject_id, bound_study_event_id, bound_event_crf_id, "
+                        + "       oct_volume, device "
                         + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, ingestItemId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
+                boolean oct = rs.getBoolean(10);
+                Boolean octVolume = rs.wasNull() ? null : oct;
                 return new Scan(ingestItemId, rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getInt(4), rs.getString(5), intOrNull(rs, 6),
-                        intOrNull(rs, 7), intOrNull(rs, 8), intOrNull(rs, 9));
+                        intOrNull(rs, 7), intOrNull(rs, 8), intOrNull(rs, 9),
+                        octVolume, rs.getString(11));
             }
         }
     }

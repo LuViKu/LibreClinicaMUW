@@ -84,7 +84,11 @@ class RetinalJobFollowerTest {
         assertTrue(RetinalJobFollower.isAnalysable("e2e", null));
         assertTrue(RetinalJobFollower.isAnalysable("E2E", null));
         assertTrue(!RetinalJobFollower.isAnalysable("image", null));
-        assertTrue(!RetinalJobFollower.isAnalysable("dicom", "1.2.840.10008.5.1.4.1.1.77.1.5.4"));
+        // DR-039 — a DICOM is analysable when it was classified as an OCT volume.
+        assertTrue(RetinalJobFollower.isAnalysable("dicom", Boolean.TRUE));
+        assertTrue(!RetinalJobFollower.isAnalysable("dicom", Boolean.FALSE));
+        assertTrue(!RetinalJobFollower.isAnalysable("dicom", null), "unclassified is not analysable");
+        assertTrue(!RetinalJobFollower.isAnalysable("image", Boolean.TRUE));
         assertTrue(!RetinalJobFollower.isAnalysable(null, null));
     }
 
