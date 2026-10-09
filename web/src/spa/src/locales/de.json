@@ -3221,6 +3221,15 @@
           "optional": "fehlt – optional"
         },
         "blocksSigning": "{n} erforderliche Aufnahme(n) fehlen. Der Teilnehmer kann erst signiert werden, wenn sie der Visite zugeordnet sind."
+      },
+      "analyses": {
+        "none": "Noch keine Auswertung",
+        "start": "Auswertung starten",
+        "starting": "Wird gestartet…",
+        "menuHeader": "Fehlende Auswertung",
+        "error": "Auswertung konnte nicht gestartet werden.",
+        "started": "Auswertung gestartet: {task}",
+        "exists": "Auswertung bereits vorhanden: {task}"
       }
     }
   },
@@ -4394,6 +4403,12 @@
       "bindSuccess": "Scan einer Visite zugewiesen.",
       "bindConflict": "Scan wurde bereits durch eine andere Sitzung zugewiesen.",
       "bindError": "Zuweisung fehlgeschlagen."
+    },
+    "trail": {
+      "unassigned": "nicht zugeordnet"
+    },
+    "siblings": {
+      "label": "Auswertungen dieses Scans"
     }
   },
   "bugReport": {

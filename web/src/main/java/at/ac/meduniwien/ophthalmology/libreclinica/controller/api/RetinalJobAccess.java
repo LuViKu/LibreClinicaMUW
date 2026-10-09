@@ -167,6 +167,119 @@ final class RetinalJobAccess {
         }
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Where a job lives                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * A job's canonical address in the SPA is {@code /subjects/{label}/jobs/{jobId}};
+     * this is the subject part. A job has one only when it is filed to a visit.
+     */
+    record JobAddress(String subjectLabel) {}
+
+    /** The subjects of these jobs; a job with no visit is absent. */
+    static Map<Long, JobAddress> addressesOf(Connection c, java.util.Collection<Long> jobIds) throws SQLException {
+        Map<Long, JobAddress> out = new java.util.HashMap<>();
+        if (jobIds == null || jobIds.isEmpty()) return out;
+        String sql = "SELECT j.job_id, ss.label FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                + " WHERE j.job_id = ANY(?)";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setArray(1, c.createArrayOf("bigint", jobIds.toArray(new Long[0])));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.put(rs.getLong(1), new JobAddress(rs.getString(2)));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Adds the job's {@code subjectLabel} to a response body, so the SPA can
+     * go to its canonical address; nothing when
+     * the job has no visit or the lookup fails (the SPA then falls back to
+     * {@code /retinal-jobs/{id}}, which redirects).
+     */
+    static void putAddress(DataSource dataSource, long jobId, Map<String, Object> body) {
+        try (Connection c = dataSource.getConnection()) {
+            JobAddress a = addressOf(c, jobId);
+            if (a == null) return;
+            body.put("subjectLabel", a.subjectLabel());
+        } catch (SQLException e) {
+            LOG.warn("address lookup failed for job {}: {}", jobId, e.getMessage());
+        }
+    }
+
+    /** {@link #addressesOf} for one job; null when it has no visit. */
+    static JobAddress addressOf(Connection c, long jobId) throws SQLException {
+        return addressesOf(c, List.of(jobId)).get(jobId);
+    }
+
+    /**
+     * The visit a job is filed to: its id, the definition's name (with the
+     * occurrence for a repeating one) and its date, ISO yyyy-MM-dd.
+     */
+    record JobVisit(int studyEventId, String name, String date) {}
+
+    static JobVisit visitOf(Connection c, long jobId) throws SQLException {
+        String sql = "SELECT se.study_event_id, sed.name, sed.repeating, se.sample_ordinal, se.date_start "
+                + "  FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "  JOIN study_event_definition sed ON sed.study_event_definition_id = se.study_event_definition_id "
+                + " WHERE j.job_id = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                String name = rs.getString("name");
+                if (rs.getBoolean("repeating")) name = name + " #" + rs.getInt("sample_ordinal");
+                Timestamp start = rs.getTimestamp("date_start");
+                return new JobVisit(rs.getInt("study_event_id"), name,
+                        start == null ? null : start.toLocalDateTime().toLocalDate().toString());
+            }
+        }
+    }
+
+    /** One analysis of the same scan, for the job page's switcher. */
+    record SiblingJob(long jobId, String task, String status) {}
+
+    /**
+     * The analyses of the scan this job read, itself included, oldest first:
+     * the jobs on the same ingest item, and for rows from before jobs had one,
+     * the same digest and scan index. Cancelled ones are left out (the job
+     * itself excepted). Only jobs filed to a visit of the same subject count,
+     * so the list shows nothing the job's own visibility does not already
+     * cover; a job with no visit has no siblings.
+     */
+    static List<SiblingJob> siblingsOf(Connection c, long jobId) throws SQLException {
+        String sql = "WITH me AS ("
+                + "  SELECT j.job_id, j.ingest_item_id, j.e2e_sha256, j.scan_index, se.study_subject_id "
+                + "    FROM retinal_inference_job j "
+                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "   WHERE j.job_id = ?) "
+                + "SELECT o.job_id, o.task, o.status "
+                + "  FROM me JOIN retinal_inference_job o "
+                + "    ON (o.job_id = me.job_id OR (o.status <> 'cancelled' AND ("
+                + "          o.ingest_item_id = me.ingest_item_id "
+                + "       OR ((me.ingest_item_id IS NULL OR o.ingest_item_id IS NULL) "
+                + "           AND o.e2e_sha256 = me.e2e_sha256 AND o.scan_index = me.scan_index)))) "
+                + "  LEFT JOIN event_crf oec ON oec.event_crf_id = o.event_crf_id "
+                + "  JOIN study_event ose ON ose.study_event_id = COALESCE(oec.study_event_id, o.study_event_id) "
+                + " WHERE ose.study_subject_id = me.study_subject_id "
+                + " ORDER BY o.job_id";
+        List<SiblingJob> out = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(new SiblingJob(rs.getLong(1), rs.getString(2), rs.getString(3)));
+            }
+        }
+        return out;
+    }
+
     /**
      * 403 when the job's study is outside what this session may see.
      *

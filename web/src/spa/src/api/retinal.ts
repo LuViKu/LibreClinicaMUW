@@ -92,6 +92,25 @@ export interface RetinalJobDetail {
    * null falls through to the existing rendering.
    */
   subjectArm: 'AI_SHOWN' | 'AI_HIDDEN' | null
+  /**
+   * 2026-10-09 — where the job lives: the subject's label (its canonical
+   * address is /subjects/<label>/jobs/<jobId>, see lib/retinalJobs.jobRoute),
+   * the visit's id, name and ISO date. All null when the scan is filed to
+   * no visit. Optional so older fixtures need not carry them.
+   */
+  subjectLabel?: string | null
+  studyEventId?: number | null
+  visitName?: string | null
+  visitDate?: string | null
+  /** Every live analysis of the same scan, this one included, oldest first. */
+  siblings?: RetinalJobSibling[]
+}
+
+/** Another analysis of the scan a job read. */
+export interface RetinalJobSibling {
+  jobId: number
+  task: RetinalTask
+  status: RetinalJobStatus
 }
 
 /**
@@ -131,13 +150,6 @@ export interface RetinalJobSummary {
    * because parked jobs (event_crf_id NULL) have no event binding.
    */
   studyEventId?: number | null
-  /**
-   * 2026-06-26 — stable 1-based per-subject sequence number (ordered by
-   * enqueued_at, append-only). Used to show "Job #n" per subject and to
-   * build the /subjects/{label}/jobs/{n} deep link. Only the per-subject
-   * list endpoint computes it; null on the per-event-crf list.
-   */
-  subjectSeq?: number | null
   primaryMetric: PrimaryMetric | null
 }
 
@@ -343,17 +355,16 @@ export async function getJob(jobId: number): Promise<RetinalJobDetail> {
 }
 
 /**
- * 2026-06-26 — resolve a stable per-subject sequence number to the job
- * detail via {@code GET /subjects/{label}/retinal-jobs/{seq}}, so the SPA
- * can deep-link the {@code /app/subjects/{label}/jobs/{n}} URL. Returns the
- * same shape as {@link getJob} (artifact URLs context-prefixed).
+ * 2026-10-09 — the job at its canonical address,
+ * {@code GET /subjects/{label}/retinal-jobs/{jobId}}: 404 unless the job is
+ * filed to a visit of that subject. Same shape as {@link getJob}.
  */
-export async function getJobBySubjectSeq(
+export async function getJobBySubject(
   subjectLabel: string,
-  seq: number,
+  jobId: number,
 ): Promise<RetinalJobDetail> {
   const dto = await apiGet<RetinalJobDetail>(
-    `/pages/api/v1/subjects/${encodeURIComponent(subjectLabel)}/retinal-jobs/${seq}`,
+    `/pages/api/v1/subjects/${encodeURIComponent(subjectLabel)}/retinal-jobs/${jobId}`,
   )
   return {
     ...dto,
@@ -683,11 +694,15 @@ export interface RetinalJobRerunAsResponse {
   jobId: number
   task: string
   status: string
+  /** 2026-10-09 — the new job's subject, for its canonical address; absent when it has no visit. */
+  subjectLabel?: string
 }
 
 export interface RetinalJobRerunAsConflict {
   message: string
   existingJobId: number
+  /** 2026-10-09 — the existing job's subject, for its canonical address; absent when it has no visit. */
+  subjectLabel?: string
 }
 
 export function rerunRetinalJobAs(

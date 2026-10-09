@@ -22,6 +22,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import { listSubjectJobs } from '@/api/retinal'
 import type { RetinalJobSummary } from '@/api/retinal'
+import { jobRoute } from '@/lib/retinalJobs'
 
 interface Props {
   /** Numeric study_subject_id — the trends + jobs endpoints take this. */
@@ -32,15 +33,9 @@ interface Props {
 }
 const props = defineProps<Props>()
 
-/**
- * 2026-06-26 — link to a job by its stable per-subject number when the
- * backend supplied one; fall back to the canonical by-id route otherwise
- * (e.g. older payloads without subjectSeq).
- */
+/** The job at its canonical address, /subjects/<label>/jobs/<jobId>. */
 function jobLink(row: RetinalJobSummary): string {
-  return row.subjectSeq != null
-    ? `/subjects/${encodeURIComponent(props.subjectLabel)}/jobs/${row.subjectSeq}`
-    : `/retinal-jobs/${row.jobId}`
+  return jobRoute({ jobId: row.jobId, subjectLabel: props.subjectLabel })
 }
 
 const { t } = useI18n()
@@ -140,7 +135,7 @@ function sortValue(row: RetinalJobSummary, key: SortKey): [number | string, numb
   const sec = row.jobId
   switch (key) {
     case 'job':
-      return [row.subjectSeq ?? row.jobId, sec]
+      return [row.jobId, sec]
     case 'acquired':
       // Null acquisition dates sort to the END regardless of direction
       // by mapping to the sentinel '' which compares LOW; the direction
@@ -284,7 +279,7 @@ const SORTABLE_COLS: { key: SortKey; label: string }[] = [
           </tr>
         </template>
         <tr v-for="row in sortedJobs" :key="row.jobId" data-testid="subject-retinal-tab-history-row">
-          <td class="px-5 py-2.5 font-mono text-xs">#{{ row.subjectSeq ?? row.jobId }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs">#{{ row.jobId }}</td>
           <td class="px-5 py-2.5 font-mono text-xs text-slate-600">{{ formatAcqDate(row.acquisitionDate) }}</td>
           <td class="px-5 py-2.5 text-xs uppercase">{{ row.task }}</td>
           <td class="px-5 py-2.5 text-xs">{{ row.laterality }}</td>

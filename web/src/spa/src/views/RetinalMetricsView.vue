@@ -45,7 +45,9 @@ const RetinalCorrectionFullscreen = defineAsyncComponent(
 import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, SdRetinaNetPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
-import PageHeader from '@/components/PageHeader.vue'
+import PageHeader, { type TrailItem } from '@/components/PageHeader.vue'
+import { jobRoute, STARTABLE_TASKS, type StartableTask } from '@/lib/retinalJobs'
+import { formatDate } from '@/lib/dateFormat'
 
 /**
  * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
@@ -117,11 +119,11 @@ function onCorrectionSaveError(message: string): void {
   )
 }
 
-// This view serves two routes:
-//   /retinal-jobs/:jobId               — canonical, by global job id
-//   /subjects/:subjectLabel/jobs/:seq  — per-subject deep link (2026-06-26)
-// For the deep link we resolve (label, seq) → jobId once via the backend
-// resolver; everything below keys off the resolved jobId exactly as before.
+// This view serves two routes, both keyed on the job id:
+//   /subjects/:subjectLabel/jobs/:jobId — canonical (2026-10-09: the job id,
+//                                         no longer a per-subject number)
+//   /retinal-jobs/:jobId                — old bookmarks; replaced by the
+//                                         canonical address once loaded
 const routeJobId = computed<number | null>(() => {
   const j = route.params.jobId
   return typeof j === 'string' && j !== '' ? Number(j) : null
@@ -130,22 +132,19 @@ const subjectLabelParam = computed<string | null>(() => {
   const l = route.params.subjectLabel
   return typeof l === 'string' && l !== '' ? l : null
 })
-const subjectSeqParam = computed<number | null>(() => {
-  const s = route.params.seq
-  return typeof s === 'string' && s !== '' ? Number(s) : null
-})
 const resolvedJobId = ref<number | null>(null)
 const resolving = ref(false)
 const resolveError = ref<string | null>(null)
 /**
- * NaN is the "not resolved yet" sentinel: on the per-subject deep link
- * (/subjects/{label}/jobs/{n}) there is no jobId until the backend resolver
- * returns. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
+ * NaN is the "not resolved yet" sentinel: on the canonical address
+ * (/subjects/{label}/jobs/{jobId}) the id in the URL is not trusted until the
+ * server has confirmed it belongs to that subject. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
  * ANY consumer that turns this into a request URL must guard with
  * `Number.isFinite(jobId.value)` — NaN passes a bare `!= null` check and we
  * shipped GET /retinal-jobs/NaN/segmentation for exactly that reason.
  */
-const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
+const jobId = computed<number>(() =>
+  (subjectLabelParam.value == null ? routeJobId.value : null) ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
 const geometry = computed(() => {
@@ -157,17 +156,47 @@ const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
 const displayError = computed<string | null>(() => loadError.value ?? resolveError.value)
 
-// 2026-06-26 — breadcrumb trail on the per-subject deep link
-// (/subjects/{label}/jobs/{n}): "Studienteilnehmer > {label} > Job #{n}".
-// The by-id route carries no label in the URL, so it renders no trail. The
-// job is the H1; register and subject are its ancestors.
-const trail = computed(() => {
-  const label = subjectLabelParam.value
-  if (label == null) return []
-  return [
-    { label: t('nav.subjectMatrix'), to: '/subjects' },
-    { label, to: `/subjects/${encodeURIComponent(label)}` },
-  ]
+// Trail: "Studienteilnehmer › {label} › {visit} · {date}", ancestors only
+// (the job is the H1). 2026-10-09: built from the job itself, so the by-id
+// route has one too; a scan filed to no visit reads "nicht zugeordnet",
+// which has no page and so is not a link. The visit is not in the URL: a
+// scan can be re-filed (DR-035), and the trail follows it.
+const trail = computed<TrailItem[]>(() => {
+  const j = job.value
+  const label = j?.subjectLabel ?? subjectLabelParam.value
+  if (!j && label == null) return []
+  const items: TrailItem[] = [{ label: t('nav.subjectMatrix'), to: '/subjects' }]
+  if (label) items.push({ label, to: `/subjects/${encodeURIComponent(label)}` })
+  if (j?.studyEventId != null && j.visitName) {
+    items.push({
+      label: j.visitDate ? `${j.visitName} · ${formatDate(j.visitDate)}` : j.visitName,
+      to: `/events/${j.studyEventId}`,
+    })
+  } else if (j) {
+    items.push({ label: t('retinal.trail.unassigned') })
+  }
+  return items
+})
+
+/**
+ * 2026-10-09 — the scan's other analyses, as a switcher above the results.
+ * Labels are resolved here rather than by a function called from the
+ * template (see the note on statusLabelText below).
+ */
+const siblingTabs = computed(() => {
+  const j = job.value
+  const sibs = j?.siblings ?? []
+  if (!j || sibs.length < 2) return []
+  return sibs.map((s) => {
+    const key = `retinal.task.${s.task}`
+    const translated = t(key)
+    return {
+      jobId: s.jobId,
+      label: translated === key ? String(s.task).toUpperCase() : translated,
+      to: jobRoute({ jobId: s.jobId, subjectLabel: j.subjectLabel }),
+      current: s.jobId === j.jobId,
+    }
+  })
 })
 
 /**
@@ -246,19 +275,26 @@ function onHoverBscan(z: number | null) {
 
 async function load() {
   try {
-    if (routeJobId.value != null) {
-      // Canonical by-id route.
+    if (routeJobId.value != null && subjectLabelParam.value == null) {
+      // The by-id address.
       resolvedJobId.value = routeJobId.value
       await store.loadJob(routeJobId.value, true)
-    } else if (subjectLabelParam.value != null && subjectSeqParam.value != null) {
-      // Per-subject deep link — resolve (label, seq) → jobId first. Keeps a
-      // separate resolving/resolveError state because there's no jobId to key
-      // the store's per-job loading/error maps on until the resolve returns.
+      // 2026-10-09 — an old bookmark or a link that knew only the id: show
+      // the job at its canonical address, replacing this history entry.
+      const loaded = store.jobs[routeJobId.value]
+      if (loaded?.subjectLabel) {
+        await router.replace(jobRoute(loaded))
+        return
+      }
+    } else if (subjectLabelParam.value != null && routeJobId.value != null) {
+      // The canonical address: the server answers the job only when it
+      // belongs to this subject. Keeps its own resolving/resolveError state,
+      // as a 404 here is about the pair, not the job.
       resolving.value = true
       resolveError.value = null
       try {
-        const detail = await store.loadJobBySubjectSeq(
-          subjectLabelParam.value, subjectSeqParam.value)
+        const detail = await store.loadJobBySubject(
+          subjectLabelParam.value, routeJobId.value)
         resolvedJobId.value = detail?.jobId ?? null
         if (detail == null) resolveError.value = 'not found'
       } catch (e) {
@@ -298,7 +334,7 @@ function closeRerunMenuOnEscape(ev: KeyboardEvent): void {
 // route params (not jobId) because jobId is itself derived from the resolve —
 // watching it would loop on the per-subject path.
 watch(
-  () => [routeJobId.value, subjectLabelParam.value, subjectSeqParam.value],
+  () => [routeJobId.value, subjectLabelParam.value],
   () => { void load() },
 )
 
@@ -985,9 +1021,9 @@ async function onRetry(): Promise<void> {
 // `bm` is intentionally NOT here; `layers` already covers it.
 // `sdretinanet` returns SD-RetinaNet's 12 boundaries + 7 lesion classes
 // (read-only — no layer-correction fullscreen).
-// Mirrors ALLOWED_RERUN_TASKS in RetinalResultsApiController.java.
-type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr' | 'layers' | 'sdretinanet'
-const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr', 'layers', 'sdretinanet'] as const
+// The list lives in lib/retinalJobs (mirrors RetinalJobFollower.STARTABLE_TASKS).
+type RerunTask = StartableTask
+const RERUN_TASKS: readonly RerunTask[] = STARTABLE_TASKS
 const rerunMenuOpen = ref(false)
 const rerunning = computed<boolean>(() => !!store.rerunAsInflight[jobId.value])
 
@@ -1017,9 +1053,9 @@ async function onRerunAs(task: RerunTask): Promise<void> {
   rerunMenuOpen.value = false
   let outcome: RerunNotice | null = null
   try {
-    const newJobId = await store.rerunJobAs(jobId.value, task)
-    outcome = { kind: 'success', task, jobId: newJobId }
-    await router.push(`/retinal-jobs/${newJobId}`)
+    const resp = await store.rerunJobAs(jobId.value, task)
+    outcome = { kind: 'success', task, jobId: resp.jobId }
+    await router.push(jobRoute(resp))
   } catch (e) {
     // 2026-06-22 — surface every rerun-as failure through the global
     // error toast so the operator gets immediate feedback. Without
@@ -1032,13 +1068,13 @@ async function onRerunAs(task: RerunTask): Promise<void> {
     // own message text for the rest so the toast prefix is actionable.
     const apiErr = e as {
       status?: number
-      body?: { existingJobId?: number; message?: string } | string | null
+      body?: { existingJobId?: number; subjectLabel?: string; message?: string } | string | null
     }
     const body = (apiErr.body && typeof apiErr.body === 'object') ? apiErr.body : null
     const existing = body?.existingJobId
     if (typeof existing === 'number' && existing > 0) {
       outcome = { kind: 'duplicate', task, jobId: existing }
-      await router.push(`/retinal-jobs/${existing}`)
+      await router.push(jobRoute({ jobId: existing, subjectLabel: body?.subjectLabel }))
     } else {
       const status = apiErr.status
       const serverMsg = body?.message ?? (typeof apiErr.body === 'string' ? apiErr.body : '')
@@ -1148,6 +1184,24 @@ onBeforeUnmount(stopInflightPoll)
 
         <template v-else-if="job">
           <PageHeader v-if="trail.length" :trail="trail" />
+          <nav
+            v-if="siblingTabs.length"
+            :aria-label="t('retinal.siblings.label')"
+            class="flex flex-wrap items-center gap-1.5 mb-3"
+            data-testid="retinal-view-siblings"
+          >
+            <RouterLink
+              v-for="s in siblingTabs"
+              :key="s.jobId"
+              :to="s.to"
+              :aria-current="s.current ? 'page' : undefined"
+              class="px-2.5 py-1 rounded-full border text-[12px] font-medium"
+              :class="s.current
+                ? 'bg-muw-blue text-white border-muw-blue'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+              :data-testid="`retinal-view-sibling-${s.jobId}`"
+            >{{ s.label }}</RouterLink>
+          </nav>
           <!-- ════════ Page header ════════ -->
           <div class="flex items-start justify-between gap-6 mb-5">
             <div class="min-w-0">
