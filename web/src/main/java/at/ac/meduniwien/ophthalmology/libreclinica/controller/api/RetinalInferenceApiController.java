@@ -500,7 +500,9 @@ public class RetinalInferenceApiController {
         try {
             remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat, scanIndex);
             if (remote == null) {
-                remoteFailureReason = "Remote /run returned null — see RemoteRetinalInferenceClient WARN logs";
+                remoteFailureReason = RetinalJobAccess.scanFileMissing(absolutePath)
+                        ? RetinalJobAccess.SCAN_FILE_MISSING
+                        : "Remote /run returned null — see RemoteRetinalInferenceClient WARN logs";
             }
         } catch (Exception e) {
             LOG.warn("Remote /run threw for job {}: {}", jobId, e.getMessage());

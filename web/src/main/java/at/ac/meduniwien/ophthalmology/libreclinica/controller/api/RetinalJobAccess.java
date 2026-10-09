@@ -211,6 +211,26 @@ final class RetinalJobAccess {
     /* The files a job produced                                            */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * What the operator is told when a job's scan file is gone. Uploads from
+     * before 2026-09-24 lived in an anonymous Docker volume that restarts
+     * emptied, so an old job can still be listed while its .e2e no longer
+     * exists; re-running it can never succeed.
+     */
+    static final String SCAN_FILE_MISSING =
+            "The original scan file is no longer on the server, so this scan cannot be "
+                    + "analysed again. Upload the scan again and assign it to the visit.";
+
+    /** True when a job's scan file cannot be read: no path, a malformed one, or no file there. */
+    static boolean scanFileMissing(String e2ePath) {
+        if (e2ePath == null || e2ePath.isBlank()) return true;
+        try {
+            return !Files.isRegularFile(Paths.get(e2ePath));
+        } catch (java.nio.file.InvalidPathException e) {
+            return true;
+        }
+    }
+
     /** Trim a single trailing ".e2e" — match what the upload controller saves. */
     static String e2eUuidFromPath(String e2ePath) {
         if (e2ePath == null) return null;
