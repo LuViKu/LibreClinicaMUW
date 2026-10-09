@@ -104,7 +104,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
         org.mockito.Mockito.when(remote.isConfigured()).thenReturn(false);
         controller.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -174,7 +174,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 org.mockito.Mockito.mock(
                         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
         controller.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
-        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new ApiExceptionHandler()).build()
+        ProductionMvc.standalone(controller).setControllerAdvice(new ApiExceptionHandler()).build()
                 .perform(post("/api/v1/internal/dicom-ingest")
                         .header("X-MUW-Dicom-Token", TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)

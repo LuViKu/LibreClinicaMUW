@@ -11,10 +11,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.http.HttpHeaders;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 
 /**
  * DR-022 — pixel geometry the app-VM /preprocess sidecar reports back in 6
@@ -63,8 +65,6 @@ public record PixelGeometry(double axialMm,
         );
     }
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-
     /**
      * DR-039 — the same geometry from the {@code geometry.json} the sidecar
      * stored next to {@code bscan.dcm}: its {@code bscan} block, which is the
@@ -90,7 +90,11 @@ public record PixelGeometry(double axialMm,
 
     /** {@link #fromGeometryJson(JsonNode)} of a file; IOException when it cannot be read or parsed. */
     public static PixelGeometry fromGeometryJson(Path file) throws IOException {
-        return fromGeometryJson(JSON.readTree(file.toFile()));
+        try {
+            return fromGeometryJson(Json.mapper().readTree(file.toFile()));
+        } catch (JacksonException e) {
+            throw new IOException("geometry.json cannot be read: " + e.getOriginalMessage(), e);
+        }
     }
 
     private static double requireDouble(HttpHeaders h, String name) {

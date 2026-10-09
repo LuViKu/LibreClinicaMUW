@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,8 +29,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -38,7 +40,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -65,7 +66,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectF
 class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
     private static final String MARKER = "dicomoct-it-";
     private static final String DEVICE = "dicomoct-it-device";
     /** Default Study's SE_V2_DAY30. */
@@ -114,7 +115,7 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static MockMvc inbox() {
         RemoteRetinalInferenceClient remote = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remote.isConfigured()).thenReturn(false);
-        return MockMvcBuilders.standaloneSetup(new IngestInboxApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new IngestInboxApiController(DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE), new StudySubjectFinder(DATA_SOURCE), remote,
                         Mockito.mock(RetinalInferenceApiController.class)))
                 .setControllerAdvice(new ApiExceptionHandler())
@@ -122,7 +123,7 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private static MockMvc eventDefinitions() {
-        return MockMvcBuilders.standaloneSetup(new EventDefinitionsApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new EventDefinitionsApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
