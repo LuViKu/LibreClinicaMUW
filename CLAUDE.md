@@ -55,7 +55,7 @@ cd /build && mvn "$@"
 
 mounting the worktree read-only at `/src` and `.m2-cache` at `/root/.m2`.
 
-Unit tests run by default (`mvn test`). As of 1.5.0-beta.15-muw: **core 344, web 957**. To skip: `mvn -DskipTests=true …` for fast iteration.
+Unit tests run by default (`mvn test`). On `spike/muw-spring-boot-4` (2026-10-09): **core 538, web 1451**. To skip: `mvn -DskipTests=true …` for fast iteration.
 
 Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
