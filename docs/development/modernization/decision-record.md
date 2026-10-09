@@ -1024,6 +1024,104 @@ in its network list explicitly; without it, it would lose the eCRF backend.
 
 ---
 
+## DR-039 — OCT volumes are accepted as DICOM, and every analysis states the devices it supports
+
+**Status:** Proposed (2026-10-09)
+
+**Context.** Retinal analysis ran only on Heidelberg `.e2e` files. Every step assumed
+them: job creation (`kind = 'e2e'`), the VM-side preprocessing (e2e → `bscan.dcm`,
+geometry from the e2e headers) and the artifact naming (the stored file's name
+without `.e2e`). A Spectralis scan exported as DICOM was filed but never analysed,
+and nothing told the operator. The multicenter deployment changes the picture:
+partner sites may only be able to deliver DICOM (from a PACS export, or from another
+vendor's device), and the internet-facing upload already accepts DICOM because the
+browser can de-identify it. All models in use today are trained on Spectralis data;
+numbers computed on another device's scan would look valid and be wrong.
+
+A DICOM made by a third-party `.e2e` → DICOM converter was found with
+`PixelSpacing = [lateral, axial]`, the reverse of the standard order. Read as stored,
+every thickness of such a file would be about 1.5× too large, silently.
+
+**Decision.**
+
+- **An OCT volume is recognised by what it is, not by its file format.** A DICOM
+  object of the Ophthalmic Tomography IOD (SOP class `1.2.840.10008.5.1.4.1.1.77.1.5.4`
+  or Modality `OPT`) with more than one frame is an OCT volume, from any vendor, and
+  takes the same path as an `.e2e`: bind to a visit, the imaging plan picks the
+  analyses, the job follows the file (DR-035). The DICOM sidecar classifies the file
+  when it describes it (upload) or receives it (C-STORE); `ingest_item.oct_volume`
+  keeps the answer, with the file's manufacturer and model. An OPT object whose
+  frame count was never recorded is not analysed. `RetinalJobFollower.isAnalysable`
+  is the one place this is asked (bind, plan catch-up, per-scan start, rerun-as,
+  inbox, visit page).
+- **A catalogue entry that accepts `.e2e` or DICOM accepts OCT volumes**, so the
+  imaging plan may set tasks on it. Every entry that accepted tasks before still
+  does, and a study module's required tasks are still forced only onto `.e2e`
+  entries, so no saved plan changes.
+- **One artifact key per stored scan.** The companion directory
+  (`bscan.dcm`, `geometry.json`, `fundus.png`) of an `.e2e` stays its name without
+  `.e2e`; any other stored path gets a name-based UUID of the normalised path
+  (`RetinalArtifactKey`). Existing artifacts keep their directories.
+- **Nothing identifying leaves the VM.** The VM-side preprocessing de-identifies a
+  DICOM volume completely (as it already does for the DICOM it synthesises from an
+  `.e2e`) and writes the same normalised `bscan.dcm` the cluster receives today. Only
+  that file is sent; a DICOM is refused outright where no preprocess service is
+  configured.
+- **The geometry comes from the file, or the analysis does not run.** Pixel and
+  B-scan spacing are read from the DICOM (top level, shared or per-frame functional
+  groups, or the B-scan positions). For a Heidelberg device, which `PixelSpacing`
+  value is axial is decided physically (Spectralis samples depth at ~3.87 µm) and
+  recorded as `standard` or `swapped`; an ambiguous file is refused. Another vendor's
+  order is kept and recorded as `standard-assumed`. If the spacing cannot be
+  determined the preprocessing refuses the file: millimetre metrics on a guessed
+  scale are worse than none.
+- **Each analysis declares the devices it supports**, in one place in the sidecar
+  (`retinal_inference/devices.py`), reported on `/health` and, per scan, in the
+  `X-MUW-Device-Tasks` header of `/preprocess`. Today every task declares Heidelberg
+  Spectralis only. The app does not send a DICOM volume to the cluster for a task
+  that is not on that list (the cluster refuses it as well): the job fails with
+  "fluid is validated for Heidelberg Spectralis only; this scan is from …", and the
+  job page shows the device. Adding a vendor is adding a validated model and widening
+  its declaration, not changing the pipeline.
+- **A refusal is the job's message.** A 422 `{"detail": {"error", "message"}}` from
+  `/preprocess` or `/run` becomes the job's status message instead of "returned null".
+- **An operator can start one analysis on one filed scan**, not only through the
+  visit's imaging plan or the re-run of an existing job.
+
+**Consequences.**
+
+- Before DICOM-derived results are used clinically, the same Spectralis scan exported
+  as `.e2e` and as DICOM must give the same thicknesses and volumes. The procedure:
+  upload both exports, file them to a visit, run the same task on each, and run
+  [`deploy/compare-oct-jobs.sh`](../../../deploy/compare-oct-jobs.sh)
+  `<e2e-job> <dicom-job>` on the VM; it prints both jobs' source, device, spacing
+  order, stored geometry (dimensions, voxel spacing, scan depth and width) and every
+  numeric result value side by side with the difference. Until that has been
+  signed off for a release, the DICOM path is for validation only.
+- A DICOM volume carries no SLO, so the B-scan position overlay on the fundus image
+  and the fovea estimate from the SLO are unavailable for it; the viewer says "Kein
+  SLO-Bild in der DICOM-Datei".
+- Every job now records its source format, device and spacing order
+  (`retinal_inference_job.source_format`, `device_manufacturer`, `device_model`,
+  `spacing_order`); a DICOM job with no single eye takes the eye the sidecar read
+  from the file.
+- A DICOM OCT volume uploaded straight to a visit, or bound by the worklist on
+  C-STORE, starts no plan tasks by itself (the upload keeps its undo window, which a
+  started job would close). Filing it from the inbox, the plan editor's catch-up, or
+  "Auswertung starten" on the visit page starts them.
+- Two defects in the shared path were fixed with this: reusing an already
+  preprocessed scan dropped its geometry (metrics fell back to pixel units), and the
+  reuse probe and the companion resolver looked in `scan-(i+1)/` while the sidecar
+  writes index 0 at the root and index `i` in `scan-<i>/`, so scan 0 of a two-volume
+  `.e2e` was analysed and shown with scan 1's volume.
+- Heidelberg-only assumptions inside the runners (`pr` forces the manufacturer tag;
+  `sdretinanet` is a Spectralis build) stay; the device declaration keeps other
+  vendors away from them.
+- DICOM received by C-STORE arrives with the full hospital identity. It goes through
+  the same de-identification before analysis; nothing changes about how it is stored.
+
+---
+
 ## Future decisions (open)
 
 *Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*
