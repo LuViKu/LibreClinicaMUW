@@ -27,7 +27,7 @@ def test_volume_spacing_from_every_place_the_standard_allows(spacing, px_source,
     assert axial == pytest.approx(AXIAL)
     assert lateral == pytest.approx(LATERAL)
     assert slice_mm == pytest.approx(SLICE, rel=1e-6)
-    assert sources == {"pixel": px_source, "slice": slice_source}
+    assert sources == {"pixel": px_source, "slice": slice_source, "order": "standard"}
 
 
 def test_no_slice_spacing_anywhere_is_refused():

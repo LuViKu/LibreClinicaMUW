@@ -94,7 +94,8 @@ _EXPOSED_HEADERS = (
     "X-MUW-Pixel-Axial-Mm, X-MUW-Pixel-Lateral-Mm, X-MUW-Pixel-Slice-Mm, "
     "X-MUW-Bscan-Dim-Z, X-MUW-Bscan-Dim-Y, X-MUW-Bscan-Dim-X, X-MUW-E2E-Uuid, "
     "X-MUW-Acquisition-Date, X-MUW-Source-Format, X-MUW-Manufacturer, "
-    "X-MUW-Manufacturer-Model, X-MUW-Device-Tasks, X-MUW-Laterality"
+    "X-MUW-Manufacturer-Model, X-MUW-Device-Tasks, X-MUW-Laterality, "
+    "X-MUW-Spacing-Order"
 )
 
 # The app sends the UUID it generated for the stored upload (java.util.UUID,
@@ -340,7 +341,10 @@ def _convert_dicom(
         "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
         "X-MUW-Source-Format": "dicom",
         "X-MUW-Laterality": bv.laterality,
+        "X-MUW-Spacing-Order": result.spacing_order,
     }
+    for w in result.plausibility.get("warnings", []):
+        LOG.warning("DICOM OCT %s: %s", uuid, w)
     if bv.acquisition_date:
         headers["X-MUW-Acquisition-Date"] = bv.acquisition_date
     _add_device_headers(headers, result.manufacturer, result.model or "")
@@ -404,6 +408,7 @@ def _convert_e2e(
                 bv, ds, fundus_dims, e2e_path=e2e_path, scan_index=scan_index
             )
             geom["source_format"] = "e2e"
+            geom["spacing_order"] = "standard"  # our writer: [axial, lateral]
             _persist_geometry(target_dir / "geometry.json", geom)
         except Exception as e:  # noqa: BLE001 — never let companion-write failures break the request
             LOG.warning("Companion persistence failed for %s: %s", uuid, e)
@@ -436,6 +441,8 @@ def _convert_e2e(
         if bv.acquisition_date:
             geom_headers["X-MUW-Acquisition-Date"] = bv.acquisition_date
     geom_headers["X-MUW-Source-Format"] = "e2e"
+    # Our own writer always stores PixelSpacing as [axial, lateral].
+    geom_headers["X-MUW-Spacing-Order"] = "standard"
     _add_device_headers(
         geom_headers,
         str(getattr(ds, "Manufacturer", "") or ""),

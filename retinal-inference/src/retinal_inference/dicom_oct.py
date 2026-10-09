@@ -38,15 +38,20 @@ from pathlib import Path
 from typing import Any
 
 from retinal_inference.dicom_geometry import (
+    SpacingAmbiguous,
     SpacingUnavailable,
     frame_count,
     pixel_spacing_mm,
+    plausibility,
     slice_spacing_mm,
 )
 
 OPT_SOP_CLASS_UID = "1.2.840.10008.5.1.4.1.1.77.1.5.4"
 
-_LATERALITY = {"R": "OD", "L": "OS", "B": "OU"}
+# DICOM codes R / L / B, plus the ophthalmic OD / OS / OU that some converters
+# write into Laterality (0020,0060) instead (seen on a third-party
+# e2e -> DICOM conversion: Laterality = "OD", no ImageLaterality).
+_LATERALITY = {"R": "OD", "L": "OS", "B": "OU", "OD": "OD", "OS": "OS", "OU": "OU"}
 
 # Source attributes whose values must never appear in the output. "Strong"
 # identifiers are searched as substrings of every text value; the free-text and
@@ -114,6 +119,8 @@ class DicomOctResult:
     model: str | None
     laterality_source: str
     spacing_sources: dict[str, str] = field(default_factory=dict)
+    spacing_order: str = "standard"  # standard | swapped | standard-assumed
+    plausibility: dict = field(default_factory=dict)
     # (value, strong) pairs that assert_deidentified must not find in the output.
     forbidden_values: tuple[tuple[str, bool], ...] = ()
 
@@ -354,8 +361,14 @@ def read_dicom_oct(path: Path, form_laterality: str | None) -> DicomOctResult:
     laterality, lat_source = resolve_laterality(ds, form_laterality)
 
     try:
-        axial, lateral, px_src = pixel_spacing_mm(ds)
+        axial, lateral, px_src, order = pixel_spacing_mm(ds)
         slice_mm, sl_src = slice_spacing_mm(ds, n)
+    except SpacingAmbiguous as e:
+        raise DicomOctRejected(
+            "spacing_ambiguous",
+            f"Which PixelSpacing value is axial cannot be decided: {e}. Every "
+            "thickness depends on it, so it is not guessed.",
+        ) from e
     except SpacingUnavailable as e:
         raise DicomOctRejected(
             "spacing_unavailable",
@@ -405,6 +418,11 @@ def read_dicom_oct(path: Path, form_laterality: str | None) -> DicomOctResult:
         model=model,
         laterality_source=lat_source,
         spacing_sources={"pixel": px_src, "slice": sl_src},
+        spacing_order=order,
+        plausibility=plausibility(
+            rows=rows, cols=cols, n_frames=n, axial=axial, lateral=lateral,
+            slice_mm=slice_mm, manufacturer=manufacturer,
+        ),
         forbidden_values=tuple(dict.fromkeys(forbidden)),
     )
 
@@ -473,6 +491,11 @@ def geometry_for_dicom(result: DicomOctResult) -> dict:
         "scan_bbox_fundus_px": None,
         "fovea_estimate_fundus_px": None,
         "spacing_source": dict(result.spacing_sources),
+        # How the stored PixelSpacing pair was read: standard ([axial,
+        # lateral]), swapped ([lateral, axial], resolved physically) or
+        # standard-assumed (non-Heidelberg, DICOM order taken).
+        "spacing_order": result.spacing_order,
+        "plausibility": dict(result.plausibility),
         "laterality_source": result.laterality_source,
         "device": {"manufacturer": result.manufacturer, "model": result.model},
     }

@@ -77,11 +77,17 @@ def make_opt(
     pixels: np.ndarray | None = None,
     compress_rle: bool = False,
     transfer_syntax: str | None = None,
+    pixel_spacing: tuple[float, float] | None = None,
+    slice_spacing: float | None = None,
 ) -> bytes:
     """Part-10 bytes of a synthetic OPT volume.
 
     ``spacing``: ``top`` | ``shared`` | ``perframe`` | ``positions`` | ``none``.
+    ``pixel_spacing`` / ``slice_spacing`` override the stored values as given
+    (in stored order), e.g. the [lateral, axial] of a third-party conversion.
     """
+    px = list(pixel_spacing) if pixel_spacing is not None else [AXIAL, LATERAL]
+    sl = slice_spacing if slice_spacing is not None else SLICE
     fm = FileMetaDataset()
     fm.MediaStorageSOPClassUID = sop_class
     fm.MediaStorageSOPInstanceUID = "1.2.3.4.5.6.7.8.9.333"
@@ -143,14 +149,14 @@ def make_opt(
 
     def _pm(with_slice: bool = True) -> Dataset:
         pm = Dataset()
-        pm.PixelSpacing = [AXIAL, LATERAL]
+        pm.PixelSpacing = px
         if with_slice:
-            pm.SpacingBetweenSlices = SLICE
+            pm.SpacingBetweenSlices = sl
         return pm
 
     if spacing == "top":
-        ds.PixelSpacing = [AXIAL, LATERAL]
-        ds.SpacingBetweenSlices = SLICE
+        ds.PixelSpacing = px
+        ds.SpacingBetweenSlices = sl
     elif spacing == "shared":
         shared = Dataset()
         shared.PixelMeasuresSequence = Sequence([_pm()])
@@ -166,7 +172,7 @@ def make_opt(
             pm.SliceThickness = 0.5
         shared.PixelMeasuresSequence = Sequence([pm])
         ds.SharedFunctionalGroupsSequence = Sequence([shared])
-        steps = position_steps or [SLICE] * (n - 1)
+        steps = position_steps or [sl] * (n - 1)
         ys = [0.0]
         for s in steps:
             ys.append(ys[-1] + s)
@@ -228,3 +234,32 @@ def _frame_group(i: int, pm: Dataset | None) -> Dataset:
 
 def read(body: bytes) -> pydicom.Dataset:
     return pydicom.dcmread(io.BytesIO(body))
+
+
+# A DICOM produced by a third-party .e2e -> DICOM converter (another
+# MUW-internal platform; tags only, observed 2026-10-09). It stores
+# PixelSpacing as [lateral, axial], against the DICOM definition, has
+# Laterality = "OD" (not R/L) and no ImageLaterality, model name or
+# BurnedInAnnotation. 1024 x 0.005825 = 5.96 mm scan width, 496 x 0.003872 =
+# 1.92 mm depth, 96 x 0.062138 = 5.97 mm volume: a 6 x 6 mm macula cube.
+# Original Heyex exports are expected in standard order (per the user). The
+# original has 97 frames; the tests use fewer (the rule does not use the count).
+CONVERTED_LATERAL = 0.005825
+CONVERTED_AXIAL = 0.003872
+CONVERTED_SLICE = 0.062138
+
+
+def make_third_party_e2e_conversion(n: int = 3) -> bytes:
+    return make_opt(
+        n=n,
+        rows=496,
+        cols=1024,
+        spacing="top",
+        pixel_spacing=(CONVERTED_LATERAL, CONVERTED_AXIAL),
+        slice_spacing=CONVERTED_SLICE,
+        manufacturer="Heidelberg Engineering",
+        model=None,
+        image_laterality=None,
+        laterality="OD",
+        burned_in=None,
+    )

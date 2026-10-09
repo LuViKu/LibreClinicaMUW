@@ -137,7 +137,9 @@ def _spacing_mm(dcm_file: Path) -> tuple[float, float, float]:
 
     ds = pydicom.dcmread(str(dcm_file), stop_before_pixels=True)
     try:
-        axial, lateral, _src = pixel_spacing_mm(ds)
+        # Resolves which stored value is axial (a third-party e2e->DICOM
+        # converter was seen writing [lateral, axial]); ambiguous -> ValueError.
+        axial, lateral, _src, _order = pixel_spacing_mm(ds)
     except SpacingUnavailable as e:
         raise ValueError(f"{Path(dcm_file).name}: cannot read PixelSpacing: {e}") from e
     try:

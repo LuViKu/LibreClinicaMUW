@@ -16,8 +16,22 @@ What the DICOM standard says, and what this module relies on
 * Pixel Spacing (0028,0030) is "adjacent row spacing \\ adjacent column
   spacing in mm". An OPT frame is one B-scan whose rows run along depth, so
   the first value is the axial (depth) spacing and the second the lateral
-  (along-scan, A-scan to A-scan) spacing. Real Spectralis exports confirm the
-  order (~0.0039 axial, ~0.011 lateral).
+  (along-scan, A-scan to A-scan) spacing. Original Heyex / Spectralis exports
+  are expected to follow this order (per the user).
+* The stored order is NOT trusted blindly. A DICOM produced by a third-party
+  .e2e -> DICOM converter (another MUW-internal platform) was observed with
+  PixelSpacing = [lateral, axial] (0.005825 \\ 0.003872 on a 496 x 1024 x 97
+  6 x 6 mm cube), and such files can be uploaded again. Read in standard
+  order, every thickness would come out ~1.5x too large, silently. So the
+  axial value is resolved physically (:func:`resolve_axial_lateral`): for a
+  Heidelberg device the axial spacing is Spectralis' fixed ~3.87 µm digital
+  depth sampling, so the value inside [0.0035, 0.0042] mm is the axial one.
+  Exactly one value must fit (``standard`` or ``swapped``); none or both is
+  refused (:class:`SpacingAmbiguous`). The physical rule handles both
+  orders. A file written by this pipeline's own writer (marked by its
+  DeidentificationMethod) is always [axial, lateral] and is taken as
+  ``standard``. Other manufacturers keep the DICOM order as
+  ``standard-assumed``; no task is validated for them anyway (vendor gating).
 * Spacing Between Slices (0018,0088) in mm is the B-scan to B-scan distance.
   It is read from the top level and from Pixel Measures.
 * Slice Thickness (0018,0050) is NOT used: in an OPT object it is the
@@ -57,6 +71,21 @@ class SpacingUnavailable(ValueError):
     """The volume's spacing cannot be determined from the DICOM header."""
 
 
+class SpacingAmbiguous(SpacingUnavailable):
+    """PixelSpacing is present, but which value is axial cannot be decided."""
+
+
+# Spectralis samples depth at a fixed ~3.87 µm per pixel; the window is wide
+# enough for rounding, narrow enough to exclude the lateral spacing of the
+# usual scan patterns (5.7-11.5 µm).
+HEIDELBERG_AXIAL_MM = (0.0035, 0.0042)
+# Spectralis B-scan depth: 496 rows x 3.87 µm = 1.92 mm (plausibility only).
+HEIDELBERG_DEPTH_MM = (1.5, 2.5)
+# Written by muw_e2e_converter.phi.redact_dicom on every bscan.dcm this
+# pipeline produces; that writer stores [axial, lateral].
+OWN_WRITER_MARKER = "LibreClinicaMUW-sidecar-v1"
+
+
 def _first_item(ds: Any, keyword: str) -> Any | None:
     seq = getattr(ds, keyword, None)
     if seq is None:
@@ -94,7 +123,7 @@ def _pair(value: Any, what: str) -> tuple[float, float]:
         a, b = value[0], value[1]
     except (TypeError, IndexError) as e:
         raise SpacingUnavailable(f"{what} does not hold two values") from e
-    return _positive_mm(a, f"{what}[0] (axial)"), _positive_mm(b, f"{what}[1] (lateral)")
+    return _positive_mm(a, f"{what}[0]"), _positive_mm(b, f"{what}[1]")
 
 
 def _agree(values: list[float]) -> bool:
@@ -110,8 +139,41 @@ def frame_count(ds: Any) -> int:
     return int(float(str(raw)))
 
 
-def pixel_spacing_mm(ds: Any) -> tuple[float, float, str]:
-    """(axial, lateral, source) — Pixel Spacing from the first place that has it."""
+def _is_heidelberg(manufacturer: str | None) -> bool:
+    return "heidelberg" in (manufacturer or "").lower()
+
+
+def resolve_axial_lateral(
+    first: float, second: float, manufacturer: str | None, own_writer: bool = False
+) -> tuple[float, float, str]:
+    """(axial, lateral, order) from PixelSpacing as stored.
+
+    ``order``: ``standard`` (stored [axial, lateral]), ``swapped`` (stored
+    [lateral, axial]) or ``standard-assumed`` (no device rule; DICOM order
+    taken). Raises :class:`SpacingAmbiguous` for a Heidelberg file whose
+    values do not single out the axial one.
+    """
+    if own_writer:
+        return first, second, "standard"
+    if not _is_heidelberg(manufacturer):
+        return first, second, "standard-assumed"
+    lo, hi = HEIDELBERG_AXIAL_MM
+    fits = [lo <= v <= hi for v in (first, second)]
+    if fits == [True, False]:
+        return first, second, "standard"
+    if fits == [False, True]:
+        return second, first, "swapped"
+    which = "both values" if all(fits) else "neither value"
+    raise SpacingAmbiguous(
+        f"PixelSpacing = [{first:g}, {second:g}] mm: {which} matches the "
+        f"Heidelberg Spectralis axial spacing (~0.00387 mm, accepted "
+        f"{lo}-{hi} mm), so which value is axial and which lateral cannot be "
+        "decided"
+    )
+
+
+def stored_pixel_spacing_mm(ds: Any) -> tuple[float, float, str]:
+    """(first, second, source): Pixel Spacing as stored, from the first place that has it."""
     if getattr(ds, "PixelSpacing", None) is not None:
         axial, lateral = _pair(ds.PixelSpacing, "PixelSpacing")
         return axial, lateral, "top-level PixelSpacing"
@@ -140,6 +202,46 @@ def pixel_spacing_mm(ds: Any) -> tuple[float, float, str]:
     raise SpacingUnavailable(
         "no PixelSpacing at the top level or in the Pixel Measures functional group"
     )
+
+
+def pixel_spacing_mm(ds: Any) -> tuple[float, float, str, str]:
+    """(axial, lateral, source, order): the stored pair resolved physically."""
+    first, second, source = stored_pixel_spacing_mm(ds)
+    manufacturer = str(getattr(ds, "Manufacturer", "") or "")
+    own = str(getattr(ds, "DeidentificationMethod", "") or "") == OWN_WRITER_MARKER
+    axial, lateral, order = resolve_axial_lateral(first, second, manufacturer, own)
+    return axial, lateral, source, order
+
+
+def plausibility(
+    *, rows: int, cols: int, n_frames: int, axial: float, lateral: float,
+    slice_mm: float, manufacturer: str | None,
+) -> dict:
+    """Physical extents + a warn-level depth check (never a refusal).
+
+    ``depth_plausible`` is judged for Heidelberg only (B-scan depth expected
+    in 1.5-2.5 mm); None for other vendors.
+    """
+    depth = rows * axial
+    width = cols * lateral
+    volume_depth = max(n_frames - 1, 0) * slice_mm
+    warnings: list[str] = []
+    plausible: bool | None = None
+    if _is_heidelberg(manufacturer):
+        lo, hi = HEIDELBERG_DEPTH_MM
+        plausible = lo <= depth <= hi
+        if not plausible:
+            warnings.append(
+                f"B-scan depth {depth:.3f} mm is outside the {lo}-{hi} mm expected "
+                "for a Spectralis volume; check the axial spacing"
+            )
+    return {
+        "depth_mm": depth,
+        "width_mm": width,
+        "volume_depth_mm": volume_depth,
+        "depth_plausible": plausible,
+        "warnings": warnings,
+    }
 
 
 def _positions(ds: Any) -> list[tuple[float, float, float]] | None:
@@ -207,7 +309,10 @@ def slice_spacing_mm(ds: Any, n_frames: int | None = None) -> tuple[float, str]:
 
 
 def volume_spacing_mm(ds: Any) -> tuple[float, float, float, dict[str, str]]:
-    """(axial, lateral, slice, sources) — raises SpacingUnavailable."""
-    axial, lateral, px_src = pixel_spacing_mm(ds)
+    """(axial, lateral, slice, sources) — raises SpacingUnavailable.
+
+    ``sources`` has ``pixel``, ``slice`` and the resolved ``order``.
+    """
+    axial, lateral, px_src, order = pixel_spacing_mm(ds)
     slice_mm, sl_src = slice_spacing_mm(ds)
-    return axial, lateral, slice_mm, {"pixel": px_src, "slice": sl_src}
+    return axial, lateral, slice_mm, {"pixel": px_src, "slice": sl_src, "order": order}

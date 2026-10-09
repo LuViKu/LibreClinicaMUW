@@ -34,6 +34,7 @@ Request (multipart, header `X-MUW-Inference-Token`):
 | `missing_manufacturer` | no Manufacturer. Without one, the device cannot be gated, and the writer would otherwise stamp its Heidelberg default. |
 | `laterality_missing` / `laterality_conflict` | OU or no eye and no form value; or the file names both eyes, or it contradicts the form value |
 | `spacing_unavailable` | the voxel spacing cannot be determined (see below) |
+| `spacing_ambiguous` | Heidelberg device, but neither or both PixelSpacing values look like the Spectralis axial spacing (see below) |
 | `unsupported_transfer_syntax` | compressed pixel data with no decoder installed. Installed: uncompressed, deflate, RLE, JPEG baseline and JPEG 2000 (via Pillow). Not installed: JPEG lossless, JPEG-LS, HTJ2K. |
 | `pixel_decode_failed` | the decoder failed, or the decoded shape ≠ (frames, rows, columns) |
 
@@ -54,6 +55,14 @@ The body is the normalised `bscan.dcm` (`application/dicom`). Headers:
   `X-MUW-Device-Tasks`. The last is a comma-separated list of the tasks whose
   models were trained on this device; empty means none.
 - **new, DICOM only:** `X-MUW-Laterality` (`OD` / `OS`, the resolved eye).
+- **new, both formats:** `X-MUW-Spacing-Order`: `standard`, `swapped` or
+  `standard-assumed` (see the spacing rules). The `.e2e` path always sends
+  `standard`.
+
+Laterality is read from ImageLaterality, Laterality and FrameLaterality. It
+accepts the DICOM codes `R` / `L` / `B` and also `OD` / `OS` / `OU`: a
+third-party conversion was seen with `Laterality = "OD"` and no
+ImageLaterality.
 
 The acquisition date is taken from the first of these that is present:
 AcquisitionDateTime, then the FrameContent FrameAcquisitionDateTime (shared,
@@ -93,6 +102,8 @@ The sidecar writes `<store>/<uuid>/bscan.dcm` and `geometry.json`. There is
 | `spacing_source` | `{"pixel": …, "slice": …}`: where each spacing came from |
 | `laterality_source` | `"dicom"` or `"form"` |
 | `device` | `{"manufacturer", "model"}` |
+| `spacing_order` | `standard` / `swapped` / `standard-assumed` (`.e2e`: `standard`) |
+| `plausibility` | `{depth_mm, width_mm, volume_depth_mm, depth_plausible, warnings[]}`. `depth_mm` = rows·axial, `width_mm` = cols·lateral, `volume_depth_mm` = (n−1)·slice. `depth_plausible` is true when a Heidelberg depth falls in 1.5–2.5 mm, and null for other vendors. A failed check only warns (it is also logged); it never refuses. |
 
 Consumers checked: `CrtComputeService.loadGeometry` reads `bscan.*` through
 a JsonNode tree, so it is safe. The SPA renders `FundusOverlay` only when the
@@ -105,9 +116,39 @@ nullable on the Java/SPA side.
 ## Spacing rules (`retinal_inference/dicom_geometry.py`)
 
 Pixel Spacing (0028,0030) is "adjacent row spacing \ adjacent column spacing,
-in mm". An OPT frame is one B-scan whose rows run along depth, so
-**value 1 = axial, value 2 = lateral**; real Spectralis exports have
-~0.0039 \ ~0.011. Sources, first match wins:
+in mm". An OPT frame is one B-scan whose rows run along depth, so by the
+standard **value 1 = axial, value 2 = lateral**. Original Heyex/Spectralis
+exports are expected to follow that order (per the user).
+
+**The stored order is not trusted blindly.** A DICOM produced by a
+third-party `.e2e` → DICOM converter (another MUW-internal platform) was
+observed with `PixelSpacing = [0.005825, 0.003872]`, which is
+**[lateral, axial]**. The file is 496 × 1024 × 97: 1024 × 0.005825 = 5.96 mm
+of scan width, 496 × 0.003872 = 1.92 mm of depth, and 96 × 0.062138 =
+5.97 mm, so a 6 × 6 mm cube. Read in standard order, every thickness would be
+~1.5× too large, silently. Such files can be uploaded again, so the axial
+value is resolved physically. The rule handles both orders:
+
+- **Heidelberg** (Manufacturer contains `heidelberg`): Spectralis samples
+  depth at a fixed ~3.87 µm. The value inside **[0.0035, 0.0042] mm** is the
+  axial one. If exactly one value fits, the order is `standard` (it was
+  first) or `swapped` (it was second). If none or both fit, the upload gets
+  422 `spacing_ambiguous`; the order is never guessed. One case is ambiguous
+  by design: a dense scan whose lateral spacing is also ~3.9 µm (e.g. 1536
+  A-scans over 6 mm).
+- **A `bscan.dcm` written by this pipeline** (DeidentificationMethod
+  `LibreClinicaMUW-sidecar-v1`) is always stored [axial, lateral]. It is
+  taken as `standard` without the value rule, so the dense-scan case above
+  does not break `.e2e`-derived jobs on the cluster.
+- **Other manufacturers:** the DICOM order is kept and recorded as
+  `standard-assumed`. No task is validated for them (vendor gating), so this
+  only affects stored geometry.
+
+The normalised output is always written [axial, lateral], so the cluster
+resolves it as `standard`. The cluster's `_spacing_mm` applies the same
+rule to any DICOM it receives (defence in depth); an ambiguous one raises.
+
+Sources, first match wins:
 
 1. Pixel spacing: top-level `PixelSpacing`, then Shared Functional Groups
    `PixelMeasuresSequence[0].PixelSpacing`, then Per-frame Pixel Measures.
@@ -126,7 +167,7 @@ in mm". An OPT frame is one B-scan whose rows run along depth, so
    When nothing usable is found, the upload is refused with 422
    `spacing_unavailable`. The spacing is never guessed.
 
-The cluster's `ApptainerAdapter._spacing_mm` uses the same helpers, so a
+The cluster's `ApptainerAdapter._spacing_mm` uses the same helpers, including the order resolution, so a
 multi-frame OPT file that keeps its spacing only in the functional groups no
 longer crashes every task. It keeps its historic slice = lateral fallback,
 because no handler reads the slice value.
