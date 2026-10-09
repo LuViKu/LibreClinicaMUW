@@ -28,12 +28,31 @@ export interface PlanRow {
   labelDe: string
   labelEn: string
   device: string | null
-  /** Only an OCT-volume modality can carry inference tasks. */
+  /** The modality takes `.e2e` files. */
   acceptsE2e: boolean
+  /**
+   * DR-039 — the modality carries the explicit `oct` marker: OCT volumes
+   * filed under it are analysed, so only such a row carries inference tasks
+   * (and the module-required ones). Mirrors VisitImagingPlan.acceptsOctVolumes.
+   */
+  acceptsOctVolumes: boolean
   included: boolean
   requirement: ImagingRequirement
   laterality: ImagingLaterality | ''
   tasks: string[]
+}
+
+/** DR-039 — the `kinds_accepted` token that marks an OCT modality. */
+export const OCT_MARKER = 'oct'
+
+/** DR-039 — the modality says OCT volumes filed under it are analysed. */
+export function acceptsOctVolumes(kindsAccepted: string | null | undefined): boolean {
+  return acceptsKind(kindsAccepted, OCT_MARKER)
+}
+
+/** The module-required tasks that apply to this row: only OCT rows get them. */
+export function requiredFor(row: Pick<PlanRow, 'acceptsOctVolumes'>, required: readonly string[]): readonly string[] {
+  return row.acceptsOctVolumes ? required : []
 }
 
 export function acceptsKind(kindsAccepted: string | null | undefined, kind: string): boolean {
@@ -65,6 +84,7 @@ export function buildPlanRows(
       labelEn: m.labelEn,
       device: m.device,
       acceptsE2e: acceptsKind(m.kindsAccepted, 'e2e'),
+      acceptsOctVolumes: acceptsOctVolumes(m.kindsAccepted),
       included: !!e,
       requirement: e?.requirement ?? 'optional',
       laterality: e?.laterality ?? '',
@@ -82,6 +102,7 @@ export function buildPlanRows(
       labelEn: e.labelEn,
       device: e.device,
       acceptsE2e: acceptsKind(e.kindsAccepted, 'e2e'),
+      acceptsOctVolumes: acceptsOctVolumes(e.kindsAccepted),
       included: true,
       requirement: e.requirement,
       laterality: e.laterality ?? '',
@@ -92,8 +113,8 @@ export function buildPlanRows(
 }
 
 /**
- * The PUT body: included rows only, tasks only where they can run, and the
- * module-required tasks forced in on every OCT-volume row.
+ * The PUT body: included rows only, tasks only on OCT modalities, and the
+ * module-required tasks forced in on every one of them.
  */
 export function toWriteEntries(rows: PlanRow[], requiredTasks: readonly string[] = []): ImagingPlanEntryWrite[] {
   return rows
@@ -102,7 +123,7 @@ export function toWriteEntries(rows: PlanRow[], requiredTasks: readonly string[]
       modalityId: r.modalityId,
       requirement: r.requirement,
       laterality: r.laterality === '' ? null : r.laterality,
-      tasks: r.acceptsE2e ? withRequired(r.tasks, requiredTasks) : [],
+      tasks: r.acceptsOctVolumes ? withRequired(r.tasks, requiredFor(r, requiredTasks)) : [],
     }))
 }
 

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-039 — an OCT volume is recognised by what it is, not by its file format.
+
+      A DICOM object of the Ophthalmic Tomography IOD (SOP class
+      1.2.840.10008.5.1.4.1.1.77.1.5.4 or Modality OPT) with more than one frame
+      is an OCT volume and takes the .e2e path: bind, imaging plan, inference.
+      The frame count is known only to the DICOM sidecar when it reads the
+      file, so the answer is kept on the row:
+
+        oct_volume          TRUE   an OCT volume (OPT, more than one frame)
+                            FALSE  a DICOM that is not one (fundus, OCTA en-face, a line scan)
+                            NULL   not classified: an .e2e (always a volume, by
+                                   kind) or a DICOM of the OPT class filed before
+                                   the frame count was recorded
+        manufacturer,       the file's Manufacturer / ManufacturerModelName,
+        manufacturer_model  for the device gate and the inbox (exam/device
+                            tags, never the patient)
+
+      Every column is nullable and nothing is rewritten except the backfill
+      below, which only marks DICOM rows that cannot be an OCT volume.
+    -->
+    <changeSet id="2026-10-09-ingest-item-oct-volume" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="oct_volume"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item: oct_volume, manufacturer, manufacturer_model (DR-039).</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="oct_volume" type="BOOLEAN"/>
+            <column name="manufacturer" type="VARCHAR(128)"/>
+            <column name="manufacturer_model" type="VARCHAR(128)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="manufacturer_model"/>
+            <dropColumn tableName="ingest_item" columnName="manufacturer"/>
+            <dropColumn tableName="ingest_item" columnName="oct_volume"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      Backfill, only where it is safe: a DICOM row whose SOP class and modality
+      both say it is not Ophthalmic Tomography is not an OCT volume. A row of
+      the OPT class stays NULL: whether it has more than one frame was never
+      recorded, and a single-frame line scan is not analysable. Such a row is
+      not analysed until it is classified (uploaded again, or set by hand).
+    -->
+    <changeSet id="2026-10-09-ingest-item-oct-volume-backfill" author="muw-ophthalmology">
+        <comment>Mark DICOM rows that are not Ophthalmic Tomography as not OCT volumes.</comment>
+        <sql>
+            UPDATE ingest_item
+               SET oct_volume = FALSE
+             WHERE kind = 'dicom'
+               AND oct_volume IS NULL
+               AND COALESCE(sop_class_uid, '') &lt;&gt; '1.2.840.10008.5.1.4.1.1.77.1.5.4'
+               AND upper(COALESCE(modality, '')) &lt;&gt; 'OPT';
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE ingest_item SET oct_volume = NULL
+                 WHERE kind = 'dicom' AND oct_volume = FALSE;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+      What the preprocess sidecar reported about the scan a job read: the
+      format it arrived in (e2e / dicom), the device that recorded it, and how
+      the pixel spacing was read (standard / swapped / standard-assumed). The
+      job page shows them; a job refused because its task is not validated for
+      the device keeps them, so the page can say which device it was.
+    -->
+    <changeSet id="2026-10-09-retinal-job-source" author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="retinal_inference_job" columnName="source_format"/>
+            </not>
+        </preConditions>
+        <comment>retinal_inference_job: source_format, device_manufacturer, device_model, spacing_order (DR-039).</comment>
+
+        <addColumn tableName="retinal_inference_job">
+            <column name="source_format" type="VARCHAR(16)"/>
+            <column name="device_manufacturer" type="VARCHAR(128)"/>
+            <column name="device_model" type="VARCHAR(128)"/>
+            <column name="spacing_order" type="VARCHAR(32)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="retinal_inference_job" columnName="spacing_order"/>
+            <dropColumn tableName="retinal_inference_job" columnName="device_model"/>
+            <dropColumn tableName="retinal_inference_job" columnName="device_manufacturer"/>
+            <dropColumn tableName="retinal_inference_job" columnName="source_format"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -44,6 +44,7 @@ const RetinalCorrectionFullscreen = defineAsyncComponent(
 )
 import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, SdRetinaNetPayload, RetinalJobDetail } from '@/api/retinal'
+import { hasFundusGeometry } from '@/lib/retinalGeometry'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
 import PageHeader, { type TrailItem } from '@/components/PageHeader.vue'
 import { jobRoute, STARTABLE_TASKS, type StartableTask } from '@/lib/retinalJobs'
@@ -151,6 +152,22 @@ const geometry = computed(() => {
   const uuid = job.value?.e2eUuid ?? null
   if (uuid == null) return null
   return store.geometries[uuid] ?? null
+})
+/** DR-039 — only an `.e2e` source places the scan on a fundus image. */
+const fundusGeometry = computed(() => (hasFundusGeometry(geometry.value) ? geometry.value : null))
+/** DR-039 — a DICOM OCT volume: no SLO, so no fundus panel to draw. */
+const isDicomSource = computed<boolean>(() =>
+  job.value?.sourceFormat === 'dicom' || geometry.value?.source_format === 'dicom')
+const sourceFormatText = computed<string>(() => {
+  const f = job.value?.sourceFormat
+  return f === 'e2e' || f === 'dicom' ? t(`retinal.header.sourceFormat.${f}`) : (f ?? '')
+})
+const deviceText = computed<string>(() =>
+  [job.value?.deviceManufacturer, job.value?.deviceModel].filter((v) => !!v && v.trim()).join(' '))
+const spacingOrderText = computed<string>(() => {
+  const o = job.value?.spacingOrder
+  return o === 'standard' || o === 'swapped' || o === 'standard-assumed'
+    ? t(`retinal.header.spacingOrder.${o}`) : (o ?? '')
 })
 const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
@@ -1263,6 +1280,30 @@ onBeforeUnmount(stopInflightPoll)
                   </span>
                 </span>
               </div>
+              <!-- DR-039 — where the scan came from: its format, the device
+                   that recorded it and, for a DICOM, how its pixel spacing
+                   was read. Absent for jobs from before this was recorded. -->
+              <div
+                v-if="job.sourceFormat"
+                class="flex items-center gap-x-5 gap-y-1 flex-wrap mt-1.5 text-[12.5px] text-slate-500"
+                data-testid="retinal-view-source"
+              >
+                <span>{{ t('retinal.header.sourceLabel') }}
+                  <span class="font-mono text-slate-700" data-testid="retinal-view-source-format">{{ sourceFormatText }}</span>
+                </span>
+                <template v-if="deviceText">
+                  <span class="text-slate-500">·</span>
+                  <span>{{ t('retinal.header.deviceLabel') }}
+                    <span class="text-slate-700" data-testid="retinal-view-device">{{ deviceText }}</span>
+                  </span>
+                </template>
+                <template v-if="job.sourceFormat === 'dicom' && job.spacingOrder">
+                  <span class="text-slate-500">·</span>
+                  <span>{{ t('retinal.header.spacingLabel') }}
+                    <span class="text-slate-700" data-testid="retinal-view-spacing-order">{{ spacingOrderText }}</span>
+                  </span>
+                </template>
+              </div>
             </div>
             <div class="flex items-center gap-2.5 shrink-0">
               <button
@@ -1402,6 +1443,13 @@ onBeforeUnmount(stopInflightPoll)
             data-testid="retinal-view-inflight"
           >
             {{ inflightMessage }}
+            <!-- DR-039 — why it stopped, in the job's own words (a refusal
+                 names the device or the sidecar's reason). -->
+            <p
+              v-if="job.status === 'failed' && job.statusMessage"
+              class="mt-1.5 font-medium"
+              data-testid="retinal-view-status-message"
+            >{{ t('retinal.header.statusMessageLabel') }} {{ job.statusMessage }}</p>
           </div>
           <div
             v-else-if="!job.primaryMetric"
@@ -1481,15 +1529,16 @@ onBeforeUnmount(stopInflightPoll)
               </div>
               <div class="p-4 flex-1 flex items-center">
                 <div
-                  v-if="!job.fundusUrl || !geometry"
-                  class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-xs text-slate-500"
+                  v-if="!job.fundusUrl || !fundusGeometry"
+                  class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-xs text-slate-500 px-4 text-center"
+                  data-testid="retinal-view-fundus-empty"
                 >
-                  {{ t('retinal.empty.fundusNotAvailable') }}
+                  {{ isDicomSource ? t('retinal.empty.noSloInDicom') : t('retinal.empty.fundusNotAvailable') }}
                 </div>
                 <div v-else class="w-full">
                   <FundusOverlay
                     :fundus-url="job.fundusUrl"
-                    :geometry="geometry"
+                    :geometry="fundusGeometry"
                     :payload="job.outputPayload"
                     :task="overlayTask"
                     :laterality="job.laterality"

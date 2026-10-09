@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactKey;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -114,6 +115,13 @@ final class RetinalJobAccess {
          * {@link AiArmPolicy#armForEvent} needs both to find the arm.
          */
         Integer studyEventId;
+        /** Why the job stopped, when it did; null otherwise. */
+        String statusMessage;
+        /* DR-039 — what the preprocess sidecar reported about the scan; null before it ran. */
+        String sourceFormat;
+        String deviceManufacturer;
+        String deviceModel;
+        String spacingOrder;
     }
 
     /**
@@ -128,7 +136,8 @@ final class RetinalJobAccess {
     JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
-                + "       j.scan_index, j.study_event_id, "
+                + "       j.scan_index, j.study_event_id, j.status_message, "
+                + "       j.source_format, j.device_manufacturer, j.device_model, j.spacing_order, "
                 + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
                 + "       r.bscan_masks_dir, r.confidence, ss.study_id "
                 + "  FROM retinal_inference_job j "
@@ -162,6 +171,11 @@ final class RetinalJobAccess {
                 row.scanIndex = rs.getInt("scan_index");
                 int sev = rs.getInt("study_event_id");
                 row.studyEventId = rs.wasNull() ? null : sev;
+                row.statusMessage = rs.getString("status_message");
+                row.sourceFormat = rs.getString("source_format");
+                row.deviceManufacturer = rs.getString("device_manufacturer");
+                row.deviceModel = rs.getString("device_model");
+                row.spacingOrder = rs.getString("spacing_order");
                 return row;
             }
         }
@@ -344,14 +358,13 @@ final class RetinalJobAccess {
         }
     }
 
-    /** Trim a single trailing ".e2e" — match what the upload controller saves. */
-    static String e2eUuidFromPath(String e2ePath) {
-        if (e2ePath == null) return null;
-        String base = Paths.get(e2ePath).getFileName().toString();
-        if (base.toLowerCase().endsWith(".e2e")) {
-            base = base.substring(0, base.length() - 4);
-        }
-        return base;
+    /**
+     * The scan's companion-directory key (DR-039): the name without
+     * {@code .e2e} for an {@code .e2e}, as always; a path-derived UUID for a
+     * DICOM OCT volume. See {@link RetinalArtifactKey}.
+     */
+    static String artifactKey(String storedPath) {
+        return RetinalArtifactKey.of(storedPath);
     }
 
     List<String> listArtifactNames(String dir) {

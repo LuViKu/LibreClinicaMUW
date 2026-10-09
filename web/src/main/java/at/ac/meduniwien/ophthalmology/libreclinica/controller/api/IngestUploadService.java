@@ -34,6 +34,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
@@ -157,6 +159,12 @@ final class IngestUploadService {
     private final IngestArtifactStore store;
     private final DicomDescribeClient describe;
     private final StudySettingService settings;
+    /**
+     * DR-039 — starts the visit plan's analyses for a DICOM OCT volume filed
+     * at upload, and detaches its jobs when the upload is taken back. Without
+     * {@link #useRetinalDispatch} it detaches only and starts nothing.
+     */
+    private RetinalJobFollower follower;
 
     IngestUploadService(DataSource dataSource) {
         this(dataSource, new IngestArtifactStore(), new DicomDescribeClient());
@@ -167,6 +175,18 @@ final class IngestUploadService {
         this.store = store;
         this.describe = describe;
         this.settings = new StudySettingService(dataSource);
+        this.follower = new RetinalJobFollower(dataSource);
+    }
+
+    /**
+     * DR-039 — wire the inference dispatch, so a DICOM OCT volume uploaded
+     * straight to a visit starts what the visit's imaging plan asks for, as an
+     * {@code .e2e} upload does. Either argument null leaves it detach-only.
+     */
+    void useRetinalDispatch(RemoteRetinalInferenceClient remote, RetinalInferenceApiController inference) {
+        this.follower = remote == null || inference == null
+                ? new RetinalJobFollower(dataSource)
+                : new RetinalJobFollower(dataSource, remote, inference);
     }
 
     /* ------------------------------------------------------------------ */
@@ -348,6 +368,9 @@ final class IngestUploadService {
                             .studyInstanceUid(desc.studyInstanceUid())
                             .seriesInstanceUid(desc.seriesInstanceUid())
                             .modality(desc.modality())
+                            // DR-039 — an OCT volume is analysed whatever its format.
+                            .octVolume(OctVolumes.of(desc))
+                            .manufacturer(desc.manufacturer(), desc.manufacturerModelName())
                             .deidentifiedAt(desc.identityRemoved() ? Instant.now() : null);
                 }
                 if (target != null) {
@@ -368,6 +391,22 @@ final class IngestUploadService {
                         new ImageIngestBinding.EventTarget(target.studySubjectId(), target.studyEventId(),
                                 target.eventCrfId()),
                         SOURCE_KIND, device, laterality, up.actor().userId());
+            }
+            // DR-039 — a DICOM OCT volume filed to a visit starts the visit
+            // plan's analyses now, like an .e2e upload: the nAMD module's
+            // physicians expect the segmentation to be there when they open
+            // the visit. The follower applies the study's inference switch
+            // and the plan; a failure here never fails the upload.
+            if (target != null && kind == IngestArtifactStore.Kind.DICOM
+                    && Boolean.TRUE.equals(OctVolumes.of(desc))) {
+                try {
+                    RetinalJobFollower.Ensured e = follower.ensure(id, up.actor(), false);
+                    LOG.info("upload: ingest_item {} is a DICOM OCT volume — {} analysis(es) started{}",
+                            id, e.started(), e.skippedBecause() == null ? "" : " (" + e.skippedBecause() + ")");
+                } catch (SQLException | RuntimeException e) {
+                    LOG.error("upload: ingest_item {} is filed, but its analyses could not start: {}",
+                            id, e.getMessage());
+                }
             }
             LOG.info("upload: ingest_item {} ({}) landed {} via {}{}", id, up.sniffed().format(),
                     target == null ? "UNBOUND" : "BOUND", up.channel(),
@@ -397,8 +436,16 @@ final class IngestUploadService {
      * Take an upload back within the window.
      *
      * <p>Only what this service created can be undone here: a row somebody
-     * has since reconciled by hand, dismissed, or that carries inference
-     * jobs is somebody's decision, and the OCT route owns the job form.
+     * has since reconciled by hand or dismissed is somebody's decision.
+     *
+     * <p>DR-039 — a DICOM OCT volume filed at upload has started its plan's
+     * analyses. Undoing it handles them the DR-035 way, through
+     * {@link RetinalJobFollower#detach}: jobs not yet running are cancelled,
+     * running or finished ones keep their results, unattached. When nothing
+     * had started, the cancelled jobs go with the upload, as an {@code .e2e}
+     * undo removes its jobs. When an analysis is already running or done, the
+     * scan cannot vanish under it: it leaves the visit and is dismissed
+     * instead (restorable from the inbox, deleted by the retention job).
      */
     Outcome undo(long ingestItemId, IngestBindService.Actor actor) {
         Instant receivedAt;
@@ -406,6 +453,7 @@ final class IngestUploadService {
         String previewPath;
         String status;
         String policy;
+        int jobs;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT received_at, stored_path, preview_png_path, status, match_policy, "
@@ -421,9 +469,7 @@ final class IngestUploadService {
                 previewPath = rs.getString("preview_png_path");
                 status = rs.getString("status");
                 policy = rs.getString("match_policy");
-                if (rs.getInt("jobs") > 0) {
-                    return new Rejected(409, "this upload already has work attached to it");
-                }
+                jobs = rs.getInt("jobs");
             }
         } catch (SQLException e) {
             LOG.error("undo lookup failed for ingest_item {}: {}", ingestItemId, e.getMessage());
@@ -437,6 +483,11 @@ final class IngestUploadService {
         }
         if (Duration.between(receivedAt, Instant.now()).compareTo(UNDO_WINDOW) > 0) {
             return new Rejected(410, "undo window of " + UNDO_WINDOW.toSeconds() + "s elapsed");
+        }
+        if (jobs > 0) {
+            if (!boundAtUpload) return new Rejected(409, "this upload already has work attached to it");
+            Outcome withJobs = undoJobs(ingestItemId, actor);
+            if (withJobs != null) return withJobs;
         }
         if (boundAtUpload) {
             // The CRF value first: a row that vanishes while the form still
@@ -465,6 +516,59 @@ final class IngestUploadService {
         if (previewPath != null && !previewPath.equals(storedPath)) deleteQuietly(previewPath);
         LOG.info("upload: ingest_item {} taken back within the undo window", ingestItemId);
         return new Undone(ingestItemId);
+    }
+
+    /**
+     * DR-039 — the jobs of an upload being taken back. Null when nothing had
+     * started: the cancelled jobs are gone and the undo carries on removing
+     * the upload. Otherwise the final outcome: the scan left the visit and
+     * was dismissed, its running or finished analyses kept, unattached.
+     */
+    private Outcome undoJobs(long ingestItemId, IngestBindService.Actor actor) {
+        try {
+            follower.detach(ingestItemId, actor);
+        } catch (SQLException e) {
+            LOG.error("undo of ingest_item {}: its analyses could not be detached: {}", ingestItemId, e.getMessage());
+            return new Rejected(500, "could not take back the upload's analyses");
+        }
+        int live;
+        try (Connection c = dataSource.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM retinal_inference_job WHERE ingest_item_id = ? AND status <> 'cancelled'")) {
+                ps.setLong(1, ingestItemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    live = rs.getInt(1);
+                }
+            }
+            if (live == 0) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "DELETE FROM retinal_inference_job WHERE ingest_item_id = ? AND status = 'cancelled'")) {
+                    ps.setLong(1, ingestItemId);
+                    ps.executeUpdate();
+                }
+                return null;
+            }
+        } catch (SQLException e) {
+            LOG.error("undo of ingest_item {}: could not settle its analyses: {}", ingestItemId, e.getMessage());
+            return new Rejected(500, "could not take back the upload's analyses");
+        }
+        IngestBindService binds = new IngestBindService(dataSource, follower);
+        IngestBindService.Result r = binds.unbind(ingestItemId, actor);
+        if (r == IngestBindService.Result.OK) {
+            r = binds.dismiss(ingestItemId, "upload undone; an analysis of it had already started", actor);
+        }
+        return switch (r) {
+            case OK -> {
+                LOG.info("upload: ingest_item {} taken back — {} analysis(es) already under way keep running, "
+                        + "unattached; the scan is dismissed", ingestItemId, live);
+                yield new Undone(ingestItemId);
+            }
+            case REFUSED_LOCKED -> new Rejected(409, "the visit has been signed or locked since");
+            case NOT_FOUND -> new Rejected(404, "no upload " + ingestItemId);
+            case WRONG_STATE -> new Rejected(409, "this upload has already been reconciled");
+            case FAILED -> new Rejected(500, "could not take back the upload");
+        };
     }
 
     /* ------------------------------------------------------------------ */

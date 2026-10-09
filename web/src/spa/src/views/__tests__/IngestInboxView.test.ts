@@ -121,6 +121,22 @@ describe('IngestInboxView', () => {
     expect(w.text()).toContain('200 MB')
   })
 
+  /** DR-039 — a DICOM OCT volume is an OCT scan, its format DICOM. */
+  it('labels a DICOM OCT volume as an OCT scan from a DICOM', async () => {
+    listIngestInbox.mockResolvedValue({
+      items: [
+        row({ id: 8, kind: 'dicom', octVolume: true, hasPreview: false, byteSize: 1048576 }),
+        row({ id: 9, kind: 'dicom', octVolume: false, hasPreview: true }),
+      ],
+      limit: 100,
+      status: 'UNBOUND',
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.text()).toContain(`${de.ingestInbox.kind.e2e} · DICOM`)
+    expect(w.text()).toContain(de.ingestInbox.kind.dicom)
+  })
+
   it('a date mismatch asks before filing, and re-sends with the acknowledgement', async () => {
     // The backend refuses the first attempt so a scan cannot land on the wrong
     // day by accident; confirming repeats it with the flag set.

@@ -170,4 +170,28 @@ public class RetinalArtifactStorageServiceTest {
         Path masksDir = tmp.newFolder("masks").toPath();
         svc.deleteCorrection(masksDir, "001-ILM (ILM).csv");
     }
+
+    /** DR-039 — index 0 at the key's root, index i at scan-<i>/, nothing guessed. */
+    @Test
+    public void resolveCompanion_followsTheSidecarsScanLayout() throws IOException {
+        Path store = tmp.newFolder("bscans").toPath();
+        RetinalArtifactStorageService svc = new RetinalArtifactStorageService() {
+            @Override protected String bscanStorePath() { return store.toString(); }
+        };
+        String key = "3f2b8c1e-0d4a-4b7e-9c11-2a6f0e5d9b40";
+        Path root = Files.createDirectories(store.resolve(key));
+        Path scan1 = Files.createDirectories(root.resolve("scan-1"));
+        Files.writeString(root.resolve("geometry.json"), "{}");
+        Files.writeString(scan1.resolve("geometry.json"), "{}");
+
+        assertEquals(root.resolve("geometry.json"), svc.resolveGeometry(key, 0));
+        assertEquals(scan1.resolve("geometry.json"), svc.resolveGeometry(key, 1));
+        assertEquals(root.resolve("geometry.json"), svc.resolveGeometry(key, -1));
+        try {
+            svc.resolveGeometry(key, 2);
+            org.junit.Assert.fail("scan 2 has no companions; scan 0's must not stand in for them");
+        } catch (java.nio.file.NoSuchFileException expected) {
+            // ok
+        }
+    }
 }

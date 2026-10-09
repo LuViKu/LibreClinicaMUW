@@ -195,13 +195,22 @@ public class IngestInboxApiController {
                            Integer scanIndex, String receivedAt,
                            String previewUrl, boolean hasPreview,
                            Suggestion suggestion, Twin twin,
-                           boolean analysable, List<ScanAnalysis> analyses) {
+                           boolean analysable, List<ScanAnalysis> analyses,
+                           /*
+                            * DR-039 — true for a DICOM that is an OCT volume
+                            * (shown as an OCT scan, source format DICOM);
+                            * false otherwise, an .e2e included (its kind says it).
+                            */
+                           boolean octVolume,
+                           /* The file's Manufacturer / ManufacturerModelName; DICOM only. */
+                           String manufacturer, String manufacturerModel) {
 
         /** The same row with the scan's analyses filled in (the visit page's list). */
         InboxRow withAnalyses(List<ScanAnalysis> list) {
             return new InboxRow(id, kind, sourceKind, device, patientId, laterality, acquisitionDate,
                     acquisitionDateSource, modality, originalFilename, byteSize, scanIndex, receivedAt,
-                    previewUrl, hasPreview, suggestion, twin, analysable, list);
+                    previewUrl, hasPreview, suggestion, twin, analysable, list,
+                    octVolume, manufacturer, manufacturerModel);
         }
     }
 
@@ -243,7 +252,9 @@ public class IngestInboxApiController {
     // ----- GET /inbox -----
 
     /**
-     * @param kind   narrow to one sort of file — e2e, dicom, image, other
+     * @param kind   narrow to one sort of file — e2e, dicom, image, other.
+     *               DR-039: {@code e2e} is "OCT scan" and includes DICOM OCT
+     *               volumes; {@code dicom} is "DICOM image" and leaves them out
      * @param source narrow to one ingress — dicom, upload, portal-oct, api
      * @param q      a substring of the patient id or the original filename, for
      *               an operator who knows roughly what they are looking for
@@ -275,6 +286,7 @@ public class IngestInboxApiController {
         StringBuilder sql = new StringBuilder(
                 "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                         + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                        + "oct_volume, manufacturer, manufacturer_model, "
                         + "received_at, preview_png_path, " + TWIN_COLUMN
                         + "  FROM ingest_item WHERE status = ?");
         // Cross-site isolation: only the rows this session may see (IngestItemVisibility).
@@ -282,8 +294,15 @@ public class IngestInboxApiController {
         List<Object> args = new ArrayList<>();
         args.add(wantedStatus);
         if (notBlank(kind)) {
-            sql.append(" AND lower(kind) = lower(?)");
-            args.add(kind.trim());
+            String k = kind.trim().toLowerCase(Locale.ROOT);
+            if ("e2e".equals(k)) {
+                sql.append(" AND (lower(kind) = 'e2e' OR (lower(kind) = 'dicom' AND oct_volume IS TRUE))");
+            } else if ("dicom".equals(k)) {
+                sql.append(" AND lower(kind) = 'dicom' AND oct_volume IS NOT TRUE");
+            } else {
+                sql.append(" AND lower(kind) = lower(?)");
+                args.add(kind.trim());
+            }
         }
         if (notBlank(source)) {
             sql.append(" AND lower(source_kind) = lower(?)");
@@ -335,9 +354,11 @@ public class IngestInboxApiController {
         int total = 0;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT kind, count(*) FROM ingest_item WHERE status = 'UNBOUND' AND "
+                     // DR-039 — a DICOM OCT volume counts under the OCT-scan chip.
+                     "SELECT CASE WHEN lower(kind) = 'dicom' AND oct_volume IS TRUE THEN 'e2e' ELSE kind END AS k, "
+                             + "       count(*) FROM ingest_item WHERE status = 'UNBOUND' AND "
                              + visibility().predicate("ingest_item", session)
-                             + " GROUP BY kind ORDER BY kind");
+                             + " GROUP BY 1 ORDER BY 1");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 byKind.put(rs.getString(1), rs.getInt(2));
@@ -362,6 +383,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                        + "oct_volume, manufacturer, manufacturer_model, "
                              + "received_at, preview_png_path, bound_study_subject_id, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
@@ -436,6 +458,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                        + "oct_volume, manufacturer, manufacturer_model, "
                              + "received_at, preview_png_path, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE bound_study_event_id = ? AND status = 'BOUND' "
                              + " ORDER BY laterality NULLS LAST, received_at")) {
@@ -846,14 +869,14 @@ public class IngestInboxApiController {
         if (itemGuard != null) return itemGuard;
 
         String kind;
-        String sopClassUid;
+        Boolean octVolume;
         String storedPath;
         Integer subjectId;
         Integer studyEventId;
         Integer eventCrfId;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT kind, sop_class_uid, stored_path, status, bound_study_subject_id, "
+                     "SELECT kind, oct_volume, stored_path, status, bound_study_subject_id, "
                              + "       bound_study_event_id, bound_event_crf_id "
                              + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
@@ -862,7 +885,8 @@ public class IngestInboxApiController {
                     return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
                 }
                 kind = rs.getString("kind");
-                sopClassUid = rs.getString("sop_class_uid");
+                boolean oct = rs.getBoolean("oct_volume");
+                octVolume = rs.wasNull() ? null : oct;
                 storedPath = rs.getString("stored_path");
                 boolean bound = "BOUND".equals(rs.getString("status"));
                 subjectId = intOrNull(rs, "bound_study_subject_id");
@@ -877,7 +901,7 @@ public class IngestInboxApiController {
             LOG.error("ingest item lookup failed for {}: {}", id, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "lookup failed"));
         }
-        if (!RetinalJobFollower.isAnalysable(kind, sopClassUid)) {
+        if (!RetinalJobFollower.isAnalysable(kind, octVolume)) {
             return ClinicalRecordGuard.conflict("NOT_ANALYSABLE", "Only OCT volumes can be analysed.");
         }
 
@@ -991,9 +1015,12 @@ public class IngestInboxApiController {
         boolean scanNull = rs.wasNull();
         long twinId = rs.getLong("twin_id");
         Twin twin = rs.wasNull() ? null : describeTwin(twinId, visible);
+        boolean oct = rs.getBoolean("oct_volume");
+        Boolean octVolume = rs.wasNull() ? null : oct;
+        String kind = rs.getString("kind");
         return new InboxRow(
                 id,
-                rs.getString("kind"),
+                kind,
                 rs.getString("source_kind"),
                 rs.getString("device"),
                 patientId,
@@ -1009,9 +1036,12 @@ public class IngestInboxApiController {
                 rs.getString("preview_png_path") != null,
                 buildSuggestion(patientId, acquisitionDate, visible),
                 twin,
-                RetinalJobFollower.isAnalysable(rs.getString("kind"), null),
+                RetinalJobFollower.isAnalysable(kind, octVolume),
                 // Looked up for the visit page only (byEvent); the inbox has no use for it.
-                null);
+                null,
+                "dicom".equalsIgnoreCase(kind) && Boolean.TRUE.equals(octVolume),
+                rs.getString("manufacturer"),
+                rs.getString("manufacturer_model"));
     }
 
     /**

@@ -468,11 +468,12 @@ public class EventDefinitionsApiController {
                     return ResponseEntity.badRequest().body(Map.of("message",
                             "Modality " + w.modalityId() + " is not an active entry of study " + studyOid));
                 }
+                // DR-039 — only a modality marked as an OCT one is analysed.
                 if (!w.tasks().isEmpty()
-                        && !VisitImagingPlan.acceptsKind(kindsById.get(w.modalityId()), "e2e")) {
+                        && !VisitImagingPlan.acceptsOctVolumes(kindsById.get(w.modalityId()))) {
                     return ResponseEntity.badRequest().body(Map.of("message",
-                            "Modality " + w.modalityId() + " does not accept OCT volumes, "
-                                    + "so no inference task can run on it"));
+                            "Modality " + w.modalityId() + " is not marked as an OCT modality "
+                                    + "(kindsAccepted lacks \"oct\"), so no inference task can run on it"));
                 }
             }
 

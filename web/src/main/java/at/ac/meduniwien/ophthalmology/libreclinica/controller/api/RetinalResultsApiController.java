@@ -229,7 +229,19 @@ public class RetinalResultsApiController {
             /** The visit's date, ISO yyyy-MM-dd. */
             String visitDate,
             /** Every analysis of the same scan, this one included, oldest first. */
-            List<JobSibling> siblings) { }
+            List<JobSibling> siblings,
+            /** Why the job stopped (failed / cancelled), else null. */
+            String statusMessage,
+            /*
+             * DR-039 — what the preprocess sidecar reported about the scan:
+             * "e2e" / "dicom", the recording device, and how a DICOM's pixel
+             * spacing was read ("standard" / "swapped" / "standard-assumed").
+             * Null for jobs that ran before this was recorded.
+             */
+            String sourceFormat,
+            String deviceManufacturer,
+            String deviceModel,
+            String spacingOrder) { }
 
     /** Another analysis of the scan a job read. */
     public record JobSibling(long jobId, String task, String status) { }
@@ -333,7 +345,7 @@ public class RetinalResultsApiController {
         ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
-        String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
+        String e2eUuid = RetinalJobAccess.artifactKey(row.e2ePath);
         List<String> artifactNames = jobs().listArtifactNames(row.bscanMasksDir);
         // 2026-06-19 — thread scan_index so multi-volume uploads
         // discover their companions under scan-N/.
@@ -418,7 +430,12 @@ public class RetinalResultsApiController {
                 visit == null ? null : visit.studyEventId(),
                 visit == null ? null : visit.name(),
                 visit == null ? null : visit.date(),
-                siblings);
+                siblings,
+                row.statusMessage,
+                row.sourceFormat,
+                row.deviceManufacturer,
+                row.deviceModel,
+                row.spacingOrder);
         return ResponseEntity.ok(dto);
     }
 
@@ -1478,6 +1495,13 @@ public class RetinalResultsApiController {
                     "code", "SCAN_FILE_MISSING",
                     "message", RetinalJobAccess.SCAN_FILE_MISSING));
         }
+        // DR-039 — the scan must still be an OCT volume (RetinalJobFollower.isAnalysable),
+        // the same question the per-scan start and the bind ask.
+        if (sourceIngestItemId != null && !itemIsAnalysable(sourceIngestItemId)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "code", "NOT_ANALYSABLE",
+                    "message", "Only OCT volumes can be analysed."));
+        }
         if (remoteClient == null || !remoteClient.isConfigured()) {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "Remote GPU sidecar not configured — rerun-as unavailable"));
@@ -1582,6 +1606,24 @@ public class RetinalResultsApiController {
         resp.put("status", "remote_pending");
         RetinalJobAccess.putAddress(dataSource, newJobId, resp);
         return ResponseEntity.accepted().body(resp);
+    }
+
+    /** Whether the ingest item a job read is (still) an analysable OCT volume; false when it is gone. */
+    private boolean itemIsAnalysable(long ingestItemId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT kind, oct_volume FROM ingest_item WHERE ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                String kind = rs.getString(1);
+                boolean oct = rs.getBoolean(2);
+                return RetinalJobFollower.isAnalysable(kind, rs.wasNull() ? null : oct);
+            }
+        } catch (SQLException e) {
+            LOG.warn("rerun-as: could not classify ingest_item {}: {}", ingestItemId, e.getMessage());
+            return false;
+        }
     }
 
     /**

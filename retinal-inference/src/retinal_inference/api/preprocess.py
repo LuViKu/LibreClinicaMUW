@@ -21,6 +21,22 @@ In addition to streaming the DCM back inline, this endpoint:
   endpoint (Wave 3) can serve the files back to the SPA.
 * Dedups at the e2e-uuid level — a second call with the same .e2e finds the
   bscan.dcm already there and skips the rewrite.
+
+DICOM OCT volumes (same endpoint): an upload whose bytes carry the DICOM
+Part-10 magic (``DICM`` at offset 128; the filename is ignored) is taken as a
+vendor OCT export instead of an ``.e2e``. ``retinal_inference.dicom_oct``
+validates it (Ophthalmic Tomography SOP class or Modality OPT, > 1 frame,
+monochrome, no burned-in annotation, a Manufacturer, a determinable eye and
+voxel spacing — otherwise 422 with ``{"error": <code>, "message": ...}``),
+reads it into a ``BscanVolume`` and writes it with the same
+``write_bscan_dcm`` as the ``.e2e`` path, so the cluster gets one normalised,
+de-identified shape. ``geometry.json`` then has the ``bscan`` block only (no
+SLO is read: ``fundus``, ``scan_bbox_fundus_px`` and
+``fovea_estimate_fundus_px`` are null and ``bscan_positions_fundus_px`` is
+empty), and no ``fundus.png`` is written. Both paths add
+``X-MUW-Source-Format`` (``e2e`` | ``dicom``), ``X-MUW-Manufacturer``,
+``X-MUW-Manufacturer-Model`` and ``X-MUW-Device-Tasks``; the DICOM path also
+``X-MUW-Laterality``. Contract: ``retinal-inference/docs/dicom-oct-preprocess.md``.
 """
 
 from __future__ import annotations
@@ -48,6 +64,7 @@ from fastapi import (
 )
 
 from retinal_inference import config as _config
+from retinal_inference.dicom_oct import is_dicom_part10
 from retinal_inference.security import resolve_under, token_matches
 
 # DR-024 — the .e2e -> bscan.dcm conversion lives in a separate package
@@ -76,7 +93,9 @@ router = APIRouter()
 _EXPOSED_HEADERS = (
     "X-MUW-Pixel-Axial-Mm, X-MUW-Pixel-Lateral-Mm, X-MUW-Pixel-Slice-Mm, "
     "X-MUW-Bscan-Dim-Z, X-MUW-Bscan-Dim-Y, X-MUW-Bscan-Dim-X, X-MUW-E2E-Uuid, "
-    "X-MUW-Acquisition-Date"
+    "X-MUW-Acquisition-Date, X-MUW-Source-Format, X-MUW-Manufacturer, "
+    "X-MUW-Manufacturer-Model, X-MUW-Device-Tasks, X-MUW-Laterality, "
+    "X-MUW-Spacing-Order"
 )
 
 # The app sends the UUID it generated for the stored upload (java.util.UUID,
@@ -230,14 +249,229 @@ def _persist_geometry(target: Path, geometry: dict) -> None:
     _atomic_write(target, payload)
 
 
+def _add_device_headers(headers: dict[str, str], manufacturer: str, model: str) -> None:
+    """X-MUW-Manufacturer / -Manufacturer-Model / -Device-Tasks (printable ASCII only)."""
+    from retinal_inference.devices import tasks_for_device
+
+    man = re.sub(r"[^\x20-\x7e]", "", manufacturer or "").strip()[:64]
+    mod = re.sub(r"[^\x20-\x7e]", "", model or "").strip()[:64]
+    if man:
+        headers["X-MUW-Manufacturer"] = man
+    if mod:
+        headers["X-MUW-Manufacturer-Model"] = mod
+    # The tasks whose models were trained on this device ("" = none); /run
+    # refuses the others with 422 unsupported_device.
+    headers["X-MUW-Device-Tasks"] = ",".join(tasks_for_device(man, mod))
+
+
+def _convert_dicom(
+    dcm_in: Path, tempdir: Path, uuid: str, laterality: str | None
+) -> tuple[bytes, dict[str, str]]:
+    """The DICOM OCT path: validate, normalise + de-identify, persist, return.
+
+    The vendor volume is read into a ``BscanVolume`` and written by the same
+    ``write_bscan_dcm`` as the ``.e2e`` path, so the cluster sees one shape.
+    Nothing is persisted before the de-identification check has passed.
+    """
+    from muw_e2e_converter import write_bscan_dcm
+
+    from retinal_inference.dicom_oct import (
+        DicomOctRejected,
+        assert_deidentified,
+        geometry_for_dicom,
+        read_dicom_oct,
+    )
+
+    try:
+        result = read_dicom_oct(dcm_in, laterality)
+    except DicomOctRejected as e:
+        raise HTTPException(
+            status_code=422, detail={"error": e.code, "message": e.message}
+        ) from e
+    except Exception as e:  # noqa: BLE001 — never echo source values
+        LOG.warning("DICOM OCT read failed: %s", type(e).__name__)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "invalid_dicom",
+                "message": f"The DICOM OCT volume cannot be read ({type(e).__name__}).",
+            },
+        ) from e
+    # The source file holds PHI; it is not needed past this point.
+    dcm_in.unlink(missing_ok=True)
+
+    out_dir = tempdir / "out"
+    write_bscan_dcm(result.volume, out_dir)
+    out_path = out_dir / "bscan.dcm"
+    try:
+        assert_deidentified(out_path, result.forbidden_values)
+    except RuntimeError as e:
+        LOG.error("Refusing a DICOM OCT output that failed de-identification: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "deidentification_failed", "message": str(e)},
+        ) from e
+    dcm_bytes = out_path.read_bytes()
+    bv = result.volume
+
+    store = _bscan_store_dir()
+    if store is not None:
+        target_dir = resolve_under(store, uuid)
+        if target_dir is None:
+            LOG.warning(
+                "Companion directory for e2e %s resolves outside the B-scan store; "
+                "skipping persistence",
+                uuid,
+            )
+        else:
+            try:
+                _persist_bscan_dcm(target_dir / "bscan.dcm", dcm_bytes)
+                _persist_geometry(target_dir / "geometry.json", geometry_for_dicom(result))
+            except Exception as e:  # noqa: BLE001 — never let companion writes break the request
+                LOG.warning("Companion persistence failed for %s: %s", uuid, e)
+    else:
+        LOG.info("bscan_store unset; skipping companion-file persistence for e2e %s", uuid)
+
+    headers = {
+        "X-MUW-Pixel-Axial-Mm": f"{bv.axial_mm:.8f}",
+        "X-MUW-Pixel-Lateral-Mm": f"{bv.lateral_mm:.8f}",
+        "X-MUW-Pixel-Slice-Mm": f"{bv.slice_mm:.8f}",
+        "X-MUW-Bscan-Dim-Z": str(int(bv.n_bscans)),
+        "X-MUW-Bscan-Dim-Y": str(int(bv.rows)),
+        "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
+        "X-MUW-Source-Format": "dicom",
+        "X-MUW-Laterality": bv.laterality,
+        "X-MUW-Spacing-Order": result.spacing_order,
+    }
+    for w in result.plausibility.get("warnings", []):
+        LOG.warning("DICOM OCT %s: %s", uuid, w)
+    if bv.acquisition_date:
+        headers["X-MUW-Acquisition-Date"] = bv.acquisition_date
+    _add_device_headers(headers, result.manufacturer, result.model or "")
+    del result, bv
+    gc.collect()
+    return dcm_bytes, headers
+
+
+def _convert_e2e(
+    e2e_path: Path, tempdir: Path, uuid: str, scan_index: int
+) -> tuple[bytes, dict[str, str]]:
+    """The ``.e2e`` path: convert, persist companions, return (DCM bytes, headers)."""
+    try:
+        out_dir = prepare_bscan_dcm(e2e_path, tempdir, scan_index=scan_index)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except IndexError as e:
+        # scan_index out of range — surface as 400 so the SPA can show
+        # the operator a clean "this file has N volumes" message.
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:  # oct-converter / pydicom failure on a bad E2E
+        raise HTTPException(
+            status_code=422, detail=f"E2E -> DICOM conversion failed: {e}"
+        ) from e
+    dcm_bytes = (Path(out_dir) / "bscan.dcm").read_bytes()
+
+    # Pixel geometry must come back to the Java client every call (the
+    # SPA doesn't care about the bind-mount but the runner does); we read
+    # it back out of the DCM the same conversion just wrote so it stays
+    # bit-identical to the headers.
+    ds = pydicom.dcmread(str(Path(out_dir) / "bscan.dcm"))
+    try:
+        bv = read_e2e_volume(e2e_path, scan_index=scan_index)
+    except Exception as e:  # noqa: BLE001 — already converted once, this is best-effort metadata
+        LOG.warning("Geometry read failed on %s: %s", e2e_path, e)
+        bv = None
+
+    # Companion file writes (best-effort; skipped when no store configured).
+    # For scan_index > 0 we use a per-volume subdir so different volumes
+    # from the same .e2e don't overwrite each other's bscan.dcm / fundus.
+    store = _bscan_store_dir()
+    target_dir: Path | None = None
+    if store is not None and bv is not None:
+        # Belt and braces on top of the UUID check: the directory must
+        # still resolve inside the store (a symlinked entry must not lead
+        # the writes elsewhere).
+        sub = os.path.join(uuid, f"scan-{scan_index}") if scan_index > 0 else uuid
+        target_dir = resolve_under(store, sub)
+        if target_dir is None:
+            LOG.warning(
+                "Companion directory for e2e %s resolves outside the B-scan store; "
+                "skipping persistence",
+                uuid,
+            )
+    if target_dir is not None:
+        try:
+            _persist_bscan_dcm(target_dir / "bscan.dcm", dcm_bytes)
+            fundus_png, fundus_dims = extract_fundus_png(e2e_path, scan_index=scan_index)
+            _persist_fundus_png(target_dir / "fundus.png", fundus_png)
+            geom = build_geometry(
+                bv, ds, fundus_dims, e2e_path=e2e_path, scan_index=scan_index
+            )
+            geom["source_format"] = "e2e"
+            geom["spacing_order"] = "standard"  # our writer: [axial, lateral]
+            _persist_geometry(target_dir / "geometry.json", geom)
+        except Exception as e:  # noqa: BLE001 — never let companion-write failures break the request
+            LOG.warning("Companion persistence failed for %s: %s", uuid, e)
+    elif store is None:
+        LOG.info("bscan_store unset; skipping companion-file persistence for e2e %s", uuid)
+
+    # 2026-06-19 — release the large per-request allocations before
+    # we exit the TemporaryDirectory context. `ds` (a pydicom
+    # Dataset) carries the full PixelData buffer (~192 MB for a
+    # 97×496×512 volume); `bv.volume_u8` carries the quantised
+    # volume (~48 MB). Neither is needed past this point — the
+    # response only needs the response body (`dcm_bytes`, already
+    # read from disk) and a handful of geometry scalars, which we
+    # copy out of `bv` into `geom_headers` before dropping it.
+    geom_headers: dict[str, str] = {}
+    if bv is not None:
+        geom_headers = {
+            "X-MUW-Pixel-Axial-Mm": f"{bv.axial_mm:.8f}",
+            "X-MUW-Pixel-Lateral-Mm": f"{bv.lateral_mm:.8f}",
+            "X-MUW-Pixel-Slice-Mm": f"{bv.slice_mm:.8f}",
+            "X-MUW-Bscan-Dim-Z": str(int(bv.n_bscans)),
+            "X-MUW-Bscan-Dim-Y": str(int(bv.rows)),
+            "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
+        }
+        # 2026-06-23 user-feedback round — surface the .e2e
+        # acquisition date so the Java client can persist it on
+        # the retinal_inference_job row and the nAMD workspace
+        # can plot the trend chart against the real scan date
+        # rather than the upload completion time.
+        if bv.acquisition_date:
+            geom_headers["X-MUW-Acquisition-Date"] = bv.acquisition_date
+    geom_headers["X-MUW-Source-Format"] = "e2e"
+    # Our own writer always stores PixelSpacing as [axial, lateral].
+    geom_headers["X-MUW-Spacing-Order"] = "standard"
+    _add_device_headers(
+        geom_headers,
+        str(getattr(ds, "Manufacturer", "") or ""),
+        str(getattr(ds, "ManufacturerModelName", "") or ""),
+    )
+    del ds
+    del bv
+    gc.collect()
+    return dcm_bytes, geom_headers
+
+
+
 @router.post("/preprocess")
 async def preprocess(
-    file: UploadFile = File(..., description="Heidelberg .e2e binary"),
-    laterality: str | None = Form(default=None, description="OD or OS (informational; derived from the E2E)"),
+    file: UploadFile = File(
+        ...,
+        description="Heidelberg .e2e binary, or a DICOM OCT volume (detected by the DICM magic)",
+    ),
+    laterality: str | None = Form(
+        default=None,
+        description=(
+            "OD or OS. Informational for an .e2e; for a DICOM it must agree with the "
+            "file's laterality and is required when the file names OU or no eye"
+        ),
+    ),
     e2e_uuid: str | None = Form(default=None, description="Optional e2e UUID; defaults to sha256(body)-derived"),
     scan_index: int = Form(
         default=0,
-        description="Volume index in a multi-acquisition .e2e (default 0)",
+        description="Volume index in a multi-acquisition .e2e (default 0); must be 0 for a DICOM",
     ),
     x_muw_inference_token: str | None = Header(default=None),
 ) -> Response:
@@ -256,24 +490,21 @@ async def preprocess(
     shared_tmpdir.mkdir(parents=True, exist_ok=True)
 
     # 2026-06-19 — stream the upload to a tempfile in 64 KiB chunks
-    # while computing sha256 incrementally. Previously `body =
-    # await file.read()` materialised the full 200 MB upload twice
-    # (once in uvicorn's multipart parser, once in the handler) and
-    # then again as `e2e_path.write_bytes(body)`. Streaming drops
-    # ~200 MB of peak RSS on a 197 MB .e2e — enough to keep the
-    # sidecar inside the 1.5 GiB compose mem_limit on a 3.8 GiB
-    # Docker VM.
-
+    # while computing sha256 incrementally (keeps a 200 MB .e2e from being
+    # materialised in memory several times over).
     with tempfile.TemporaryDirectory(prefix="prep_", dir=str(shared_tmpdir)) as td:
         tempdir = Path(td)
-        e2e_path = tempdir / "input.e2e"
+        upload_path = tempdir / "upload.bin"
         total = 0
         hasher = hashlib.sha256()
-        with e2e_path.open("wb") as out:
+        head = b""
+        with upload_path.open("wb") as out:
             while True:
                 chunk = await file.read(65536)
                 if not chunk:
                     break
+                if len(head) < 132:
+                    head += chunk[: 132 - len(head)]
                 out.write(chunk)
                 hasher.update(chunk)
                 total += len(chunk)
@@ -281,93 +512,23 @@ async def preprocess(
             raise HTTPException(status_code=400, detail="file part is empty")
 
         uuid = requested_uuid or _format_uuid_from_digest(hasher.hexdigest())
-        try:
-            out_dir = prepare_bscan_dcm(e2e_path, tempdir, scan_index=scan_index)
-        except FileNotFoundError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        except IndexError as e:
-            # scan_index out of range — surface as 400 so the SPA can show
-            # the operator a clean "this file has N volumes" message.
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        except Exception as e:  # oct-converter / pydicom failure on a bad E2E
-            raise HTTPException(
-                status_code=422, detail=f"E2E -> DICOM conversion failed: {e}"
-            ) from e
-        dcm_bytes = (Path(out_dir) / "bscan.dcm").read_bytes()
-
-        # Pixel geometry must come back to the Java client every call (the
-        # SPA doesn't care about the bind-mount but the runner does); we read
-        # it back out of the DCM the same conversion just wrote so it stays
-        # bit-identical to the headers.
-        ds = pydicom.dcmread(str(Path(out_dir) / "bscan.dcm"))
-        try:
-            bv = read_e2e_volume(e2e_path, scan_index=scan_index)
-        except Exception as e:  # noqa: BLE001 — already converted once, this is best-effort metadata
-            LOG.warning("Geometry read failed on %s: %s", e2e_path, e)
-            bv = None
-
-        # Companion file writes (best-effort; skipped when no store configured).
-        # For scan_index > 0 we use a per-volume subdir so different volumes
-        # from the same .e2e don't overwrite each other's bscan.dcm / fundus.
-        store = _bscan_store_dir()
-        target_dir: Path | None = None
-        if store is not None and bv is not None:
-            # Belt and braces on top of the UUID check: the directory must
-            # still resolve inside the store (a symlinked entry must not lead
-            # the writes elsewhere).
-            sub = os.path.join(uuid, f"scan-{scan_index}") if scan_index > 0 else uuid
-            target_dir = resolve_under(store, sub)
-            if target_dir is None:
-                LOG.warning(
-                    "Companion directory for e2e %s resolves outside the B-scan store; "
-                    "skipping persistence",
-                    uuid,
+        # The content decides, never the filename: DICOM Part-10 = 128-byte
+        # preamble + "DICM".
+        if is_dicom_part10(head):
+            if scan_index != 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="scan_index must be 0 for a DICOM upload (one volume per file)",
                 )
-        if target_dir is not None:
-            try:
-                _persist_bscan_dcm(target_dir / "bscan.dcm", dcm_bytes)
-                fundus_png, fundus_dims = extract_fundus_png(e2e_path, scan_index=scan_index)
-                _persist_fundus_png(target_dir / "fundus.png", fundus_png)
-                geom = build_geometry(
-                    bv, ds, fundus_dims, e2e_path=e2e_path, scan_index=scan_index
-                )
-                _persist_geometry(target_dir / "geometry.json", geom)
-            except Exception as e:  # noqa: BLE001 — never let companion-write failures break the request
-                LOG.warning("Companion persistence failed for %s: %s", uuid, e)
-        elif store is None:
-            LOG.info("bscan_store unset; skipping companion-file persistence for e2e %s", uuid)
-
-        # 2026-06-19 — release the large per-request allocations before
-        # we exit the TemporaryDirectory context. `ds` (a pydicom
-        # Dataset) carries the full PixelData buffer (~192 MB for a
-        # 97×496×512 volume); `bv.volume_u8` carries the quantised
-        # volume (~48 MB). Neither is needed past this point — the
-        # response only needs the response body (`dcm_bytes`, already
-        # read from disk) and a handful of geometry scalars, which we
-        # copy out of `bv` into `geom_headers` before dropping it.
-        geom_headers: dict[str, str] = {}
-        if bv is not None:
-            geom_headers = {
-                "X-MUW-Pixel-Axial-Mm": f"{bv.axial_mm:.8f}",
-                "X-MUW-Pixel-Lateral-Mm": f"{bv.lateral_mm:.8f}",
-                "X-MUW-Pixel-Slice-Mm": f"{bv.slice_mm:.8f}",
-                "X-MUW-Bscan-Dim-Z": str(int(bv.n_bscans)),
-                "X-MUW-Bscan-Dim-Y": str(int(bv.rows)),
-                "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
-            }
-            # 2026-06-23 user-feedback round — surface the .e2e
-            # acquisition date so the Java client can persist it on
-            # the retinal_inference_job row and the nAMD workspace
-            # can plot the trend chart against the real scan date
-            # rather than the upload completion time.
-            if bv.acquisition_date:
-                geom_headers["X-MUW-Acquisition-Date"] = bv.acquisition_date
-        del ds
-        del bv
-        gc.collect()
+            dcm_in = upload_path.rename(tempdir / "input.dcm")
+            dcm_bytes, geom_headers = _convert_dicom(dcm_in, tempdir, uuid, lat)
+        else:
+            e2e_path = upload_path.rename(tempdir / "input.e2e")
+            dcm_bytes, geom_headers = _convert_e2e(e2e_path, tempdir, uuid, scan_index)
 
     LOG.info(
-        "POST /preprocess -> bscan.dcm (%d bytes, laterality=%s, e2e_uuid=%s)",
+        "POST /preprocess (%s) -> bscan.dcm (%d bytes, laterality=%s, e2e_uuid=%s)",
+        geom_headers.get("X-MUW-Source-Format", "?"),
         len(dcm_bytes),
         lat,
         uuid,

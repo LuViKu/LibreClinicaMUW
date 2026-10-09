@@ -65,8 +65,17 @@ export interface IngestItem {
   hasPreview: boolean
   suggestion: IngestSuggestion | null
   twin: IngestTwin | null
-  /** 2026-10-09 — a file a retinal analysis can be started on (today: an OCT volume). */
+  /** 2026-10-09 — a file a retinal analysis can be started on: an OCT volume, `.e2e` or DICOM. */
   analysable?: boolean
+  /**
+   * DR-039 — a DICOM that is an OCT volume (shown as an OCT scan, source
+   * format DICOM). False for everything else, an `.e2e` included (its kind
+   * says it). Optional so older fixtures need not carry it.
+   */
+  octVolume?: boolean
+  /** The file's Manufacturer / ManufacturerModelName; DICOM only. */
+  manufacturer?: string | null
+  manufacturerModel?: string | null
   /**
    * The scan's analyses that are not cancelled — filled in by the visit's
    * image list only; null elsewhere, and null when the lookup failed (then

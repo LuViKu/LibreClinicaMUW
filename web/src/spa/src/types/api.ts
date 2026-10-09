@@ -5188,6 +5188,11 @@ export interface components {
             dicomPath?: string;
             previewPngPath?: string;
             pixelSha256?: string;
+            manufacturer?: string;
+            manufacturerModelName?: string;
+            /** Format: int32 */
+            numberOfFrames?: number;
+            octVolume?: boolean;
         };
         UnbindRequest: {
             dismiss?: boolean;
