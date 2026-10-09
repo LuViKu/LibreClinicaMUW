@@ -3227,7 +3227,9 @@
         "start": "Auswertung starten",
         "starting": "Wird gestartet…",
         "menuHeader": "Fehlende Auswertung",
-        "error": "Auswertung konnte nicht gestartet werden."
+        "error": "Auswertung konnte nicht gestartet werden.",
+        "started": "Auswertung gestartet: {task}",
+        "exists": "Auswertung bereits vorhanden: {task}"
       }
     }
   },

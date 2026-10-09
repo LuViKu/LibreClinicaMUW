@@ -700,6 +700,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                       :subject-label="event?.subjectLabel ?? null"
                       :can-start="mayStartAnalysis"
                       :can-open="mayOpenMetrics"
+                      @changed="loadVisitImages(eventId)"
                     />
                     <button
                       v-if="!visitSealed && mayBindImages"

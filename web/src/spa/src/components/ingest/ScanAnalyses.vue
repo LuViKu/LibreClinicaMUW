@@ -12,12 +12,18 @@
  * Shown only for a file the server marks analysable, and the menu only when
  * the analyses could be listed (`analyses` is an array) and the caller may
  * start one (`canStart`, the same rule as rerun-as).
+ *
+ * A session that may start an analysis but may not open the job page (a
+ * treating clinician in a blinded study, `canOpen` false) is not taken to
+ * the job: the card lists the started analysis with its status, or the one
+ * that was already there, and says so. `changed` asks the page to reload
+ * the list.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRouter } from 'vue-router'
 
-import { startScanAnalysis, type IngestItem } from '@/api/ingest'
+import { startScanAnalysis, type IngestItem, type ScanAnalysis } from '@/api/ingest'
 import { jobRoute, STARTABLE_TASKS, type StartableTask } from '@/lib/retinalJobs'
 import { useErrorsStore } from '@/stores/errors'
 
@@ -32,11 +38,20 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 const router = useRouter()
 const errors = useErrorsStore()
 
-const analyses = computed(() => props.item.analyses ?? [])
+/** Analyses this card started or found, until the page's reloaded list carries them. */
+const local = ref<ScanAnalysis[]>([])
+const analyses = computed<ScanAnalysis[]>(() => {
+  const listed = props.item.analyses ?? []
+  const ids = new Set(listed.map((a) => a.jobId))
+  return [...listed, ...local.value.filter((a) => !ids.has(a.jobId))]
+})
+/** What the last start did, for a session that stays on the page. */
+const notice = ref<{ kind: 'started' | 'exists'; task: string } | null>(null)
 const missing = computed<StartableTask[]>(() => {
   if (!Array.isArray(props.item.analyses)) return []
   const have = new Set(analyses.value.map((a) => a.task))
@@ -45,6 +60,7 @@ const missing = computed<StartableTask[]>(() => {
 const showMenu = computed(() => props.canStart && missing.value.length > 0)
 
 const menuOpen = ref(false)
+
 const starting = ref(false)
 
 function label(kind: 'task' | 'status', value: string): string {
@@ -62,13 +78,28 @@ async function start(task: StartableTask): Promise<void> {
   starting.value = true
   try {
     const res = await startScanAnalysis(props.item.id, task)
-    await router.push(jobRoute(res))
+    if (props.canOpen) {
+      await router.push(jobRoute(res))
+      return
+    }
+    local.value = [...local.value, { jobId: res.jobId, task: res.task || task, status: res.status }]
+    notice.value = { kind: 'started', task }
+    emit('changed')
   } catch (e) {
     const err = e as { status?: number; body?: unknown }
     const body = err.body && typeof err.body === 'object'
       ? (err.body as { existingJobId?: number; subjectLabel?: string; message?: string })
       : null
     if (typeof body?.existingJobId === 'number' && body.existingJobId > 0) {
+      if (!props.canOpen) {
+        // Already there: show it rather than open a page this session may not see.
+        if (!analyses.value.some((a) => a.jobId === body.existingJobId)) {
+          local.value = [...local.value, { jobId: body.existingJobId, task, status: '' }]
+        }
+        notice.value = { kind: 'exists', task }
+        emit('changed')
+        return
+      }
       await router.push(jobRoute({
         jobId: body.existingJobId,
         subjectLabel: body.subjectLabel ?? props.subjectLabel,
@@ -99,11 +130,15 @@ async function start(task: StartableTask): Promise<void> {
           :data-testid="`scan-analysis-link-${a.jobId}`"
         >{{ label('task', a.task) }}</RouterLink>
         <span v-else>{{ label('task', a.task) }}</span>
-        <span class="text-slate-400">· {{ label('status', a.status) }}</span>
+        <span v-if="a.status" class="text-slate-400">· {{ label('status', a.status) }}</span>
       </li>
     </ul>
     <p v-else-if="Array.isArray(item.analyses)" class="text-slate-400 italic" data-testid="scan-analyses-none">
       {{ t('eventDetail.images.analyses.none') }}
+    </p>
+
+    <p v-if="notice" class="mt-1 text-slate-500" role="status" data-testid="scan-analyses-notice">
+      {{ t(`eventDetail.images.analyses.${notice.kind}`, { task: label('task', notice.task) }) }}
     </p>
 
     <div v-if="showMenu" class="relative mt-1" data-testid="scan-analyses-start">

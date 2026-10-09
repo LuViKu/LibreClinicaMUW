@@ -3227,7 +3227,9 @@
         "start": "Start analysis",
         "starting": "Starting…",
         "menuHeader": "Missing analysis",
-        "error": "The analysis could not be started."
+        "error": "The analysis could not be started.",
+        "started": "Analysis started: {task}",
+        "exists": "Analysis already there: {task}"
       }
     }
   },
