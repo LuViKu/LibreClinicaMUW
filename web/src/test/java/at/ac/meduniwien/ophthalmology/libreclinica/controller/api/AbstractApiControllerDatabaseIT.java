@@ -151,7 +151,7 @@ public abstract class AbstractApiControllerDatabaseIT {
                 .withPassword("clinica");
         POSTGRES.start();
 
-        SimpleDriverDataSource ds = new SimpleDriverDataSource();
+        SimpleDriverDataSource ds = new RefusalTolerantDataSource();
         ds.setDriver(new org.postgresql.Driver());
         ds.setUrl(POSTGRES.getJdbcUrl());
         ds.setUsername(POSTGRES.getUsername());
