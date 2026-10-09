@@ -89,13 +89,11 @@ public class ApiExceptionHandler {
     })
     public ResponseEntity<ValidationErrorBody> handleBadRequest(Exception e) {
         LOG.debug("API 400 bad request: {}", e.getMessage());
-        // Fixed messages for the framework exceptions: Spring's text for an
-        // empty body embeds the controller method signature and Jackson's
-        // embeds parser internals; neither belongs on the wire.
+        // Fixed messages for the framework exceptions: Spring's own text names
+        // the controller method or the parameter's Java type, which does not
+        // belong on the wire. (An unreadable body has its own handler below.)
         String message;
-        if (e instanceof HttpMessageNotReadableException) {
-            message = "Malformed or missing request body.";
-        } else if (e instanceof MethodArgumentTypeMismatchException mm) {
+        if (e instanceof MethodArgumentTypeMismatchException mm) {
             message = "Invalid value for parameter '" + mm.getName() + "'.";
         } else if (e instanceof MissingServletRequestParameterException mp) {
             message = "Missing required request parameter: '" + mp.getParameterName() + "'.";
