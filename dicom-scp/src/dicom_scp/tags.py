@@ -93,6 +93,12 @@ def extract(ds: Dataset, source_ae: str) -> dict:
         "laterality": laterality(ds),
         "sourceAeTitle": source_ae or None,
         "pixelSha256": pixel_sha256(ds),
+        # DR-039 — device and OCT-volume classification, as describe() reports
+        # them, so a C-STOREd OCT volume is analysable like an uploaded one.
+        "manufacturer": _s(ds, "Manufacturer"),
+        "manufacturerModelName": _s(ds, "ManufacturerModelName"),
+        "numberOfFrames": number_of_frames(ds),
+        "octVolume": is_oct_volume(ds),
     }
 
 

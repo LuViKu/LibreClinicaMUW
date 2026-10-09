@@ -126,6 +126,20 @@ def test_describe_a_malformed_frame_count_is_none_and_not_a_volume():
     assert d["octVolume"] is False
 
 
+def test_extract_carries_the_device_and_the_oct_volume_verdict():
+    p = tags.extract(_ds(SOPClassUID=_OPT_SOP, Modality="OPT", NumberOfFrames="97",
+                         Manufacturer="Heidelberg Engineering",
+                         ManufacturerModelName="SPECTRALIS"), "SPECTRALIS_AE")
+    assert p["numberOfFrames"] == 97
+    assert p["octVolume"] is True
+    assert p["manufacturer"] == "Heidelberg Engineering"
+    assert p["manufacturerModelName"] == "SPECTRALIS"
+    q = tags.extract(_ds(SOPInstanceUID="1.2.3"), "")
+    assert q["octVolume"] is False
+    assert q["numberOfFrames"] is None
+    assert q["manufacturer"] is None
+
+
 def test_laterality_accepts_ophthalmic_codes_in_laterality():
     # A third-party .e2e -> DICOM converter writes Laterality = "OD" (not R/L)
     # and no ImageLaterality.
