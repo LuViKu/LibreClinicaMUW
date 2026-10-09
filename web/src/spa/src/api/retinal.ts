@@ -104,6 +104,17 @@ export interface RetinalJobDetail {
   visitDate?: string | null
   /** Every live analysis of the same scan, this one included, oldest first. */
   siblings?: RetinalJobSibling[]
+  /** Why the job stopped (failed / cancelled); null otherwise. Optional for older fixtures. */
+  statusMessage?: string | null
+  /**
+   * DR-039 — what the preprocess step reported about the scan: the format
+   * it arrived in, the recording device and, for a DICOM, how its pixel
+   * spacing was read. Null for jobs that ran before this was recorded.
+   */
+  sourceFormat?: ScanSourceFormat | null
+  deviceManufacturer?: string | null
+  deviceModel?: string | null
+  spacingOrder?: SpacingOrder | null
 }
 
 /** Another analysis of the scan a job read. */
@@ -282,12 +293,16 @@ export interface SdRetinaNetPayload {
  *   - mm → fundus px (slice):   multiply by {@code 1 / slice_mm_per_px}
  */
 export interface GeometryJson {
+  /**
+   * DR-039 — null for a DICOM source: a DICOM OCT volume carries no SLO, so
+   * there is no fundus.png and nothing to place the B-scans on.
+   */
   fundus: {
     width_px: number
     height_px: number
     lateral_mm_per_px: number
     slice_mm_per_px: number
-  }
+  } | null
   bscan: {
     dim_x_ascans: number
     dim_y_rows: number
@@ -296,7 +311,10 @@ export interface GeometryJson {
     pixel_lateral_mm: number
     pixel_slice_mm: number
   }
-  /** One polyline per B-scan in fundus-pixel space; `z` is the slice index. */
+  /**
+   * One polyline per B-scan in fundus-pixel space; `z` is the slice index.
+   * Empty for a DICOM source.
+   */
   bscan_positions_fundus_px: Array<{
     z: number
     x1: number
@@ -304,18 +322,18 @@ export interface GeometryJson {
     x2: number
     y2: number
   }>
-  /** Bounding box of the OCT scan footprint on the fundus image (fundus px). */
+  /** Bounding box of the OCT scan footprint on the fundus image (fundus px); null for a DICOM source. */
   scan_bbox_fundus_px: {
     x: number
     y: number
     width: number
     height: number
-  }
+  } | null
   /**
    * Fovea estimate — MVP uses {@code volume-center-mvp} (volume center +
    * B-scan/A-scan derivation). Future replacement (true detection) will
    * change the {@code source} string only; consumers should not rely on
-   * the value for medical decision-making.
+   * the value for medical decision-making. Null for a DICOM source.
    */
   fovea_estimate_fundus_px: {
     x: number
@@ -323,7 +341,31 @@ export interface GeometryJson {
     bscan_z: number
     ascan_x: number
     source: string
-  }
+  } | null
+  /** DR-039 — the format the scan arrived in; absent in geometry written before it. */
+  source_format?: ScanSourceFormat
+  /** DR-039 — how a DICOM's PixelSpacing was read; `.e2e` writes "standard". */
+  spacing_order?: SpacingOrder
+  /** DR-039 — the recording device, from the file. */
+  device?: { manufacturer: string | null; model: string | null } | null
+}
+
+/** DR-039 — `e2e` or `dicom`. */
+export type ScanSourceFormat = 'e2e' | 'dicom'
+
+/**
+ * DR-039 — how a DICOM's PixelSpacing pair was read: `standard` [axial,
+ * lateral]; `swapped` [lateral, axial] (a third-party converter's order,
+ * resolved physically for Heidelberg); `standard-assumed` (another vendor,
+ * taken as stored).
+ */
+export type SpacingOrder = 'standard' | 'swapped' | 'standard-assumed'
+
+/** Geometry that can be drawn on a fundus image: an `.e2e` source's. */
+export type FundusGeometryJson = GeometryJson & {
+  fundus: NonNullable<GeometryJson['fundus']>
+  scan_bbox_fundus_px: NonNullable<GeometryJson['scan_bbox_fundus_px']>
+  fovea_estimate_fundus_px: NonNullable<GeometryJson['fovea_estimate_fundus_px']>
 }
 
 const BASE = '/pages/api/v1/retinal-jobs'

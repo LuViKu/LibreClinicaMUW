@@ -436,7 +436,8 @@ describe('EventDetailView — analyses of a filed scan', () => {
     apiPostMock.mockReset()
   })
 
-  async function mountWithScan(role: UserRole, status: EventDetailDto['status'] = 'scheduled') {
+  async function mountWithScan(role: UserRole, status: EventDetailDto['status'] = 'scheduled',
+                              scan: Record<string, unknown> = {}) {
     apiGetMock.mockImplementation((url: string) =>
       url.includes('/ingest/by-event/')
         ? Promise.resolve({
@@ -444,7 +445,7 @@ describe('EventDetailView — analyses of a filed scan', () => {
               laterality: 'OD', acquisitionDate: null, acquisitionDateSource: null, modality: null,
               originalFilename: null, byteSize: null, scanIndex: 0, receivedAt: null,
               previewUrl: '/pages/api/v1/ingest/6/preview', hasPreview: false, suggestion: null, twin: null,
-              analysable: true, analyses: [{ jobId: 9, task: 'fluid', status: 'done' }] }],
+              analysable: true, analyses: [{ jobId: 9, task: 'fluid', status: 'done' }], ...scan }],
             studyEventId: 42, pendingForSubject: 0, plan: [],
           })
         : Promise.resolve({ ...TWO_ROWS, status }),
@@ -467,5 +468,18 @@ describe('EventDetailView — analyses of a filed scan', () => {
   it('offers no start on a signed visit', async () => {
     const w = await mountWithScan('Investigator', 'signed')
     expect(w.find('[data-testid="scan-analyses-start"]').exists()).toBe(false)
+  })
+
+  it('names a DICOM OCT volume an OCT scan from a DICOM, and offers its analyses (DR-039)', async () => {
+    const w = await mountWithScan('Investigator', 'scheduled', { kind: 'dicom', octVolume: true })
+    expect(w.find('[data-testid="event-detail-image-kind-6"]').text()).toContain('DICOM')
+    expect(w.find('[data-testid="event-detail-image-kind-6"]').text()).not.toBe('dicom')
+    expect(w.find('[data-testid="scan-analyses-6"]').exists()).toBe(true)
+    expect(w.find('[data-testid="scan-analyses-start"]').exists()).toBe(true)
+  })
+
+  it('keeps an .e2e named by its kind', async () => {
+    const w = await mountWithScan('Investigator')
+    expect(w.find('[data-testid="event-detail-image-kind-6"]').text()).toBe('e2e')
   })
 })

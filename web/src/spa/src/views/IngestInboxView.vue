@@ -15,6 +15,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ingestKindLabel } from '@/lib/ingestKind'
 
 import AssignIngestDialog from '@/components/ingest/AssignIngestDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
@@ -456,7 +457,7 @@ async function onDismissSelected(): Promise<void> {
           <!-- An OCT volume has no preview until the pipeline renders one; say
                what it is rather than showing an empty frame. -->
           <span v-else class="text-[12px] text-slate-500 px-3 text-center">
-            {{ t(`ingestInbox.kind.${row.kind}`) }}<template v-if="size(row)"> · {{ size(row) }}</template>
+            {{ ingestKindLabel(t, row) }}<template v-if="size(row)"> · {{ size(row) }}</template>
           </span>
           <label class="absolute top-2 left-2 bg-white/90 rounded-md px-1.5 py-1 ring-1 ring-slate-200">
             <input
@@ -492,7 +493,7 @@ async function onDismissSelected(): Promise<void> {
             <span v-else>—</span>
           </div>
           <div class="text-[11px] text-slate-500 mt-0.5 uppercase tracking-wide">
-            {{ t(`ingestInbox.kind.${row.kind}`) }}
+            {{ ingestKindLabel(t, row) }}
             <template v-if="row.device"> · {{ row.device }}</template>
             <template v-if="row.receivedAt"> · {{ row.receivedAt.slice(0, 10) }}</template>
           </div>

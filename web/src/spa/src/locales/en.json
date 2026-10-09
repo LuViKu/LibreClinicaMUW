@@ -3718,6 +3718,9 @@
       "unfiledNoLabel": "The same picture is already waiting in the inbox without a label (file #{id}).",
       "dismissed": "The same picture was already dismissed (file #{id}).",
       "bindAnyway": "File this one anyway?"
+    },
+    "sourceFormat": {
+      "dicom": "DICOM"
     }
   },
   "imagingModalities": {
@@ -4148,7 +4151,20 @@
         "OS": "OS · left eye",
         "OD": "OD · right eye",
         "OU": "OU · both eyes"
-      }
+      },
+      "sourceLabel": "Source:",
+      "deviceLabel": "Device:",
+      "spacingLabel": "Pixel spacing:",
+      "sourceFormat": {
+        "e2e": "E2E",
+        "dicom": "DICOM"
+      },
+      "spacingOrder": {
+        "standard": "standard order",
+        "swapped": "stored swapped, resolved physically",
+        "standard-assumed": "taken as stored (not checked)"
+      },
+      "statusMessageLabel": "Reason:"
     },
     "status": {
       "queued": "Queued",
@@ -4182,7 +4198,8 @@
       "noKpi": "No KPI yet.",
       "fundusNotAvailable": "Fundus image not yet available.",
       "bscanNotAvailable": "OCT B-scan not yet available.",
-      "noPerBscan": "No per-B-scan trace for this task."
+      "noPerBscan": "No per-B-scan trace for this task.",
+      "noSloInDicom": "No SLO image in the DICOM file"
     },
     "kpi": {
       "irf": "IRF",

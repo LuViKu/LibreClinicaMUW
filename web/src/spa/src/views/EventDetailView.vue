@@ -24,6 +24,7 @@ import { fieldNoteSummary, notesOnField } from '@/lib/fieldNotes'
 import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
 import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
 import ScanAnalyses from '@/components/ingest/ScanAnalyses.vue'
+import { ingestKindLabel, isDicomOctVolume } from '@/lib/ingestKind'
 import { userMayViewRetinalMetrics } from '@/lib/retinalAccess'
 import RemoveEventCrfDialog from '@/components/RemoveEventCrfDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
@@ -687,7 +688,8 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                   </div>
                   <div class="mt-1 text-[11px] leading-tight text-slate-600">
                     <div>
-                      <span class="font-mono uppercase">{{ img.kind }}</span>
+                      <span class="font-mono uppercase" :data-testid="`event-detail-image-kind-${img.id}`">{{
+                        isDicomOctVolume(img) ? ingestKindLabel(t, img) : img.kind }}</span>
                       <span v-if="img.device"> · {{ img.device }}</span>
                     </div>
                     <div class="text-slate-500">

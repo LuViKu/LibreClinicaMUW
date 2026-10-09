@@ -89,6 +89,21 @@ describe('ScanAnalyses', () => {
     expect(w.find('[data-testid="scan-analyses-list"]').text()).toContain('Flüssigkeit')
   })
 
+  it('offers the menu for a DICOM OCT volume too (DR-039)', async () => {
+    const w = await mountCard({
+      item: item({ kind: 'dicom', octVolume: true, originalFilename: 'a.dcm', analyses: [] }),
+    })
+    expect(w.find('[data-testid="scan-analyses-55"]').exists()).toBe(true)
+    await w.find('[data-testid="scan-analyses-start"] button').trigger('click')
+    const offered = w.findAll('[data-testid^="scan-analyses-task-"]').map((b) => b.attributes('data-testid'))
+    expect(offered).toEqual(['fluid', 'ga', 'onl', 'pr', 'layers', 'sdretinanet'].map((x) => `scan-analyses-task-${x}`))
+  })
+
+  it('shows nothing for a DICOM that is not an OCT volume', async () => {
+    const w = await mountCard({ item: item({ kind: 'dicom', octVolume: false, analysable: false, analyses: null }) })
+    expect(w.find('[data-testid="scan-analyses-55"]').exists()).toBe(false)
+  })
+
   it('shows nothing for a file that is not an OCT volume', async () => {
     const w = await mountCard({ item: item({ kind: 'image', analysable: false, analyses: null }) })
     expect(w.find('[data-testid="scan-analyses-55"]').exists()).toBe(false)

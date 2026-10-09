@@ -16,6 +16,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ingestKindLabel } from '@/lib/ingestKind'
 import { RouterLink } from 'vue-router'
 
 import { listIngestInbox, type IngestItem } from '@/api/ingest'
@@ -79,7 +80,7 @@ watch(() => props.studySubjectId, load)
           data-testid="unbound-item-row"
         >
           <span class="font-medium text-slate-700">
-            {{ t(`ingestInbox.kind.${item.kind}`) }}
+            {{ ingestKindLabel(t, item) }}
           </span>
           <span v-if="item.laterality">· {{ item.laterality }}</span>
           <span v-if="item.acquisitionDate">· {{ item.acquisitionDate }}</span>

@@ -3718,6 +3718,9 @@
       "unfiledNoLabel": "Dasselbe Bild wartet bereits ohne Kennung im Eingang (Datei #{id}).",
       "dismissed": "Dasselbe Bild wurde bereits verworfen (Datei #{id}).",
       "bindAnyway": "Diese Datei trotzdem zuordnen?"
+    },
+    "sourceFormat": {
+      "dicom": "DICOM"
     }
   },
   "imagingModalities": {
@@ -4148,7 +4151,20 @@
         "OS": "OS · linkes Auge",
         "OD": "OD · rechtes Auge",
         "OU": "OU · beide Augen"
-      }
+      },
+      "sourceLabel": "Quelle:",
+      "deviceLabel": "Gerät:",
+      "spacingLabel": "Pixelabstand:",
+      "sourceFormat": {
+        "e2e": "E2E",
+        "dicom": "DICOM"
+      },
+      "spacingOrder": {
+        "standard": "Standardreihenfolge",
+        "swapped": "vertauscht gespeichert, physikalisch aufgelöst",
+        "standard-assumed": "wie gespeichert übernommen (nicht geprüft)"
+      },
+      "statusMessageLabel": "Grund:"
     },
     "live": {
       "indicator": "Live"
@@ -4185,7 +4201,8 @@
       "noKpi": "Noch keine Kennzahlen.",
       "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
       "bscanNotAvailable": "OCT-B-Scan ist noch nicht verfügbar.",
-      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
+      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung.",
+      "noSloInDicom": "Kein SLO-Bild in der DICOM-Datei"
     },
     "kpi": {
       "irf": "IRF",

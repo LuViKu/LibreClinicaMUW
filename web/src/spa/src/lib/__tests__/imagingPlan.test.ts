@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   RETINAL_TASK_OPTIONS,
+  acceptsOctVolumes,
   buildPlanRows,
+  requiredFor,
   requiredTasksOf,
   toWriteEntries,
   toggleTask,
@@ -51,13 +53,15 @@ function entry(overrides: Partial<ImagingPlanEntry>): ImagingPlanEntry {
 const OCT = modality({})
 const CLARUS = modality({ id: 2, code: 'CLARUS', device: 'clarus', kindsAccepted: 'dicom,image', ordinal: 2 })
 const RETIRED = modality({ id: 3, code: 'OLD', statusId: 5, ordinal: 3 })
+const REMIDIO = modality({ id: 4, code: 'REMIDIO', device: 'remidio', kindsAccepted: 'image', ordinal: 4 })
 
 describe('buildPlanRows', () => {
   it('lists every active modality, included only where the plan names it', () => {
     const rows = buildPlanRows([OCT, CLARUS, RETIRED], [entry({})])
     expect(rows.map((r) => r.code)).toEqual(['OCT', 'CLARUS'])
-    expect(rows[0]).toMatchObject({ included: true, requirement: 'required', laterality: 'OU', tasks: ['fluid'], acceptsE2e: true })
-    expect(rows[1]).toMatchObject({ included: false, requirement: 'optional', laterality: '', tasks: [], acceptsE2e: false })
+    expect(rows[0]).toMatchObject({ included: true, requirement: 'required', laterality: 'OU', tasks: ['fluid'], acceptsE2e: true, acceptsOctVolumes: true })
+    // DR-039 — a DICOM-accepting modality can receive an OCT volume.
+    expect(rows[1]).toMatchObject({ included: false, requirement: 'optional', laterality: '', tasks: [], acceptsE2e: false, acceptsOctVolumes: true })
   })
 
   it('keeps a retired modality visible while the plan still names it', () => {
@@ -69,20 +73,48 @@ describe('buildPlanRows', () => {
   it('appends an entry whose modality is missing from the catalogue list rather than dropping it', () => {
     const rows = buildPlanRows([OCT], [entry({ modalityId: 9, code: 'GHOST', kindsAccepted: '' })])
     expect(rows.map((r) => r.code)).toEqual(['OCT', 'GHOST'])
-    expect(rows[1]).toMatchObject({ included: true, acceptsE2e: false })
+    expect(rows[1]).toMatchObject({ included: true, acceptsE2e: false, acceptsOctVolumes: false })
+  })
+})
+
+describe('acceptsOctVolumes (DR-039)', () => {
+  it('is .e2e or DICOM, and nothing else', () => {
+    expect(acceptsOctVolumes('e2e')).toBe(true)
+    expect(acceptsOctVolumes('dicom,image')).toBe(true)
+    expect(acceptsOctVolumes(' DICOM ')).toBe(true)
+    expect(acceptsOctVolumes('image,other')).toBe(false)
+    expect(acceptsOctVolumes('')).toBe(false)
+    expect(acceptsOctVolumes(null)).toBe(false)
+  })
+
+  it('forces module-required tasks only onto .e2e rows', () => {
+    expect(requiredFor({ acceptsE2e: true }, ['fluid'])).toEqual(['fluid'])
+    expect(requiredFor({ acceptsE2e: false }, ['fluid'])).toEqual([])
   })
 })
 
 describe('toWriteEntries', () => {
-  it('sends included rows only, strips tasks from non-OCT rows and forces required tasks onto OCT rows', () => {
-    const rows = buildPlanRows([OCT, CLARUS], [
+  it('sends included rows only, strips tasks where no OCT volume can arrive and forces required tasks onto .e2e rows', () => {
+    const rows = buildPlanRows([OCT, CLARUS, REMIDIO], [
       entry({ tasks: ['layers'] }),
-      entry({ modalityId: 2, code: 'CLARUS', kindsAccepted: 'dicom', laterality: null, requirement: 'optional', tasks: [] }),
+      entry({ modalityId: 2, code: 'CLARUS', kindsAccepted: 'dicom,image', laterality: null, requirement: 'optional', tasks: [] }),
+      entry({ modalityId: 4, code: 'REMIDIO', kindsAccepted: 'image', laterality: null, requirement: 'optional', tasks: [] }),
     ])
-    rows[1].tasks = ['fluid'] // nonsense the UI never allows; must not leak out
+    rows[2].tasks = ['fluid'] // nonsense the UI never allows; must not leak out
     expect(toWriteEntries(rows, ['fluid'])).toEqual([
       { modalityId: 1, requirement: 'required', laterality: 'OU', tasks: ['fluid', 'layers'] },
+      // A DICOM row keeps an existing plan as it was: nothing forced onto it.
       { modalityId: 2, requirement: 'optional', laterality: null, tasks: [] },
+      { modalityId: 4, requirement: 'optional', laterality: null, tasks: [] },
+    ])
+  })
+
+  it('sends the tasks an operator chose on a DICOM row (DR-039)', () => {
+    const rows = buildPlanRows([OCT, CLARUS], [
+      entry({ modalityId: 2, code: 'CLARUS', kindsAccepted: 'dicom,image', laterality: null, requirement: 'optional', tasks: ['ga'] }),
+    ])
+    expect(toWriteEntries(rows, ['fluid'])).toEqual([
+      { modalityId: 2, requirement: 'optional', laterality: null, tasks: ['ga'] },
     ])
   })
 

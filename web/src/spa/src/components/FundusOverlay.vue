@@ -31,7 +31,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { GeometryJson } from '@/api/retinal'
+import type { FundusGeometryJson } from '@/api/retinal'
 import { artifactUrl } from '@/api/retinal'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 
@@ -65,7 +65,7 @@ interface Props {
   /** Absolute URL of the {@code fundus.png} companion. */
   fundusUrl: string
   /** Parsed {@code geometry.json}. */
-  geometry: GeometryJson
+  geometry: FundusGeometryJson
   /** Wave 2 output_payload (per-task shape). */
   payload: Record<string, unknown>
   /** Task discriminator selecting the per-B-scan indicator strategy. */
