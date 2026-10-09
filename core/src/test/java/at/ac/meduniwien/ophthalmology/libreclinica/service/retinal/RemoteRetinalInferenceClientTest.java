@@ -51,6 +51,7 @@ public class RemoteRetinalInferenceClientTest {
     private int port;
     private Path e2eFile;
     private TestClient client;
+    private final java.util.List<Path> tempDirs = new java.util.ArrayList<>();
 
     /** Overridable wrapper so the test can inject config without touching the
      *  static {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources}. */
@@ -90,6 +91,7 @@ public class RemoteRetinalInferenceClientTest {
     public void tearDown() throws IOException {
         if (server != null) server.stop(0);
         if (e2eFile != null) Files.deleteIfExists(e2eFile);
+        for (Path d : tempDirs) deleteTree(d);
     }
 
     private void registerJsonHandler(String path, int status, String body,
@@ -515,5 +517,235 @@ public class RemoteRetinalInferenceClientTest {
         } finally {
             deleteTree(store);
         }
+    }
+
+    // --- DR-039: DICOM OCT volumes -------------------------------------------
+
+    /** A stored DICOM OCT volume, named like an ingest upload. */
+    private Path dicomFile() throws IOException {
+        Path dir = Files.createTempDirectory("ingest-dicom-");
+        tempDirs.add(dir);
+        Path f = dir.resolve("5a1c7e2b-1111-4a2b-9c3d-0e4f5a6b7c8d.dcm");
+        Files.write(f, fakeDicom("PSEUDONYMISED-VENDOR-DICOM"));
+        return f;
+    }
+
+    private static Map<String, String> dicomHeaders(String deviceTasks) {
+        Map<String, String> h = new HashMap<>();
+        h.put(PixelGeometry.HEADER_AXIAL_MM, "0.00387");
+        h.put(PixelGeometry.HEADER_LATERAL_MM, "0.00582");
+        h.put(PixelGeometry.HEADER_SLICE_MM, "0.06213");
+        h.put(PixelGeometry.HEADER_DIM_Z, "97");
+        h.put(PixelGeometry.HEADER_DIM_Y, "496");
+        h.put(PixelGeometry.HEADER_DIM_X, "1024");
+        h.put(ScanSource.HEADER_SOURCE_FORMAT, "dicom");
+        h.put(ScanSource.HEADER_MANUFACTURER, "Carl Zeiss Meditec");
+        h.put(ScanSource.HEADER_MODEL, "CIRRUS HD-OCT 5000");
+        h.put(ScanSource.HEADER_DEVICE_TASKS, deviceTasks);
+        h.put(ScanSource.HEADER_LATERALITY, "OS");
+        h.put(ScanSource.HEADER_SPACING_ORDER, "standard-assumed");
+        return h;
+    }
+
+    /** /preprocess stub that records the request body and answers with the normalised DICOM. */
+    private AtomicReference<byte[]> preprocessReturning(int status, byte[] payload, String contentType,
+                                                        Map<String, String> headers) {
+        AtomicReference<byte[]> body = new AtomicReference<>();
+        server.createContext("/preprocess", exchange -> {
+            try (var in = exchange.getRequestBody()) {
+                body.set(in.readAllBytes());
+            }
+            exchange.getResponseHeaders().set("Content-Type", contentType);
+            headers.forEach((k, v) -> exchange.getResponseHeaders().set(k, v));
+            exchange.sendResponseHeaders(status, payload.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(payload);
+            }
+        });
+        return body;
+    }
+
+    private static String formField(byte[] multipart, String name) {
+        String s = new String(multipart, StandardCharsets.ISO_8859_1);
+        int at = s.indexOf("name=\"" + name + "\"");
+        if (at < 0) return null;
+        int start = s.indexOf("\r\n\r\n", at) + 4;
+        int end = s.indexOf("\r\n", start);
+        return s.substring(start, end);
+    }
+
+    @Test
+    public void dicom_goesToPreprocessWithTheArtifactKeyAndScanIndexZero() throws IOException {
+        Path dcm = dicomFile();
+        AtomicReference<byte[]> prepBody = preprocessReturning(200, fakeDicom("NORMALISED-BSCAN"),
+                "application/dicom", dicomHeaders("fluid,ga,layers"));
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+
+        RemoteRunResult result = client.runRemote(21L, "fluid", dcm.toString(), "OU", 3);
+
+        assertNotNull(result);
+        assertEquals(RetinalArtifactKey.of(dcm.toString()), formField(prepBody.get(), "e2e_uuid"));
+        assertEquals("0", formField(prepBody.get(), "scan_index"));
+        assertNull("OU is not an eye the sidecar accepts; the file's own eye decides",
+                formField(prepBody.get(), "laterality"));
+        String run = new String(runBody.get(), StandardCharsets.ISO_8859_1);
+        assertTrue("the cluster gets the normalised volume", run.contains("NORMALISED-BSCAN"));
+        assertFalse("never the stored file", run.contains("PSEUDONYMISED-VENDOR-DICOM"));
+        assertEquals("the sidecar's resolved eye", "OS", formField(runBody.get(), "laterality"));
+        assertEquals("0", formField(runBody.get(), "scan_index"));
+        assertNotNull(result.source());
+        assertEquals("dicom", result.source().sourceFormat());
+        assertEquals("Carl Zeiss Meditec", result.source().manufacturer());
+        assertEquals("CIRRUS HD-OCT 5000", result.source().model());
+        assertEquals("standard-assumed", result.source().spacingOrder());
+        assertEquals(97, result.geometry().dimZ());
+    }
+
+    @Test
+    public void dicom_passesASingleEyeThrough() throws IOException {
+        Path dcm = dicomFile();
+        AtomicReference<byte[]> prepBody = preprocessReturning(200, fakeDicom("NORMALISED-BSCAN"),
+                "application/dicom", dicomHeaders("fluid"));
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), new AtomicReference<>());
+        client.prepUrl = client.url;
+
+        assertNotNull(client.runRemote(22L, "fluid", dcm.toString(), "os", 0));
+        assertEquals("OS", formField(prepBody.get(), "laterality"));
+    }
+
+    @Test
+    public void dicom_unsupportedDevice_isNotSentToTheClusterAndSaysWhy() throws IOException {
+        Path dcm = dicomFile();
+        preprocessReturning(200, fakeDicom("NORMALISED-BSCAN"), "application/dicom", dicomHeaders(""));
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+
+        try {
+            client.runRemote(23L, "fluid", dcm.toString(), "OD", 0);
+            org.junit.Assert.fail("a task not validated for the device must be refused");
+        } catch (RetinalRunRefused refused) {
+            assertEquals("unsupported_device", refused.code());
+            assertTrue(refused.getMessage(), refused.getMessage().startsWith(
+                    "fluid is validated for Heidelberg Spectralis only; this scan is from "
+                            + "Carl Zeiss Meditec CIRRUS HD-OCT 5000."));
+            assertNotNull("the device is known even though nothing ran", refused.source());
+            assertEquals("Carl Zeiss Meditec", refused.source().manufacturer());
+        }
+        assertNull("/run must not be called", runBody.get());
+    }
+
+    @Test
+    public void dicom_aTaskOutsideTheDevicesListIsRefusedToo() throws IOException {
+        Path dcm = dicomFile();
+        preprocessReturning(200, fakeDicom("NORMALISED-BSCAN"), "application/dicom", dicomHeaders("ga"));
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+        try {
+            client.runRemote(24L, "fluid", dcm.toString(), "OD", 0);
+            org.junit.Assert.fail("expected a refusal");
+        } catch (RetinalRunRefused refused) {
+            assertTrue(refused.getMessage(), refused.getMessage().contains("Validated for this device: ga."));
+        }
+        assertNull(runBody.get());
+    }
+
+    @Test
+    public void dicom_withoutDeviceHeaders_isRefusedNotSent() throws IOException {
+        Path dcm = dicomFile();
+        Map<String, String> h = dicomHeaders("fluid");
+        h.remove(ScanSource.HEADER_DEVICE_TASKS);
+        preprocessReturning(200, fakeDicom("NORMALISED-BSCAN"), "application/dicom", h);
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+        try {
+            client.runRemote(25L, "fluid", dcm.toString(), "OD", 0);
+            org.junit.Assert.fail("expected a refusal");
+        } catch (RetinalRunRefused refused) {
+            assertEquals("device_unknown", refused.code());
+        }
+        assertNull(runBody.get());
+    }
+
+    @Test
+    public void dicom_withoutAPreprocessService_isNeverPostedRaw() throws IOException {
+        Path dcm = dicomFile();
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = "";
+        try {
+            client.runRemote(26L, "fluid", dcm.toString(), "OD", 0);
+            org.junit.Assert.fail("expected a refusal");
+        } catch (RetinalRunRefused refused) {
+            assertEquals("preprocess_unavailable", refused.code());
+        }
+        assertNull("the stored DICOM must not leave the VM", runBody.get());
+    }
+
+    @Test
+    public void preprocess422_detailMessageBecomesTheRefusal() throws IOException {
+        Path dcm = dicomFile();
+        String body = "{\"detail\":{\"error\":\"laterality_missing\","
+                + "\"message\":\"The volume names no single eye; send laterality OD or OS.\"}}";
+        preprocessReturning(422, body.getBytes(StandardCharsets.UTF_8), "application/json", Map.of());
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+        try {
+            client.runRemote(27L, "fluid", dcm.toString(), "OU", 0);
+            org.junit.Assert.fail("expected a refusal");
+        } catch (RetinalRunRefused refused) {
+            assertEquals("laterality_missing", refused.code());
+            assertEquals("The volume names no single eye; send laterality OD or OS.", refused.getMessage());
+        }
+        assertNull(runBody.get());
+    }
+
+    @Test
+    public void run422_detailMessageBecomesTheRefusal() {
+        String body = "{\"detail\":{\"error\":\"unsupported_device\","
+                + "\"message\":\"Task 'fluid' is validated only for Heidelberg Engineering Spectralis volumes.\","
+                + "\"task\":\"fluid\"}}";
+        registerJsonHandler("/run", 422, body, null);
+        try {
+            client.runRemote(28L, "fluid", e2eFile.toString(), "OD");
+            org.junit.Assert.fail("expected a refusal");
+        } catch (RetinalRunRefused refused) {
+            assertEquals("unsupported_device", refused.code());
+            assertEquals("Task 'fluid' is validated only for Heidelberg Engineering Spectralis volumes.",
+                    refused.getMessage());
+        }
+    }
+
+    @Test
+    public void run422_withAStringDetail_staysAnOutage() {
+        registerJsonHandler("/run", 422, "{\"detail\":\"scan_index out of range\"}", null);
+        assertNull(client.runRemote(29L, "fluid", e2eFile.toString(), "OD"));
+    }
+
+    @Test
+    public void e2e_isNotDeviceGated_andKeepsItsLateralityAndScanIndex() throws IOException {
+        Map<String, String> h = dicomHeaders("");
+        h.put(ScanSource.HEADER_SOURCE_FORMAT, "e2e");
+        h.remove(ScanSource.HEADER_LATERALITY);
+        AtomicReference<byte[]> prepBody = preprocessReturning(200, fakeDicom("NORMALISED-BSCAN"),
+                "application/dicom", h);
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+
+        RemoteRunResult result = client.runRemote(30L, "fluid", e2eFile.toString(), "OU", 2);
+
+        assertNotNull("an .e2e runs whatever the device list says", result);
+        assertEquals(RetinalArtifactKey.of(e2eFile.toString()), formField(prepBody.get(), "e2e_uuid"));
+        assertEquals("OU", formField(prepBody.get(), "laterality"));
+        assertEquals("2", formField(prepBody.get(), "scan_index"));
+        assertEquals("OU", formField(runBody.get(), "laterality"));
+        assertEquals("2", formField(runBody.get(), "scan_index"));
+        assertEquals("e2e", result.source().sourceFormat());
     }
 }

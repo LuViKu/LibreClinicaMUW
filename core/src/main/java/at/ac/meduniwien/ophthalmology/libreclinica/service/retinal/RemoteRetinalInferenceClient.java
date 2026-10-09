@@ -121,6 +121,9 @@ public class RemoteRetinalInferenceClient {
         }
 
         String fileName = Path.of(e2ePath).getFileName().toString();
+        // DR-039 — the content decides, as on the sidecar: a DICOM Part-10
+        // file is a DICOM OCT volume, anything else is handled as an .e2e.
+        boolean dicom = isDicomPart10(bytes);
 
         RestTemplate rest = restTemplate(timeoutMs);
 
@@ -131,30 +134,34 @@ public class RemoteRetinalInferenceClient {
         // only the bscan.dcm. When unset, post the .e2e as-is (the single-host dev
         // OptimaAdapter ingests the E2E itself).
         PreprocessResult prep = null;
+        String runLaterality = laterality;
+        int runScanIndex = scanIndex;
         String prepUrl = preprocessUrl();
         if (prepUrl != null && !prepUrl.isBlank()) {
-            // DR-039 — the companion-directory key: the basename without
-            // .e2e for an .e2e (as always), a path-derived UUID otherwise.
+            // DR-039 — the companion-directory key (RetinalArtifactKey): the
+            // basename without .e2e for an .e2e, a path-derived UUID otherwise.
             String derivedUuid = RetinalArtifactKey.of(e2ePath);
-            // 2026-06-19 — preprocess-dedup. The public OCT-portal commit
-            // path now eagerly calls /preprocess in its async pipeline
-            // (PublicOctUploadController.runPostCommitPipeline), so by
-            // the time {@link RetinalInferenceApiController#handleRemote}
-            // invokes runRemote the {@code bscan.dcm} (and companion
-            // {@code geometry.json}) are already on disk under
-            // {@code bscanStorePath/<e2eUuid>/scan-{1..N}/}. A second
-            // {@code /preprocess} HTTP call against the same sidecar
-            // wastes 30+ s of CPU, doubles RAM pressure on the
-            // 10 GiB-limited container, and the 2026-06-19 smoke
-            // observed those repeat calls reliably dying with
-            // "Unexpected end of file from server" (sidecar closes the
-            // connection mid-response under sustained load). Try the
-            // disk artifacts first — if present + intact, skip the
-            // HTTP call entirely.
-            prep = tryReuseDiskDicom(derivedUuid, jobId, scanIndex);
-            if (prep == null) {
-                prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality,
-                        derivedUuid, scanIndex);
+            if (dicom) {
+                // A DICOM is one volume, and the sidecar reads its eye from the
+                // file. The item's eye goes along only when it names one; with
+                // OU or none, and nothing in the file, the sidecar refuses with
+                // laterality_missing rather than anyone guessing. No disk reuse:
+                // the device headers decide below whether the task may run, and
+                // only a /preprocess answer carries them.
+                runScanIndex = 0;
+                prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes,
+                        singleEye(laterality), derivedUuid, 0);
+            } else {
+                // 2026-06-19 — preprocess-dedup. The public OCT-portal commit
+                // path eagerly calls /preprocess in its async pipeline, so the
+                // bscan.dcm and geometry.json are usually on disk by now; a
+                // second /preprocess of a 200 MB .e2e costs 30+ s and was seen
+                // to die under load. Reuse them when present and intact.
+                prep = tryReuseDiskDicom(derivedUuid, jobId, scanIndex);
+                if (prep == null) {
+                    prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality,
+                            derivedUuid, scanIndex);
+                }
             }
             if (prep == null || prep.dcmBytes() == null) {
                 // Conversion failed — return null so the caller reverts the job and
@@ -162,8 +169,33 @@ public class RemoteRetinalInferenceClient {
                 // the DICOM-only cluster adapter would reject.
                 return null;
             }
+            if (dicom) {
+                // DR-039 — vendor gating. Nothing goes to the cluster for a task
+                // whose model was not trained on this device; the sidecar says
+                // which tasks are, and a sidecar that does not say is a no.
+                ScanSource src = prep.source();
+                if (src == null || src.deviceTasks() == null) {
+                    throw new RetinalRunRefused("device_unknown",
+                            "The preprocess service did not report this scan's device, so it cannot "
+                                    + "be checked against the devices " + task + " is validated for. "
+                                    + "The scan was not sent for analysis.", src);
+                }
+                if (!src.validatedFor(task)) {
+                    LOG.info("Job {}: task {} is not validated for the device of this DICOM volume; "
+                            + "not sent to the cluster", jobId, task);
+                    throw new RetinalRunRefused("unsupported_device", src.unsupportedDeviceMessage(task), src);
+                }
+                if (src.laterality() != null) runLaterality = src.laterality();
+            }
             bytes = prep.dcmBytes();
             fileName = "bscan.dcm";
+        } else if (dicom) {
+            // DR-039 — nothing identifying leaves the VM. Without the preprocess
+            // sidecar a DICOM would go to /run as stored, identity and all.
+            throw new RetinalRunRefused("preprocess_unavailable",
+                    "DICOM OCT volumes are analysed only through the preprocess service, "
+                            + "which is not configured on this server (core.retinalInference.preprocessUrl).",
+                    null);
         }
 
         final String partFileName = fileName;
@@ -174,8 +206,8 @@ public class RemoteRetinalInferenceClient {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", filePart);
         body.add("task", task);
-        body.add("laterality", laterality);
-        body.add("scan_index", Integer.toString(scanIndex));
+        body.add("laterality", runLaterality);
+        body.add("scan_index", Integer.toString(runScanIndex));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -213,7 +245,8 @@ public class RemoteRetinalInferenceClient {
                         parsed.laterality(),
                         prep.geometry(),
                         prep.e2eUuid(),
-                        prep.acquisitionDate()
+                        prep.acquisitionDate(),
+                        prep.source()
                 );
             }
             return parsed;
@@ -228,6 +261,15 @@ public class RemoteRetinalInferenceClient {
             // fill the log; truncated body is still vastly more useful
             // than the status line alone.
             String bodyText = httpErr.getResponseBodyAsString();
+            // DR-039 — a 422 with {"detail": {"error", "message"}} is a refusal
+            // the operator can act on (unsupported_device, invalid_dicom, …):
+            // it becomes the job's message instead of "returned null".
+            RetinalRunRefused refused = refusalOf(httpErr.getStatusCode().value(), bodyText,
+                    prep == null ? null : prep.source());
+            if (refused != null) {
+                LOG.warn("Remote /run refused job {} (task={}): {}", jobId, task, refused.code());
+                throw refused;
+            }
             if (bodyText != null && bodyText.length() > 4096) {
                 bodyText = bodyText.substring(0, 4096) + "…[truncated]";
             }
@@ -238,6 +280,42 @@ public class RemoteRetinalInferenceClient {
         } catch (Exception e) {
             LOG.warn("Remote /run failed for job {} (task={}) at {}: {}",
                     jobId, task, endpoint, e.getMessage());
+            return null;
+        }
+    }
+
+    /** DICOM Part-10: a 128-byte preamble, then "DICM". */
+    static boolean isDicomPart10(byte[] bytes) {
+        return bytes != null && bytes.length >= 132
+                && bytes[128] == 'D' && bytes[129] == 'I' && bytes[130] == 'C' && bytes[131] == 'M';
+    }
+
+    /** OD or OS, upper-cased; null for OU, blank or anything else. */
+    static String singleEye(String laterality) {
+        if (laterality == null) return null;
+        String l = laterality.trim().toUpperCase(java.util.Locale.ROOT);
+        return "OD".equals(l) || "OS".equals(l) ? l : null;
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * A refusal out of a sidecar error body, or null when the body is not the
+     * object form {@code {"detail": {"error": code, "message": text}}} of a
+     * 422. Other errors stay outages (null from {@link #runRemote}).
+     */
+    static RetinalRunRefused refusalOf(int status, String body, ScanSource source) {
+        if (status != 422 || body == null || body.isBlank()) return null;
+        try {
+            com.fasterxml.jackson.databind.JsonNode detail = JSON.readTree(body).path("detail");
+            if (!detail.isObject()) return null;
+            String message = detail.path("message").asText("").trim();
+            if (message.isEmpty()) return null;
+            if (message.length() > 1000) message = message.substring(0, 1000) + "…";
+            String code = detail.path("error").asText("refused");
+            return new RetinalRunRefused(code, message, source);
+        } catch (Exception notJson) {
             return null;
         }
     }
@@ -273,8 +351,16 @@ public class RemoteRetinalInferenceClient {
             return null;
         }
         RestTemplate rest = restTemplate(remoteTimeout().toMillis());
-        return preprocessToDicom(rest, prepUrl, jobId, e2eName, e2eBytes, laterality,
-                e2eUuid, scanIndex);
+        boolean dicom = isDicomPart10(e2eBytes);
+        try {
+            return preprocessToDicom(rest, prepUrl, jobId, e2eName, e2eBytes,
+                    dicom ? singleEye(laterality) : laterality, e2eUuid, dicom ? 0 : scanIndex);
+        } catch (RetinalRunRefused refused) {
+            // Best-effort warm-up: the job's own dispatch preprocesses again
+            // and records the refusal on the job.
+            LOG.info("Eager preprocess refused for job {}: {}", jobId, refused.code());
+            return null;
+        }
     }
 
     /**
@@ -385,6 +471,8 @@ public class RemoteRetinalInferenceClient {
      *
      * <p>{@code scanIndex} picks which volume from a multi-acquisition .e2e to
      * convert; forwarded to /preprocess as a {@code scan_index} form field.
+     *
+     * @throws RetinalRunRefused on a 422 with {@code detail.message} (DR-039)
      */
     private PreprocessResult preprocessToDicom(RestTemplate rest,
                                                String prepUrl,
@@ -441,7 +529,21 @@ public class RemoteRetinalInferenceClient {
             String resolvedUuid = (echoedUuid == null || echoedUuid.isBlank()) ? e2eUuid : echoedUuid;
             String acquisitionDate = resp.getHeaders().getFirst(PixelGeometry.HEADER_ACQUISITION_DATE);
             return new PreprocessResult(resp.getBody(), geom, resolvedUuid,
-                    acquisitionDate != null && !acquisitionDate.isBlank() ? acquisitionDate : null);
+                    acquisitionDate != null && !acquisitionDate.isBlank() ? acquisitionDate : null,
+                    ScanSource.from(resp.getHeaders()));
+        } catch (org.springframework.web.client.HttpStatusCodeException httpErr) {
+            // DR-039 — the sidecar refused the file (not_oct_volume,
+            // laterality_missing, spacing_ambiguous, …); its message is what
+            // the operator needs, and it never quotes values from the file.
+            RetinalRunRefused refused = refusalOf(httpErr.getStatusCode().value(),
+                    httpErr.getResponseBodyAsString(), null);
+            if (refused != null) {
+                LOG.warn("Preprocess refused the scan of job {}: {}", jobId, refused.code());
+                throw refused;
+            }
+            LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",
+                    jobId, endpoint, httpErr.getMessage());
+            return null;
         } catch (Exception e) {
             LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",
                     jobId, endpoint, e.getMessage());
@@ -458,7 +560,14 @@ public class RemoteRetinalInferenceClient {
      * field blank or the preprocess deploy is older than this header.
      */
     public record PreprocessResult(byte[] dcmBytes, PixelGeometry geometry,
-                                   String e2eUuid, String acquisitionDate) { }
+                                   String e2eUuid, String acquisitionDate, ScanSource source) {
+
+        /** Without {@code source}: the disk-reuse path and older sidecars. */
+        public PreprocessResult(byte[] dcmBytes, PixelGeometry geometry,
+                                String e2eUuid, String acquisitionDate) {
+            this(dcmBytes, geometry, e2eUuid, acquisitionDate, null);
+        }
+    }
 
     @SuppressWarnings("unchecked")
     private static RemoteRunResult parseEnvelope(Map<String, Object> b) {
