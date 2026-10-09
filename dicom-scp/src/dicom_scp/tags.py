@@ -8,7 +8,9 @@ import numpy as np
 from pydicom.dataset import Dataset
 
 # DICOM Laterality (0020,0060) / Image Laterality (0020,0062) → ophthalmic OD/OS/OU.
-_LATERALITY = {"R": "OD", "L": "OS", "B": "OU"}
+# OD/OS/OU are accepted as written too: a third-party .e2e -> DICOM converter
+# puts Laterality = "OD" (not the DICOM code R) and no ImageLaterality.
+_LATERALITY = {"R": "OD", "L": "OS", "B": "OU", "OD": "OD", "OS": "OS", "OU": "OU"}
 
 
 def _s(ds: Dataset, name: str) -> str | None:

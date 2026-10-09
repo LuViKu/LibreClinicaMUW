@@ -124,3 +124,12 @@ def test_describe_a_malformed_frame_count_is_none_and_not_a_volume():
     d = tags.describe(ds)
     assert d["numberOfFrames"] is None
     assert d["octVolume"] is False
+
+
+def test_laterality_accepts_ophthalmic_codes_in_laterality():
+    # A third-party .e2e -> DICOM converter writes Laterality = "OD" (not R/L)
+    # and no ImageLaterality.
+    assert tags.laterality(_ds(Laterality="OD")) == "OD"
+    assert tags.laterality(_ds(Laterality="os")) == "OS"
+    assert tags.laterality(_ds(ImageLaterality="OU")) == "OU"
+    assert tags.laterality(_ds(Laterality="X")) is None
