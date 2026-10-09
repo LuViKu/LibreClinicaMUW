@@ -81,6 +81,7 @@ public class UpdateSubStudyServlet extends SecureController {
 
     @Override
     public void processRequest() throws Exception {
+        CreateStudyServlet.ensureOptionMaps();
 
         StudyDAO sdao = new StudyDAO(sm.getDataSource());
         StudyBean study = (StudyBean) session.getAttribute("newStudy");

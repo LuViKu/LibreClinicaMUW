@@ -10,6 +10,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.i18n.util;
 
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
@@ -18,19 +19,25 @@ import java.util.ResourceBundle;
 
 public class ResourceBundleProvider {
     /**
-     * A Map of the locales corresponding to each Thread.
+     * The locale bound to the calling thread. It was a plain HashMap keyed by Thread,
+     * written by every request thread - unsafe (lost entries, resize loops).
+     * Every access was to the current thread's entry, so a ThreadLocal is equivalent.
      *
      * @author Nacho M. Castejon and Jose Martinez Garcia, BAP Health
      */
-    public static HashMap<Thread, Locale> localeMap = new HashMap<Thread, Locale>();
+    private static final ThreadLocal<Locale> CURRENT_LOCALE = new ThreadLocal<Locale>();
     /**
      * Contains the set of ResourceBundles associated to each locale.
      */
-    static HashMap<Locale, HashMap<String, ResourceBundle>> resBundleSetMap = new HashMap<Locale, HashMap<String, ResourceBundle>>();
+    static final ConcurrentHashMap<Locale, HashMap<String, ResourceBundle>> resBundleSetMap = new ConcurrentHashMap<Locale, HashMap<String, ResourceBundle>>();
 
     public static void updateLocale(Locale l) {
         //logger.info("* found locale " + l.getDisplayCountry() + " " + l.getDisplayLanguage());
-        localeMap.put(Thread.currentThread(), l);
+        if (l == null) {
+            clearLocale();
+            return;
+        }
+        CURRENT_LOCALE.set(l);
         if (!resBundleSetMap.containsKey(l)) {
             HashMap<String, ResourceBundle> resBundleSet = new HashMap<String, ResourceBundle>();
             resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin", l));
@@ -49,7 +56,12 @@ public class ResourceBundleProvider {
     }
 
     public static Locale getLocale() {
-        return localeMap.get(Thread.currentThread());
+        return CURRENT_LOCALE.get();
+    }
+
+    /** Unbinds the calling thread's locale; use on pooled worker threads once the work is done. */
+    public static void clearLocale() {
+        CURRENT_LOCALE.remove();
     }
 
     public static ResourceBundle getAdminBundle() {
@@ -138,7 +150,7 @@ public class ResourceBundleProvider {
      */
     private static ResourceBundle getResBundle(String name) {
 
-        return resBundleSetMap.get(localeMap.get(Thread.currentThread())).get(name);
+        return resBundleSetMap.get(CURRENT_LOCALE.get()).get(name);
     }
 
     /**

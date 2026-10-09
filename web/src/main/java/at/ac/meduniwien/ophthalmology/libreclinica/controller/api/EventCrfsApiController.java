@@ -3049,7 +3049,18 @@ public class EventCrfsApiController {
         headers.setContentDisposition(
                 org.springframework.http.ContentDisposition.attachment()
                         .filename(filename).build());
-        return ResponseEntity.ok().headers(headers).body(new FileSystemResource(target));
+        // byte[], not a Resource: the pages dispatcher's converter list has no
+        // ResourceHttpMessageConverter (see WebMvcConfig#apiMessageConverters), so a
+        // Resource body answers 500. ByteArrayHttpMessageConverter is first in it.
+        byte[] content;
+        try {
+            content = Files.readAllBytes(target);
+        } catch (IOException e) {
+            LOG.warn("Attached file {} for item {} could not be read: {}", target, itemOid, e.toString());
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Attached file no longer accessible"));
+        }
+        return ResponseEntity.ok().headers(headers).body(content);
     }
 
     @org.springframework.web.bind.annotation.DeleteMapping(
