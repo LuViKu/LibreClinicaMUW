@@ -333,7 +333,7 @@ public class RetinalResultsApiController {
         ResponseEntity<?> visGuard = jobs().guardJobVisibility(row, session);
         if (visGuard != null) return visGuard;
 
-        String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
+        String e2eUuid = RetinalJobAccess.artifactKey(row.e2ePath);
         List<String> artifactNames = jobs().listArtifactNames(row.bscanMasksDir);
         // 2026-06-19 — thread scan_index so multi-volume uploads
         // discover their companions under scan-N/.

@@ -134,14 +134,10 @@ public class RetinalArtifactStorageService {
     }
 
     /**
-     * 2026-06-19 — multi-volume-aware overloads. The preprocess
-     * sidecar writes companion files for multi-volume {@code .e2e}
-     * uploads under per-scan subdirectories named {@code scan-{N+1}/}
-     * (1-indexed, sidecar convention) instead of the legacy root
-     * layout {@code <e2eUuid>/<name>}. The resolvers below look in
-     * {@code scan-{scanIndex+1}/} first and fall back to the root,
-     * so legacy single-volume uploads + tests against the older
-     * sidecar continue to work.
+     * Multi-volume-aware overloads. The preprocess sidecar writes the
+     * companions of scan index 0 to {@code <key>/} and those of index
+     * {@code i > 0} to {@code <key>/scan-<i>/}; see
+     * {@link RetinalArtifactKey#scanDir}.
      */
     public Path resolveBscanDcm(String e2eUuid, int scanIndex) throws IOException {
         return resolveCompanion(e2eUuid, "bscan.dcm", scanIndex);
@@ -226,25 +222,21 @@ public class RetinalArtifactStorageService {
         if (!e2eUuid.matches("[A-Za-z0-9_.-]+")) {
             throw new IllegalArgumentException("e2eUuid contains disallowed chars: " + e2eUuid);
         }
-        // 2026-06-19 — multi-volume layout fallback ladder. The
-        // preprocess sidecar's exact subdir naming convention isn't
-        // fully consistent: for some uploads it honours the
-        // {@code scan_index} form-field and writes to
-        // {@code scan-{scanIndex+1}/}; for others (notably the
-        // 2026-06-19 smoke run on jobs 49–51) it writes to
-        // {@code scan-1/} regardless of the requested index. Try the
-        // matching subdir first, then the conservative {@code scan-1/}
-        // single-scan fallback, then the legacy root layout. {@code -1}
-        // skips the subdir probes entirely (IT tests, parked-list).
+        // DR-039 — the sidecar's layout, and only that: index 0 in the
+        // key's directory, index i > 0 in scan-<i>/ (RetinalArtifactKey).
+        // This used to try scan-(i+1)/, then scan-1/, then the root, on the
+        // belief that the sidecar counted from 1. It never did
+        // (retinal_inference/api/preprocess.py since scan_index existed), so
+        // scan 0 of a two-volume .e2e was shown with scan 1's companions.
+        // Uploads from before scan_index existed have everything at the root,
+        // which is where index 0 is looked for. -1 = "don't know" = root.
         Path base = Path.of(bscanStorePath(), e2eUuid);
-        if (scanIndex >= 0) {
-            Path withSubdir = base.resolve("scan-" + (scanIndex + 1)).resolve(name);
-            if (Files.exists(withSubdir)) return withSubdir;
-            // Sidecar quirk: writes scan-1/ even when scan_index > 0.
-            if (scanIndex != 0) {
-                Path scan1 = base.resolve("scan-1").resolve(name);
-                if (Files.exists(scan1)) return scan1;
+        if (scanIndex > 0) {
+            Path inSubdir = RetinalArtifactKey.scanDir(Path.of(bscanStorePath()), e2eUuid, scanIndex).resolve(name);
+            if (!Files.exists(inSubdir)) {
+                throw new NoSuchFileException(inSubdir.toString());
             }
+            return inSubdir;
         }
         Path direct = base.resolve(name);
         if (!Files.exists(direct)) {

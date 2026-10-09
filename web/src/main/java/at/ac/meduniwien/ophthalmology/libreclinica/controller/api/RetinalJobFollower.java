@@ -591,9 +591,8 @@ public final class RetinalJobFollower {
             try {
                 byte[] bytes = Files.readAllBytes(path);
                 String name = path.getFileName().toString();
-                String uuid = name.toLowerCase(Locale.ROOT).endsWith(".e2e")
-                        ? name.substring(0, name.length() - 4) : name;
-                remoteClient.preprocessUpload(primary, name, bytes, scan.laterality(), uuid, scan.scanIndex());
+                remoteClient.preprocessUpload(primary, name, bytes, scan.laterality(),
+                        RetinalJobAccess.artifactKey(scan.storedPath()), scan.scanIndex());
             } catch (IOException | RuntimeException ex) {
                 LOG.warn("follow-file preprocess failed for ingest_item {} (job {}): {}",
                         scan.ingestItemId(), primary, ex.getMessage());

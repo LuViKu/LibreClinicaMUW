@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactKey;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -344,14 +345,13 @@ final class RetinalJobAccess {
         }
     }
 
-    /** Trim a single trailing ".e2e" — match what the upload controller saves. */
-    static String e2eUuidFromPath(String e2ePath) {
-        if (e2ePath == null) return null;
-        String base = Paths.get(e2ePath).getFileName().toString();
-        if (base.toLowerCase().endsWith(".e2e")) {
-            base = base.substring(0, base.length() - 4);
-        }
-        return base;
+    /**
+     * The scan's companion-directory key (DR-039): the name without
+     * {@code .e2e} for an {@code .e2e}, as always; a path-derived UUID for a
+     * DICOM OCT volume. See {@link RetinalArtifactKey}.
+     */
+    static String artifactKey(String storedPath) {
+        return RetinalArtifactKey.of(storedPath);
     }
 
     List<String> listArtifactNames(String dir) {

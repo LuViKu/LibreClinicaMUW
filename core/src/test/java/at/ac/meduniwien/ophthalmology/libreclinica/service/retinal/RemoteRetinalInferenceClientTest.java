@@ -60,6 +60,7 @@ public class RemoteRetinalInferenceClientTest {
         Duration timeout = Duration.ofSeconds(10);
         String prepUrl = "";
         String prepToken = "";
+        String bscanStore = "";
 
         @Override protected String remoteUrl() { return url == null ? "" : url; }
         @Override protected String remoteToken() { return token == null ? "" : token; }
@@ -68,6 +69,7 @@ public class RemoteRetinalInferenceClientTest {
         @Override protected String preprocessToken() {
             return (prepToken == null || prepToken.isBlank()) ? remoteToken() : prepToken;
         }
+        @Override protected String bscanStorePath() { return bscanStore == null ? "" : bscanStore; }
     }
 
     @Before
@@ -401,5 +403,117 @@ public class RemoteRetinalInferenceClientTest {
         String received = new String(runBody.get(), StandardCharsets.ISO_8859_1);
         assertTrue("default scan_index reaches /run as 0",
                 received.contains("name=\"scan_index\"") && received.contains("\r\n\r\n0\r\n"));
+    }
+
+    // --- DR-039: the on-disk reuse path -------------------------------------
+
+    private static final String GEOMETRY_JSON = "{"
+            + "\"scan_index\": 0,"
+            + "\"fundus\": null,"
+            + "\"bscan\": {\"dim_x_ascans\": 512, \"dim_y_rows\": 496, \"dim_z_bscans\": 49,"
+            + " \"pixel_axial_mm\": 0.00387, \"pixel_lateral_mm\": 0.01155, \"pixel_slice_mm\": 0.121}"
+            + "}";
+
+    private static byte[] fakeDicom(String marker) {
+        byte[] head = new byte[132];
+        System.arraycopy("DICM".getBytes(StandardCharsets.UTF_8), 0, head, 128, 4);
+        byte[] tail = marker.getBytes(StandardCharsets.UTF_8);
+        byte[] out = new byte[head.length + tail.length];
+        System.arraycopy(head, 0, out, 0, head.length);
+        System.arraycopy(tail, 0, out, head.length, tail.length);
+        return out;
+    }
+
+    /** {@code <store>/<key>/<sub>/bscan.dcm} (+ geometry.json when given). */
+    private static void writeCompanions(Path dir, String marker, String geometry) throws IOException {
+        Files.createDirectories(dir);
+        Files.write(dir.resolve("bscan.dcm"), fakeDicom(marker));
+        if (geometry != null) Files.writeString(dir.resolve("geometry.json"), geometry);
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        if (root == null || !Files.exists(root)) return;
+        try (var walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try { Files.deleteIfExists(p); } catch (IOException ignored) { /* best effort */ }
+            });
+        }
+    }
+
+    @Test
+    public void reuse_returnsTheGeometryOfTheStoredGeometryJson() throws IOException {
+        Path store = Files.createTempDirectory("bscan-store-");
+        try {
+            String key = RetinalArtifactKey.of(e2eFile.toString());
+            writeCompanions(store.resolve(key), "ROOT-SCAN-0", GEOMETRY_JSON);
+            AtomicReference<byte[]> prepBody = new AtomicReference<>();
+            registerCapturingJsonHandler("/preprocess", 500, "{}", prepBody);
+            AtomicReference<byte[]> runBody = new AtomicReference<>();
+            registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+            client.prepUrl = client.url;
+            client.bscanStore = store.toString();
+
+            RemoteRunResult result = client.runRemote(5L, "fluid", e2eFile.toString(), "OD", 0);
+
+            assertNotNull(result);
+            assertNull("the stored bscan.dcm is reused, /preprocess is not called", prepBody.get());
+            assertNotNull("geometry must come from geometry.json, not be dropped", result.geometry());
+            assertEquals(0.00387, result.geometry().axialMm(), 1e-9);
+            assertEquals(0.01155, result.geometry().lateralMm(), 1e-9);
+            assertEquals(0.121, result.geometry().sliceMm(), 1e-9);
+            assertEquals(49, result.geometry().dimZ());
+            assertEquals(496, result.geometry().dimY());
+            assertEquals(512, result.geometry().dimX());
+        } finally {
+            deleteTree(store);
+        }
+    }
+
+    @Test
+    public void reuse_scanZeroReadsTheRootNotScanOne() throws IOException {
+        // The sidecar writes index 0 at the root and index 1 at scan-1/.
+        Path store = Files.createTempDirectory("bscan-store-");
+        try {
+            String key = RetinalArtifactKey.of(e2eFile.toString());
+            writeCompanions(store.resolve(key), "ROOT-SCAN-0", GEOMETRY_JSON);
+            writeCompanions(store.resolve(key).resolve("scan-1"), "SUBDIR-SCAN-1", GEOMETRY_JSON);
+            registerBinaryHandler("/preprocess", 500, new byte[]{1}, "application/json");
+            AtomicReference<byte[]> runBody = new AtomicReference<>();
+            registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+            client.prepUrl = client.url;
+            client.bscanStore = store.toString();
+
+            assertNotNull(client.runRemote(6L, "fluid", e2eFile.toString(), "OD", 0));
+
+            String sent = new String(runBody.get(), StandardCharsets.ISO_8859_1);
+            assertTrue("scan 0 is the root companion", sent.contains("ROOT-SCAN-0"));
+            assertFalse("scan 1's volume must not be analysed as scan 0", sent.contains("SUBDIR-SCAN-1"));
+        } finally {
+            deleteTree(store);
+        }
+    }
+
+    @Test
+    public void reuse_scanOneReadsScanOneNotScanTwo() throws IOException {
+        Path store = Files.createTempDirectory("bscan-store-");
+        try {
+            String key = RetinalArtifactKey.of(e2eFile.toString());
+            writeCompanions(store.resolve(key), "ROOT-SCAN-0", GEOMETRY_JSON);
+            writeCompanions(store.resolve(key).resolve("scan-1"), "SUBDIR-SCAN-1", GEOMETRY_JSON);
+            writeCompanions(store.resolve(key).resolve("scan-2"), "SUBDIR-SCAN-2", GEOMETRY_JSON);
+            registerBinaryHandler("/preprocess", 500, new byte[]{1}, "application/json");
+            AtomicReference<byte[]> runBody = new AtomicReference<>();
+            registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+            client.prepUrl = client.url;
+            client.bscanStore = store.toString();
+
+            assertNotNull(client.runRemote(7L, "fluid", e2eFile.toString(), "OD", 1));
+
+            String sent = new String(runBody.get(), StandardCharsets.ISO_8859_1);
+            assertTrue(sent.contains("SUBDIR-SCAN-1"));
+            assertFalse(sent.contains("SUBDIR-SCAN-2"));
+        } finally {
+            deleteTree(store);
+        }
     }
 }
