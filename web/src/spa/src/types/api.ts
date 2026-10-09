@@ -10712,7 +10712,11 @@ export interface operations {
     };
     uploadVersion: {
         parameters: {
-            query?: never;
+            query?: {
+                versionName?: string;
+                versionDescription?: string;
+                revisionNotes?: string;
+            };
             header?: {
                 "Accept-Language"?: string;
             };
@@ -10726,9 +10730,6 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    versionName: string;
-                    versionDescription?: string;
-                    revisionNotes?: string;
                 };
                 "application/json": components["schemas"]["CrfVersionAuthoringRequest"];
             };
