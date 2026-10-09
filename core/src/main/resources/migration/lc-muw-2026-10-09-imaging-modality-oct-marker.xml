@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      DR-039 — a modality is analysed only when it says so.
+
+      kinds_accepted gains the token "oct": OCT volumes filed under this
+      modality (as .e2e or, where it also accepts dicom, as DICOM) are
+      analysed, and the visit imaging plan may set inference tasks on it. It
+      is set by an administrator in the imaging catalogue. A fundus camera
+      that exports DICOM (Clarus, Optomed) does not carry it, so its plan rows
+      offer no tasks.
+
+      Backfill: every modality that accepts e2e — the only one tasks could be
+      set on before — gets the marker, so every existing plan and its tasks
+      stay valid. Nothing else changes.
+    -->
+    <changeSet id="2026-10-09-imaging-modality-oct-marker" author="muw-ophthalmology">
+        <comment>Mark every e2e-accepting imaging modality as an OCT modality (kinds_accepted += oct).</comment>
+        <sql>
+            UPDATE imaging_modality
+               SET kinds_accepted = kinds_accepted || ',oct'
+             WHERE (',' || lower(COALESCE(kinds_accepted, '')) || ',') LIKE '%,e2e,%'
+               AND (',' || lower(COALESCE(kinds_accepted, '')) || ',') NOT LIKE '%,oct,%';
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE imaging_modality
+                   SET kinds_accepted = trim(BOTH ',' FROM
+                           replace(',' || kinds_accepted || ',', ',oct,', ','))
+                 WHERE (',' || lower(COALESCE(kinds_accepted, '')) || ',') LIKE '%,oct,%';
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

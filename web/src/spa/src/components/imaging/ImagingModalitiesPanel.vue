@@ -297,6 +297,12 @@ function kindsLabel(m: ImagingModality): string {
               <input v-model="draft.kindsAccepted" type="checkbox" :value="k" />
               {{ t(`ingestInbox.kind.${k}`) }}
             </label>
+            <!-- DR-039 — not a file kind: the marker that OCT volumes filed
+                 here are analysed, so the visit plan may set tasks on it. -->
+            <label class="text-[12px] inline-flex items-center gap-1" :title="t('imagingModalities.octMarkerHint')">
+              <input v-model="draft.kindsAccepted" type="checkbox" value="oct" data-testid="imaging-modality-oct-marker" />
+              {{ t('imagingModalities.octMarker') }}
+            </label>
             <label class="text-[12px] inline-flex items-center gap-1 ml-2">
               <input v-model="draft.lateralityRequired" type="checkbox" />
               {{ t('imagingModalities.lateralityRequired') }}

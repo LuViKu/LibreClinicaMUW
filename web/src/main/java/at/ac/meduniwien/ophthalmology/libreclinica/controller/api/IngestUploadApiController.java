@@ -46,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffe
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 /**
@@ -84,6 +85,15 @@ public class IngestUploadApiController {
 
     /** Null (hand-built controllers) reads as "not required". */
     private DeidentificationPolicy deidPolicy;
+
+    /**
+     * DR-039 — a DICOM OCT volume uploaded to a visit starts its plan's
+     * analyses; absent (hand-built controllers), it starts none.
+     */
+    @Autowired(required = false)
+    void setRetinalDispatch(RemoteRetinalInferenceClient remote, RetinalInferenceApiController inference) {
+        uploads.useRetinalDispatch(remote, inference);
+    }
 
     @Autowired(required = false)
     void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {

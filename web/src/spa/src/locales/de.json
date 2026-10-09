@@ -3756,7 +3756,9 @@
       "performed": "durchgeführt",
       "not_performed_reason": "Begründung",
       "initials": "Kürzel"
-    }
+    },
+    "octMarker": "OCT-Volumen auswerten",
+    "octMarkerHint": "Als OCT-Modalität markiert: hier abgelegte OCT-Volumen (.e2e oder DICOM) werden ausgewertet, und der Visitenplan kann Auswertungen festlegen. Braucht E2E oder DICOM."
   },
   "studySettings": {
     "title": "Plattform-Einstellungen",

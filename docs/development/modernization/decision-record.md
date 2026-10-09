@@ -1054,10 +1054,21 @@ every thickness of such a file would be about 1.5× too large, silently.
   frame count was never recorded is not analysed. `RetinalJobFollower.isAnalysable`
   is the one place this is asked (bind, plan catch-up, per-scan start, rerun-as,
   inbox, visit page).
-- **A catalogue entry that accepts `.e2e` or DICOM accepts OCT volumes**, so the
-  imaging plan may set tasks on it. Every entry that accepted tasks before still
-  does, and a study module's required tasks are still forced only onto `.e2e`
-  entries, so no saved plan changes.
+- **A modality is analysed only when it says so.** An imaging-catalogue entry
+  carries the explicit marker `oct` in `kinds_accepted` (set by an administrator,
+  "OCT-Volumen auswerten"); only a marked entry may carry plan tasks, and a DICOM
+  OCT volume of unknown modality is filed under the one marked entry that accepts
+  `dicom` and matches its device. Every entry that accepted `.e2e` was marked by
+  the migration, so every existing plan keeps its tasks; a fundus camera that also
+  exports DICOM is not marked and offers no tasks.
+- **A volume filed on arrival starts its analyses on arrival.** A DICOM OCT volume
+  uploaded straight to a visit, or bound to one by the worklist on C-STORE, starts
+  the visit plan's tasks at once, as an `.e2e` upload does (the study's inference
+  switch applies; the C-STORE hand-off stays closed where de-identification is
+  required). Taking such an upload back within the undo window handles its jobs the
+  DR-035 way: queued ones are cancelled, and removed with the upload when none had
+  started; if one is already running or done, the scan leaves the visit and is
+  dismissed instead, and that analysis keeps its result, unattached.
 - **One artifact key per stored scan.** The companion directory
   (`bscan.dcm`, `geometry.json`, `fundus.png`) of an `.e2e` stays its name without
   `.e2e`; any other stored path gets a name-based UUID of the normalised path
@@ -1105,10 +1116,8 @@ every thickness of such a file would be about 1.5× too large, silently.
   (`retinal_inference_job.source_format`, `device_manufacturer`, `device_model`,
   `spacing_order`); a DICOM job with no single eye takes the eye the sidecar read
   from the file.
-- A DICOM OCT volume uploaded straight to a visit, or bound by the worklist on
-  C-STORE, starts no plan tasks by itself (the upload keeps its undo window, which a
-  started job would close). Filing it from the inbox, the plan editor's catch-up, or
-  "Auswertung starten" on the visit page starts them.
+- An administrator who wants another vendor's OCT analysed marks its modality; the
+  device gate then still refuses every task not validated for that vendor, visibly.
 - Two defects in the shared path were fixed with this: reusing an already
   preprocessed scan dropped its geometry (metrics fell back to pixel units), and the
   reuse probe and the companion resolver looked in `scan-(i+1)/` while the sidecar

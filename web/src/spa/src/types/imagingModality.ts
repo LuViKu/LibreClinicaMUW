@@ -7,8 +7,12 @@
  * measurements (BCVA, IOP, refraction) and a different thing entirely.
  */
 
-/** What a file may be. An empty `kindsAccepted` means no file ever arrives. */
-export type IngestKindCode = 'e2e' | 'dicom' | 'image' | 'other'
+/**
+ * What a file may be. An empty `kindsAccepted` means no file ever arrives.
+ * `oct` is not a file kind but DR-039's marker: OCT volumes filed under the
+ * modality are analysed.
+ */
+export type IngestKindCode = 'e2e' | 'dicom' | 'image' | 'other' | 'oct'
 
 /** Which item on the checklist row a binding fills. */
 export type BindingRole = 'performed' | 'not_performed_reason' | 'initials'

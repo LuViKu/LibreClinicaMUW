@@ -282,7 +282,7 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void bindingADicomOctVolumeEnqueuesThePlansTasks() throws Exception {
-        int modalityId = modality("dicom");
+        int modalityId = modality("dicom,oct");
         plan(modalityId, "fluid,ga");
         Visit v = visit();
         long item = dicom(true, null);
@@ -312,7 +312,7 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void bindingAFundusDicomStartsNothing() throws Exception {
-        plan(modality("dicom"), "fluid");
+        plan(modality("dicom,oct"), "fluid");
         Visit v = visit();
         long item = dicom(false, null);
 
@@ -322,7 +322,7 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void bindingAnUnclassifiedOptDicomStartsNothing() throws Exception {
-        plan(modality("dicom"), "fluid");
+        plan(modality("dicom,oct"), "fluid");
         Visit v = visit();
         long item = dicom(null, null);
 
@@ -367,7 +367,7 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
     void thePlanCatchUpIncludesDicomOctVolumes() throws Exception {
         long volume = dicom(true, visit());
         long fundus = dicom(false, visit());
-        plan(modality("dicom"), "fluid");
+        plan(modality("dicom,oct"), "fluid");
 
         RetinalJobFollower.CatchUp r = follower().catchUp(SED_ID,
                 new IngestBindService.Actor(null, defaultStudy()), false);
@@ -392,13 +392,20 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
-    void thePlanEditorAcceptsTasksOnAModalityThatReceivesDicom() throws Exception {
-        int dicomModality = modality("dicom,image");
-        Answer a = putPlan(dicomModality, "[\"fluid\"]");
+    void thePlanEditorAcceptsTasksOnAModalityMarkedOctThatReceivesDicom() throws Exception {
+        int dicomOct = modality("dicom,oct");
+        Answer a = putPlan(dicomOct, "[\"fluid\"]");
         assertEquals(200, a.status(), a.body().toString());
         assertEquals("fluid", text(
                 "SELECT retinal_tasks FROM event_definition_imaging WHERE study_event_definition_id = "
-                        + SED_ID + " AND imaging_modality_id = " + dicomModality));
+                        + SED_ID + " AND imaging_modality_id = " + dicomOct));
+    }
+
+    /** DR-039 — a fundus camera that also exports DICOM is not an OCT modality. */
+    @Test
+    void thePlanEditorRefusesTasksOnADicomModalityWithoutTheOctMarker() throws Exception {
+        Answer a = putPlan(modality("dicom,image"), "[\"fluid\"]");
+        assertEquals(400, a.status(), a.body().toString());
     }
 
     @Test
@@ -406,6 +413,51 @@ class DicomOctVolumeDatabaseIT extends AbstractApiControllerDatabaseIT {
         int imageOnly = modality("image");
         Answer a = putPlan(imageOnly, "[\"fluid\"]");
         assertEquals(400, a.status(), a.body().toString());
+    }
+
+    /** A DICOM OCT volume is not filed under a marked modality that does not take DICOM. */
+    @Test
+    void aDicomVolumeIsNotFiledUnderAnE2eOnlyOctModality() throws Exception {
+        plan(modality("e2e,oct"), "fluid");
+        Visit v = visit();
+        long item = dicom(true, null);
+        assertEquals(200, bind(item, v).status());
+        assertEquals(List.of(), tasksOf(item));
+    }
+
+    /**
+     * The backfill: every modality that accepted e2e — the only kind tasks
+     * could be set on before DR-039 — carries the marker, so its plan keeps
+     * its tasks. Run against a modality created the way the old catalogue
+     * did, with the changeset's own statement.
+     */
+    @Test
+    void theBackfillMarksE2eModalitiesSoTheirPlansKeepTheirTasks() throws Exception {
+        assertEquals(0, LifecycleFixtures.intQuery("SELECT count(*) FROM imaging_modality "
+                + " WHERE (',' || kinds_accepted || ',') LIKE '%,e2e,%' "
+                + "   AND (',' || kinds_accepted || ',') NOT LIKE '%,oct,%'"),
+                "every seeded e2e modality was marked by the migration");
+
+        int legacy = modality("e2e");
+        int fundus = modality("dicom,image");
+        plan(legacy, "fluid,layers");
+        exec(backfillStatement());
+        assertEquals("e2e,oct", text("SELECT kinds_accepted FROM imaging_modality WHERE imaging_modality_id = " + legacy));
+        assertEquals("dicom,image", text("SELECT kinds_accepted FROM imaging_modality WHERE imaging_modality_id = " + fundus));
+        Answer a = putPlan(legacy, "[\"fluid\",\"layers\"]");
+        assertEquals(200, a.status(), "the existing plan saves unchanged: " + a.body());
+    }
+
+    /** The UPDATE of lc-muw-2026-10-09-imaging-modality-oct-marker.xml, as Liquibase runs it. */
+    private static String backfillStatement() throws Exception {
+        try (var in = DicomOctVolumeDatabaseIT.class.getResourceAsStream(
+                "/migration/lc-muw-2026-10-09-imaging-modality-oct-marker.xml")) {
+            assertNotNull(in, "the changeset is on the classpath");
+            String xml = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            int start = xml.indexOf("<sql>") + "<sql>".length();
+            return xml.substring(start, xml.indexOf("</sql>", start)).trim()
+                    .replace("&lt;", "<").replace("&gt;", ">");
+        }
     }
 
     /* ------------------------------------------------------------------ */
