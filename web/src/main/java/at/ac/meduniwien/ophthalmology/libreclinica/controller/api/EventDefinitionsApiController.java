@@ -468,12 +468,12 @@ public class EventDefinitionsApiController {
                     return ResponseEntity.badRequest().body(Map.of("message",
                             "Modality " + w.modalityId() + " is not an active entry of study " + studyOid));
                 }
-                // DR-039 — OCT volumes arrive as .e2e or as DICOM.
+                // DR-039 — only a modality marked as an OCT one is analysed.
                 if (!w.tasks().isEmpty()
                         && !VisitImagingPlan.acceptsOctVolumes(kindsById.get(w.modalityId()))) {
                     return ResponseEntity.badRequest().body(Map.of("message",
-                            "Modality " + w.modalityId() + " accepts neither .e2e nor DICOM files, "
-                                    + "so no OCT volume and no inference task can run on it"));
+                            "Modality " + w.modalityId() + " is not marked as an OCT modality "
+                                    + "(kindsAccepted lacks \"oct\"), so no inference task can run on it"));
                 }
             }
 

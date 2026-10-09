@@ -44,6 +44,14 @@ public final class VisitImagingPlan {
     /** What runs when a visit definition has neither a plan nor a legacy task list. */
     public static final String DEFAULT_TASK = "fluid";
 
+    /**
+     * DR-039 — the {@code kinds_accepted} token that marks a catalogue entry
+     * as one OCT volumes are analysed under. Set explicitly by an
+     * administrator; every entry that accepted {@code e2e} received it in
+     * {@code lc-muw-2026-10-09-imaging-modality-oct-marker.xml}.
+     */
+    public static final String OCT_MARKER = "oct";
+
     public static final String REQUIRED = "required";
     public static final String OPTIONAL = "optional";
 
@@ -134,17 +142,13 @@ public final class VisitImagingPlan {
     }
 
     /**
-     * DR-039 — whether OCT volumes can be filed under an entry that accepts
-     * these kinds: an {@code .e2e} always is one, and any DICOM-accepting
-     * entry can receive an Ophthalmic Tomography volume. Only such an entry
-     * can carry inference tasks; the tasks then run on the OCT volumes filed
-     * under it and on nothing else (a fundus DICOM is not analysable), and
-     * the device gate refuses a volume from a device a task is not validated
-     * for. Before DR-039 this was "accepts e2e"; every entry that qualified
-     * then still does.
+     * DR-039 — whether this catalogue entry is one OCT volumes are analysed
+     * under, i.e. it carries the explicit {@link #OCT_MARKER}. Only such an
+     * entry can carry inference tasks. A fundus camera that also exports
+     * DICOM does not have it, so it offers none.
      */
     public static boolean acceptsOctVolumes(String kindsAccepted) {
-        return acceptsKind(kindsAccepted, "e2e") || acceptsKind(kindsAccepted, "dicom");
+        return acceptsKind(kindsAccepted, OCT_MARKER);
     }
 
     public static List<String> splitTasks(String csv) {
@@ -284,48 +288,37 @@ public final class VisitImagingPlan {
      *
      * <ul>
      *   <li>An {@code .e2e}: {@link #e2eModalityOf}, as always.</li>
-     *   <li>A DICOM OCT volume: the one active entry for the file's device
-     *       ({@code device}, e.g. {@code spectralis}) that accepts OCT
-     *       volumes; failing that, the study's {@code .e2e} entry — but only
-     *       when the file names no device or the same device, so a Spectralis
-     *       DICOM export lands where the Spectralis {@code .e2e} does, and a
-     *       Cirrus volume is never filed as a Spectralis acquisition.</li>
+     *   <li>A DICOM OCT volume: the one active entry that carries the
+     *       {@link #OCT_MARKER}, accepts {@code dicom} and is for the file's
+     *       device ({@code device}, e.g. {@code spectralis}); with no device on
+     *       the file, the one such entry of the study. A Cirrus volume is never
+     *       filed as a Spectralis acquisition, and an entry that does not take
+     *       DICOM is not given one.</li>
      * </ul>
      */
     public static Integer octModalityOf(Connection c, int studyId, String kind, String device)
             throws SQLException {
         if (!"dicom".equalsIgnoreCase(kind)) return e2eModalityOf(c, studyId);
         String dev = device == null ? "" : device.trim().toLowerCase(Locale.ROOT);
-        if (!dev.isEmpty()) {
-            Integer only = null;
-            int found = 0;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT imaging_modality_id, kinds_accepted FROM imaging_modality "
-                            + " WHERE study_id = ? AND COALESCE(status_id, 1) = 1 "
-                            + "   AND lower(COALESCE(device, '')) = ? "
-                            + " ORDER BY ordinal, code")) {
-                ps.setInt(1, studyId);
-                ps.setString(2, dev);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        if (!acceptsOctVolumes(rs.getString(2))) continue;
-                        found++;
-                        only = rs.getInt(1);
-                    }
+        Integer only = null;
+        int found = 0;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT imaging_modality_id, kinds_accepted, lower(COALESCE(device, '')) "
+                        + "  FROM imaging_modality "
+                        + " WHERE study_id = ? AND COALESCE(status_id, 1) = 1 "
+                        + " ORDER BY ordinal, code")) {
+            ps.setInt(1, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String kinds = rs.getString(2);
+                    if (!acceptsOctVolumes(kinds) || !acceptsKind(kinds, "dicom")) continue;
+                    if (!dev.isEmpty() && !dev.equals(rs.getString(3))) continue;
+                    found++;
+                    only = rs.getInt(1);
                 }
             }
-            if (found == 1) return only;
-            if (found > 1) return null;
         }
-        Integer e2e = e2eModalityOf(c, studyId);
-        if (e2e == null || dev.isEmpty()) return e2e;
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT lower(COALESCE(device, '')) FROM imaging_modality WHERE imaging_modality_id = ?")) {
-            ps.setInt(1, e2e);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && dev.equals(rs.getString(1)) ? e2e : null;
-            }
-        }
+        return found == 1 ? only : null;
     }
 
     /** The files filed against one visit, as much of each as matching needs. */

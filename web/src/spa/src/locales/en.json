@@ -3756,7 +3756,9 @@
       "performed": "performed",
       "not_performed_reason": "reason",
       "initials": "initials"
-    }
+    },
+    "octMarker": "Analyse OCT volumes",
+    "octMarkerHint": "Marked as an OCT modality: OCT volumes filed here (.e2e or DICOM) are analysed, and the visit plan may set analyses on it. Needs E2E or DICOM."
   },
   "studySettings": {
     "title": "Platform settings",
