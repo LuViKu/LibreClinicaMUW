@@ -895,7 +895,8 @@
       "replace": "Replace",
       "removeConfirm": "Remove the attached file? The deletion is recorded in the audit trail.",
       "tooBig": "File exceeds the configured size limit.",
-      "badExtension": "File type is not in the allowed list."
+      "badExtension": "File type is not in the allowed list.",
+      "deidBlocked": "File attachments are disabled on this internet-facing deployment: they cannot be checked for patient-identifying content."
     },
     "selectMulti": {
       "noneSelected": "None selected"
@@ -3220,6 +3221,15 @@
           "optional": "missing – optional"
         },
         "blocksSigning": "{n} required image(s) missing. The subject cannot be signed until they are filed against the visit."
+      },
+      "analyses": {
+        "none": "No analysis yet",
+        "start": "Start analysis",
+        "starting": "Starting…",
+        "menuHeader": "Missing analysis",
+        "error": "The analysis could not be started.",
+        "started": "Analysis started: {task}",
+        "exists": "Analysis already there: {task}"
       }
     }
   },
@@ -3708,6 +3718,9 @@
       "unfiledNoLabel": "The same picture is already waiting in the inbox without a label (file #{id}).",
       "dismissed": "The same picture was already dismissed (file #{id}).",
       "bindAnyway": "File this one anyway?"
+    },
+    "sourceFormat": {
+      "dicom": "DICOM"
     }
   },
   "imagingModalities": {
@@ -3743,7 +3756,9 @@
       "performed": "performed",
       "not_performed_reason": "reason",
       "initials": "initials"
-    }
+    },
+    "octMarker": "Analyse OCT volumes",
+    "octMarkerHint": "Marked as an OCT modality: OCT volumes filed here (.e2e or DICOM) are analysed, and the visit plan may set analyses on it. Needs E2E or DICOM."
   },
   "studySettings": {
     "title": "Platform settings",
@@ -3928,6 +3943,26 @@
     },
     "actions": {
       "uploadWithoutVisit": "Upload without visit"
+    },
+    "deid": {
+      "banner": "Internet-facing deployment: only Heidelberg .e2e and DICOM files are accepted. Identifying data is removed in your browser before anything is sent — check each preview for names or IDs in the picture itself.",
+      "previewAlt": "Preview of {file}",
+      "noPreview": "No preview can be shown for this file. Open it in your viewer first and make sure no patient name or ID is visible in the image.",
+      "confirmLabel": "No patient name or ID is visible in the image",
+      "confirmAllLabel": "All previews checked: no patient name or ID visible",
+      "confirmFirst": "Tick the confirmation under the preview first.",
+      "errors": {
+        "format": "{file}: not accepted here — only Heidelberg .e2e and DICOM files can be uploaded.",
+        "label": "{file}: the study subject label cannot be written into the file (too long or unusual characters).",
+        "e2eNoPatientChunk": "{file}: the .e2e file has no readable patient-data block, so de-identification cannot be verified. Not uploaded.",
+        "e2eTruncated": "{file}: the .e2e file is damaged (patient block cut off). Not uploaded.",
+        "parse": "{file}: the file could not be read or de-identified. Not uploaded.",
+        "burnedIn": "{file}: the DICOM file declares burned-in annotation (identity in the image). Not uploaded.",
+        "residual": "{file}: identifying data was still found in the file after removal. Not uploaded.",
+        "verify": "{file}: the de-identified file failed its own check. Not uploaded.",
+        "laterality": "{file}: choose the eye (OD or OS) before uploading.",
+        "noSubject": "{file}: pick the study subject first — the label is written into the file."
+      }
     },
     "summary": {
       "fileSingular": "file",
@@ -4118,7 +4153,20 @@
         "OS": "OS · left eye",
         "OD": "OD · right eye",
         "OU": "OU · both eyes"
-      }
+      },
+      "sourceLabel": "Source:",
+      "deviceLabel": "Device:",
+      "spacingLabel": "Pixel spacing:",
+      "sourceFormat": {
+        "e2e": "E2E",
+        "dicom": "DICOM"
+      },
+      "spacingOrder": {
+        "standard": "standard order",
+        "swapped": "stored swapped, resolved physically",
+        "standard-assumed": "taken as stored (not checked)"
+      },
+      "statusMessageLabel": "Reason:"
     },
     "status": {
       "queued": "Queued",
@@ -4140,7 +4188,8 @@
       "ga": "GA area",
       "bmeis": "BMEIS",
       "layers": "Layer segmentation (IOWA + BM)",
-      "bm": "Bruch's membrane"
+      "bm": "Bruch's membrane",
+      "sdretinanet": "SD-RetinaNet layers + lesions"
     },
     "empty": {
       "awaitingSidecar": "Awaiting sidecar…",
@@ -4151,7 +4200,8 @@
       "noKpi": "No KPI yet.",
       "fundusNotAvailable": "Fundus image not yet available.",
       "bscanNotAvailable": "OCT B-scan not yet available.",
-      "noPerBscan": "No per-B-scan trace for this task."
+      "noPerBscan": "No per-B-scan trace for this task.",
+      "noSloInDicom": "No SLO image in the DICOM file"
     },
     "kpi": {
       "irf": "IRF",
@@ -4161,11 +4211,13 @@
       "gaArea": "GA area",
       "onlThickness": "ONL thickness",
       "prThickness": "PR thickness",
+      "crt": "CRT",
       "validAscans": "{valid} / {total} A-scans valid",
       "subtitle": {
         "notDetected": "not detected",
         "affected": "{count} of {total} B-scans affected",
-        "totalLoad": "Total fluid load"
+        "totalLoad": "Total fluid load",
+        "crtCentral": "Central 1 mm, ILM–BM"
       }
     },
     "etdrs": {
@@ -4277,6 +4329,16 @@
       "allOn": "All on",
       "allOff": "All off"
     },
+    "lesions": {
+      "legendTitle": "Lesions"
+    },
+    "sdretinanet": {
+      "caution": {
+        "geometryMissing": "Scan geometry was unavailable: thickness, CRT and ETDRS values could not be computed.",
+        "foveaNeedsReview": "The detected fovea needs review: CRT and ETDRS values may be off-centre.",
+        "gridCenterFallback": "No fovea was detected; the ETDRS grid is centred on the scan centre instead."
+      }
+    },
     "correction": {
       "tools": {
         "off": "View",
@@ -4360,6 +4422,12 @@
       "bindSuccess": "Scan assigned to a visit.",
       "bindConflict": "Scan was already assigned by another session.",
       "bindError": "Assignment failed."
+    },
+    "trail": {
+      "unassigned": "not assigned"
+    },
+    "siblings": {
+      "label": "Analyses of this scan"
     }
   },
   "bugReport": {

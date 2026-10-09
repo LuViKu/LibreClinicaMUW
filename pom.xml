@@ -5,7 +5,7 @@
 	<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 	<artifactId>LibreClinica</artifactId>
 	<packaging>pom</packaging>
-	<version>1.5.0-beta.15-muw</version>
+	<version>1.5.0-beta.16-muw</version>
 	<name>LibreClinica MUW Ophthalmology</name>
 	<description>Electronic Data Capture (EDC) for clinical trials — institutional build of LibreClinica for the Department of Ophthalmology and Optometry, Medical University of Vienna.</description>
 	<organization>
@@ -99,6 +99,14 @@
 			     NOTE: this profile does NOT yet bootstrap the database schema;
 			     test schema setup via Liquibase is pending work for Phase 0.2. -->
 			<id>integration-tests</id>
+			<properties>
+				<!-- @Tag("isolation-leak") classes record known, accepted findings
+				     and fail by design (CrossSiteIsolationLeaksIT: the anonymous
+				     upload portals, open on the internal deployment and closed on
+				     the internet-facing one). Run them on purpose with
+				     -DexcludedGroups= -Dgroups=isolation-leak. -->
+				<excludedGroups>isolation-leak</excludedGroups>
+			</properties>
 			<build>
 				<pluginManagement>
 					<plugins>

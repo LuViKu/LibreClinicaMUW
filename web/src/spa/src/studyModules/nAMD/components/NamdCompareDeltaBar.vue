@@ -34,11 +34,11 @@ interface Cell {
 const cells = computed<Cell[]>(() => {
   const A = props.a
   const B = props.b
-  function pair(get: (v: NamdVisit) => number): { a: number | null; b: number | null; delta: number | null } {
+  function pair(get: (v: NamdVisit) => number | null): { a: number | null; b: number | null; delta: number | null } {
     if (!A || !B) return { a: A ? get(A) : null, b: B ? get(B) : null, delta: null }
     const av = get(A)
     const bv = get(B)
-    return { a: av, b: bv, delta: bv - av }
+    return { a: av, b: bv, delta: av != null && bv != null ? bv - av : null }
   }
   return [
     { key: 'IRF', unit: ' nL', direction: 'badUp', ...pair((v) => v.irf) },

@@ -78,4 +78,24 @@ class RetinalJobFollowerTest {
                 List.of(new ExistingJob(7, "fluid", "done"), new ExistingJob(9, "fluid", "cancelled")));
         assertEquals(List.of(new Step(Action.ATTACH, "fluid", 7L)), steps);
     }
+
+    @Test
+    void onlyOctVolumesAreAnalysable() {
+        assertTrue(RetinalJobFollower.isAnalysable("e2e", null));
+        assertTrue(RetinalJobFollower.isAnalysable("E2E", null));
+        assertTrue(!RetinalJobFollower.isAnalysable("image", null));
+        // DR-039 — a DICOM is analysable when it was classified as an OCT volume.
+        assertTrue(RetinalJobFollower.isAnalysable("dicom", Boolean.TRUE));
+        assertTrue(!RetinalJobFollower.isAnalysable("dicom", Boolean.FALSE));
+        assertTrue(!RetinalJobFollower.isAnalysable("dicom", null), "unclassified is not analysable");
+        assertTrue(!RetinalJobFollower.isAnalysable("image", Boolean.TRUE));
+        assertTrue(!RetinalJobFollower.isAnalysable(null, null));
+    }
+
+    @Test
+    void theStartableTasksAreTheRerunList() {
+        assertEquals(List.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet"), RetinalJobFollower.STARTABLE_TASKS);
+        assertTrue(!RetinalJobFollower.isStartableTask("bm"), "layers covers bm");
+        assertTrue(!RetinalJobFollower.isStartableTask(null));
+    }
 }

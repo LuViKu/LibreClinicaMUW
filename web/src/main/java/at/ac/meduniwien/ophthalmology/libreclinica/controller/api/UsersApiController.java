@@ -1677,6 +1677,13 @@ public class UsersApiController {
         target.setPasswd(hash);
         target.setPasswdTimestamp(null);
         target.setAccountNonLocked(Boolean.TRUE);
+        // The failed-login lock (UserAccountDAO.lockUser) also moves status_id
+        // to LOCKED, and the login filter refuses a LOCKED status before it
+        // looks at the password. Clearing only account_non_locked left such an
+        // account locked; the legacy UnLockUserServlet restores AVAILABLE too.
+        if (target.getStatus() != null && target.getStatus().isLocked()) {
+            target.setStatus(Status.AVAILABLE);
+        }
         target.setLockCounter(0);
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());

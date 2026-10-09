@@ -76,11 +76,11 @@ export interface NamdVisit {
    * for backwards-compat with the existing seg-cards / report / SegCards
    * read sites that don't care about the ring filter.
    */
-  irf: number
+  irf: number | null
   /** Subretinal fluid volume (nL). Mirrors {@link irf}'s c6 semantics. */
-  srf: number
+  srf: number | null
   /** Pigment-epithelial detachment volume (nL). Mirrors {@link irf}'s c6 semantics. */
-  ped: number
+  ped: number | null
   /**
    * 2026-06-26 user-feedback round — per-ETDRS-ring biomarker
    * breakdown driving the Flüssigkeitsverlauf chart's region filter
@@ -94,17 +94,21 @@ export interface NamdVisit {
     c3: { irf: number; srf: number; ped: number }
     c6: { irf: number; srf: number; ped: number }
   } | null
-  /** Central retinal thickness (µm). */
-  crt: number
-  /** Best-corrected visual acuity (ETDRS letters). */
-  bcva: number
+  /** Central retinal thickness (µm). Null when unknown — not 0. */
+  crt: number | null
+  /**
+   * Best-corrected visual acuity (ETDRS letters). Null when no BCVA was
+   * recorded for the visit (or the BCVA timeline could not be fetched) — NOT 0.
+   * Zero letters is a real (if extreme) acuity; "unknown" must never look like it.
+   */
+  bcva: number | null
   /**
    * 2026-06-24 user-feedback round — canonical raw BCVA form for
    * tooltip + audit display. For decimal-flavoured studies (post-
    * BCVA-portal) this is the `1,0p-2` / `0,8+2` form; for legacy
    * letters-flavoured studies the field stays null (the letter
    * count IS the raw form). Null also when no BCVA row exists for
-   * the visit at all (the chart falls back to {@link bcva} = 0).
+   * the visit at all ({@link bcva} is null then).
    */
   bcvaRaw: string | null
   /** Injection agent, or empty string when no injection administered. */
@@ -130,19 +134,45 @@ export interface NamdVisit {
   studyEventId: number | null
   /**
    * 2026-06-30 — per-eye clinical-flag observations recorded by the
-   * physician at this visit. Both default to false when no CRF row
-   * was authored. The rule engine reads the eye matching
+   * physician at this visit. The rule engine reads the eye matching
    * {@link NamdPatient.eye}.
+   *
+   * Fail-closed: true/false mean the physician RECORDED that answer; null
+   * means it was never recorded or the flags could not be fetched. The rule
+   * engine refuses to recommend on null (it used to read it as "no
+   * haemorrhage", which let EXTEND fire on an unexamined eye).
    */
-  hemorrhage: boolean
+  hemorrhage: boolean | null
   /**
    * 2026-06-30 — true when a BCVA drop is clinically attributable
    * to nAMD activity (vs cataract, dry eye, etc). The rule engine
    * fires {@code BCVA_LOSS_5_LETTERS} only when this flag is true
    * AND the BCVA delta vs the prior visit is ≤ −5 letters.
    */
-  bcvaAttributableToNamd: boolean
+  bcvaAttributableToNamd: boolean | null
+  /**
+   * Model version of the fluid job behind this visit (e.g. "placeholder-v1"
+   * from the sidecar's stub adapter). Null when unknown. A placeholder model
+   * emits fake deterministic volumes, so the rule engine never derives a
+   * recommendation from one.
+   */
+  modelVersion?: string | null
+  /**
+   * Inputs that could not be loaded (as opposed to merely not recorded), so
+   * the UI can say "fetch failed" instead of "not recorded".
+   */
+  fetchFailures?: NamdFetchFailure[]
 }
+
+/** A data source the composable tried and failed to load for a visit. */
+export type NamdFetchFailure = 'jobDetail' | 'bcva' | 'clinicalFlags'
+
+/** Rule-engine inputs that can be unknown, as `<visit>.<field>`. */
+export type NamdMissingInput =
+  | `${'current' | 'previous'}.${'irf' | 'srf' | 'ped' | 'fluidByRegion' | 'bcva'}`
+  | 'current.hemorrhage'
+  | 'current.bcvaAttributableToNamd'
+  | 'reference.fluidByRegion'
 
 /** Trigger keys the rule engine emits — stable wire identifiers. */
 export type NamdTriggerKey =
@@ -184,9 +214,24 @@ export interface NamdAiRecommendation {
    * The doctor's chosen TREAT/OBSERVE action stays a separate concern
    * captured by the decision panel.
    */
-  rec: 'SHORTEN' | 'KEEP' | 'EXTEND'
-  /** Suggested next interval (weeks). */
-  intervalWeeks: number
+  rec: 'SHORTEN' | 'KEEP' | 'EXTEND' | null
+  /**
+   * Why {@link rec} is null: 'INSUFFICIENT_DATA' (an input the rules need is
+   * unknown, or the visit comes from a placeholder model). Null when a
+   * recommendation was produced. The clinician can still decide manually.
+   * Consumers must handle a null rec; it is never to be rendered as KEEP/EXTEND.
+   */
+  reason: 'INSUFFICIENT_DATA' | null
+  /** Rule inputs that were unknown (empty when nothing the rules need was missing). */
+  missing: NamdMissingInput[]
+  /** True when the current/previous visit came from a placeholder model. */
+  placeholderModel: boolean
+  /** Data sources that failed to load for the visits compared (vs. merely not recorded). */
+  fetchFailures: NamdFetchFailure[]
+  /** Drug the AI recommends, if it ever does (it currently does not). Compared by the decision panel when present. */
+  drug?: string | null
+  /** Suggested next interval (weeks). Null when {@link rec} is null. */
+  intervalWeeks: number | null
   /**
    * One-line rationale, as a translation key plus its parameters.
    *

@@ -8,7 +8,7 @@
  * via `canCloseNote(role, status)` etc. so the buttons match the
  * legacy thread-panel UI.
  *
- * Phase E.5 follow-up (2026-06-02, TODO #7): {@link DiscrepancyNote}
+ * Phase E.5 follow-up (2026-06-02): {@link DiscrepancyNote}
  * is derived from the openapi-typescript-generated
  * {@code components['schemas']['DiscrepancyNoteDto']} so SPA call
  * sites track the backend record shape. Narrow {@link NoteType} /

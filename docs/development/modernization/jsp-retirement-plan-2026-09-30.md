@@ -445,7 +445,7 @@ These were delegated ("make the best educated choice") and are recorded here so 
 | D2 | **`ra` / `ra2` holders are not migrated automatically** (§3.2.3) | Both targets widen rights: CRC passes study-admin and dataset gates, Investigator adds e-signature and reopen. The roles stay as they are, are shown in the SPA as "Data Entry Person (legacy)", and a role change needs an explicit choice (the API answers 409 without one). The migration waits for the production count (§13) and a deliberate GCP decision |
 | D3 | DR-018 is accepted | The whole plan depends on it |
 | D4 | The six-month bake-in is kept | DR-018 requires it; R3 deletions are therefore deferred by design |
-| D5 | **Open:** the role model for the legacy `coordinator` ("Data Manager" in legacy, CRC in the SPA) | The backend already lets `coordinator` administer the study; the SPA routes do not. Recommendation: make the SPA gates follow the backend. Blocks W3 |
+| D5 | **The SPA gates follow the backend; no backend right is widened** (2026-10-02). The legacy `coordinator` (CRC in the SPA, "Data Manager" in legacy) is the role a study's creator is bound to | The backend (`StudyAdminAuthorization.userMayEditStudy`, `userMayManageCrfLibrary`, the export and import gates) and the legacy `mayProceed` of the same screens admit `coordinator`; the SPA routes did not. CRC now enters: Build Study, Event definitions, CRF Library, CRF, CRF version migration, CRF Builder, Sites, Group classes, Rules, Data Export (`/export`, `/datasets`, create and edit dataset), Study Audit Log and Import CRF Data. The build rail, the primary navigation and the home cards follow. Stay refused for CRC: Create Study, Edit Study, Study Parameters and Manage Users (sysadmin only in the backend). Actions the backend keeps narrower stay narrower and answer 403: site disable and restore, event definition lock and unlock, CRF version delete (sysadmin only), CRF rename (the owner as director or admin only). The study audit log API (`/api/v1/audit`, facets, export) had no role gate; it now answers 403 unless the caller is a system administrator, director, coordinator or monitor, as legacy `StudyAuditLogServlet` (only the SPA audit page called it). Write controls follow the backend: site disable and restore, event definition lock and unlock and CRF version removal are shown to Administrator only |
 | D6 | **The heritage REST API under `/pages/auth` closes in wave 0** | Seven OpenClinica 3.x controllers, API-key only, with no caller in the app, the SPA, the legacy pages or the deployment. Closing is a configuration change and every call is logged during the bake-in |
 | D7 | Investigators, monitors and data-entry users download the study metadata from the SPA home page | So `/DownloadStudyMetadata` can close in W1; no SPA page for the current study existed for these roles |
 | D8 | **Export schedules: only the creator or a system administrator changes one** | Its runs execute as the creator |
@@ -469,6 +469,7 @@ These were delegated ("make the best educated choice") and are recorded here so 
 | R1.3 | SPA login answers JSON; SPA logout API | #384 |
 | R1.3 (DR-029) | old SPA upload pages deleted | #378 |
 | R2 W0 | 17 not-needed screens and the heritage REST API closed | #371 |
+| R2 W1 | Administration prepared in this branch: 43 paths added to the closed-paths default: users, lockout, test e-mail, login history, all-studies list, study metadata download, job pages, LDAP picker, and, after D5, the CRF library servlets and `/AuditLogStudy`. Held back: `/ViewCRF`, `/ViewStudy`. Per-screen record in the [retirement log](phase-e-retirement-log.md#w1-parity-record) | branch `chore/muw-retire-w1-admin` |
 | R4 | PostgreSQL 17 for dev/test/CI + production runbook | #376 |
 | R4 | OpenPDF (DR-007), Hibernate 6.6, Quartz 2.5 | #385 |
 | R4 | Liquibase 4 | #388 |
@@ -484,7 +485,7 @@ The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each 
 - **Clinical data-integrity gaps in the SPA data-entry path** (reason for change after reopen, required items at completion, subject identifiers, rules on save) — #391.
 - **The monitor's SPA gaps** — #390.
 - **The data manager's SPA gaps** (import commit, audit paging, cascades) — #392.
-- **Item-data provenance** survives status cascades (`ItemDataDAO.updateStatusOnly`) — #377.
+- **Item-data provenance** survives status cascades (`ItemDataDAO.updateStatusOnly`) — #377 for the SPA paths; the legacy remove, restore, lock and unlock servlets use `updateStatusOnly` (or `updateStatusAndOldStatusOnly` where a restore reads `old_status_id`) — branch `fix/muw-legacy-status-provenance`.
 - **Dependabot:** 20 open alerts on the SPA lockfile; 3 fixed, 17 dismissed with the reason on each alert — #366.
 
 ### 14.4 Deferred, with the reason
@@ -492,8 +493,8 @@ The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each 
 | Item | Reason | Next step |
 |---|---|---|
 | R3 deletions | The six-month bake-in (DR-018, D4) | W0 deletion no earlier than six months after #371 reaches production |
-| W1–W3 closure | Each wave closes only once its SPA gaps have landed and parity is recorded | Close per the retirement log once the packages above are merged |
-| W3 | Also blocked by D5 (role model) | Maintainer decision |
+| W1 closure | Prepared in branch `chore/muw-retire-w1-admin` (43 paths). **Held back:** `/ViewCRF` (its "run all rules for this CRF" link has no SPA counterpart) and `/ViewStudy` (linked for every role from the legacy side bar; no read-only SPA study view) | Merge the branch; announce, crawl-diff, check the log and start the clock per the retirement log; decide whether `/ViewCRF` and `/ViewStudy` need an SPA feature first |
+| W2–W3 closure | Each wave closes only once its SPA gaps have landed and parity is recorded | Close per the retirement log once the packages above are merged |
 | W4 | Needs the E.10 usability panel on the SPA (DR-019), a human study | Schedule the panel |
 | W5 | Needs every other wave closed, and four couplings removed first: the expired-session redirect targets `/MainMenu` (also for SPA API calls); SSO logins land on `/MainMenu` and get their session set-up there; e-mail links use `sysURL`; the legacy logout's success target | A follow-up package before W5 |
 | `ra` / `ra2` migration | D2 | Production count (§13), then an explicit choice |
@@ -503,4 +504,3 @@ The R1.0 catalogue walks and the reviews found gaps the plan did not list. Each 
 | Spring Boot 4 | DR-037; see the spike result | Per the spike |
 | commons-lang/collections, Phase C finish | Most affected files are legacy (§9) | After R3 |
 | Production checks (§13) | No production access in this pass | Lukas runs the queries |
-| Legacy servlets still clear item-data provenance on status changes | Retiring; the SPA paths are fixed | A small follow-up switching them to `updateStatusOnly`, or their closure |

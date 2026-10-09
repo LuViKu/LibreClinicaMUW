@@ -119,8 +119,21 @@ public class SitesApiController {
         StudyBean parent = studyDao.findByOid(parentOid);
         ArrayList<StudyBean> sites = studyDao.findAllByParent(parent.getId());
 
+        // Cross-site isolation: a role on the parent study lists every site; a
+        // role on one site lists that site only (and none for a user with no
+        // role anywhere under the parent). A system administrator lists all.
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        boolean allSites = me.isSysAdmin();
+        java.util.Set<Integer> mine = StudyAdminAuthorization.liveRoleStudyIds(me, dataSource);
+        if (mine.contains(parent.getId())) allSites = true;
+        if (!allSites && sites.stream().noneMatch(s -> mine.contains(s.getId()))) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + parentOid + "'"));
+        }
+
         List<StudyIdentityDto> out = new ArrayList<>(sites.size());
         for (StudyBean site : sites) {
+            if (!allSites && !mine.contains(site.getId())) continue;
             out.add(toIdentityDto(site, parent));
         }
         return ResponseEntity.ok(out);

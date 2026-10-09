@@ -21,11 +21,20 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import {
+  decodeLesionPackedValue,
+  lesionPackedLayout,
+  useSegmentationEnvelope,
+} from '@/composables/useSegmentationEnvelope'
 import {
   IOWA_DEFAULT_VISIBLE,
   IOWA_LAYER_COLORS,
   IOWA_LAYER_LABELS,
+  SDRETINANET_DEFAULT_VISIBLE,
+  SDRETINANET_LAYER_COLORS,
+  SDRETINANET_LAYER_LABELS,
+  sdRetinaNetLesionColor,
+  sdRetinaNetLesionDisplayLabel,
 } from '@/components/retinalPalette'
 
 const { t } = useI18n()
@@ -212,6 +221,178 @@ watch(jobIdRef, (id) => {
 }, { immediate: true })
 
 /**
+ * SD-RetinaNet (sdretinanet task) — a second boundary stack, painted and
+ * toggled exactly like the IOWA `layers` stack but with its own palette
+ * and CRT-trio defaults (its boundary indices differ from IOWA's). The
+ * task is only known once the envelope arrives, so the defaults are
+ * re-applied whenever the task (or the job) changes. Watching the job
+ * too matters: switching between two sdretinanet jobs leaves the task
+ * unchanged while the jobId watcher above has already reset to the IOWA
+ * defaults. For a `layers` job the result is the same as that watcher's.
+ */
+const isSdRetinaNet = computed<boolean>(() => segEnvelope.value?.task === 'sdretinanet')
+const isLayerStack = computed<boolean>(() => {
+  const task = segEnvelope.value?.task
+  return task === 'layers' || task === 'sdretinanet'
+})
+const layerPalette = computed<readonly string[]>(() =>
+  isSdRetinaNet.value ? SDRETINANET_LAYER_COLORS : IOWA_LAYER_COLORS,
+)
+const layerLegendLabels = computed<readonly string[]>(() => {
+  const labels = segEnvelope.value?.labels
+  if (labels?.length) return labels
+  return isSdRetinaNet.value ? SDRETINANET_LAYER_LABELS : IOWA_LAYER_LABELS
+})
+
+watch([() => segEnvelope.value?.task, jobIdRef], ([task, id]) => {
+  if (task !== 'layers' && task !== 'sdretinanet') return
+  visibleLayers.value = new Set(task === 'sdretinanet' ? SDRETINANET_DEFAULT_VISIBLE : IOWA_DEFAULT_VISIBLE)
+  loadLayersVisibility(id)
+}, { immediate: true })
+
+/**
+ * SD-RetinaNet lesion overlay — the task's second envelope
+ * ({@code ?part=lesions}, kind {@code lesion_packed}). Fetched only once
+ * the default envelope says the job is sdretinanet, so no other task
+ * makes the extra request.
+ *
+ * <p>Classes come from the labels header, never from a hard-coded list:
+ * main lesions first (indices 0..M-1), then the {@code +} overlay lesions
+ * (M..M+K-1). Visibility is tracked as the set of HIDDEN class indices so
+ * the default — every class on — needs no knowledge of the header.
+ */
+const lesionJobId = computed<number | null>(() =>
+  isSdRetinaNet.value ? jobIdRef.value : null,
+)
+const { envelope: lesionEnvelope } = useSegmentationEnvelope(lesionJobId, 'lesions')
+const hiddenLesions = ref<Set<number>>(new Set())
+watch(jobIdRef, () => { hiddenLesions.value = new Set() })
+
+const lesionLayout = computed(() => {
+  const env = lesionEnvelope.value
+  if (!isSdRetinaNet.value || !env || env.kind !== 'lesion_packed') return null
+  return lesionPackedLayout(env.labels)
+})
+
+interface LesionClass {
+  /** Display label (Cyst → IRF, Pseudodrusen → SDD). */
+  label: string
+  color: string
+}
+
+const lesionClasses = computed<LesionClass[]>(() => {
+  const layout = lesionLayout.value
+  if (!layout) return []
+  return [...layout.mainLabels, ...layout.overlayLabels].map((raw) => {
+    const label = sdRetinaNetLesionDisplayLabel(raw)
+    return { label, color: sdRetinaNetLesionColor(label) }
+  })
+})
+
+function toggleLesion(index: number): void {
+  const next = new Set(hiddenLesions.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  hiddenLesions.value = next
+}
+
+/** ~35 % — the B-scan anatomy must stay readable under the lesion wash. */
+const LESION_ALPHA = 89
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.replace('#', ''), 16)
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
+}
+
+/**
+ * RGBA for every possible packed byte (256 × 4), honouring the per-class
+ * toggles. A pixel's main lesion is painted first and each visible
+ * overlay is composited over it ("source-over", straight alpha), so HRF
+ * inside a cyst reads as a lighter cyst rather than replacing it.
+ * Rebuilt only when the header or the toggles change; the per-slice
+ * paint is then a table lookup per pixel.
+ */
+const lesionLut = computed<Uint8ClampedArray | null>(() => {
+  const layout = lesionLayout.value
+  if (!layout) return null
+  const classes = lesionClasses.value
+  const rgbs = classes.map((c) => hexToRgb(c.color))
+  const hidden = hiddenLesions.value
+  const nMain = layout.mainLabels.length
+  const a = LESION_ALPHA / 255
+  const lut = new Uint8ClampedArray(256 * 4)
+  for (let v = 1; v < 256; v++) {
+    const { mainIndex, overlayIndices } = decodeLesionPackedValue(v, layout)
+    const layers: number[] = []
+    if (mainIndex != null) layers.push(mainIndex)
+    for (const k of overlayIndices) layers.push(nMain + k)
+    let r = 0
+    let g = 0
+    let b = 0
+    let alpha = 0
+    for (const idx of layers) {
+      if (hidden.has(idx)) continue
+      const c = rgbs[idx]
+      if (!c) continue
+      const outA = a + alpha * (1 - a)
+      r = (c[0] * a + r * alpha * (1 - a)) / outA
+      g = (c[1] * a + g * alpha * (1 - a)) / outA
+      b = (c[2] * a + b * alpha * (1 - a)) / outA
+      alpha = outA
+    }
+    const px = v * 4
+    lut[px] = r
+    lut[px + 1] = g
+    lut[px + 2] = b
+    lut[px + 3] = Math.round(alpha * 255)
+  }
+  return lut
+})
+
+/**
+ * Paint slice {@code z} of the lesion envelope onto the overlay canvas
+ * (already sized {@code width × height} and cleared). Must run before
+ * the boundary polylines are stroked: putImageData replaces pixels
+ * rather than blending, so anything drawn earlier would be wiped.
+ */
+function paintLesionSlice(ctx: CanvasRenderingContext2D, z: number, width: number, height: number): void {
+  const env = lesionEnvelope.value
+  const lut = lesionLut.value
+  if (!env || !lut || env.kind !== 'lesion_packed' || env.shape.length !== 3) return
+  const nZ = env.shape[0] ?? 0
+  const rows = env.shape[1] ?? 0
+  const cols = env.shape[2] ?? 0
+  if (!rows || !cols || z >= nZ) return
+  const data = env.data as Uint8Array
+  const sliceStride = rows * cols
+  const sliceOffset = z * sliceStride
+  const img = ctx.createImageData(cols, rows)
+  for (let i = 0; i < sliceStride; i++) {
+    const v = data[sliceOffset + i] ?? 0
+    if (v === 0) continue
+    const src = v * 4
+    const px = i * 4
+    img.data[px] = lut[src]!
+    img.data[px + 1] = lut[src + 1]!
+    img.data[px + 2] = lut[src + 2]!
+    img.data[px + 3] = lut[src + 3]!
+  }
+  if (rows === height && cols === width) {
+    ctx.putImageData(img, 0, 0)
+    return
+  }
+  // The lesion grid should match the B-scan pixel grid; if it does not,
+  // scale through a scratch canvas rather than misplace the mask.
+  const scratch = document.createElement('canvas')
+  scratch.width = cols
+  scratch.height = rows
+  const sctx = scratch.getContext('2d')
+  if (!sctx) return
+  sctx.putImageData(img, 0, 0)
+  ctx.drawImage(scratch, 0, 0, width, height)
+}
+
+/**
  * 2026-06-22 round 4 — position the overlay canvas at the bscan's
  * *actual rendered* bounding box via cornerstone's worldToCanvas
  * coordinate transform. Previous attempts (pixel-aspect wrapper,
@@ -368,13 +549,20 @@ function paintOverlay(): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, cols, h)
+    // sdretinanet — lesion wash underneath the boundary lines. Painted
+    // first because putImageData overwrites what is already there.
+    if (env.task === 'sdretinanet') paintLesionSlice(ctx, z, cols, h)
     // 2026-06-25 — palette is task-specific. The `layers` task ships
     // an 11-surface IOWA stack; other surface_y tasks (onl, pr) stay
     // on the legacy 4-entry SURFACE_PALETTE which wraps modulo. Per-
     // surface visibility + focused-layer alpha kick in for layers
     // only; ONL/PR always render both polylines at full opacity.
-    const isLayers = env.task === 'layers'
-    const palette = isLayers ? IOWA_LAYER_COLORS : SURFACE_PALETTE
+    // sdretinanet's 12-boundary stack behaves like `layers` with its
+    // own palette.
+    const isLayers = env.task === 'layers' || env.task === 'sdretinanet'
+    const palette = env.task === 'sdretinanet'
+      ? SDRETINANET_LAYER_COLORS
+      : isLayers ? IOWA_LAYER_COLORS : SURFACE_PALETTE
     const focused = focusedLayer.value
     // 2026-06-27 — suppression set lets BscanLayerEditOverlay hide the
     // surfaces it's already painting itself so there's no overlap of
@@ -429,6 +617,8 @@ watch([
   visibleLayers,
   focusedLayer,
   () => props.suppressedSurfaceIndices,
+  lesionEnvelope,
+  lesionLut,
 ], () => {
   paintOverlay()
 }, { flush: 'post' })
@@ -876,9 +1066,11 @@ onBeforeUnmount(() => {
              only when the envelope is the layers task; renders one
              chip per surface with click-toggle visibility + hover-
              focus. ILM + RPE + BM ship visible by default; the rest
-             persist per-job via localStorage. -->
+             persist per-job via localStorage.
+             The sdretinanet boundary stack reuses the same legend with
+             its own palette + labels. -->
         <div
-          v-if="segEnvelope?.kind === 'surface_y' && segEnvelope?.task === 'layers'"
+          v-if="segEnvelope?.kind === 'surface_y' && isLayerStack"
           class="hidden sm:flex items-center gap-2 text-[11px]"
           data-testid="bscan-viewer-layers-legend"
         >
@@ -887,9 +1079,7 @@ onBeforeUnmount(() => {
           </span>
           <span class="flex flex-wrap items-center gap-1.5">
             <button
-              v-for="(label, idx) in (segEnvelope.labels?.length
-                ? segEnvelope.labels
-                : IOWA_LAYER_LABELS)"
+              v-for="(label, idx) in layerLegendLabels"
               :key="label + idx"
               type="button"
               :data-testid="`bscan-layers-chip-${idx}`"
@@ -898,7 +1088,7 @@ onBeforeUnmount(() => {
                 ? 'border-white/30 text-white/90 bg-white/5'
                 : 'border-white/10 text-white/40'"
               :style="{ borderColor: visibleLayers.has(idx)
-                ? IOWA_LAYER_COLORS[idx % IOWA_LAYER_COLORS.length]
+                ? layerPalette[idx % layerPalette.length]
                 : undefined }"
               :title="label"
               @click="toggleLayer(idx)"
@@ -907,7 +1097,7 @@ onBeforeUnmount(() => {
             >
               <span
                 class="w-2 h-2 rounded-[2px]"
-                :style="{ backgroundColor: IOWA_LAYER_COLORS[idx % IOWA_LAYER_COLORS.length] }"
+                :style="{ backgroundColor: layerPalette[idx % layerPalette.length] }"
               />
               <span class="text-[10px] font-mono">{{ label }}</span>
             </button>
@@ -924,6 +1114,37 @@ onBeforeUnmount(() => {
             data-testid="bscan-layers-all-off"
             @click="setAllLayers(false)"
           >{{ t('retinal.layers.allOff') }}</button>
+        </div>
+        <!-- sdretinanet lesion legend — one chip per class in the
+             lesion envelope's labels header (display names: Cyst → IRF,
+             Pseudodrusen → SDD). Click toggles the class; all start on. -->
+        <div
+          v-if="lesionClasses.length"
+          class="hidden sm:flex items-center gap-2 text-[11px]"
+          data-testid="bscan-viewer-lesions-legend"
+        >
+          <span class="text-white/50 uppercase tracking-wider text-[10px]">
+            {{ t('retinal.lesions.legendTitle') }}
+          </span>
+          <span class="flex flex-wrap items-center gap-1.5">
+            <button
+              v-for="(cls, idx) in lesionClasses"
+              :key="cls.label + idx"
+              type="button"
+              :data-testid="`bscan-lesions-chip-${idx}`"
+              :aria-pressed="!hiddenLesions.has(idx)"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border transition-opacity"
+              :class="!hiddenLesions.has(idx)
+                ? 'border-white/30 text-white/90 bg-white/5'
+                : 'border-white/10 text-white/40'"
+              :style="{ borderColor: !hiddenLesions.has(idx) ? cls.color : undefined }"
+              :title="cls.label"
+              @click="toggleLesion(idx)"
+            >
+              <span class="w-2 h-2 rounded-[2px]" :style="{ backgroundColor: cls.color }" />
+              <span class="text-[10px] font-mono">{{ cls.label }}</span>
+            </button>
+          </span>
         </div>
         <span class="text-[11px] text-white/60 tabular-nums font-mono">
           {{ t('retinal.bscanViewer.position', { current: modelValue + 1, total: nBscans }) }}

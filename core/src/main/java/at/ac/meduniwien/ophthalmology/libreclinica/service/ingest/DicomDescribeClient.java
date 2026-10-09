@@ -62,13 +62,17 @@ public class DicomDescribeClient {
      * @param pixelSha256 DR-036 — SHA-256 of the decoded pixel array, the
      *                    file's picture without its tags; null when the
      *                    sidecar predates it or could not decode the pixels
+     * @param numberOfFrames DR-039 — NumberOfFrames, null when absent or
+     *                    the sidecar predates it
+     * @param octVolume   DR-039 — the sidecar's verdict "OPT and more than
+     *                    one frame", null when it predates it
      */
     public record Description(String sopInstanceUid, String sopClassUid, String studyInstanceUid,
                               String seriesInstanceUid, String modality, String laterality,
                               LocalDate studyDate, LocalDate acquisitionDate,
                               String manufacturer, String manufacturerModelName,
                               String previewPngPath, boolean identityRemoved, int changedTags,
-                              String pixelSha256) {}
+                              String pixelSha256, Integer numberOfFrames, Boolean octVolume) {}
 
     /** Why a description could not be had, so the caller can pick a status code. */
     public static class DescribeException extends Exception {
@@ -128,12 +132,23 @@ public class DicomDescribeClient {
      *                  filed yet carries no name at all
      */
     public Description describe(Path file, String pseudonym) throws DescribeException {
+        return describe(file, pseudonym, false);
+    }
+
+    /**
+     * As {@link #describe(Path, String)}; {@code strict} asks the sidecar for
+     * the de-identification-required behaviour: private tags dropped and the
+     * extended attribute list (sex, size, weight, descriptions, device and
+     * station) cleared as well.
+     */
+    public Description describe(Path file, String pseudonym, boolean strict) throws DescribeException {
         if (!isConfigured()) {
             throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
                     "no DICOM describe sidecar is configured (" + KEY_URL + ")");
         }
         ObjectNode body = json.createObjectNode();
         body.put("path", file.toAbsolutePath().toString());
+        if (strict) body.put("strict", true);
         if (pseudonym != null && !pseudonym.isBlank()) {
             body.put("pseudonym", pseudonym.trim());
         } else {
@@ -192,7 +207,11 @@ public class DicomDescribeClient {
                 text(n, "previewPngPath"),
                 n.path("identityRemoved").asBoolean(false),
                 n.path("changedTags").asInt(0),
-                text(n, "pixelSha256"));
+                text(n, "pixelSha256"),
+                n.hasNonNull("numberOfFrames") && n.get("numberOfFrames").canConvertToInt()
+                        ? Integer.valueOf(n.get("numberOfFrames").asInt()) : null,
+                n.hasNonNull("octVolume") && n.get("octVolume").isBoolean()
+                        ? Boolean.valueOf(n.get("octVolume").asBoolean()) : null);
     }
 
     /**
@@ -260,6 +279,82 @@ public class DicomDescribeClient {
             return base.substring(0, base.length() - "/describe".length()) + "/fingerprint";
         }
         return base + "/fingerprint";
+    }
+
+    /**
+     * What {@link #verify} found: {@code violations} are DICOM keywords or
+     * rule names, never values.
+     */
+    public record Verification(boolean ok, java.util.List<String> violations) {}
+
+    /**
+     * Layer 2/3 — ask the sidecar whether the file at {@code file} is already
+     * de-identified, WITHOUT touching it. The patient name and id must be
+     * empty or equal {@code pseudonym}; see {@code dicom_scp/verify.py}.
+     */
+    public Verification verify(Path file, String pseudonym) throws DescribeException {
+        if (!isConfigured()) {
+            throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
+                    "no DICOM describe sidecar is configured (" + KEY_URL + ")");
+        }
+        ObjectNode body = json.createObjectNode();
+        body.put("path", file.toAbsolutePath().toString());
+        if (pseudonym != null && !pseudonym.isBlank()) {
+            body.put("pseudonym", pseudonym.trim());
+        } else {
+            body.putNull("pseudonym");
+        }
+        HttpRequest request;
+        try {
+            request = HttpRequest.newBuilder(URI.create(siblingUrl("verify")))
+                    .timeout(TIMEOUT)
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .header(TOKEN_HEADER, token)
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+                    .build();
+        } catch (IllegalArgumentException | IOException bad) {
+            throw new DescribeException(DescribeException.Reason.UNCONFIGURED,
+                    "the DICOM describe URL is not usable: " + bad.getMessage());
+        }
+        HttpResponse<String> response;
+        try {
+            response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            LOG.warn("DICOM verify sidecar unreachable: {}", e.getClass().getSimpleName());
+            throw new DescribeException(DescribeException.Reason.UNREACHABLE,
+                    "the DICOM describe sidecar did not answer");
+        }
+        int status = response.statusCode();
+        if (status == 422) {
+            throw new DescribeException(DescribeException.Reason.NOT_DICOM, "not a DICOM file");
+        }
+        if (status / 100 != 2) {
+            LOG.warn("DICOM verify sidecar answered HTTP {}", status);
+            throw new DescribeException(DescribeException.Reason.REJECTED,
+                    "the DICOM describe sidecar refused (HTTP " + status + ")");
+        }
+        try {
+            JsonNode n = json.readTree(response.body());
+            java.util.List<String> violations = new java.util.ArrayList<>();
+            for (JsonNode v : n.path("violations")) violations.add(v.asText());
+            // Fail-closed: only an explicit ok=true with no violations passes.
+            boolean ok = n.path("ok").asBoolean(false) && violations.isEmpty();
+            return new Verification(ok, violations);
+        } catch (IOException | RuntimeException malformed) {
+            throw new DescribeException(DescribeException.Reason.REJECTED,
+                    "the DICOM describe sidecar answered malformed JSON");
+        }
+    }
+
+    /** A sidecar route beside the describe one: {@code …/describe} becomes {@code …/<name>}. */
+    String siblingUrl(String name) {
+        String base = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        if (base.endsWith("/describe")) {
+            return base.substring(0, base.length() - "/describe".length()) + "/" + name;
+        }
+        return base + "/" + name;
     }
 
     private static String text(JsonNode n, String field) {

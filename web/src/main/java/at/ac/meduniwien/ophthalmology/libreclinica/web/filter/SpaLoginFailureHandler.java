@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
@@ -42,15 +43,42 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigur
 public class SpaLoginFailureHandler implements AuthenticationFailureHandler {
 
     private final AuthenticationFailureHandler legacy;
+    private volatile boolean internetFacing;
 
     public SpaLoginFailureHandler(AuthenticationFailureHandler legacy) {
+        this(legacy, false);
+    }
+
+    /**
+     * @param internetFacing {@code libreclinica.deployment.internet-facing}.
+     *        When true every failure, for the SPA and the legacy form alike,
+     *        is reported as bad credentials: telling {@code locked} apart
+     *        would let anyone on the internet confirm that a user name exists
+     *        and lock a named account on purpose. The filter has already
+     *        written the audit row ({@code FAILED_LOGIN_LOCKED} vs
+     *        {@code FAILED_LOGIN}) and the denied-login mail, so
+     *        administrators still see the real reason.
+     */
+    public SpaLoginFailureHandler(AuthenticationFailureHandler legacy, boolean internetFacing) {
         this.legacy = legacy;
+        this.internetFacing = internetFacing;
+    }
+
+    /**
+     * Set by {@code SecurityConfig} from {@code libreclinica.deployment.internet-facing}
+     * (the XML bean context has no property resolution).
+     */
+    public void setInternetFacing(boolean internetFacing) {
+        this.internetFacing = internetFacing;
     }
 
     @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
             AuthenticationException exception) throws IOException, ServletException {
+        if (internetFacing) {
+            exception = new BadCredentialsException("Bad Credentials");
+        }
         if (!SpaLoginSuccessHandler.SPA_LOGIN.matches(request)) {
             legacy.onAuthenticationFailure(request, response, exception);
             return;

@@ -42,6 +42,7 @@
         "bcvaAttrHint": "[NEEDS_REVIEW] Clinical judgement on ≥ 5-letter loss vs prior visit. Confirms the BCVA-based SHORTEN trigger.",
         "saved": "[NEEDS_REVIEW] Saved",
         "dirty": "[NEEDS_REVIEW] Unsaved changes",
+        "unrecorded": "[NEEDS_REVIEW] Not recorded yet. The recommendation needs both answers — please assess both and save (an explicit \"no\" has to be saved too).",
         "unavailable": "[NEEDS_REVIEW] This visit has no CRF row yet. Create the NAMD_VISIT CRF for this visit before recording clinical findings."
       },
       "overview": {
@@ -54,6 +55,7 @@
         "clinicalBcvaAttr": "[NEEDS_REVIEW] BCVA loss nAMD-attributed",
         "clinicalFlagYes": "[NEEDS_REVIEW] Yes",
         "clinicalFlagNo": "[NEEDS_REVIEW] No",
+        "clinicalFlagUnknown": "[NEEDS_REVIEW] Not recorded",
         "visitList": "[NEEDS_REVIEW] Visit timeline (BCVA)",
         "bcvaTrend": "[NEEDS_REVIEW] BCVA trend",
         "armUnassigned": "[NEEDS_REVIEW] This patient is not yet assigned to a study-arm group. AI quantification + AI recommendation are hidden until assignment."
@@ -155,6 +157,10 @@
         "skip": "Later",
         "alreadyPlanned": "A visit is already scheduled for {date}."
       },
+      "placeholder": {
+        "banner": "Placeholder result — not a real segmentation. The fluid values of visit(s) {visits} come from a placeholder model with artificial values and must not be used clinically.",
+        "badge": "Placeholder"
+      },
       "recommendation": {
         "headline": {
           "SHORTEN": "[NEEDS_REVIEW] Shorten interval",
@@ -163,6 +169,32 @@
         },
         "intervalProposed": "[NEEDS_REVIEW] Proposed: {weeks} weeks",
         "firedTriggers": "[NEEDS_REVIEW] Fired triggers",
+        "insufficient": {
+          "headline": "[NEEDS_REVIEW] No recommendation — insufficient data",
+          "body": "[NEEDS_REVIEW] The following inputs are missing. A missing value is never treated as \"no finding\":",
+          "placeholder": "Result from placeholder model — not a real segmentation. No recommendation is shown.",
+          "manual": "[NEEDS_REVIEW] You can still record the treatment decision manually below.",
+          "fetchFailed": "[NEEDS_REVIEW] Loading failed: {sources}.",
+          "visit": {
+            "current": "[NEEDS_REVIEW] Current visit",
+            "previous": "[NEEDS_REVIEW] Previous visit",
+            "reference": "[NEEDS_REVIEW] Reference visit"
+          },
+          "field": {
+            "irf": "[NEEDS_REVIEW] IRF volume",
+            "srf": "[NEEDS_REVIEW] SRF volume",
+            "ped": "[NEEDS_REVIEW] PED volume",
+            "fluidByRegion": "[NEEDS_REVIEW] Fluid per ETDRS ring",
+            "bcva": "[NEEDS_REVIEW] BCVA",
+            "hemorrhage": "[NEEDS_REVIEW] Haemorrhage (clinical finding)",
+            "bcvaAttributableToNamd": "[NEEDS_REVIEW] BCVA loss attributable to nAMD (clinical finding)"
+          },
+          "source": {
+            "jobDetail": "[NEEDS_REVIEW] segmentation result",
+            "bcva": "[NEEDS_REVIEW] BCVA timeline",
+            "clinicalFlags": "[NEEDS_REVIEW] clinical findings"
+          }
+        },
         "thresholdSet": "Threshold set {version}.",
         "disclaimer": "[NEEDS_REVIEW] This recommendation follows the study protocol. The treating physician makes the clinical decision.",
         "rationale": {

@@ -87,6 +87,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanel;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.StudyInfoPanelLine;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InconsistentStateException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
 import org.quartz.JobKey;
@@ -152,7 +153,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 // request/session state. MUW runs single-host (no session replication), so the
 // servlet never round-trips a serialized form — the warning is meaningless here
 // and noisy across 195 subclasses.
-@SuppressWarnings("all")
 public abstract class SecureController extends HttpServlet {
     /**
 	 * 
@@ -288,6 +288,40 @@ public abstract class SecureController extends HttpServlet {
     protected void refuseRecordOutsideCurrentStudy() throws InsufficientPermissionException {
         addPageMessage(resexception.getString("not_select_valid_entity_current_study"));
         throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("entity_not_belong_studies"), "1");
+    }
+
+    /**
+     * The record-scope check of the heritage servlets: the study that owns a record the request names (its study
+     * subject's {@code study_id}) must be the session's study or one of its sites, which is all a site session
+     * covers. Refuses with the main menu otherwise; an unknown record (id 0) is refused too.
+     *
+     * @param owningStudyId the {@code study_id} of the record's study subject
+     */
+    protected void assertRecordInScope(int owningStudyId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsStudy(currentStudy, owningStudyId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
+    /** {@link #assertRecordInScope(int)} for a study subject id of the request. */
+    protected void assertStudySubjectInScope(int studySubjectId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsStudySubject(currentStudy, studySubjectId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
+    /** {@link #assertRecordInScope(int)} for a study event id of the request. */
+    protected void assertStudyEventInScope(int studyEventId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsStudyEvent(currentStudy, studyEventId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
+    }
+
+    /** {@link #assertRecordInScope(int)} for an event CRF id of the request. */
+    protected void assertEventCrfInScope(int eventCrfId) throws InsufficientPermissionException {
+        if (!new StudyTreeScope(sm.getDataSource()).containsEventCrf(currentStudy, eventCrfId)) {
+            refuseRecordOutsideCurrentStudy();
+        }
     }
 
     public static final String USER_BEAN_NAME = "userBean";
@@ -1187,7 +1221,14 @@ public abstract class SecureController extends HttpServlet {
 
         return note;
     }
-    public void checkRoleByUserAndStudy(UserAccountBean ub, int studyId, int siteId){
+    /**
+     * Refuses the request when the user holds no role on the study or the site. The refusal is an
+     * {@link InsufficientPermissionException}, which ends the request at the main menu.
+     */
+    public void checkRoleByUserAndStudy(UserAccountBean ub, int studyId, int siteId) throws InsufficientPermissionException {
+        if (ub.isSysAdmin()) {
+            return;
+        }
         StudyUserRoleBean studyUserRole = ub.getRoleByStudy(studyId);
         StudyUserRoleBean siteUserRole = new StudyUserRoleBean();
         if (siteId != 0) {
@@ -1196,8 +1237,7 @@ public abstract class SecureController extends HttpServlet {
         if(studyUserRole.getRole().equals(Role.INVALID) && siteUserRole.getRole().equals(Role.INVALID)){
             addPageMessage(respage.getString("no_have_correct_privilege_current_study")
                     + " " + respage.getString("change_active_study_or_contact"));
-            forwardPage(Page.MENU_SERVLET);
-            return;
+            throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
         }
     }
 

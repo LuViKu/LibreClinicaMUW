@@ -35,9 +35,14 @@ interface Props {
   studyEventId: number | null
   /** Currently-viewed eye — determines which per-eye item names to write. */
   eye: 'OD' | 'OS'
-  /** Current in-memory flag values (from useNamdVisitData → props.data.current). */
-  hemorrhage: boolean
-  bcvaAttributableToNamd: boolean
+  /**
+   * Current in-memory flag values (from useNamdVisitData → props.data.current).
+   * null = never recorded (or the fetch failed): the card shows the toggles
+   * unticked but offers the save so the physician can record an explicit
+   * "no" — the recommendation engine will not treat an unrecorded flag as one.
+   */
+  hemorrhage: boolean | null
+  bcvaAttributableToNamd: boolean | null
 }
 
 const props = defineProps<Props>()
@@ -47,8 +52,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const localHemorrhage = ref<boolean>(props.hemorrhage)
-const localBcvaAttr = ref<boolean>(props.bcvaAttributableToNamd)
+const localHemorrhage = ref<boolean>(props.hemorrhage ?? false)
+const localBcvaAttr = ref<boolean>(props.bcvaAttributableToNamd ?? false)
 const saving = ref<boolean>(false)
 const savedRecently = ref<boolean>(false)
 const saveError = ref<string | null>(null)
@@ -59,15 +64,21 @@ const saveError = ref<string | null>(null)
 watch(
   () => [props.hemorrhage, props.bcvaAttributableToNamd, props.eye, props.studyEventId] as const,
   ([nextHem, nextBcva]) => {
-    localHemorrhage.value = nextHem
-    localBcvaAttr.value = nextBcva
+    localHemorrhage.value = nextHem ?? false
+    localBcvaAttr.value = nextBcva ?? false
     savedRecently.value = false
     saveError.value = null
   },
 )
 
+// Either answer still unrecorded: the form is "dirty" from the start so the
+// physician can save an explicit answer (an untouched card must not look done).
+const unrecorded = computed(
+  () => props.hemorrhage == null || props.bcvaAttributableToNamd == null,
+)
 const dirty = computed(
-  () => localHemorrhage.value !== props.hemorrhage
+  () => unrecorded.value
+     || localHemorrhage.value !== props.hemorrhage
      || localBcvaAttr.value !== props.bcvaAttributableToNamd,
 )
 
@@ -137,6 +148,13 @@ async function save() {
     </div>
 
     <div v-else class="space-y-3">
+      <p
+        v-if="unrecorded"
+        data-testid="namd-clinical-flags-unrecorded"
+        class="rounded-md bg-amber-50 text-amber-800 px-3 py-2 text-[12px]"
+      >
+        {{ t('studyModules.namd.clinicalFlags.unrecorded') }}
+      </p>
       <label class="flex items-start gap-2.5 cursor-pointer">
         <input
           v-model="localHemorrhage"

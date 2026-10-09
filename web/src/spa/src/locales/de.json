@@ -895,7 +895,8 @@
       "replace": "Ersetzen",
       "removeConfirm": "Angehängte Datei entfernen? Das Löschen wird im Audit-Trail vermerkt.",
       "tooBig": "Datei überschreitet die zulässige Größe.",
-      "badExtension": "Dateityp ist nicht zulässig."
+      "badExtension": "Dateityp ist nicht zulässig.",
+      "deidBlocked": "Dateianhänge sind in diesem Internet-Betrieb deaktiviert: Sie können nicht auf identifizierende Inhalte geprüft werden."
     },
     "selectMulti": {
       "noneSelected": "Keine Auswahl"
@@ -3220,6 +3221,15 @@
           "optional": "fehlt – optional"
         },
         "blocksSigning": "{n} erforderliche Aufnahme(n) fehlen. Der Teilnehmer kann erst signiert werden, wenn sie der Visite zugeordnet sind."
+      },
+      "analyses": {
+        "none": "Noch keine Auswertung",
+        "start": "Auswertung starten",
+        "starting": "Wird gestartet…",
+        "menuHeader": "Fehlende Auswertung",
+        "error": "Auswertung konnte nicht gestartet werden.",
+        "started": "Auswertung gestartet: {task}",
+        "exists": "Auswertung bereits vorhanden: {task}"
       }
     }
   },
@@ -3708,6 +3718,9 @@
       "unfiledNoLabel": "Dasselbe Bild wartet bereits ohne Kennung im Eingang (Datei #{id}).",
       "dismissed": "Dasselbe Bild wurde bereits verworfen (Datei #{id}).",
       "bindAnyway": "Diese Datei trotzdem zuordnen?"
+    },
+    "sourceFormat": {
+      "dicom": "DICOM"
     }
   },
   "imagingModalities": {
@@ -3743,7 +3756,9 @@
       "performed": "durchgeführt",
       "not_performed_reason": "Begründung",
       "initials": "Kürzel"
-    }
+    },
+    "octMarker": "OCT-Volumen auswerten",
+    "octMarkerHint": "Als OCT-Modalität markiert: hier abgelegte OCT-Volumen (.e2e oder DICOM) werden ausgewertet, und der Visitenplan kann Auswertungen festlegen. Braucht E2E oder DICOM."
   },
   "studySettings": {
     "title": "Plattform-Einstellungen",
@@ -3928,6 +3943,26 @@
     },
     "actions": {
       "uploadWithoutVisit": "Ohne Visite hochladen"
+    },
+    "deid": {
+      "banner": "Internet-Betrieb: Es werden nur Heidelberg-.e2e- und DICOM-Dateien akzeptiert. Identifizierende Daten werden in Ihrem Browser entfernt, bevor etwas gesendet wird — prüfen Sie in jeder Vorschau, ob Name oder ID im Bild selbst sichtbar ist.",
+      "previewAlt": "Vorschau von {file}",
+      "noPreview": "Für diese Datei kann keine Vorschau angezeigt werden. Öffnen Sie sie zuerst in Ihrem Viewer und stellen Sie sicher, dass im Bild kein Patientenname und keine ID sichtbar ist.",
+      "confirmLabel": "Im Bild ist kein Patientenname und keine ID sichtbar",
+      "confirmAllLabel": "Alle Vorschauen geprüft: kein Patientenname, keine ID sichtbar",
+      "confirmFirst": "Bitte zuerst die Bestätigung unter der Vorschau setzen.",
+      "errors": {
+        "format": "{file}: hier nicht zulässig — nur Heidelberg-.e2e- und DICOM-Dateien können hochgeladen werden.",
+        "label": "{file}: Das Studien-Kürzel des Probanden kann nicht in die Datei geschrieben werden (zu lang oder ungewöhnliche Zeichen).",
+        "e2eNoPatientChunk": "{file}: Die .e2e-Datei enthält keinen lesbaren Patientendatenblock, die Anonymisierung ist nicht überprüfbar. Nicht hochgeladen.",
+        "e2eTruncated": "{file}: Die .e2e-Datei ist beschädigt (Patientenblock abgeschnitten). Nicht hochgeladen.",
+        "parse": "{file}: Die Datei konnte nicht gelesen oder anonymisiert werden. Nicht hochgeladen.",
+        "burnedIn": "{file}: Die DICOM-Datei meldet eingebrannte Annotationen (Identität im Bild). Nicht hochgeladen.",
+        "residual": "{file}: Nach dem Entfernen wurden in der Datei noch identifizierende Daten gefunden. Nicht hochgeladen.",
+        "verify": "{file}: Die anonymisierte Datei hat ihre eigene Prüfung nicht bestanden. Nicht hochgeladen.",
+        "laterality": "{file}: Bitte vor dem Hochladen das Auge (OD oder OS) wählen.",
+        "noSubject": "{file}: Bitte zuerst den Probanden wählen — das Kürzel wird in die Datei geschrieben."
+      }
     },
     "summary": {
       "fileSingular": "Datei",
@@ -4118,7 +4153,20 @@
         "OS": "OS · linkes Auge",
         "OD": "OD · rechtes Auge",
         "OU": "OU · beide Augen"
-      }
+      },
+      "sourceLabel": "Quelle:",
+      "deviceLabel": "Gerät:",
+      "spacingLabel": "Pixelabstand:",
+      "sourceFormat": {
+        "e2e": "E2E",
+        "dicom": "DICOM"
+      },
+      "spacingOrder": {
+        "standard": "Standardreihenfolge",
+        "swapped": "vertauscht gespeichert, physikalisch aufgelöst",
+        "standard-assumed": "wie gespeichert übernommen (nicht geprüft)"
+      },
+      "statusMessageLabel": "Grund:"
     },
     "live": {
       "indicator": "Live"
@@ -4143,7 +4191,8 @@
       "ga": "GA-Fläche",
       "bmeis": "BMEIS",
       "layers": "Schichtsegmentierung (IOWA + BM)",
-      "bm": "Bruch-Membran"
+      "bm": "Bruch-Membran",
+      "sdretinanet": "SD-RetinaNet Schichten + Läsionen"
     },
     "empty": {
       "awaitingSidecar": "Warte auf Sidecar …",
@@ -4154,7 +4203,8 @@
       "noKpi": "Noch keine Kennzahlen.",
       "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
       "bscanNotAvailable": "OCT-B-Scan ist noch nicht verfügbar.",
-      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
+      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung.",
+      "noSloInDicom": "Kein SLO-Bild in der DICOM-Datei"
     },
     "kpi": {
       "irf": "IRF",
@@ -4164,11 +4214,13 @@
       "gaArea": "GA-Fläche",
       "onlThickness": "ONL-Dicke",
       "prThickness": "PR-Dicke",
+      "crt": "CRT",
       "validAscans": "{valid} / {total} A-Scans gültig",
       "subtitle": {
         "notDetected": "nicht detektiert",
         "affected": "{count} von {total} B-Scans betroffen",
-        "totalLoad": "Fluid-Last gesamt"
+        "totalLoad": "Fluid-Last gesamt",
+        "crtCentral": "Zentral 1 mm, ILM–BM"
       }
     },
     "etdrs": {
@@ -4280,6 +4332,16 @@
       "allOn": "Alle ein",
       "allOff": "Alle aus"
     },
+    "lesions": {
+      "legendTitle": "Läsionen"
+    },
+    "sdretinanet": {
+      "caution": {
+        "geometryMissing": "Scan-Geometrie nicht verfügbar: Dicken-, CRT- und ETDRS-Werte konnten nicht berechnet werden.",
+        "foveaNeedsReview": "Die erkannte Fovea muss geprüft werden: CRT- und ETDRS-Werte sind möglicherweise dezentriert.",
+        "gridCenterFallback": "Keine Fovea erkannt; das ETDRS-Raster ist stattdessen auf die Scanmitte zentriert."
+      }
+    },
     "correction": {
       "tools": {
         "off": "Ansicht",
@@ -4360,6 +4422,12 @@
       "bindSuccess": "Scan einer Visite zugewiesen.",
       "bindConflict": "Scan wurde bereits durch eine andere Sitzung zugewiesen.",
       "bindError": "Zuweisung fehlgeschlagen."
+    },
+    "trail": {
+      "unassigned": "nicht zugeordnet"
+    },
+    "siblings": {
+      "label": "Auswertungen dieses Scans"
     }
   },
   "bugReport": {

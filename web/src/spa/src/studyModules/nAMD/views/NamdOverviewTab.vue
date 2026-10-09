@@ -102,7 +102,7 @@ const crtDelta = computed<number | null>(() => {
               :aria-label="t('studyModules.namd.overview2.crtDeltaAria')"
             />
             <span class="text-[15px] font-semibold text-slate-900 tabular-nums" data-testid="namd-overview-crt-value">
-              <template v-if="props.data.current">{{ props.data.current.crt }} µm</template>
+              <template v-if="props.data.current?.crt != null">{{ props.data.current.crt }} µm</template>
               <template v-else>—</template>
             </span>
           </span>
@@ -119,7 +119,7 @@ const crtDelta = computed<number | null>(() => {
            duplicates the information. Renders only when at least one
            visit carries a non-zero BCVA reading. -->
       <Card
-        v-if="!aiVisible && props.data.visits.some((v) => v.bcva > 0)"
+        v-if="!aiVisible && props.data.visits.some((v) => (v.bcva ?? 0) > 0)"
         :title="t('studyModules.namd.overview.bcvaTrend')"
       >
         <NamdBcvaTrendChart :visits="props.data.visits" />
@@ -136,7 +136,7 @@ const crtDelta = computed<number | null>(() => {
           <div>
             <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1">BCVA</div>
             <div class="text-[16px] font-semibold tabular-nums">
-              <template v-if="props.data.current.bcva > 0">{{ props.data.current.bcva }} L</template>
+              <template v-if="(props.data.current.bcva ?? 0) > 0">{{ props.data.current.bcva }} L</template>
               <template v-else>—</template>
             </div>
             <div v-if="props.data.current.bcvaRaw" class="text-[11px] text-slate-400 mt-0.5">
@@ -151,9 +151,11 @@ const crtDelta = computed<number | null>(() => {
               class="text-[14px] font-semibold"
               :class="props.data.current.hemorrhage ? 'text-rose-700' : 'text-slate-500'"
             >
-              {{ props.data.current.hemorrhage
-                ? t('studyModules.namd.overview.clinicalFlagYes')
-                : t('studyModules.namd.overview.clinicalFlagNo') }}
+              {{ props.data.current.hemorrhage == null
+                ? t('studyModules.namd.overview.clinicalFlagUnknown')
+                : props.data.current.hemorrhage
+                  ? t('studyModules.namd.overview.clinicalFlagYes')
+                  : t('studyModules.namd.overview.clinicalFlagNo') }}
             </div>
           </div>
           <div>
@@ -164,9 +166,11 @@ const crtDelta = computed<number | null>(() => {
               class="text-[14px] font-semibold"
               :class="props.data.current.bcvaAttributableToNamd ? 'text-rose-700' : 'text-slate-500'"
             >
-              {{ props.data.current.bcvaAttributableToNamd
-                ? t('studyModules.namd.overview.clinicalFlagYes')
-                : t('studyModules.namd.overview.clinicalFlagNo') }}
+              {{ props.data.current.bcvaAttributableToNamd == null
+                ? t('studyModules.namd.overview.clinicalFlagUnknown')
+                : props.data.current.bcvaAttributableToNamd
+                  ? t('studyModules.namd.overview.clinicalFlagYes')
+                  : t('studyModules.namd.overview.clinicalFlagNo') }}
             </div>
           </div>
         </div>

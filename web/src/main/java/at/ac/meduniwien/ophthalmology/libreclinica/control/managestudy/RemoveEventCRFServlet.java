@@ -51,7 +51,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  */
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("all")
 public class RemoveEventCRFServlet extends SecureController {
 	private static final long serialVersionUID = -9018141066583773642L;
 
@@ -95,6 +94,8 @@ public class RemoveEventCRFServlet extends SecureController {
             request.setAttribute("id", Integer.valueOf(studySubId).toString());
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
+            assertEventCrfInScope(eventCRFId);
+            assertStudySubjectInScope(studySubId);
             EventCRFBean eventCRF = (EventCRFBean) ecdao.findByPK(eventCRFId);
 
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
@@ -167,7 +168,7 @@ public class RemoveEventCRFServlet extends SecureController {
                         item.setStatus(Status.AUTO_DELETED);
                         item.setUpdater(ub);
                         item.setUpdatedDate(new Date());
-                        iddao.update(item);
+                        iddao.updateStatusOnly(item);
                         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(sm.getDataSource());
                         ArrayList<DiscrepancyNoteBean> dnNotesOfRemovedItem = dnDao.findExistingNotesForItemData(item.getId());
                         if (!dnNotesOfRemovedItem.isEmpty()) {

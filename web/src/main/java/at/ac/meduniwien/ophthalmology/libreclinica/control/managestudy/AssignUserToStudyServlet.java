@@ -40,7 +40,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.UserAccountRow;
  * 
  * @author jxu
  */
-@SuppressWarnings("all")
 public class AssignUserToStudyServlet extends SecureController {
 
 	private static final long serialVersionUID = 4960926890819274181L;
@@ -149,8 +148,16 @@ public class AssignUserToStudyServlet extends SecureController {
         FormProcessor fp = new FormProcessor(request);
         Map<Integer, Integer> tmpSelectedUsersMap = asHashMap(session.getAttribute("tmpSelectedUsersMap"), Integer.class, Integer.class);
         Set<Integer> addedUsers = new HashSet<>();
+        // only accounts that were on offer (see findUsers) can be assigned, whatever ids the form carries
+        Set<Integer> offeredIds = new HashSet<>();
+        for (UserAccountBean offered : users) {
+            offeredIds.add(offered.getId());
+        }
         for (int i = 0; i < users.size(); i++) {
             int id = fp.getInt("id" + i);
+            if (!offeredIds.contains(id)) {
+                continue;
+            }
             String firstName = fp.getString("firstName" + i);
             String lastName = fp.getString("lastName" + i);
             String name = fp.getString("name" + i);
@@ -168,12 +175,6 @@ public class AssignUserToStudyServlet extends SecureController {
                 u.setName(name);
                 u.setEmail(email);
                 u.setActiveStudyId(ub.getActiveStudyId());
-                /* TODO setOwner is not compatible to UserAccountDao.findById (returns UserAccount), 
-                 * but it is compatible to UserAccountDAO.findByPK (returns UserAccountBean), 
-                 * there is already an instance variable userDaoDomain (of type UserAccountDao) 
-                 * for SecureController and to me it does not seem to be a good solution to add an 
-                 * instance variable of type UserAccountDAO additionally  
-                 */
                 u.setOwnerId(id);
                 addedUsers.add(id);
 
@@ -202,6 +203,9 @@ public class AssignUserToStudyServlet extends SecureController {
         if (tmpSelectedUsersMap != null) { // try to fix the null pointer
             // exception
             for (Integer idSelected : tmpSelectedUsersMap.keySet()) {
+                if (!offeredIds.contains(idSelected)) {
+                    continue;
+                }
                 int roleId = tmpSelectedUsersMap.get(idSelected);
                 boolean alreadyAdded = false;
                 for (Integer idAdded : addedUsers) {
@@ -215,12 +219,6 @@ public class AssignUserToStudyServlet extends SecureController {
                     u.setId(idSelected);
                     u.setName(userAccountDao.findByPK(idSelected).getName());
                     u.setActiveStudyId(ub.getActiveStudyId());
-                    /* TODO setOwner is not compatible to UserAccountDao.findById (returns UserAccount), 
-                     * but it is compatible to UserAccountDAO.findByPK (returns UserAccountBean), 
-                     * there is already an instance variable userDaoDomain (of type UserAccountDao) 
-                     * for SecureController and to me it does not seem to be a good solution to add an 
-                     * instance variable of type UserAccountDAO additionally  
-                     */
                     u.setOwnerId(idSelected);
 
                     StudyUserRoleBean sub = new StudyUserRoleBean();
@@ -262,6 +260,12 @@ public class AssignUserToStudyServlet extends SecureController {
         ArrayList<UserAccountBean> userAvailable = new ArrayList<>();
         for (UserAccountBean u : userList) {
             int activeStudyId = currentStudy.getId();
+            // A site's coordinator is offered the study's own team (the accounts with a role on the parent study),
+            // not every account of the installation: strangers and the staff of other sites stay out of view.
+            if (currentStudy.getParentStudyId() > 0 && !ub.isSysAdmin()
+                    && !userAccountDao.findRoleByUserNameAndStudyId(u.getName(), currentStudy.getParentStudyId()).isActive()) {
+                continue;
+            }
             StudyUserRoleBean sub = userAccountDao.findRoleByUserNameAndStudyId(u.getName(), activeStudyId);
             if (!sub.isActive()) { // doesn't have a role in the current study
                 sub.setRole(Role.RESEARCHASSISTANT);

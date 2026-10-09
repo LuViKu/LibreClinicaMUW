@@ -31,6 +31,12 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
@@ -117,7 +123,9 @@ public class IngestInboxApiController {
     private final RetinalInferenceApiController inferenceController;
 
     private StudyResourceAccess access;
+    private RetinalJobFollower follower;
     private IngestBindService binds;
+    private IngestItemVisibility visibility;
 
     @Autowired
     public IngestInboxApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -144,11 +152,24 @@ public class IngestInboxApiController {
         return access;
     }
 
+    private IngestItemVisibility visibility() {
+        if (visibility == null) visibility = new IngestItemVisibility(dataSource, access());
+        return visibility;
+    }
+
+    /** 404 for an item that does not exist or that the session may not see (no existence oracle). */
+    private ResponseEntity<?> guardItem(long id, HttpSession session) {
+        if (visibility().canSee(id, session)) return null;
+        return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+    }
+
+    private RetinalJobFollower follower() {
+        if (follower == null) follower = new RetinalJobFollower(dataSource, remoteClient, inferenceController);
+        return follower;
+    }
+
     private IngestBindService binds() {
-        if (binds == null) {
-            binds = new IngestBindService(dataSource,
-                    new RetinalJobFollower(dataSource, remoteClient, inferenceController));
-        }
+        if (binds == null) binds = new IngestBindService(dataSource, follower());
         return binds;
     }
 
@@ -173,7 +194,31 @@ public class IngestInboxApiController {
                            String modality, String originalFilename, Long byteSize,
                            Integer scanIndex, String receivedAt,
                            String previewUrl, boolean hasPreview,
-                           Suggestion suggestion, Twin twin) {}
+                           Suggestion suggestion, Twin twin,
+                           boolean analysable, List<ScanAnalysis> analyses,
+                           /*
+                            * DR-039 — true for a DICOM that is an OCT volume
+                            * (shown as an OCT scan, source format DICOM);
+                            * false otherwise, an .e2e included (its kind says it).
+                            */
+                           boolean octVolume,
+                           /* The file's Manufacturer / ManufacturerModelName; DICOM only. */
+                           String manufacturer, String manufacturerModel) {
+
+        /** The same row with the scan's analyses filled in (the visit page's list). */
+        InboxRow withAnalyses(List<ScanAnalysis> list) {
+            return new InboxRow(id, kind, sourceKind, device, patientId, laterality, acquisitionDate,
+                    acquisitionDateSource, modality, originalFilename, byteSize, scanIndex, receivedAt,
+                    previewUrl, hasPreview, suggestion, twin, analysable, list,
+                    octVolume, manufacturer, manufacturerModel);
+        }
+    }
+
+    /**
+     * A retinal analysis of a scan that is not cancelled, for the visit page:
+     * which tasks the scan already has, and where each one's results are.
+     */
+    public record ScanAnalysis(long jobId, String task, String status) {}
 
     /**
      * DR-036 — an earlier file that shows the same picture as this one.
@@ -207,7 +252,9 @@ public class IngestInboxApiController {
     // ----- GET /inbox -----
 
     /**
-     * @param kind   narrow to one sort of file — e2e, dicom, image, other
+     * @param kind   narrow to one sort of file — e2e, dicom, image, other.
+     *               DR-039: {@code e2e} is "OCT scan" and includes DICOM OCT
+     *               volumes; {@code dicom} is "DICOM image" and leaves them out
      * @param source narrow to one ingress — dicom, upload, portal-oct, api
      * @param q      a substring of the patient id or the original filename, for
      *               an operator who knows roughly what they are looking for
@@ -239,13 +286,23 @@ public class IngestInboxApiController {
         StringBuilder sql = new StringBuilder(
                 "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                         + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                        + "oct_volume, manufacturer, manufacturer_model, "
                         + "received_at, preview_png_path, " + TWIN_COLUMN
                         + "  FROM ingest_item WHERE status = ?");
+        // Cross-site isolation: only the rows this session may see (IngestItemVisibility).
+        sql.append(" AND ").append(visibility().predicate("ingest_item", session));
         List<Object> args = new ArrayList<>();
         args.add(wantedStatus);
         if (notBlank(kind)) {
-            sql.append(" AND lower(kind) = lower(?)");
-            args.add(kind.trim());
+            String k = kind.trim().toLowerCase(Locale.ROOT);
+            if ("e2e".equals(k)) {
+                sql.append(" AND (lower(kind) = 'e2e' OR (lower(kind) = 'dicom' AND oct_volume IS TRUE))");
+            } else if ("dicom".equals(k)) {
+                sql.append(" AND lower(kind) = 'dicom' AND oct_volume IS NOT TRUE");
+            } else {
+                sql.append(" AND lower(kind) = lower(?)");
+                args.add(kind.trim());
+            }
         }
         if (notBlank(source)) {
             sql.append(" AND lower(source_kind) = lower(?)");
@@ -297,8 +354,11 @@ public class IngestInboxApiController {
         int total = 0;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT kind, count(*) FROM ingest_item WHERE status = 'UNBOUND' "
-                             + "GROUP BY kind ORDER BY kind");
+                     // DR-039 — a DICOM OCT volume counts under the OCT-scan chip.
+                     "SELECT CASE WHEN lower(kind) = 'dicom' AND oct_volume IS TRUE THEN 'e2e' ELSE kind END AS k, "
+                             + "       count(*) FROM ingest_item WHERE status = 'UNBOUND' AND "
+                             + visibility().predicate("ingest_item", session)
+                             + " GROUP BY 1 ORDER BY 1");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 byKind.put(rs.getString(1), rs.getInt(2));
@@ -323,6 +383,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                        + "oct_volume, manufacturer, manufacturer_model, "
                              + "received_at, preview_png_path, bound_study_subject_id, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
@@ -338,6 +399,9 @@ public class IngestInboxApiController {
                             subjectStudyId(boundSubject), session,
                             "This file belongs to a study you cannot access");
                     if (vis != null) return vis;
+                } else if (!visibility().canSee(id, session)) {
+                    // Unbound or dismissed: visible by the uploader's study (origin_study_id).
+                    return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
                 }
                 return ResponseEntity.ok(toRow(rs, visible));
             }
@@ -394,6 +458,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
+                        + "oct_volume, manufacturer, manufacturer_model, "
                              + "received_at, preview_png_path, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE bound_study_event_id = ? AND status = 'BOUND' "
                              + " ORDER BY laterality NULLS LAST, received_at")) {
@@ -405,6 +470,22 @@ public class IngestInboxApiController {
             LOG.error("ingest by-event list failed for study_event {}: {}", studyEventId, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "could not list the visit's images"));
         }
+        // What each scan has been analysed for, so the page can show the
+        // results and offer only the tasks it lacks.
+        try {
+            for (int i = 0; i < rows.size(); i++) {
+                InboxRow row = rows.get(i);
+                if (!row.analysable()) continue;
+                List<ScanAnalysis> analyses = new ArrayList<>();
+                for (RetinalJobFollower.ExistingJob j : follower().liveJobs(row.id())) {
+                    analyses.add(new ScanAnalysis(j.jobId(), j.task(), j.status()));
+                }
+                rows.set(i, row.withAnalyses(analyses));
+            }
+        } catch (SQLException e) {
+            // The files still list; a row left without analyses (null) offers nothing to start.
+            LOG.warn("retinal job lookup failed for study_event {}: {}", studyEventId, e.getMessage());
+        }
         // Files that carry this subject's label but are not filed anywhere —
         // after "remove from visit: wrong visit", or a capture the resolver
         // could not place. The visit page says so, so nothing removed from a
@@ -413,7 +494,8 @@ public class IngestInboxApiController {
         if (subjectLabel != null && !subjectLabel.isBlank()) {
             try (Connection c = dataSource.getConnection();
                  PreparedStatement ps = c.prepareStatement(
-                         "SELECT count(*) FROM ingest_item WHERE status = 'UNBOUND' AND lower(patient_id) = lower(?)")) {
+                         "SELECT count(*) FROM ingest_item WHERE status = 'UNBOUND' AND lower(patient_id) = lower(?) AND "
+                                 + visibility().predicate("ingest_item", session))) {
                 ps.setString(1, subjectLabel.trim());
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) pendingForSubject = rs.getInt(1);
@@ -498,6 +580,8 @@ public class IngestInboxApiController {
         } else {
             ResponseEntity<?> role = guards(session);
             if (role != null) return role;
+            ResponseEntity<?> item = guardItem(id, session);
+            if (item != null) return item;
         }
         if (previewPath == null || previewPath.isBlank()) {
             return ResponseEntity.status(404).body(Map.of("message", "no preview for file " + id));
@@ -541,6 +625,8 @@ public class IngestInboxApiController {
         }
         ResponseEntity<?> targetGuard = guardBindTarget(req.studySubjectId(), session);
         if (targetGuard != null) return targetGuard;
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
 
         // What the file says about itself, before it is filed under a day it
         // may not belong to. A mismatch is refused once and applied on the
@@ -611,6 +697,10 @@ public class IngestInboxApiController {
         List<Map<String, Object>> skipped = new ArrayList<>();
         for (Long id : req.ids()) {
             if (id == null) continue;
+            if (!visibility().canSee(id, session)) {
+                skipped.add(Map.of("id", id, "reason", IngestBindService.Result.NOT_FOUND.name()));
+                continue;
+            }
             // Each file is dated on its own, so one scan from the wrong day
             // is skipped with its two dates rather than taking the batch down
             // — the same shape the already-reconciled case uses.
@@ -653,6 +743,8 @@ public class IngestInboxApiController {
                     "This file belongs to a study you cannot access");
             if (vis != null) return vis;
         }
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
         IngestBindService.Actor actor = actor(session);
         IngestBindService.Result r = binds().unbind(id, actor);
         // 2026-09-24 — "remove from visit" on the visit page carries the
@@ -677,6 +769,8 @@ public class IngestInboxApiController {
     public ResponseEntity<?> restore(@PathVariable("id") long id, HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
         return bindResponse(binds().restore(id, actor(session)), id, "UNBOUND");
     }
 
@@ -703,6 +797,10 @@ public class IngestInboxApiController {
         List<Map<String, Object>> skipped = new ArrayList<>();
         for (Long id : req.ids()) {
             if (id == null) continue;
+            if (!visibility().canSee(id, session)) {
+                skipped.add(Map.of("id", id, "reason", IngestBindService.Result.NOT_FOUND.name()));
+                continue;
+            }
             IngestBindService.Result r = binds().dismiss(id, req.reason(), actor);
             if (r == IngestBindService.Result.OK) {
                 dismissed.add(id);
@@ -722,8 +820,143 @@ public class IngestInboxApiController {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
 
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
         String reason = req == null ? null : req.reason();
         return bindResponse(binds().dismiss(id, reason, actor(session)), id, "DISMISSED");
+    }
+
+    // ----- POST /{id}/analyses -----
+
+    public record StartAnalysisRequest(String task) {}
+
+    /**
+     * Start one retinal analysis on a filed OCT scan.
+     *
+     * <p>A bind starts what the visit's imaging plan asks for, and rerun-as
+     * needs a job to start from. A filed scan that the plan did not cover had
+     * no way to be analysed at all; this is that way, one task at a time.
+     *
+     * <p>Answers, in this order: 403 for a role that may not enter data; 400
+     * for a task that is not offered; 404 for a file the caller cannot see
+     * (never 403, so a foreign id says nothing); 409 {@code NOT_BOUND} for a
+     * file not filed to a visit, {@code NOT_ANALYSABLE} for a file that is not
+     * an OCT volume, the {@link ClinicalRecordGuard} codes for a closed
+     * record, {@code SCAN_FILE_MISSING} for a file no longer on disk,
+     * {@code INFERENCE_DISABLED} for a study that runs no inference, and
+     * {@code ANALYSIS_EXISTS} with {@code existingJobId} for a task the scan
+     * already has; 202 with {@code jobId} otherwise.
+     */
+    @PostMapping(value = "/{id:[0-9]+}/analyses",
+                 consumes = MediaType.APPLICATION_JSON_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> startAnalysis(@PathVariable("id") long id,
+                                           @RequestBody StartAnalysisRequest req,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = access().guardSession(session);
+        if (guard != null) return guard;
+        // A finished job writes its metrics into the visit's CRF, as for a re-run.
+        ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                session, "running retinal analyses");
+        if (roleRefusal != null) return roleRefusal;
+
+        String task = req == null || req.task() == null ? null : req.task().trim().toLowerCase(Locale.ROOT);
+        if (!RetinalJobFollower.isStartableTask(task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "task must be one of " + RetinalJobFollower.STARTABLE_TASKS));
+        }
+        ResponseEntity<?> itemGuard = guardItem(id, session);
+        if (itemGuard != null) return itemGuard;
+
+        String kind;
+        Boolean octVolume;
+        String storedPath;
+        Integer subjectId;
+        Integer studyEventId;
+        Integer eventCrfId;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT kind, oct_volume, stored_path, status, bound_study_subject_id, "
+                             + "       bound_study_event_id, bound_event_crf_id "
+                             + "  FROM ingest_item WHERE ingest_item_id = ?")) {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+                }
+                kind = rs.getString("kind");
+                boolean oct = rs.getBoolean("oct_volume");
+                octVolume = rs.wasNull() ? null : oct;
+                storedPath = rs.getString("stored_path");
+                boolean bound = "BOUND".equals(rs.getString("status"));
+                subjectId = intOrNull(rs, "bound_study_subject_id");
+                studyEventId = intOrNull(rs, "bound_study_event_id");
+                eventCrfId = intOrNull(rs, "bound_event_crf_id");
+                if (!bound || subjectId == null || (studyEventId == null && eventCrfId == null)) {
+                    return ClinicalRecordGuard.conflict("NOT_BOUND",
+                            "This file is not filed to a visit; file it before starting an analysis.");
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("ingest item lookup failed for {}: {}", id, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "lookup failed"));
+        }
+        if (!RetinalJobFollower.isAnalysable(kind, octVolume)) {
+            return ClinicalRecordGuard.conflict("NOT_ANALYSABLE", "Only OCT volumes can be analysed.");
+        }
+
+        StudySubjectBean ss = (StudySubjectBean) new StudySubjectDAO(dataSource).findByPK(subjectId);
+        StudyEventBean event = studyEventId == null ? null
+                : (StudyEventBean) new StudyEventDAO(dataSource).findByPK(studyEventId);
+        EventCRFBean ecb = eventCrfId == null ? null : new EventCRFDAO(dataSource).findByPK(eventCrfId);
+        ResponseEntity<?> closed = ClinicalRecordGuard.refuseIfClosed(dataSource,
+                (StudyBean) session.getAttribute("study"), ss, event, ecb, "starting a retinal analysis");
+        if (closed != null) return closed;
+
+        if (RetinalJobAccess.scanFileMissing(storedPath)) {
+            return ClinicalRecordGuard.conflict("SCAN_FILE_MISSING", RetinalJobAccess.SCAN_FILE_MISSING);
+        }
+
+        RetinalJobFollower.Started r;
+        try {
+            r = follower().start(id, task, actor(session));
+        } catch (SQLException e) {
+            LOG.error("starting task {} on ingest_item {} failed: {}", task, id, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "the analysis could not be started"));
+        }
+        return switch (r.outcome()) {
+            case STARTED -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("jobId", r.jobId());
+                body.put("task", task);
+                body.put("status", r.status());
+                RetinalJobAccess.putAddress(dataSource, r.jobId(), body);
+                yield ResponseEntity.accepted().body(body);
+            }
+            case DUPLICATE -> {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("code", "ANALYSIS_EXISTS");
+                body.put("message", "This scan already has a " + task + " analysis — open it instead.");
+                body.put("existingJobId", r.jobId());
+                RetinalJobAccess.putAddress(dataSource, r.jobId(), body);
+                yield ResponseEntity.status(409).body(body);
+            }
+            case INFERENCE_DISABLED -> ClinicalRecordGuard.conflict("INFERENCE_DISABLED",
+                    "Retinal analyses are switched off for this study.");
+            case NO_DISPATCHER -> ResponseEntity.status(503).body(Map.of(
+                    "message", "Starting analyses is unavailable on this server."));
+            // The file changed between the checks above and the start.
+            case NOT_FOUND -> ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
+            case NOT_BOUND -> ClinicalRecordGuard.conflict("NOT_BOUND",
+                    "This file is not filed to a visit; file it before starting an analysis.");
+            case NOT_ANALYSABLE -> ClinicalRecordGuard.conflict("NOT_ANALYSABLE",
+                    "Only OCT volumes can be analysed.");
+        };
+    }
+
+    private static Integer intOrNull(ResultSet rs, String column) throws SQLException {
+        int v = rs.getInt(column);
+        return rs.wasNull() ? null : v;
     }
 
     // ----- guards / helpers -----
@@ -782,9 +1015,12 @@ public class IngestInboxApiController {
         boolean scanNull = rs.wasNull();
         long twinId = rs.getLong("twin_id");
         Twin twin = rs.wasNull() ? null : describeTwin(twinId, visible);
+        boolean oct = rs.getBoolean("oct_volume");
+        Boolean octVolume = rs.wasNull() ? null : oct;
+        String kind = rs.getString("kind");
         return new InboxRow(
                 id,
-                rs.getString("kind"),
+                kind,
                 rs.getString("source_kind"),
                 rs.getString("device"),
                 patientId,
@@ -799,7 +1035,13 @@ public class IngestInboxApiController {
                 "/pages/api/v1/ingest/" + id + "/preview",
                 rs.getString("preview_png_path") != null,
                 buildSuggestion(patientId, acquisitionDate, visible),
-                twin);
+                twin,
+                RetinalJobFollower.isAnalysable(kind, octVolume),
+                // Looked up for the visit page only (byEvent); the inbox has no use for it.
+                null,
+                "dicom".equalsIgnoreCase(kind) && Boolean.TRUE.equals(octVolume),
+                rs.getString("manufacturer"),
+                rs.getString("manufacturer_model"));
     }
 
     /**

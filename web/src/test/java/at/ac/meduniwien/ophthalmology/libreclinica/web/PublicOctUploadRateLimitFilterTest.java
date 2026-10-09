@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,23 +94,25 @@ class PublicOctUploadRateLimitFilterTest {
     }
 
     @Test
-    void prefersXForwardedForOverRemoteAddr() throws Exception {
+    void ignoresSpoofableXForwardedFor() throws Exception {
+        // The client rotates X-Forwarded-For on every request to dodge its
+        // bucket; the bucket is keyed on remoteAddr, so the limit still bites.
         ClockableFilter filter = new ClockableFilter(0L);
         for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
             MockHttpServletRequest req = guardedRequest();
-            req.addHeader("X-Forwarded-For", "203.0.113.7, 10.0.0.1");
+            req.addHeader("X-Forwarded-For", "203.0.113." + i);
             req.setRemoteAddr("10.0.0.1");
             MockHttpServletResponse resp = new MockHttpServletResponse();
             filter.doFilter(req, resp, new MockFilterChain());
             assertEquals(200, resp.getStatus());
         }
-        // XFF IP exhausted; an XFF-less request from the same backend
-        // remote IP (10.0.0.1) is in a separate bucket and passes.
-        MockHttpServletRequest direct = guardedRequest();
-        direct.setRemoteAddr("10.0.0.1");
+        MockHttpServletRequest spoofed = guardedRequest();
+        spoofed.addHeader("X-Forwarded-For", "198.51.100.99");
+        spoofed.setRemoteAddr("10.0.0.1");
         MockHttpServletResponse resp = new MockHttpServletResponse();
-        filter.doFilter(direct, resp, new MockFilterChain());
-        assertEquals(200, resp.getStatus());
+        filter.doFilter(spoofed, resp, new MockFilterChain());
+        assertEquals(429, resp.getStatus());
+        assertEquals("10.0.0.1", PublicOctUploadRateLimitFilter.clientIp(spoofed));
     }
 
     @Test
@@ -206,6 +209,47 @@ class PublicOctUploadRateLimitFilterTest {
         assertEquals(200, invoke(filter, "10.0.0.12", "/pages/api/v1/public/upload/resolve").getStatus());
         filter.nowMs = PublicOctUploadRateLimitFilter.HEARTBEAT_REFILL_INTERVAL_MS + 1L;
         assertEquals(200, invoke(filter, "10.0.0.12", heartbeat).getStatus());
+    }
+
+    @Test
+    void guardsPathsUnderTheDeployedContextPath() throws Exception {
+        // Production serves the app under /LibreClinica, so getRequestURI()
+        // carries the prefix; the guard must still engage.
+        ClockableFilter filter = new ClockableFilter(0L);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invokeInContext(filter, "10.0.0.20").getStatus());
+        }
+        assertEquals(429, invokeInContext(filter, "10.0.0.20").getStatus());
+    }
+
+    @Test
+    void theInternalDeploymentIsNeverThrottled() throws Exception {
+        // Off unless internet-facing: the acquisition-PC uploaders resolve every
+        // capture and file it without a visit on a 429.
+        PublicOctUploadRateLimitFilter filter = new PublicOctUploadRateLimitFilter(false);
+        for (int i = 0; i < 10 * PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invokeInContext(filter, "10.0.0.30").getStatus(), "request " + i);
+        }
+    }
+
+    @Test
+    void theBeanThrottlesOnlyWhenInternetFacing() {
+        at.ac.meduniwien.ophthalmology.libreclinica.config.ServletInfraConfig config =
+                new at.ac.meduniwien.ophthalmology.libreclinica.config.ServletInfraConfig();
+        assertTrue(config.publicOctUploadRateLimitFilter(true).isEnabled());
+        assertFalse(config.publicOctUploadRateLimitFilter(false).isEnabled());
+    }
+
+    private static MockHttpServletResponse invokeInContext(PublicOctUploadRateLimitFilter filter,
+                                                           String remoteAddr) throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST",
+                "/LibreClinica/pages/api/v1/public/oct-upload/resolve");
+        req.setContextPath("/LibreClinica");
+        req.setRequestURI("/LibreClinica/pages/api/v1/public/oct-upload/resolve");
+        req.setRemoteAddr(remoteAddr);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(req, resp, new MockFilterChain());
+        return resp;
     }
 
     /* ---- helpers ----------------------------------------------------- */

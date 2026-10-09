@@ -406,6 +406,18 @@ public final class IngestBindService {
             }
             if (updated == 0) return existsState(c, ingestItemId);
 
+            // A dismissed file is not study data: cancel what has not run yet,
+            // as an unbind does. After the status change, so a refused dismiss
+            // (the file was bound meanwhile) never cancels a filed scan's jobs.
+            // A failure here leaves the dismissal standing; the retention sweep
+            // cancels the same jobs again before it removes anything.
+            try {
+                jobs.detachForDismissal(ingestItemId, actor);
+            } catch (SQLException e) {
+                LOG.warn("ingest_item {} dismissed, but its waiting retinal jobs could not be cancelled: {}",
+                        ingestItemId, e.getMessage());
+            }
+
             // No visit: a file that was never filed is not study data, so the
             // row stays out of every study's audit log, including the log of
             // a subject the file was only suggested for.

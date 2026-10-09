@@ -12,6 +12,13 @@ import {
   IOWA_DEFAULT_VISIBLE,
   IOWA_LAYER_COLORS,
   IOWA_LAYER_LABELS,
+  SDRETINANET_DEFAULT_VISIBLE,
+  SDRETINANET_LAYER_COLORS,
+  SDRETINANET_LAYER_LABELS,
+  SDRETINANET_LESION_COLORS,
+  SDRETINANET_LESION_FALLBACK_COLOR,
+  sdRetinaNetLesionColor,
+  sdRetinaNetLesionDisplayLabel,
 } from '@/components/retinalPalette'
 
 describe('IOWA layer palette', () => {
@@ -68,5 +75,48 @@ describe('IOWA layer palette', () => {
       'OPL-HFL', 'BMEIS', 'IS#OSJ', 'IB_OPR', 'IB_RPE', 'OB_RPE',
     ])
     expect(IOWA_LAYER_LABELS[11]).toBe('BM')
+  })
+})
+
+describe('SD-RetinaNet layer palette', () => {
+  it('has 12 colors and 12 labels, aligned with the backend header order', () => {
+    expect(SDRETINANET_LAYER_COLORS).toHaveLength(12)
+    expect(SDRETINANET_LAYER_LABELS).toEqual([
+      'ILM', 'RNFL-GCL', 'GCL-IPL', 'IPL-INL', 'INL-OPL', 'OPL-HFL',
+      'OB_ELM', 'BMEIS', 'IB_RPE', 'OB_RPE', 'BM', 'HL-S',
+    ])
+  })
+
+  it('all colors are unique #RRGGBB hex codes', () => {
+    for (const c of SDRETINANET_LAYER_COLORS) {
+      expect(c).toMatch(/^#[0-9A-Fa-f]{6}$/)
+    }
+    expect(new Set(SDRETINANET_LAYER_COLORS.map((c) => c.toLowerCase())).size).toBe(12)
+  })
+
+  it('default-visible indices point at ILM, IB_RPE, BM (clinical CRT trio)', () => {
+    expect(SDRETINANET_DEFAULT_VISIBLE.map((i) => SDRETINANET_LAYER_LABELS[i])).toEqual(['ILM', 'IB_RPE', 'BM'])
+  })
+})
+
+describe('SD-RetinaNet lesion palette', () => {
+  it('maps the model names to the clinical display names', () => {
+    expect(sdRetinaNetLesionDisplayLabel('Cyst')).toBe('IRF')
+    expect(sdRetinaNetLesionDisplayLabel('Pseudodrusen')).toBe('SDD')
+    for (const same of ['SRF', 'PED', 'SHRM', 'ORT', 'HRF']) {
+      expect(sdRetinaNetLesionDisplayLabel(same)).toBe(same)
+    }
+  })
+
+  it('has a distinct colour for each of the 7 display classes', () => {
+    const keys = ['IRF', 'SRF', 'PED', 'SHRM', 'SDD', 'ORT', 'HRF']
+    expect(Object.keys(SDRETINANET_LESION_COLORS).sort()).toEqual([...keys].sort())
+    const colors = keys.map((k) => sdRetinaNetLesionColor(k).toLowerCase())
+    expect(new Set(colors).size).toBe(7)
+    for (const c of colors) expect(c).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('an unknown lesion label gets the fallback swatch instead of no colour', () => {
+    expect(sdRetinaNetLesionColor('Drusen')).toBe(SDRETINANET_LESION_FALLBACK_COLOR)
   })
 })

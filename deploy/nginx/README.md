@@ -68,7 +68,11 @@ sudo sed -i 's| retinal-inference$| retinal-inference nginx|' /etc/systemd/syste
 sudo systemctl daemon-reload
 
 # 5. Validate the nginx config, then restart the stack.
-sudo docker run --rm -v /opt/libreclinica/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro \
+sudo docker run --rm --add-host libreclinica:127.0.0.1 \
+     -v /opt/libreclinica/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-edge.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/empty.conf:/etc/nginx/ecrf-realip.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/empty.conf:/etc/nginx/ecrf-edge-http.conf:ro \
      -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
 sudo systemctl restart libreclinica
 ```
@@ -121,6 +125,8 @@ to a daily cron so it can't lapse silently:
 ```sh
 0 8 * * *  /opt/libreclinica/deploy/nginx/cert-expiry-check.sh \
              || echo "eCRF TLS cert needs renewal" | mail -s "eCRF cert" you@meduniwien.ac.at
+5 8 * * *  /opt/libreclinica/deploy/nginx/cert-expiry-check.sh /etc/libreclinica/tls/einteilung-augen.crt \
+             || echo "DutyPlan TLS cert needs renewal" | mail -s "DutyPlan cert" you@meduniwien.ac.at
 ```
 
 After installing a renewed cert, reload nginx without downtime:
@@ -128,9 +134,150 @@ After installing a renewed cert, reload nginx without downtime:
 sudo docker exec libreclinica-muw-nginx-1 nginx -s reload
 ```
 
+## Edge hardening (2026-10)
+
+Applies to both deployments (it is in the shared `ecrf.conf`):
+
+- `server_tokens off`; Mozilla "intermediate" TLS (TLS 1.2 + 1.3, AEAD
+  ciphers, `ssl_prefer_server_ciphers off`, `ssl_session_tickets off`). A
+  client that only speaks CBC suites or TLS 1.0/1.1 will no longer connect.
+- **HSTS** `max-age=31536000` is **on**: port 80 only redirects, so both
+  deployments are already HTTPS-only. Browsers remember it for a year; if
+  HTTPS ever has to be taken away from the internal name, that is a long wait.
+  `includeSubDomains` is added only on the internet-facing host.
+- `Referrer-Policy: same-origin`, `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'`.
+  There is deliberately no `script-src`: the heritage JSPs use inline scripts.
+- `X-Forwarded-For` is **set** to `$remote_addr` (nginx is the first hop), and
+  `REMOTE_USER`, `mail` and `displayName` (the SSO identity headers) are blanked
+  on every proxied request. `Connection ""` is set at server level so the SSE
+  location inherits all of it (a location with its own `proxy_set_header`
+  drops the server-level ones).
+- **Per-mode limits** (only ONE file sets them, the server-level include
+  `ecrf-edge.conf`): the internal deployment (`edge-none.conf`) keeps the old
+  server-level `client_max_body_size 1024m`, nginx's default timeouts and no
+  rate limiting; the internet-facing one (`internet-facing.conf`) sets 2 MB, the
+  timeouts and the rate limits below. The per-location limits in this table are
+  in `ecrf.conf` and apply in both modes. All are 1024m (the old internal
+  limit), so internal is unchanged; the app's own `/pages/*` multipart cap of
+  200 MiB is the real ceiling on those routes.
+- Request bodies, internet-facing: **2 MB** by default. The large limit is granted only here:
+
+  | Location | Limit |
+  |---|---|
+  | `/LibreClinica/pages/api/v1/public/` (portals; 404 on internet-facing) | 1024m |
+  | `/LibreClinica/pages/api/v1/ingest/upload/` (SPA `/ingest-inbox/upload`) | 1024m |
+  | `/LibreClinica/pages/api/v1/event-crfs/{id}/oct-upload` | 1024m |
+  | `/LibreClinica/pages/api/v1/eventCrfs/{id}/items/{oid}/file` (CRF file item) | 1024m |
+  | `/LibreClinica/pages/api/v1/crfs/{oid}/versions`, `…/import`, `…/rules/import` | 1024m |
+  | `/LibreClinica/{CreateCRFVersion,CreateXformCRFVersion,ImportCRFData,ImportRule,UploadFile}` (legacy multipart JSPs) | 1024m |
+
+  The app itself caps the `/pages/*` multipart parser at 200 MiB (`web.xml`).
+  The Optomed device endpoints and uploader heartbeats are tiny and keep the
+  2 MB default. **A new upload route needs a line in this table and in
+  `ecrf.conf`, or it answers 413.** The `:8088` retinal failover listener keeps
+  its own 1024m.
+- Rate limits, **internet-facing only** (per client address; `429` when exceeded): login
+  (`/LibreClinica/j_spring_security_check`) 20/min burst 10; `RequestAccount`,
+  `Contact`, `/pages/api/v1/contact` 6/min burst 5; everything else 50 r/s burst
+  200; 100 concurrent requests per address. `client_header_timeout 15s`,
+  `client_body_timeout 60s`, `send_timeout 60s`.
+- Per-deployment includes (compose variables; defaults are the internal
+  deployment's, the setup script's internet-facing mode sets the others):
+  `LIBRECLINICA_NGINX_EDGE_CONF` (server level; default `edge-none.conf`, internet:
+  `internet-facing.conf` = limits above plus 404 for actuator, Swagger, public,
+  internal and device APIs, `pages/auth`, the clean twins, the public portal
+  pages and `;param` path tricks), `LIBRECLINICA_NGINX_EDGE_HTTP_CONF` (http level;
+  default `empty.conf`, internet: `internet-facing-http.conf` = `default_server`
+  catch-alls that close unknown `Host` on :80 with 444 and refuse unknown SNI on
+  :443 via `ssl_reject_handshake`) and `LIBRECLINICA_NGINX_REALIP_CONF` (default
+  `empty.conf`; generated `set_real_ip_from` lines for the DMZ proxy). See
+  [../README.md](../README.md#internet-facing-multicenter-deployment).
+- **Who breaks with AEAD-only TLS (both deployments).** Only
+  ECDHE/DHE + AES-GCM/ChaCha20 over TLS 1.2/1.3 is offered (the old list was
+  `HIGH:!aNULL:!MD5`, which also allowed CBC suites and static RSA key exchange).
+  Checked in this repo: `deploy/optomed/OptomedBridge.ps1` and
+  `deploy/export-watcher/ExportWatcher.ps1` are Windows PowerShell + .NET
+  `HttpClient` and pin `SecurityProtocol = Tls12`, so they use the OS's Schannel:
+  fine on Windows 10/11 and Server 2016+ (and 8.1/2012 R2), which offer
+  ECDHE-RSA-AES-GCM; **not fine on Windows 7 / Server 2008 R2 / 2012 (non-R2)**,
+  which have no AES-GCM suites. Verify on each acquisition PC with
+  `Invoke-WebRequest https://<host>/login -UseBasicParsing`
+  (or open the site in its browser) after the change. The Remidio probe
+  (`deploy/remidio/remidio-probe.sh`) and the app's Remidio client only make
+  outbound calls to Remidio's cloud and are not affected. Other possible
+  victims: Java 7 or older, Python 2 / OpenSSL < 1.0.1, embedded devices and
+  old Android (< 5) browsers. The server certificate must be RSA or ECDSA
+  (both suites are listed).
+
+Validate a change without touching the running stack (a dummy cert is enough;
+the app hostname must resolve, hence `--add-host`):
+
+```sh
+docker run --rm --add-host libreclinica:127.0.0.1 \
+  -v "$PWD/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro" \
+  -v "$PWD/deploy/nginx/internet-facing.conf:/etc/nginx/ecrf-edge.conf:ro" \
+  -v "$PWD/deploy/nginx/empty.conf:/etc/nginx/ecrf-realip.conf:ro" \
+  -v "$PWD/deploy/nginx/internet-facing-http.conf:/etc/nginx/ecrf-edge-http.conf:ro" \
+  -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
+```
+
+## Other apps behind this nginx (DutyPlan, DR-038)
+
+The VM also hosts **DutyPlan**, a small separate web app (FastAPI, one container,
+its own compose project and repository). This nginx serves it at
+`https://einteilung.augen.meduniwien.ac.at`, so it needs no port of its own.
+
+- **Network:** nginx and DutyPlan meet on the external docker network `edge`.
+  `setup-ubuntu-host.sh` creates it, and the systemd unit re-creates it before
+  every start (`ExecStartPre`), because compose refuses to start nginx while an
+  external network is missing. `compose down` never removes it.
+- **Server block:** [dutyplan.conf](dutyplan.conf). The setup script copies it to
+  `/etc/libreclinica/nginx-sites/` (mounted into the sidecar and included by
+  `ecrf.conf`) **only when** `/etc/libreclinica/tls/einteilung-augen.crt` and
+  `.key` exist, and removes it otherwise. nginx exits on a missing certificate,
+  so this is what keeps a DutyPlan cert problem from taking the eCRF down.
+- **Upstream:** `dutyplan:8000`, resolved per request, so a stopped DutyPlan
+  only returns 502 on its own hostname. Never proxy to `127.0.0.1:8000`: inside
+  the container that is nginx itself.
+- **Certificate:** a separate one, so the eCRF certificate is never reissued:
+
+  ```sh
+  sudo openssl req -new -newkey rsa:2048 -nodes \
+    -keyout /etc/libreclinica/tls/einteilung-augen.key \
+    -out    /etc/libreclinica/tls/einteilung-augen.csr \
+    -subj   "/C=AT/O=Medizinische Universitaet Wien/CN=einteilung.augen.meduniwien.ac.at" \
+    -addext "subjectAltName=DNS:einteilung.augen.meduniwien.ac.at"
+  sudo chmod 600 /etc/libreclinica/tls/einteilung-augen.key
+  ```
+
+  Install the signed full chain as `einteilung-augen.crt` (chmod 600, server cert
+  first), then **re-run the setup script** to activate the block, or copy it by
+  hand and reload:
+
+  ```sh
+  sudo install -m 0644 /opt/libreclinica/deploy/nginx/dutyplan.conf /etc/libreclinica/nginx-sites/
+  sudo docker exec libreclinica-muw-nginx-1 nginx -t && sudo docker exec libreclinica-muw-nginx-1 nginx -s reload
+  ```
+
+- **DNS:** IT adds a CNAME `einteilung.augen.meduniwien.ac.at` →
+  `vrc-lin-tasks.augen.meduniwien.ac.at`.
+- **Rollback:** `sudo rm /etc/libreclinica/nginx-sites/dutyplan.conf` and
+  `nginx -s reload` as above. The `edge` network can stay.
+
+Validate with the sites directory mounted:
+
+```sh
+sudo docker run --rm --network edge \
+     -v /opt/libreclinica/deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/edge-none.conf:/etc/nginx/ecrf-edge.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/empty.conf:/etc/nginx/ecrf-realip.conf:ro \
+     -v /opt/libreclinica/deploy/nginx/empty.conf:/etc/nginx/ecrf-edge-http.conf:ro \
+     -v /etc/libreclinica/nginx-sites:/etc/nginx/sites:ro \
+     -v /etc/libreclinica/tls:/etc/libreclinica/tls:ro nginx:1.27-alpine nginx -t
+```
+
 ## Notes
 
-- **HSTS** is commented out in `ecrf.conf` — enable it only once HTTPS is
-  proven stable on every path (it's hard to unpin in browsers).
-- If clean-URL routing misbehaves, iterate on `ecrf.conf` + `nginx -s reload`
+- HSTS is enabled (see above). If clean-URL routing misbehaves, iterate on `ecrf.conf` + `nginx -s reload`
   (no image rebuild needed); only the SPA base / valve need a rebuild.

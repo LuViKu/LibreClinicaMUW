@@ -34,7 +34,6 @@ import java.util.Locale;
  * @author thickerson
  * Created on Jun 9, 2005
  */
-@SuppressWarnings("all")
 public class ShowFileServlet extends SecureController {
 
     /**
@@ -59,6 +58,12 @@ public class ShowFileServlet extends SecureController {
 
         ArchivedDatasetFileDAO asdfdao = new ArchivedDatasetFileDAO(sm.getDataSource());
         ArchivedDatasetFileBean asdfBean = (ArchivedDatasetFileBean) asdfdao.findByPK(fileId);
+
+        // the dataset, and the file as one of its own, must belong to the session's study tree
+        assertRecordInScope(db.getStudyId());
+        if (asdfBean.getDatasetId() != db.getId()) {
+            refuseRecordOutsideCurrentStudy();
+        }
 
         ArrayList<ArchivedDatasetFileBean> newFileList = new ArrayList<>();
         newFileList.add(asdfBean);

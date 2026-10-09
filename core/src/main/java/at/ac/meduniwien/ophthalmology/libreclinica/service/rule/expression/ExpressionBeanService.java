@@ -75,7 +75,7 @@ public class ExpressionBeanService {
         logger.debug("Test :: {}", test);
 
         if(checkIfForScheduling(test)){
-        	SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");//TODO: get the format from data format properties.??
+        	SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd"); // ISO on purpose: the rule expression engine compares dates in this form, not in the locale format
         	index = test.indexOf(".");
         	oid = test.substring(0,index);
         	temp = test.substring(index,test.length());

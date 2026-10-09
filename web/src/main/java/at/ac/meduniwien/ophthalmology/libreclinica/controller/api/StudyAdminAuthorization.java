@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
 /**
  * Phase E A8 — study-administration authorization.
@@ -272,6 +273,61 @@ public final class StudyAdminAuthorization {
      */
     static boolean roleMayLifecycleStudy(UserAccountBean me) {
         return me != null && me.isSysAdmin();
+    }
+
+    /**
+     * The ids of the studies on which {@code me} holds a live (AVAILABLE) role;
+     * empty when the lookup fails (fail closed).
+     */
+    static java.util.Set<Integer> liveRoleStudyIds(UserAccountBean me, DataSource dataSource) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        if (me == null || dataSource == null) return ids;
+        try {
+            List<StudyUserRoleBean> bindings = new UserAccountDAO(dataSource).findAllRolesByUserName(me.getName());
+            if (bindings == null) return ids;
+            for (StudyUserRoleBean b : bindings) {
+                if (b == null || b.getStatus() == null
+                        || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+                ids.add(b.getStudyId());
+            }
+        } catch (RuntimeException e) {
+            ids.clear();
+        }
+        return ids;
+    }
+
+    /**
+     * May {@code me} read the configuration of {@code target} (identity,
+     * parameters, settings, modules, the site list)? A system administrator
+     * always; otherwise a study the user holds a live role on, a site of such
+     * a study, or the parent of such a site: a site user reads her own site
+     * and the parent study whose configuration the site inherits, and not a
+     * sibling site or another study.
+     */
+    static boolean userMayReadStudy(UserAccountBean me, StudyBean target, DataSource dataSource) {
+        if (me == null || target == null) return false;
+        if (me.isSysAdmin()) return true;
+        java.util.Set<Integer> mine = liveRoleStudyIds(me, dataSource);
+        if (mine.contains(target.getId())) return true;
+        // A role on the parent study covers its sites.
+        if (target.getParentStudyId() > 0 && mine.contains(target.getParentStudyId())) return true;
+        // A role on a site reaches the parent study (the site inherits its configuration).
+        if (target.getParentStudyId() == 0 && target.getId() > 0) {
+            StudyDAO studyDao = new StudyDAO(dataSource);
+            for (int id : mine) {
+                StudyBean granted = (StudyBean) studyDao.findByPK(id);
+                if (granted != null && granted.getParentStudyId() == target.getId()) return true;
+            }
+        }
+        return false;
+    }
+
+    /** 404 (not 403: no existence oracle) for a study {@code me} may not read; null when allowed. */
+    static org.springframework.http.ResponseEntity<?> refuseUnlessMayReadStudy(
+            UserAccountBean me, StudyBean target, String studyOid, DataSource dataSource) {
+        if (userMayReadStudy(me, target, dataSource)) return null;
+        return org.springframework.http.ResponseEntity.status(404).body(java.util.Map.of(
+                "message", "No study with oid '" + studyOid + "'"));
     }
 
     /**

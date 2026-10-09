@@ -46,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffe
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 /**
@@ -82,6 +83,23 @@ public class IngestUploadApiController {
 
     private StudyResourceAccess access;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    /**
+     * DR-039 — a DICOM OCT volume uploaded to a visit starts its plan's
+     * analyses; absent (hand-built controllers), it starts none.
+     */
+    @Autowired(required = false)
+    void setRetinalDispatch(RemoteRetinalInferenceClient remote, RetinalInferenceApiController inference) {
+        uploads.useRetinalDispatch(remote, inference);
+    }
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired
     public IngestUploadApiController(@Qualifier("dataSource") DataSource dataSource,
                                      SiteVisibilityFilter siteVisibilityFilter,
@@ -103,6 +121,13 @@ public class IngestUploadApiController {
     private StudyResourceAccess access() {
         if (access == null) access = new StudyResourceAccess(dataSource, siteVisibilityFilter);
         return access;
+    }
+
+    private IngestItemVisibility visibility;
+
+    private IngestItemVisibility visibility() {
+        if (visibility == null) visibility = new IngestItemVisibility(dataSource, access());
+        return visibility;
     }
 
     /* ---------------- resolve / preflight ---------------- */
@@ -149,7 +174,9 @@ public class IngestUploadApiController {
         if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
             return ResponseEntity.badRequest().body(Map.of("message", "sha256 must be 64 hex characters"));
         }
-        return ResponseEntity.ok(uploads.preflight(sha256, scanIndex));
+        // Only files this session may see count as "already there"; a file of
+        // a site the caller has no access to would otherwise be named by id.
+        return ResponseEntity.ok(uploads.preflight(sha256, scanIndex, visibility().visibleTo(session)));
     }
 
     /* ---------------- the upload ---------------- */
@@ -167,6 +194,11 @@ public class IngestUploadApiController {
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
             @RequestParam(value = "park", defaultValue = "false") boolean park,
             @RequestParam(value = "device", required = false) String device,
+            // Required de-identification (libreclinica.ingest.deidentification.required):
+            // the browser's confirmation that it stripped the file, and the
+            // SHA-256 of the bytes it sent, which the server checks.
+            @RequestParam(value = "deidConfirmed", required = false) String deidConfirmed,
+            @RequestParam(value = "deidSha256", required = false) String deidSha256,
             HttpSession session) {
 
         ResponseEntity<?> guard = guards(session);
@@ -174,8 +206,9 @@ public class IngestUploadApiController {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }
+        final boolean deidRequired = DeidentificationPolicy.required(deidPolicy);
         FileKindSniffer.Sniffed sniffed = UploadRoute.sniff(file);
-        if (sniffed == null) {
+        if (sniffed == null && !deidRequired) {
             return ResponseEntity.badRequest().body(Map.of("message", UploadRoute.UNSUPPORTED_MESSAGE));
         }
         String date = UploadRoute.isBlank(scanDate) ? studyDate : scanDate;
@@ -194,26 +227,64 @@ public class IngestUploadApiController {
         }
         IngestBindService.Actor actor = actor(session);
 
+        // Required de-identification, layer 2: the request is checked against
+        // what the server knows (kind, label, SHA-256, name) before a byte is
+        // stored; the content checks run on the stored bytes further down.
+        DeidUploadGate.Context deid = null;
+        if (deidRequired) {
+            String visitLabel = visit == null ? null : UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
+            DeidUploadGate.Check check = DeidUploadGate.precheck(dataSource, file, sniffed, patientId,
+                    deidConfirmed, deidSha256, access().visibleStudyIds(session), visitLabel);
+            if (check instanceof DeidUploadGate.Reject rejected) {
+                LOG.warn("staff upload refused as not de-identified (sha256={}): {}",
+                        rejected.sha256(), rejected.violations());
+                DeidUploadGate.auditRejected(dataSource, actor.user(), actor.study(),
+                        rejected.violations(), rejected.sha256(), "staff");
+                return rejected.toResponse();
+            }
+            DeidUploadGate.Pass pass = (DeidUploadGate.Pass) check;
+            deid = new DeidUploadGate.Context(pass.label(), pass.sha256(), pass.filename(),
+                    violations -> DeidUploadGate.auditRejected(dataSource, actor.user(), actor.study(),
+                            violations, pass.sha256(), "staff"));
+        }
+
         if (sniffed.kind() == IngestArtifactStore.Kind.E2E) {
             String pid = patientId;
-            if (UploadRoute.isBlank(pid) && visit != null) {
+            if (deid == null && UploadRoute.isBlank(pid) && visit != null) {
                 pid = UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
             }
-            ResponseEntity<?> r = oct.commit(file, pid == null ? "" : pid, date == null ? "" : date,
+            ResponseEntity<?> r = oct.commitStaff(file, pid == null ? "" : pid, date == null ? "" : date,
                     laterality == null ? "" : laterality, scanIndex, eventCrfId, studyEventId, park,
-                    false, 0);
+                    false, 0, deid);
             attributeOctUpload(r, actor);
+            if (deid != null) auditDeidConfirmed(r, actor, deid, visit);
+            r = maskForeignDuplicate(r, session);
             return UploadRoute.asE2e(r);
         }
 
         IngestUploadService.Outcome outcome = uploads.commit(new IngestUploadService.Upload(
                 sniffed, file, patientId, UploadRoute.parseIsoDateOrNull(date), laterality, visit, device,
-                IngestUploadService.Channel.STAFF, actor, access().visibleStudyIds(session)));
+                IngestUploadService.Channel.STAFF, actor, access().visibleStudyIds(session), deid,
+                visibility().visibleTo(session)));
         if (outcome instanceof IngestUploadService.Created c) {
             LOG.info("staff upload: ingest_item {} ({}) {} by user {}",
                     c.ingestItemId(), c.format(), c.status(), actor.userId());
+            if (deid != null) {
+                DeidUploadGate.auditConfirmed(dataSource, actor.user(), actor.study(),
+                        c.ingestItemId(), deid.sha256(), visit);
+            }
         }
         return UploadRoute.respond(outcome);
+    }
+
+    /** Keep the browser's confirmation with the row the OCT route created. */
+    private void auditDeidConfirmed(ResponseEntity<?> r, IngestBindService.Actor actor,
+                                    DeidUploadGate.Context deid, Integer visit) {
+        if (!r.getStatusCode().is2xxSuccessful()) return;
+        if (!(r.getBody() instanceof Map<?, ?> body)) return;
+        if (!(body.get("ingestItemId") instanceof Number n)) return;
+        DeidUploadGate.auditConfirmed(dataSource, actor.user(), actor.study(), n.longValue(),
+                deid.sha256(), visit);
     }
 
     /* ---------------- undo ---------------- */
@@ -222,6 +293,10 @@ public class IngestUploadApiController {
     public ResponseEntity<?> undoStaffUploadItem(@PathVariable("ingestItemId") long ingestItemId, HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
+        // The upload of a site the caller cannot see is "not found", not "reconciled" or "too late".
+        if (!visibility().canSeeOrIsFiler(ingestItemId, session)) {
+            return ResponseEntity.status(404).body(Map.of("message", "no upload " + ingestItemId));
+        }
         return UploadRoute.respond(uploads.undo(ingestItemId, actor(session)));
     }
 
@@ -229,6 +304,9 @@ public class IngestUploadApiController {
     public ResponseEntity<?> undoStaffUploadJob(@PathVariable("jobId") long jobId, HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
+        if (!visibility().canSeeJob(jobId, session)) {
+            return ResponseEntity.status(404).body(Map.of("message", "No retinal_inference_job with id " + jobId));
+        }
         return oct.undo(jobId);
     }
 
@@ -281,12 +359,39 @@ public class IngestUploadApiController {
      * filed it and the trail says who uploaded it. Best-effort — the scan is
      * in, which is what matters.
      */
+    /**
+     * A duplicate the OCT route reports names the existing file and job by id.
+     * When that file is one this session may not see, the answer is the bare
+     * "already uploaded" with no ids.
+     */
+    private ResponseEntity<?> maskForeignDuplicate(ResponseEntity<?> r, HttpSession session) {
+        if (r.getStatusCode().value() != 409 || !(r.getBody() instanceof Map<?, ?> body)) return r;
+        if (!(body.get("existingIngestItemId") instanceof Number n)) return r;
+        if (visibility().canSee(n.longValue(), session)) return r;
+        Map<String, Object> masked = new java.util.LinkedHashMap<>();
+        masked.put("message", body.get("message"));
+        masked.put("duplicate", true);
+        return ResponseEntity.status(409).body(masked);
+    }
+
     private void attributeOctUpload(ResponseEntity<?> r, IngestBindService.Actor actor) {
         if (!r.getStatusCode().is2xxSuccessful() || actor.isSystem()) return;
         if (!(r.getBody() instanceof Map<?, ?> body)) return;
         Object idRaw = body.get("ingestItemId");
         if (!(idRaw instanceof Number n)) return;
         long id = n.longValue();
+        // Who may see the scan while it is unbound: the uploader's study.
+        if (actor.study() != null && actor.study().getId() > 0) {
+            try (Connection c = dataSource.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "UPDATE ingest_item SET origin_study_id = ? WHERE ingest_item_id = ? AND origin_study_id IS NULL")) {
+                ps.setInt(1, actor.study().getId());
+                ps.setLong(2, id);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                LOG.warn("could not record the origin study of OCT upload ingest_item {}: {}", id, e.getMessage());
+            }
+        }
         String status = String.valueOf(body.get("status"));
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(

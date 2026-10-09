@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Restores a removed study event and all its data
  */
-@SuppressWarnings("all")
 public class RestoreStudyEventServlet extends SecureController {
     /**
 	 * 
@@ -96,6 +95,8 @@ public class RestoreStudyEventServlet extends SecureController {
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
         } else {
 
+            assertStudyEventInScope(studyEventId);
+            assertStudySubjectInScope(studySubId);
             StudySubjectBean studySub = (StudySubjectBean) subdao.findByPK(studySubId);
 
             // YW 11-07-2007, a study event could not be restored if its study
@@ -175,7 +176,7 @@ public class RestoreStudyEventServlet extends SecureController {
                                 item.setStatus(Status.AVAILABLE);
                                 item.setUpdater(ub);
                                 item.setUpdatedDate(new Date());
-                                iddao.update(item);
+                                iddao.updateStatusOnly(item);
                             }
                         }
                     }

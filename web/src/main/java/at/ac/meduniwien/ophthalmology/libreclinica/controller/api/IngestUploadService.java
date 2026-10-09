@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.LongPredicate;
 
 import javax.sql.DataSource;
 
@@ -33,6 +34,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
@@ -94,9 +97,44 @@ final class IngestUploadService {
      */
     record Upload(FileKindSniffer.Sniffed sniffed, MultipartFile file, String patientId,
                   LocalDate acquisitionDate, String laterality, Integer studyEventId, String device,
-                  Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope) {}
+                  Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope,
+                  DeidUploadGate.Context deid, LongPredicate visibleItem) {
 
-    sealed interface Outcome permits Created, Duplicate, Rejected, Undone {}
+        /**
+         * An upload on a deployment that does not require de-identification,
+         * with no limit on which existing items a duplicate may name (the portal's).
+         */
+        Upload(FileKindSniffer.Sniffed sniffed, MultipartFile file, String patientId,
+               LocalDate acquisitionDate, String laterality, Integer studyEventId, String device,
+               Channel channel, IngestBindService.Actor actor, Set<Integer> studyScope) {
+            this(sniffed, file, patientId, acquisitionDate, laterality, studyEventId, device, channel, actor,
+                    studyScope, null, null);
+        }
+
+        /** True when the caller may be told about {@code ingestItemId} (null predicate = unrestricted). */
+        boolean mayName(long ingestItemId) {
+            return visibleItem == null || visibleItem.test(ingestItemId);
+        }
+
+        /** The study the staff uploader was working in; null on the portal and for the system actor. */
+        Integer originStudyId() {
+            if (channel != Channel.STAFF || actor == null || actor.isSystem() || actor.study() == null) return null;
+            int id = actor.study().getId();
+            return id > 0 ? id : null;
+        }
+    }
+
+    private static final Rejected ALREADY_UPLOADED = new Rejected(409, "Diese Datei wurde bereits hochgeladen.");
+
+    /** A duplicate the caller may not be told the details of is only "already uploaded". */
+    private static Outcome maskDuplicate(Upload up, Duplicate d) {
+        return up.mayName(d.existingIngestItemId()) ? d : ALREADY_UPLOADED;
+    }
+
+    sealed interface Outcome permits Created, Duplicate, Rejected, Undone, DeidRejected {}
+
+    /** The file failed the server's de-identification check; {@code violations} are field names. */
+    record DeidRejected(java.util.List<String> violations) implements Outcome {}
 
     /**
      * @param sameImageAs DR-036 — set when the file was held back: the row
@@ -121,6 +159,12 @@ final class IngestUploadService {
     private final IngestArtifactStore store;
     private final DicomDescribeClient describe;
     private final StudySettingService settings;
+    /**
+     * DR-039 — starts the visit plan's analyses for a DICOM OCT volume filed
+     * at upload, and detaches its jobs when the upload is taken back. Without
+     * {@link #useRetinalDispatch} it detaches only and starts nothing.
+     */
+    private RetinalJobFollower follower;
 
     IngestUploadService(DataSource dataSource) {
         this(dataSource, new IngestArtifactStore(), new DicomDescribeClient());
@@ -131,6 +175,18 @@ final class IngestUploadService {
         this.store = store;
         this.describe = describe;
         this.settings = new StudySettingService(dataSource);
+        this.follower = new RetinalJobFollower(dataSource);
+    }
+
+    /**
+     * DR-039 — wire the inference dispatch, so a DICOM OCT volume uploaded
+     * straight to a visit starts what the visit's imaging plan asks for, as an
+     * {@code .e2e} upload does. Either argument null leaves it detach-only.
+     */
+    void useRetinalDispatch(RemoteRetinalInferenceClient remote, RetinalInferenceApiController inference) {
+        this.follower = remote == null || inference == null
+                ? new RetinalJobFollower(dataSource)
+                : new RetinalJobFollower(dataSource, remote, inference);
     }
 
     /* ------------------------------------------------------------------ */
@@ -160,8 +216,28 @@ final class IngestUploadService {
         String preview = null;
 
         try {
+            // Required de-identification: the file is read by the sidecar
+            // BEFORE anything touches it, and refused unless it is already
+            // clean. The in-place rewrite further down still runs.
+            if (up.deid() != null && kind == IngestArtifactStore.Kind.DICOM) {
+                if (!up.deid().sha256().equals(stored.sha256())) {
+                    // The bytes stored are not the bytes that were checked.
+                    return rejectDeid(path, up.deid(), java.util.List.of(DeidUploadGate.V_SHA256));
+                }
+                try {
+                    DicomDescribeClient.Verification v = describe.verify(path, up.deid().label());
+                    if (!v.ok()) return rejectDeid(path, up.deid(), v.violations());
+                } catch (DicomDescribeClient.DescribeException e) {
+                    if (e.reason() == DicomDescribeClient.DescribeException.Reason.NOT_DICOM) {
+                        return rejectDeid(path, up.deid(), java.util.List.of(DeidUploadGate.V_FILE_TYPE));
+                    }
+                    // Fail-closed: a file the sidecar could not check is not kept.
+                    return discard(path, null, rejectionFor(e));
+                }
+            }
+
             Duplicate dup = findDuplicateBySha(stored.sha256());
-            if (dup != null) return discard(path, null, dup);
+            if (dup != null) return discard(path, null, maskDuplicate(up, dup));
 
             // The visit first: the label written into a DICOM file's patient
             // identity is the visit's subject and nothing else — an upload
@@ -211,14 +287,18 @@ final class IngestUploadService {
             DicomDescribeClient.Description desc = null;
             if (kind == IngestArtifactStore.Kind.DICOM) {
                 try {
-                    desc = describe.describe(path, target == null ? null : target.subjectLabel());
+                    desc = up.deid() != null
+                            ? describe.describe(path, up.deid().label(), true)
+                            : describe.describe(path, target == null ? null : target.subjectLabel());
                 } catch (DicomDescribeClient.DescribeException e) {
                     return discard(path, null, rejectionFor(e));
                 }
                 preview = desc.previewPngPath();
                 if (desc.sopInstanceUid() != null) {
                     Long existing = findBySopInstanceUid(desc.sopInstanceUid());
-                    if (existing != null) return discard(path, preview, new Duplicate(existing, null));
+                    if (existing != null) {
+                        return discard(path, preview, maskDuplicate(up, new Duplicate(existing, null)));
+                    }
                 }
             }
 
@@ -232,7 +312,7 @@ final class IngestUploadService {
             String claimedLabel = target != null ? target.subjectLabel() : blankToNull(up.patientId());
             IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
             if (verdict == IngestTwins.Verdict.DUPLICATE) {
-                return discard(path, preview, new Duplicate(twin.ingestItemId(), null));
+                return discard(path, preview, maskDuplicate(up, new Duplicate(twin.ingestItemId(), null)));
             }
             boolean held = verdict == IngestTwins.Verdict.HELD;
             if (held) target = null;
@@ -266,7 +346,10 @@ final class IngestUploadService {
                         .newItem(kind, SOURCE_KIND, path.toString())
                         .device(device)
                         .previewPngPath(kind == IngestArtifactStore.Kind.IMAGE ? path.toString() : preview)
-                        .originalFilename(up.file().getOriginalFilename())
+                        // Required de-identification: only the neutral name
+                        // the gate validated is ever stored.
+                        .originalFilename(up.deid() != null ? up.deid().neutralFilename()
+                                : up.file().getOriginalFilename())
                         .contentType(up.sniffed().contentType())
                         .digest(stored.sha256(), stored.byteSize())
                         .pixelSha256(pixelSha256)
@@ -276,13 +359,18 @@ final class IngestUploadService {
                         .laterality(laterality)
                         .acquisitionDate(acquisition)
                         .acquisitionDateSource(acquisitionSource)
-                        .imagingModalityId(modalityId);
+                        .imagingModalityId(modalityId)
+                        // Who may see the file while it is unbound: the uploader's study (staff only).
+                        .originStudyId(up.originStudyId());
                 if (desc != null) {
                     item.sopInstanceUid(desc.sopInstanceUid())
                             .sopClassUid(desc.sopClassUid())
                             .studyInstanceUid(desc.studyInstanceUid())
                             .seriesInstanceUid(desc.seriesInstanceUid())
                             .modality(desc.modality())
+                            // DR-039 — an OCT volume is analysed whatever its format.
+                            .octVolume(OctVolumes.of(desc))
+                            .manufacturer(desc.manufacturer(), desc.manufacturerModelName())
                             .deidentifiedAt(desc.identityRemoved() ? Instant.now() : null);
                 }
                 if (target != null) {
@@ -304,18 +392,36 @@ final class IngestUploadService {
                                 target.eventCrfId()),
                         SOURCE_KIND, device, laterality, up.actor().userId());
             }
+            // DR-039 — a DICOM OCT volume filed to a visit starts the visit
+            // plan's analyses now, like an .e2e upload: the nAMD module's
+            // physicians expect the segmentation to be there when they open
+            // the visit. The follower applies the study's inference switch
+            // and the plan; a failure here never fails the upload.
+            if (target != null && kind == IngestArtifactStore.Kind.DICOM
+                    && Boolean.TRUE.equals(OctVolumes.of(desc))) {
+                try {
+                    RetinalJobFollower.Ensured e = follower.ensure(id, up.actor(), false);
+                    LOG.info("upload: ingest_item {} is a DICOM OCT volume — {} analysis(es) started{}",
+                            id, e.started(), e.skippedBecause() == null ? "" : " (" + e.skippedBecause() + ")");
+                } catch (SQLException | RuntimeException e) {
+                    LOG.error("upload: ingest_item {} is filed, but its analyses could not start: {}",
+                            id, e.getMessage());
+                }
+            }
             LOG.info("upload: ingest_item {} ({}) landed {} via {}{}", id, up.sniffed().format(),
                     target == null ? "UNBOUND" : "BOUND", up.channel(),
                     held ? " — held back, same picture as ingest_item " + twin.ingestItemId() : "");
             return new Created(id, kind.dir(), up.sniffed().format(),
                     target == null ? "UNBOUND" : "BOUND", laterality, acquisition, device, modalityId,
-                    desc != null && desc.identityRemoved(), held ? twin.ingestItemId() : null);
+                    desc != null && desc.identityRemoved(),
+                    held && up.mayName(twin.ingestItemId()) ? twin.ingestItemId() : null);
         } catch (SQLException e) {
             // The race-safe dedup index fires here when two operators upload
             // the same bytes at once; the earlier row wins.
             if ("23505".equals(e.getSQLState())) {
                 Duplicate raced = findDuplicateBySha(stored.sha256());
-                return discard(path, preview, raced != null ? raced : new Rejected(409, "already uploaded"));
+                return discard(path, preview,
+                        raced != null ? maskDuplicate(up, raced) : new Rejected(409, "already uploaded"));
             }
             LOG.error("upload: INSERT failed: {}", e.getMessage());
             return discard(path, preview, new Rejected(500, "the upload could not be recorded"));
@@ -330,8 +436,16 @@ final class IngestUploadService {
      * Take an upload back within the window.
      *
      * <p>Only what this service created can be undone here: a row somebody
-     * has since reconciled by hand, dismissed, or that carries inference
-     * jobs is somebody's decision, and the OCT route owns the job form.
+     * has since reconciled by hand or dismissed is somebody's decision.
+     *
+     * <p>DR-039 — a DICOM OCT volume filed at upload has started its plan's
+     * analyses. Undoing it handles them the DR-035 way, through
+     * {@link RetinalJobFollower#detach}: jobs not yet running are cancelled,
+     * running or finished ones keep their results, unattached. When nothing
+     * had started, the cancelled jobs go with the upload, as an {@code .e2e}
+     * undo removes its jobs. When an analysis is already running or done, the
+     * scan cannot vanish under it: it leaves the visit and is dismissed
+     * instead (restorable from the inbox, deleted by the retention job).
      */
     Outcome undo(long ingestItemId, IngestBindService.Actor actor) {
         Instant receivedAt;
@@ -339,6 +453,7 @@ final class IngestUploadService {
         String previewPath;
         String status;
         String policy;
+        int jobs;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT received_at, stored_path, preview_png_path, status, match_policy, "
@@ -354,9 +469,7 @@ final class IngestUploadService {
                 previewPath = rs.getString("preview_png_path");
                 status = rs.getString("status");
                 policy = rs.getString("match_policy");
-                if (rs.getInt("jobs") > 0) {
-                    return new Rejected(409, "this upload already has work attached to it");
-                }
+                jobs = rs.getInt("jobs");
             }
         } catch (SQLException e) {
             LOG.error("undo lookup failed for ingest_item {}: {}", ingestItemId, e.getMessage());
@@ -370,6 +483,11 @@ final class IngestUploadService {
         }
         if (Duration.between(receivedAt, Instant.now()).compareTo(UNDO_WINDOW) > 0) {
             return new Rejected(410, "undo window of " + UNDO_WINDOW.toSeconds() + "s elapsed");
+        }
+        if (jobs > 0) {
+            if (!boundAtUpload) return new Rejected(409, "this upload already has work attached to it");
+            Outcome withJobs = undoJobs(ingestItemId, actor);
+            if (withJobs != null) return withJobs;
         }
         if (boundAtUpload) {
             // The CRF value first: a row that vanishes while the form still
@@ -400,6 +518,59 @@ final class IngestUploadService {
         return new Undone(ingestItemId);
     }
 
+    /**
+     * DR-039 — the jobs of an upload being taken back. Null when nothing had
+     * started: the cancelled jobs are gone and the undo carries on removing
+     * the upload. Otherwise the final outcome: the scan left the visit and
+     * was dismissed, its running or finished analyses kept, unattached.
+     */
+    private Outcome undoJobs(long ingestItemId, IngestBindService.Actor actor) {
+        try {
+            follower.detach(ingestItemId, actor);
+        } catch (SQLException e) {
+            LOG.error("undo of ingest_item {}: its analyses could not be detached: {}", ingestItemId, e.getMessage());
+            return new Rejected(500, "could not take back the upload's analyses");
+        }
+        int live;
+        try (Connection c = dataSource.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT count(*) FROM retinal_inference_job WHERE ingest_item_id = ? AND status <> 'cancelled'")) {
+                ps.setLong(1, ingestItemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    live = rs.getInt(1);
+                }
+            }
+            if (live == 0) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "DELETE FROM retinal_inference_job WHERE ingest_item_id = ? AND status = 'cancelled'")) {
+                    ps.setLong(1, ingestItemId);
+                    ps.executeUpdate();
+                }
+                return null;
+            }
+        } catch (SQLException e) {
+            LOG.error("undo of ingest_item {}: could not settle its analyses: {}", ingestItemId, e.getMessage());
+            return new Rejected(500, "could not take back the upload's analyses");
+        }
+        IngestBindService binds = new IngestBindService(dataSource, follower);
+        IngestBindService.Result r = binds.unbind(ingestItemId, actor);
+        if (r == IngestBindService.Result.OK) {
+            r = binds.dismiss(ingestItemId, "upload undone; an analysis of it had already started", actor);
+        }
+        return switch (r) {
+            case OK -> {
+                LOG.info("upload: ingest_item {} taken back — {} analysis(es) already under way keep running, "
+                        + "unattached; the scan is dismissed", ingestItemId, live);
+                yield new Undone(ingestItemId);
+            }
+            case REFUSED_LOCKED -> new Rejected(409, "the visit has been signed or locked since");
+            case NOT_FOUND -> new Rejected(404, "no upload " + ingestItemId);
+            case WRONG_STATE -> new Rejected(409, "this upload has already been reconciled");
+            case FAILED -> new Rejected(500, "could not take back the upload");
+        };
+    }
+
     /* ------------------------------------------------------------------ */
     /* preflight                                                           */
     /* ------------------------------------------------------------------ */
@@ -412,8 +583,18 @@ final class IngestUploadService {
      *                  match a file that is one acquisition
      */
     Map<String, Object> preflight(String sha256, Integer scanIndex) {
+        return preflight(sha256, scanIndex, null);
+    }
+
+    /**
+     * As {@link #preflight(String, Integer)}, reporting only items the caller
+     * may see ({@code visibleItem} null = all): a file of a site the caller
+     * has no access to is not "already here" as far as they can tell.
+     */
+    Map<String, Object> preflight(String sha256, Integer scanIndex, LongPredicate visibleItem) {
         Map<String, Object> body = new LinkedHashMap<>();
         Duplicate d = scanIndex == null ? findDuplicateBySha(sha256) : findDuplicateByShaAndScan(sha256, scanIndex);
+        if (d != null && visibleItem != null && !visibleItem.test(d.existingIngestItemId())) d = null;
         body.put("exists", d != null);
         body.put("ingestItemId", d == null ? null : d.existingIngestItemId());
         body.put("jobId", d == null ? null : d.existingJobId());
@@ -612,6 +793,12 @@ final class IngestUploadService {
             LOG.warn("upload: could not fingerprint the image: {}", e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    /** Delete the stored file, tell the caller's audit, and answer 422. */
+    private static Outcome rejectDeid(Path stored, DeidUploadGate.Context deid, java.util.List<String> violations) {
+        deid.rejected(violations);
+        return discard(stored, null, new DeidRejected(violations));
     }
 
     private static Outcome discard(Path stored, String preview, Outcome outcome) {

@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 /**
- * The e-mail rule runs on the unauthenticated Contact, RequestPassword and
+ * The e-mail rule runs on the unauthenticated Contact and
  * RequestAccount forms, and its pattern backtracks polynomially, so the
  * value's length is checked before the pattern. Every regular-expression
  * validation is also refused for values longer than any column a

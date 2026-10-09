@@ -38,7 +38,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * Removes a study subject and all the related data
  */
-@SuppressWarnings("all")
 public class RemoveStudySubjectServlet extends SecureController {
     /**
 	 * 
@@ -98,6 +97,8 @@ public class RemoveStudySubjectServlet extends SecureController {
             StudyDAO studydao = new StudyDAO(sm.getDataSource());
             StudyBean study = (StudyBean) studydao.findByPK(studyId);
 
+            // the subject being removed, whatever study the request names, must be the session's
+            assertRecordInScope(studySub.getStudyId());
             checkRoleByUserAndStudy(ub, study.getParentStudyId(), study.getId());
 
             // find study events
@@ -158,7 +159,7 @@ public class RemoveStudySubjectServlet extends SecureController {
                                         item.setStatus(Status.AUTO_DELETED);
                                         item.setUpdater(ub);
                                         item.setUpdatedDate(new Date());
-                                        iddao.update(item);
+                                        iddao.updateStatusOnly(item);
                                     }
                                 }
                             }

@@ -17,6 +17,12 @@
  * <p>The card is study-arm-only — the parent gates its mount on
  * {@code useStudyArm().aiVisible}. Control-arm visits never see this.
  *
+ * <p>Insufficient data: when {@code rec.rec} is null the engine refused to
+ * recommend (an input is unknown, or the result is from a placeholder model).
+ * The card then says so, lists exactly which inputs are missing and reminds
+ * the clinician that the decision below is theirs to make unaided. It never
+ * falls back to a KEEP/EXTEND look.
+ *
  * <p>First-visit fall-through: when the rec is null the card hides;
  * the parent tab shows the loading-phase copy ("Loading-Phase —
  * monatliche Injektion") instead.
@@ -44,8 +50,16 @@ const headlineColour = computed(() => {
     case 'SHORTEN': return 'bg-rose-100 text-rose-800 ring-rose-300'
     case 'KEEP':    return 'bg-amber-100 text-amber-800 ring-amber-300'
     case 'EXTEND':  return 'bg-emerald-100 text-emerald-800 ring-emerald-300'
+    default:        return 'bg-slate-200 text-slate-700'
   }
 })
+
+/** "current.irf" → "Current visit · IRF" in the reader's language. */
+function missingLabel(key: string): string {
+  const [scope, field] = key.split('.')
+  const base = 'studyModules.namd.recommendation.insufficient.'
+  return t(base + 'visit.' + scope) + ' · ' + t(base + 'field.' + field)
+}
 
 const triggers = computed<NamdTriggerHit[]>(() => props.rec?.triggersFired ?? [])
 
@@ -67,7 +81,52 @@ function useI18nLabel(h: NamdTriggerHit): string {
 
 <template>
   <div
-    v-if="rec"
+    v-if="rec && rec.rec == null"
+    data-testid="namd-recommendation-insufficient"
+    role="status"
+    class="rounded-2xl ring-1 ring-amber-300 bg-amber-50 p-5 shadow-sm"
+  >
+    <div class="text-[13px] font-semibold text-amber-900">
+      {{ t('studyModules.namd.recommendation.insufficient.headline') }}
+    </div>
+    <p
+      v-if="rec.placeholderModel"
+      data-testid="namd-placeholder-warning"
+      class="mt-2 text-[13px] font-semibold text-rose-700"
+    >
+      {{ t('studyModules.namd.recommendation.insufficient.placeholder') }}
+    </p>
+    <template v-else>
+      <p class="mt-2 text-[13px] text-amber-900 leading-relaxed">
+        {{ t('studyModules.namd.recommendation.insufficient.body') }}
+      </p>
+      <ul class="mt-2 space-y-1" data-testid="namd-missing-inputs">
+        <li
+          v-for="m in rec.missing"
+          :key="m"
+          :data-testid="`namd-missing-${m}`"
+          class="text-[13px] text-amber-900 flex items-start gap-2"
+        >
+          <span class="inline-block w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-amber-600" />
+          <span>{{ missingLabel(m) }}</span>
+        </li>
+      </ul>
+      <p
+        v-if="rec.fetchFailures.length > 0"
+        data-testid="namd-fetch-failures"
+        class="mt-2 text-[12px] text-rose-700"
+      >
+        {{ t('studyModules.namd.recommendation.insufficient.fetchFailed', {
+          sources: rec.fetchFailures.map((s) => t('studyModules.namd.recommendation.insufficient.source.' + s)).join(', '),
+        }) }}
+      </p>
+    </template>
+    <p class="mt-3 text-[12px] text-amber-800">
+      {{ t('studyModules.namd.recommendation.insufficient.manual') }}
+    </p>
+  </div>
+  <div
+    v-else-if="rec"
     data-testid="namd-recommendation-card"
     class="rounded-2xl ring-1 ring-slate-200 bg-white p-5 shadow-sm"
   >

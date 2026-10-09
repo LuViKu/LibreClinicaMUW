@@ -158,10 +158,11 @@ public class ServletInfraConfig {
     @Bean
     public FilterRegistrationBean<LegacyServletTelemetryFilter> legacyServletTelemetryFilter(
             LegacyServletDeprecationCatalog catalog,
-            @Value("${libreclinica.legacy.closedPaths:}") String closedPaths) {
+            @Value("${libreclinica.legacy.closedPaths:}") String closedPaths,
+            @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing) {
         FilterRegistrationBean<LegacyServletTelemetryFilter> reg =
                 new FilterRegistrationBean<>(new LegacyServletTelemetryFilter(
-                        catalog, LegacyServletTelemetryFilter.parseClosedPaths(closedPaths)));
+                        catalog, LegacyServletTelemetryFilter.parseClosedPaths(closedPaths), internetFacing));
         reg.addUrlPatterns("/*");
         reg.setDispatcherTypes(DispatcherType.REQUEST);
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
@@ -327,8 +328,12 @@ public class ServletInfraConfig {
      */
     @Bean
     public at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter
-            publicOctUploadRateLimitFilter() {
-        return new at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter();
+            publicOctUploadRateLimitFilter(
+                    // Throttles only on the internet-facing deployment; on the
+                    // internal one it passes everything through (see the filter's
+                    // `enabled` field for why).
+                    @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing) {
+        return new at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter(internetFacing);
     }
 
     /**

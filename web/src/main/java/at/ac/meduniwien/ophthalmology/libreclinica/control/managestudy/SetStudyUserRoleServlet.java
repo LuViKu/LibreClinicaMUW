@@ -31,7 +31,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author jxu
  */
-@SuppressWarnings("all")
 public class SetStudyUserRoleServlet extends SecureController {
 
 	private static final long serialVersionUID = 7607566814278848612L;
@@ -72,6 +71,8 @@ public class SetStudyUserRoleServlet extends SecureController {
         } else {
             String action = request.getParameter("action");
             FormProcessor fp = new FormProcessor(request);
+            // the role's study (site) must be the session's study or one of its sites
+            assertRecordInScope(fp.getInt("studyId"));
             UserAccountBean user = udao.findByUserName(name);
             StudyBean userStudy = sdao.findByPK(fp.getInt("studyId"));
             if ("confirm".equalsIgnoreCase(action)) {

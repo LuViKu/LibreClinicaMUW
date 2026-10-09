@@ -78,7 +78,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.RestoreDatase
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ChangeStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ContactServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestPasswordServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ResetPasswordServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.UpdateProfileServlet;
@@ -303,7 +302,6 @@ class LegacyGetWritesPostOnlyTest {
                         "subject", "x", "message", "x"),
                 get(RequestAccountServlet.class, "/RequestAccount", "action", "submit"),
                 get(RequestStudyServlet.class, "/RequestStudy", "action", "submit"),
-                get(RequestPasswordServlet.class, "/RequestPassword", "action", "confirm", "name", "root", "email", "x@example.invalid"),
                 get(ResetPasswordServlet.class, "/ResetPassword", "mustChangePwd", "no", "oldPasswd", "x"),
                 get(AssignUserToStudyServlet.class, "/AssignUserToStudy", "action", "submit"),
                 get(CreateStudyServlet.class, "/CreateStudy", "action", "submit"),

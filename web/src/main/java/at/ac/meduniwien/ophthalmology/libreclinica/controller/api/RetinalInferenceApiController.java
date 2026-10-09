@@ -20,6 +20,7 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -40,6 +41,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRunResult;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalRunRefused;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.ScanSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
@@ -112,7 +115,7 @@ public class RetinalInferenceApiController {
      * a GPU host exist. {@code bm} (Bruch's membrane) and {@code layers} (the full
      * IOWA surface stack) run through the same async worker path.
      */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers");
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers", "sdretinanet");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
@@ -141,6 +144,14 @@ public class RetinalInferenceApiController {
      */
     private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
             retinalAutoPopulator;
+
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
 
     @Autowired(required = false)
     public void setRetinalAutoPopulator(
@@ -230,6 +241,15 @@ public class RetinalInferenceApiController {
                 session, "uploading scans to a CRF");
         if (roleRefusal != null) {
             return roleRefusal;
+        }
+        // Denied outright when de-identification is required. This endpoint has
+        // no caller in the SPA (the upload page uses /ingest/upload/commit),
+        // takes no patient label, no SHA-256 confirmation and no neutral
+        // filename, and keeps the multipart name as given: verifying it to the
+        // same standard would mean duplicating the staff route for a path
+        // nobody uses, so the one place a file can come in is the one that checks.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.response(403, List.of("directOctUploadClosed"));
         }
 
         // ---- request-shape gates ------------------------------------------------
@@ -482,8 +502,18 @@ public class RetinalInferenceApiController {
         try {
             remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat, scanIndex);
             if (remote == null) {
-                remoteFailureReason = "Remote /run returned null — see RemoteRetinalInferenceClient WARN logs";
+                remoteFailureReason = RetinalJobAccess.scanFileMissing(absolutePath)
+                        ? RetinalJobAccess.SCAN_FILE_MISSING
+                        : "Remote /run returned null — see RemoteRetinalInferenceClient WARN logs";
             }
+        } catch (RetinalRunRefused refused) {
+            // DR-039 — refused for a reason the operator can act on: the
+            // sidecar's 422 message, or a task not validated for the scan's
+            // device. The message is the job's; what was learnt about the
+            // scan is kept, so the job page can name the device.
+            remote = null;
+            remoteFailureReason = refused.getMessage();
+            persistScanSource(jobId, refused.source());
         } catch (Exception e) {
             LOG.warn("Remote /run threw for job {}: {}", jobId, e.getMessage());
             remote = null;
@@ -554,8 +584,11 @@ public class RetinalInferenceApiController {
         // compute crash leaves the row with the envelope's values so the
         // operator can still browse the segmentation + re-run.
         ComputedMetrics metrics = null;
+        // DR-039 — for a DICOM the sidecar's resolved eye is the scan's eye.
+        String scanEye = remote.source() != null && remote.source().isDicom()
+                && remote.source().laterality() != null ? remote.source().laterality() : lat;
         try {
-            metrics = metricComputer.compute(taskClean, artifactDir, remote.geometry(), lat);
+            metrics = metricComputer.compute(taskClean, artifactDir, remote.geometry(), scanEye);
         } catch (Exception metricEx) {
             LOG.warn("Metric compute failed for job {} (task={}): {}",
                     jobId, taskClean, metricEx.getMessage());
@@ -591,6 +624,10 @@ public class RetinalInferenceApiController {
             return null;
         }
 
+        // DR-039 — what the preprocess step reported: format, device,
+        // spacing order, and the eye it resolved from a DICOM.
+        persistScanSource(jobId, remote.source());
+
         // P2-4 — the job is done, so put its numbers in the CRF.
         //
         // Soft-fail, like the metric compute above: the result row and the
@@ -609,7 +646,7 @@ public class RetinalInferenceApiController {
         body.put("jobId", jobId);
         body.put("status", "done");
         body.put("task", taskClean);
-        body.put("laterality", lat);
+        body.put("laterality", scanEye);
         body.put("primaryMetricValue", respValue);
         body.put("primaryMetricUnit", respUnit);
         body.put("confidence", remote.confidence());
@@ -742,6 +779,43 @@ public class RetinalInferenceApiController {
             LOG.warn("Job {} — acquisition_date persist failed: {}",
                     jobId, sqlEx.getMessage());
         }
+    }
+
+    /**
+     * DR-039 — record on the job what the preprocess sidecar reported about
+     * the scan: its source format, device and spacing order, and — for a
+     * DICOM whose job carries no single eye (OU or none) — the eye the
+     * sidecar resolved from the file. Soft-fail: the job's outcome does not
+     * depend on it.
+     */
+    void persistScanSource(long jobId, ScanSource src) {
+        if (src == null) return;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE retinal_inference_job SET source_format = ?, device_manufacturer = ?, "
+                             + "       device_model = ?, spacing_order = ?, "
+                             + "       eye_laterality = CASE WHEN ? IS NOT NULL "
+                             + "            AND upper(COALESCE(eye_laterality, '')) NOT IN ('OD', 'OS') "
+                             + "           THEN ? ELSE eye_laterality END "
+                             + " WHERE job_id = ?")) {
+            ps.setString(1, clip(src.sourceFormat(), 16));
+            ps.setString(2, clip(src.manufacturer(), 128));
+            ps.setString(3, clip(src.model(), 128));
+            ps.setString(4, clip(src.spacingOrder(), 32));
+            String eye = src.isDicom() ? src.laterality() : null;
+            if (eye != null && !"OD".equals(eye) && !"OS".equals(eye)) eye = null;
+            ps.setString(5, eye);
+            ps.setString(6, eye);
+            ps.setLong(7, jobId);
+            ps.executeUpdate();
+        } catch (SQLException sqlEx) {
+            LOG.warn("Job {} — recording the scan's source failed: {}", jobId, sqlEx.getMessage());
+        }
+    }
+
+    private static String clip(String v, int max) {
+        if (v == null) return null;
+        return v.length() > max ? v.substring(0, max) : v;
     }
 
     /**

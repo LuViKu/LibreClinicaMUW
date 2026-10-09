@@ -132,6 +132,14 @@ public class MeApiController {
 
     private final DataSource dataSource;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
     @Autowired
     public MeApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
@@ -282,7 +290,8 @@ public class MeApiController {
                 req.mustChange,
                 req.reason,
                 activeStudy,
-                ub.isTechAdmin() ? "TECHADMIN" : ub.isSysAdmin() ? "SYSADMIN" : "USER"
+                ub.isTechAdmin() ? "TECHADMIN" : ub.isSysAdmin() ? "SYSADMIN" : "USER",
+                DeidentificationPolicy.required(deidPolicy)
         );
 
         return ResponseEntity.ok(dto);

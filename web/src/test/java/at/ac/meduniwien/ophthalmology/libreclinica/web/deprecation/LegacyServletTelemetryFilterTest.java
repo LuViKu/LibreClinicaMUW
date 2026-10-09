@@ -135,11 +135,11 @@ class LegacyServletTelemetryFilterTest {
 
     @Test
     void logsAScreenWithoutAnSpaRouteAsNone() throws Exception {
-        filter().doFilter(request("GET", "/pages", "/listCurrentScheduledJobs"),
+        filter().doFilter(request("GET", "/pages", "/extract"),
                 new MockHttpServletResponse(), new MockFilterChain());
 
         assertEquals(1, hits().size());
-        assertTrue(hits().get(0).contains("path=/pages/listCurrentScheduledJobs bucket=JOB_ADMIN spaRoute=none"),
+        assertTrue(hits().get(0).contains("path=/pages/extract bucket=DATA_EXPORT spaRoute=none"),
                 hits().get(0));
     }
 
@@ -349,7 +349,7 @@ class LegacyServletTelemetryFilterTest {
 
     @Test
     void goneHtmlWithoutAnSpaRouteSaysSo() {
-        String html = LegacyServletTelemetryFilter.goneHtml(CONTEXT, catalog.entry("/Configure").orElseThrow());
+        String html = LegacyServletTelemetryFilter.goneHtml(CONTEXT, catalog.entry("/AuditDatabase").orElseThrow());
         assertTrue(html.contains("noch keinen Ersatz"), html);
         assertTrue(html.contains("href=\"/LibreClinica/app/\""), html);
     }

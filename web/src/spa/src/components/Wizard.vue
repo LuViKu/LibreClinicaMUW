@@ -54,14 +54,19 @@ const currentStep = computed(() => props.steps[props.step])
 
 <template>
   <div class="space-y-6">
-    <ol
-      class="flex items-center gap-3 text-xs"
+    <!-- The progressbar is a sibling of the step list, not its parent: a
+         progressbar's children are presentational, so wrapping the step
+         buttons in it hid them from assistive tech (axe nested-interactive). -->
+    <div
+      class="sr-only"
       role="progressbar"
+      aria-label="Progress"
       :aria-valuenow="step + 1"
       :aria-valuemin="1"
       :aria-valuemax="steps.length"
       :aria-valuetext="currentStep ? `Step ${step + 1} of ${steps.length}: ${currentStep.title}` : undefined"
-    >
+    />
+    <ol class="flex items-center gap-3 text-xs" aria-label="Steps">
       <template v-for="(s, idx) in steps" :key="s.id">
         <li
           class="flex items-center gap-2"

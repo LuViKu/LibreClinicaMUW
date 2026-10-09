@@ -28,6 +28,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
@@ -59,9 +60,9 @@ import org.slf4j.LoggerFactory;
  * because a configuration changed is not something a clinical system should do
  * quietly.
  *
- * <p>Only OCT volumes ({@code kind = 'e2e'}) are inferred on; every other kind
- * is a no-op here. The study's inference switch gates the enqueueing, as it
- * gates the portal's.
+ * <p>Only OCT volumes are inferred on — an {@code .e2e}, or a DICOM classified
+ * as one (DR-039, {@link #isAnalysable}); every other file is a no-op here.
+ * The study's inference switch gates the enqueueing, as it gates the portal's.
  */
 public final class RetinalJobFollower {
 
@@ -92,6 +93,38 @@ public final class RetinalJobFollower {
     /* ------------------------------------------------------------------ */
     /* Pure logic                                                          */
     /* ------------------------------------------------------------------ */
+
+    /**
+     * The tasks an operator may start by hand: rerun-as, "start an analysis"
+     * on a filed scan, and a visit definition's default tasks. One list, so
+     * a task added to the runner is offered everywhere at once. {@code bm}
+     * is absent on purpose, {@code layers} covers it. Mirrors
+     * {@code RERUN_TASKS} in RetinalMetricsView.vue and the CHECK constraint
+     * on {@code event_definition_retinal_task}.
+     */
+    public static final List<String> STARTABLE_TASKS =
+            List.of("fluid", "ga", "onl", "pr", "layers", "sdretinanet");
+
+    public static boolean isStartableTask(String task) {
+        return task != null && STARTABLE_TASKS.contains(task);
+    }
+
+    /**
+     * Whether a file can be analysed at all: an OCT volume, i.e. an
+     * {@code .e2e}, or a DICOM whose {@code ingest_item.oct_volume} says it is
+     * an Ophthalmic Tomography volume of more than one frame (DR-039,
+     * {@link OctVolumes}). The one place this is decided: bind, catch-up, the
+     * per-scan start, rerun-as, the inbox and the visit page all ask here.
+     */
+    public static boolean isAnalysable(String kind, Boolean octVolume) {
+        return OctVolumes.isAnalysable(kind, octVolume);
+    }
+
+    /** The SQL form of {@link #isAnalysable}, over an {@code ingest_item} alias. */
+    static String analysablePredicate(String alias) {
+        return "(lower(" + alias + ".kind) = 'e2e' OR (lower(" + alias + ".kind) = 'dicom' AND "
+                + alias + ".oct_volume IS TRUE))";
+    }
 
     /** What is already there for one task of the scan. */
     public record ExistingJob(long jobId, String task, String status) {}
@@ -148,16 +181,33 @@ public final class RetinalJobFollower {
      * an unbound file whose jobs still claim a visit.
      */
     public Detached detach(long ingestItemId, IngestBindService.Actor actor) throws SQLException {
+        return detach(ingestItemId, actor, "scan removed from its visit before this job ran",
+                "retinal jobs detached from the visit");
+    }
+
+    /**
+     * The same, on a dismissal: a dismissed file is not study data, so nothing
+     * new may be computed from it. Finished jobs stay as they are, so a
+     * restore followed by a bind attaches their results again, and the
+     * cancelled ones are revived where the visit's plan wants them.
+     */
+    public Detached detachForDismissal(long ingestItemId, IngestBindService.Actor actor) throws SQLException {
+        return detach(ingestItemId, actor, "scan dismissed before this job ran",
+                "retinal jobs cancelled — file dismissed");
+    }
+
+    private Detached detach(long ingestItemId, IngestBindService.Actor actor, String statusMessage,
+                            String auditLabel) throws SQLException {
         try (Connection c = dataSource.getConnection()) {
             // Still filed at this point: the unbind runs after this.
             Integer visit = visitOf(c, ingestItemId);
             int cancelled;
             try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE retinal_inference_job SET status = ?, "
-                            + "status_message = 'scan removed from its visit before this job ran' "
+                    "UPDATE retinal_inference_job SET status = ?, status_message = ? "
                             + " WHERE ingest_item_id = ? AND status IN ('queued','remote_pending','parked')")) {
                 ps.setString(1, RetinalInferenceJobStatus.CANCELLED.dbValue());
-                ps.setLong(2, ingestItemId);
+                ps.setString(2, statusMessage);
+                ps.setLong(3, ingestItemId);
                 cancelled = ps.executeUpdate();
             }
             int detached;
@@ -171,7 +221,7 @@ public final class RetinalJobFollower {
             Detached out = new Detached(detached, cancelled);
             if (!out.nothing()) {
                 audit(AuditTypeIds.RETINAL_JOBS_DETACHED, ingestItemId, actor,
-                        "retinal jobs detached from the visit", "attached",
+                        auditLabel, "attached",
                         "detached=" + detached + ";cancelled=" + cancelled, visit);
                 LOG.info("ingest_item {}: {} retinal job(s) detached, {} cancelled",
                         ingestItemId, detached, cancelled);
@@ -197,7 +247,8 @@ public final class RetinalJobFollower {
     /** What {@link #ensure} reads about the scan. */
     private record Scan(long ingestItemId, String kind, String storedPath, String sha256,
                         int scanIndex, String laterality, Integer modalityId,
-                        Integer boundSubjectId, Integer boundStudyEventId, Integer boundEventCrfId) {}
+                        Integer boundSubjectId, Integer boundStudyEventId, Integer boundEventCrfId,
+                        Boolean octVolume, String device) {}
 
     /**
      * Attach what exists and start what the plan still wants, for a BOUND scan.
@@ -210,7 +261,7 @@ public final class RetinalJobFollower {
         try (Connection c = dataSource.getConnection()) {
             Scan scan = readScan(c, ingestItemId);
             if (scan == null) return Ensured.skipped("no such ingest_item");
-            if (!"e2e".equalsIgnoreCase(scan.kind())) return Ensured.skipped("not an OCT volume");
+            if (!isAnalysable(scan.kind(), scan.octVolume())) return Ensured.skipped("not an OCT volume");
             if (scan.boundStudyEventId() == null && scan.boundEventCrfId() == null) {
                 return Ensured.skipped("not bound to a visit");
             }
@@ -220,7 +271,7 @@ public final class RetinalJobFollower {
 
             Integer modalityId = scan.modalityId();
             if (modalityId == null) {
-                modalityId = VisitImagingPlan.e2eModalityOf(c, studyId);
+                modalityId = VisitImagingPlan.octModalityOf(c, studyId, scan.kind(), scan.device());
                 if (modalityId != null && !dryRun) stampModality(c, ingestItemId, modalityId);
             }
 
@@ -305,7 +356,7 @@ public final class RetinalJobFollower {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ii.ingest_item_id FROM ingest_item ii "
                              + "  JOIN study_event se ON se.study_event_id = ii.bound_study_event_id "
-                             + " WHERE ii.status = 'BOUND' AND ii.kind = 'e2e' "
+                             + " WHERE ii.status = 'BOUND' AND " + analysablePredicate("ii")
                              + "   AND se.study_event_definition_id = ? "
                              + " ORDER BY ii.ingest_item_id")) {
             ps.setInt(1, sedId);
@@ -332,20 +383,117 @@ public final class RetinalJobFollower {
     }
 
     /* ------------------------------------------------------------------ */
+    /* start                                                               */
+    /* ------------------------------------------------------------------ */
+
+    /** What {@link #start} did, or why it did nothing. */
+    public enum StartOutcome {
+        STARTED, NOT_FOUND, NOT_BOUND, NOT_ANALYSABLE, INFERENCE_DISABLED, DUPLICATE, NO_DISPATCHER
+    }
+
+    /**
+     * @param jobId the new job for {@code STARTED}, the job already there for
+     *              {@code DUPLICATE}, else null
+     */
+    public record Started(StartOutcome outcome, Long jobId, String status) {
+        static Started not(StartOutcome why) {
+            return new Started(why, null, null);
+        }
+    }
+
+    /**
+     * Start one task on one filed scan, because an operator asked for it.
+     *
+     * <p>The imaging plan decides what a bind starts; this is for the scan the
+     * plan did not cover, or the task somebody wants in addition. The same job
+     * row a plan would have written, dispatched the same way. The caller has
+     * already checked the role, the item's visibility, the record's state and
+     * that the file is on disk; this checks what only the scan and its jobs can
+     * say.
+     *
+     * <p>A task that already has a job that is not cancelled is not started
+     * again: {@code DUPLICATE} names that job, which is where a retry belongs.
+     * The partial unique index on {@code (ingest_item_id, task)} catches two
+     * requests that cross.
+     */
+    public Started start(long ingestItemId, String task, IngestBindService.Actor actor) throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            Scan scan = readScan(c, ingestItemId);
+            if (scan == null) return Started.not(StartOutcome.NOT_FOUND);
+            if (scan.boundStudyEventId() == null && scan.boundEventCrfId() == null) {
+                return Started.not(StartOutcome.NOT_BOUND);
+            }
+            if (!isAnalysable(scan.kind(), scan.octVolume())) return Started.not(StartOutcome.NOT_ANALYSABLE);
+
+            Integer studyId = VisitImagingPlan.studyOfBinding(c, scan.boundEventCrfId(), scan.boundStudyEventId());
+            if (studyId == null || !new StudySettingService(dataSource)
+                    .isEnabled(studyId, StudySettingService.INFERENCE_ENABLED)) {
+                return Started.not(StartOutcome.INFERENCE_DISABLED);
+            }
+            ExistingJob live = liveJobFor(existingJobs(c, scan), task);
+            if (live != null) return new Started(StartOutcome.DUPLICATE, live.jobId(), live.status());
+            // As in ensure: a 'queued' row nobody hands on would be drained by
+            // the local placeholder worker.
+            if (!canDispatch()) return Started.not(StartOutcome.NO_DISPATCHER);
+
+            String status = initialStatus();
+            long jobId;
+            try {
+                jobId = insertJob(c, scan, task, status);
+            } catch (SQLException e) {
+                if (!"23505".equals(e.getSQLState())) throw e;
+                // Another request started the same task in between.
+                ExistingJob raced = liveJobFor(existingJobs(c, scan), task);
+                if (raced == null) throw e;
+                return new Started(StartOutcome.DUPLICATE, raced.jobId(), raced.status());
+            }
+            auditStart(jobId, task, actor, visitOf(c, ingestItemId));
+            LOG.info("ingest_item {}: retinal task {} started by hand as job {}", ingestItemId, task, jobId);
+            dispatchAsync(scan, List.of(jobInfo(jobId, task)), actor);
+            return new Started(StartOutcome.STARTED, jobId, status);
+        }
+    }
+
+    /**
+     * The scan's jobs that are not cancelled, oldest first: what the visit
+     * page lists beside the file, and what makes a task "already there".
+     */
+    public List<ExistingJob> liveJobs(long ingestItemId) throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            Scan scan = readScan(c, ingestItemId);
+            if (scan == null) return List.of();
+            String cancelled = RetinalInferenceJobStatus.CANCELLED.dbValue();
+            return existingJobs(c, scan).stream().filter(j -> !cancelled.equals(j.status())).toList();
+        }
+    }
+
+    private static ExistingJob liveJobFor(List<ExistingJob> jobs, String task) {
+        String cancelled = RetinalInferenceJobStatus.CANCELLED.dbValue();
+        for (ExistingJob j : jobs) {
+            if (task.equals(j.task()) && !cancelled.equals(j.status())) return j;
+        }
+        return null;
+    }
+
+    /* ------------------------------------------------------------------ */
     /* SQL                                                                 */
     /* ------------------------------------------------------------------ */
 
     private static Scan readScan(Connection c, long ingestItemId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT kind, stored_path, sha256, scan_index, laterality, imaging_modality_id, "
-                        + "       bound_study_subject_id, bound_study_event_id, bound_event_crf_id "
+                        + "       bound_study_subject_id, bound_study_event_id, bound_event_crf_id, "
+                        + "       oct_volume, device "
                         + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, ingestItemId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
+                boolean oct = rs.getBoolean(10);
+                Boolean octVolume = rs.wasNull() ? null : oct;
                 return new Scan(ingestItemId, rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getInt(4), rs.getString(5), intOrNull(rs, 6),
-                        intOrNull(rs, 7), intOrNull(rs, 8), intOrNull(rs, 9));
+                        intOrNull(rs, 7), intOrNull(rs, 8), intOrNull(rs, 9),
+                        octVolume, rs.getString(11));
             }
         }
     }
@@ -473,9 +621,8 @@ public final class RetinalJobFollower {
             try {
                 byte[] bytes = Files.readAllBytes(path);
                 String name = path.getFileName().toString();
-                String uuid = name.toLowerCase(Locale.ROOT).endsWith(".e2e")
-                        ? name.substring(0, name.length() - 4) : name;
-                remoteClient.preprocessUpload(primary, name, bytes, scan.laterality(), uuid, scan.scanIndex());
+                remoteClient.preprocessUpload(primary, name, bytes, scan.laterality(),
+                        RetinalJobAccess.artifactKey(scan.storedPath()), scan.scanIndex());
             } catch (IOException | RuntimeException ex) {
                 LOG.warn("follow-file preprocess failed for ingest_item {} (job {}): {}",
                         scan.ingestItemId(), primary, ex.getMessage());
@@ -543,6 +690,25 @@ public final class RetinalJobFollower {
                     oldValue, newValue, null, visit);
         } catch (RuntimeException e) {
             LOG.warn("could not audit {} of ingest_item {}: {}", label, ingestItemId, e.getMessage());
+        }
+    }
+
+    /**
+     * One row per job started by hand, on the job, so the subject's audit log
+     * shows who asked for which analysis; {@code visit} places it there.
+     */
+    private void auditStart(long jobId, String task, IngestBindService.Actor actor, Integer visit) {
+        if (jobId <= 0 || jobId > Integer.MAX_VALUE) {
+            LOG.warn("could not audit the start of job {}: id out of the audit column's range", jobId);
+            return;
+        }
+        try {
+            EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                    AuditTypeIds.RETINAL_INFERENCE_ENQUEUED, actor.user(), actor.study(), null,
+                    "Retinal analysis started by hand — task=" + task,
+                    "retinal_inference_job", (int) jobId, "task", "", task, null, visit);
+        } catch (RuntimeException e) {
+            LOG.warn("could not audit the start of job {}: {}", jobId, e.getMessage());
         }
     }
 

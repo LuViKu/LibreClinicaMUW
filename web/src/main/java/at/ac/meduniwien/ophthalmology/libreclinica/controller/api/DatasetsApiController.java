@@ -752,7 +752,7 @@ public class DatasetsApiController {
             }
             case EXCEL -> {
                 // The legacy /ExportDataset Excel branch doesn't actually
-                // emit a binary .xls (TODO in the servlet since 2009);
+                // emit a binary .xls;
                 // it streams a generated tab file with a .xls
                 // Content-Disposition. Replicate by reusing the tab
                 // pipeline — operators get a .xls Excel can open
@@ -848,6 +848,17 @@ public class DatasetsApiController {
     private static final Set<String> NUMERIC_ONLY_OPS = Set.of("<", "<=", ">", ">=", "between");
     private static final Set<String> UNARY_OPS = Set.of("is-null", "not-null");
 
+    /**
+     * The dataset belongs to the session's study or to one of its sites (the
+     * rule of {@link #resolveContext}, which the legacy dataset servlets also
+     * use). A site session therefore reaches only its own site's datasets.
+     */
+    private boolean datasetInStudyTree(DatasetBean dataset, StudyBean currentStudy) {
+        if (dataset.getStudyId() == currentStudy.getId()) return true;
+        StudyBean owner = (StudyBean) new StudyDAO(dataSource).findByPK(dataset.getStudyId());
+        return owner != null && owner.getId() > 0 && owner.getParentStudyId() == currentStudy.getId();
+    }
+
     /** ItemDataType.name() values that admit numeric/date-style ordering operators. */
     private static final Set<String> NUMERIC_OR_DATE_TYPES = Set.of(
             ItemDataType.INTEGER.getName(),
@@ -875,7 +886,6 @@ public class DatasetsApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
-
         if (body == null || body.filters() == null) {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "'filters' is required"));
@@ -890,6 +900,28 @@ public class DatasetsApiController {
             DatasetFilterDto row = body.filters().get(i);
             ResponseEntity<?> err = validateFilterRow(row, i, itemDao, resolvedItems);
             if (err != null) return err;
+        }
+
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!roleMayExportData(ub, role)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit accessing data exports."));
+        }
+        // The wizard probes with id 0 before the dataset exists; a real id has to
+        // be a dataset of this study tree (404 otherwise, like getDataset). The
+        // counts below are always those of the session's own study.
+        int probedId = 0;
+        try {
+            probedId = Integer.parseInt(datasetId.trim());
+        } catch (NumberFormatException notANumber) {
+            // not a stored dataset: the wizard's placeholder
+        }
+        if (probedId > 0) {
+            DatasetBean probed = (DatasetBean) new DatasetDAO(dataSource).findByPK(probedId);
+            if (probed == null || probed.getId() == 0 || !datasetInStudyTree(probed, currentStudy)) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No dataset with id " + datasetId));
+            }
         }
 
         try {
@@ -1159,10 +1191,21 @@ public class DatasetsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!roleMayExportData(me, currentRole)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit accessing data exports."));
+        }
 
         DatasetDAO datasetDao = new DatasetDAO(dataSource);
         DatasetBean bean = (DatasetBean) datasetDao.findByPK(datasetId);
-        if (bean == null || bean.getId() == 0) {
+        if (bean == null || bean.getId() == 0 || !datasetInStudyTree(bean, currentStudy)) {
+            // Same answer for "missing" and "another site's": no existence oracle.
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
         }

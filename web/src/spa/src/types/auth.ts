@@ -34,7 +34,7 @@ export type AuthState =
   | 'authenticated'
 
 /**
- * Phase E.5 follow-up (2026-06-02, TODO #7): hydrated from the
+ * Phase E.5 follow-up (2026-06-02): hydrated from the
  * openapi-typescript-generated {@link components['schemas']['MeDto']}.
  * The generated type marks every field optional (records don't carry
  * required-vs-optional metadata); we lift the always-present fields
@@ -47,12 +47,18 @@ export type AuthState =
 export type AuthenticatedUser =
   Omit<Required<components['schemas']['MeDto']>,
        'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
-       | 'passwordChangeReason' | 'activeStudy' | 'userType'>
+       | 'passwordChangeReason' | 'activeStudy' | 'userType' | 'deidentificationRequired'>
   & {
     role: UserRole
     source: AuthSource
     /** Optional for /me responses from before the field existed. */
     userType?: AccountType
+    /**
+     * True on the internet-facing deployment: uploaded imaging files must
+     * be de-identified in the browser first (and the server refuses the
+     * ones that are not). Absent/false → today's behaviour.
+     */
+    deidentificationRequired?: boolean
     email: string | null
     siteLabel: string | null
     locale: string | null
@@ -94,7 +100,7 @@ export interface PasswordChangeFieldError {
 /**
  * Phase E.5 B1 — body of {@code PUT /pages/api/v1/me/profile}.
  *
- * <p>Phase E.5 follow-up (2026-06-02, TODO #7): derived from the
+ * <p>Phase E.5 follow-up (2026-06-02): derived from the
  * openapi-typescript-generated {@link components} schema so the SPA's
  * call sites stay aligned with the backend record shape. The previous
  * hand-typed declaration had {@code displayName / locale / timezone}
@@ -119,7 +125,7 @@ export interface ProfileFieldError {
 /**
  * Minimal study summary embedded in AuthenticatedUser.
  *
- * Phase E.5 follow-up (TODO #7) — derived from
+ * Phase E.5 follow-up — derived from
  * {@code components['schemas']['ActiveStudyDto']}.
  *
  * <p>Multi-role per (user, study) — M2 (2026-06-08): {@code roles}
@@ -179,7 +185,7 @@ export interface StudyWritePermissions {
  * returned by `GET /pages/api/v1/studies` and consumed by the
  * StudyPicker view.
  *
- * Phase E.5 follow-up (TODO #7) — derived from
+ * Phase E.5 follow-up — derived from
  * {@code components['schemas']['StudyOptionDto']}. Overrides the
  * loosely-typed {@code role} field with the SPA's {@link UserRole}
  * union, and keeps the {@code parentOid} / {@code parentName} pair

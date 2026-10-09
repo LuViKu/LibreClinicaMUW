@@ -8,6 +8,12 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import java.io.IOException;
+import java.nio.file.Path;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.http.HttpHeaders;
 
 /**
@@ -55,6 +61,36 @@ public record PixelGeometry(double axialMm,
                 requireInt(headers, HEADER_DIM_Y),
                 requireInt(headers, HEADER_DIM_X)
         );
+    }
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    /**
+     * DR-039 — the same geometry from the {@code geometry.json} the sidecar
+     * stored next to {@code bscan.dcm}: its {@code bscan} block, which is the
+     * same for an {@code .e2e} and a DICOM source.
+     *
+     * @return null when the block is missing or any of its six values is
+     *         absent or not positive — a geometry with a hole in it would put
+     *         a wrong scale on every metric
+     */
+    public static PixelGeometry fromGeometryJson(JsonNode root) {
+        if (root == null) return null;
+        JsonNode b = root.path("bscan");
+        if (!b.isObject()) return null;
+        double axial = b.path("pixel_axial_mm").asDouble(0);
+        double lateral = b.path("pixel_lateral_mm").asDouble(0);
+        double slice = b.path("pixel_slice_mm").asDouble(0);
+        int z = b.path("dim_z_bscans").asInt(0);
+        int y = b.path("dim_y_rows").asInt(0);
+        int x = b.path("dim_x_ascans").asInt(0);
+        if (axial <= 0 || lateral <= 0 || slice <= 0 || z <= 0 || y <= 0 || x <= 0) return null;
+        return new PixelGeometry(axial, lateral, slice, z, y, x);
+    }
+
+    /** {@link #fromGeometryJson(JsonNode)} of a file; IOException when it cannot be read or parsed. */
+    public static PixelGeometry fromGeometryJson(Path file) throws IOException {
+        return fromGeometryJson(JSON.readTree(file.toFile()));
     }
 
     private static double requireDouble(HttpHeaders h, String name) {

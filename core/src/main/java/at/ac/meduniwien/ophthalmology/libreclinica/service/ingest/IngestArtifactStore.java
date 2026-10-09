@@ -176,6 +176,25 @@ public class IngestArtifactStore {
         }
     }
 
+    /**
+     * True when {@code candidate} exists and lies strictly below {@code root}
+     * — never the root itself — with symlinks resolved on both sides.
+     *
+     * <p>The test for a delete, which is stricter than the one for a read: a
+     * path equal to the root would hand a recursive delete the whole store,
+     * and a root that does not exist yet cannot contain anything.
+     */
+    public static boolean isStrictlyUnder(Path candidate, Path root) {
+        if (candidate == null || root == null) return false;
+        try {
+            Path realRoot = root.toAbsolutePath().normalize().toRealPath();
+            Path realCandidate = candidate.toAbsolutePath().normalize().toRealPath();
+            return realCandidate.startsWith(realRoot) && !realCandidate.equals(realRoot);
+        } catch (IOException missing) {
+            return false;
+        }
+    }
+
     /** Where new files are written. */
     public Path writeRoot() {
         return Path.of(cfg(CONFIG_KEY_STORE_PATH, DEFAULT_STORE_PATH));

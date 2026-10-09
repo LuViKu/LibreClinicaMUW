@@ -111,7 +111,10 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         retinalInference,
                         new RetinalResultsApiController(DATA_SOURCE, filter,
                                 Mockito.mock(RetinalArtifactStorageService.class),
-                                null, remote, new RetinalJobStatusBroadcaster(), retinalInference))
+                                null, remote, new RetinalJobStatusBroadcaster(), retinalInference),
+                        new IngestInboxApiController(DATA_SOURCE, filter,
+                                new at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder(DATA_SOURCE),
+                                remote, retinalInference))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -154,6 +157,8 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 write("retry a retinal analysis", () -> post("/api/v1/retinal-jobs/1/retry")),
                 write("re-run a retinal analysis",
                         () -> json(post("/api/v1/retinal-jobs/1/rerun-as"), "{\"task\":\"fluid\"}")),
+                write("start a retinal analysis on a filed scan",
+                        () -> json(post("/api/v1/ingest/1/analyses"), "{\"task\":\"fluid\"}")),
                 // Binding a scan to a visit: IngestBindAuthorization.
                 write("bind a parked scan",
                         () -> json(patch("/api/v1/retinal-jobs/1/bind"), "{\"eventCrfId\":1}")),
@@ -392,6 +397,10 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         () -> post("/api/v1/retinal-jobs/999999/retry")),
                 permitted("re-run a retinal analysis", "manual_investigator", 404,
                         () -> json(post("/api/v1/retinal-jobs/999999/rerun-as"), "{\"task\":\"fluid\"}")),
+                permitted("start a retinal analysis on a filed scan", "manual_investigator", 404,
+                        () -> json(post("/api/v1/ingest/999999/analyses"), "{\"task\":\"fluid\"}")),
+                permitted("start a retinal analysis on a filed scan as ra", Role.RESEARCHASSISTANT, 404,
+                        () -> json(post("/api/v1/ingest/999999/analyses"), "{\"task\":\"fluid\"}")),
                 permitted("bind a parked scan", "manual_dm", 404,
                         () -> json(patch("/api/v1/retinal-jobs/999999/bind"), "{\"eventCrfId\":9}")),
                 permitted("bulk-bind parked scans", "manual_dm", 200,

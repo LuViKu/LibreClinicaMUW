@@ -39,9 +39,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * 30 succeed immediately; subsequent calls wait until the next token
  * refills.
  *
- * <p>Client IP resolution: prefers the first entry in {@code X-Forwarded-For}
- * (the reverse proxy is mandatory for production), falls back to
- * {@code request.getRemoteAddr()} for direct (dev / smoke-test) hits.
+ * <p>Client IP resolution: {@code request.getRemoteAddr()} only. Tomcat's
+ * RemoteIpValve (Dockerfile) already substitutes the real client address
+ * from the trusted proxy's {@code X-Forwarded-For}; reading that header here
+ * as well would let a client pick its own bucket by sending one.
  *
  * <p>Idle eviction: a scheduled task drops buckets that haven't seen a
  * request in 1 h so a parade of distinct client IPs can't bloat the
@@ -125,6 +126,34 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
+     * Whether the filter throttles at all. Only the internet-facing deployment
+     * turns it on ({@code libreclinica.deployment.internet-facing}; see
+     * ServletInfraConfig). On the internal deployment the acquisition-PC
+     * uploaders (Export Watcher, Optomed Bridge) look up the visit of every
+     * capture through {@code /public/upload/resolve} and file the capture
+     * without a visit when refused, so a 30/hour budget would leave captures
+     * unbound on a busy clinic day. That deployment is reachable only from the
+     * MUW network, and the limiter had never engaged there before the context
+     * path fix, so off keeps its behaviour unchanged.
+     */
+    private final boolean enabled;
+
+    /** A filter that throttles: the unit tests' and the internet-facing case. */
+    public PublicOctUploadRateLimitFilter() {
+        this(true);
+    }
+
+    /** @param enabled false passes every request through untouched */
+    public PublicOctUploadRateLimitFilter(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    /** Whether this filter throttles (test seam). */
+    boolean isEnabled() {
+        return enabled;
+    }
+
+    /**
      * Token-bucket carrier. Atomics avoid the per-bucket lock that a
      * dedicated synchronization block would introduce; the contention
      * profile here is read-modify-write so AtomicInteger is enough.
@@ -183,7 +212,18 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain)
             throws ServletException, IOException {
+        if (!enabled) {
+            chain.doFilter(request, response);
+            return;
+        }
         String uri = request.getRequestURI();
+        // The guarded prefixes are context-relative; the app runs under
+        // /LibreClinica, so getRequestURI() carries that prefix and would
+        // never match without stripping it.
+        String ctx = request.getContextPath();
+        if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
+            uri = uri.substring(ctx.length());
+        }
         String prefix = guardedPrefixFor(uri);
         if (prefix == null) {
             chain.doFilter(request, response);
@@ -246,17 +286,10 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * First X-Forwarded-For entry (the reverse proxy is mandatory in
-     * production) falling back to remoteAddr. Cheap to spoof on a
-     * non-proxied edge — fine for the institutional model where the
-     * proxy is the only access gate.
+     * The connection peer as the container resolved it. Never the raw
+     * X-Forwarded-For header, which a client can set to anything.
      */
     static String clientIp(HttpServletRequest req) {
-        String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma < 0 ? xff : xff.substring(0, comma)).trim();
-        }
         return req.getRemoteAddr();
     }
 

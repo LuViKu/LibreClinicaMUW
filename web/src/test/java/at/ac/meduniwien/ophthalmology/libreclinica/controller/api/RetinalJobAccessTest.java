@@ -75,4 +75,16 @@ class RetinalJobAccessTest {
         assertFalse(AiArmPolicy.maskAiFor(arm, sessionAs(Role.STUDYDIRECTOR)),
                 "failing closed narrows what a blinded role sees; it does not blind everyone");
     }
+
+    @Test
+    void aJobWhoseScanFileIsGoneIsRecognised(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        java.nio.file.Path present = java.nio.file.Files.write(dir.resolve("a.e2e"), new byte[] {1});
+        assertFalse(RetinalJobAccess.scanFileMissing(present.toString()));
+        assertTrue(RetinalJobAccess.scanFileMissing(dir.resolve("gone.e2e").toString()));
+        assertTrue(RetinalJobAccess.scanFileMissing(dir.toString()), "a directory is not a scan file");
+        assertTrue(RetinalJobAccess.scanFileMissing(null));
+        assertTrue(RetinalJobAccess.scanFileMissing("  "));
+        assertTrue(RetinalJobAccess.SCAN_FILE_MISSING.contains("Upload the scan again"));
+    }
 }

@@ -30,7 +30,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
  *
  * @author jxu
  */
-@SuppressWarnings("all")
 public class RemoveStudyUserRoleServlet extends SecureController {
 
 	private static final long serialVersionUID = 9002693250126772488L;
@@ -73,6 +72,8 @@ public class RemoveStudyUserRoleServlet extends SecureController {
         } else {
 
             String action = request.getParameter("action");
+            // the role's study (site) must be the session's study or one of its sites
+            assertRecordInScope(new FormProcessor(request).getInt("studyId"));
             UserAccountBean user = udao.findByUserName(name);
 
             if ("confirm".equalsIgnoreCase(action)) {

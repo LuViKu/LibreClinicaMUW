@@ -289,17 +289,6 @@ public class OdmFileCreation {
             } */
             HashMap<String, Integer> answerMap = new HashMap<>();
             //JN: Zipped in the next stage as thats where the ODM file is named and copied over in default categories.
-    //        if(zipped)
-    //        { try {
-    //              zipFile(ODMXMLFileName,generalFileDir);
-    //
-    //          } catch (IOException e) {
-    //              // TODO Auto-generated catch block
-    //              logger.error(e.getMessage());
-    //              e.printStackTrace();
-    //          }
-    //
-    //        }   // return ODMXMLFileName;
 
             answerMap.put(ODMXMLFileName, Integer.valueOf(fId));
         //    if(deleteOld && files!=null &&oldFiles!=null) setOldFiles(oldFiles);

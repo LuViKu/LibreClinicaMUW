@@ -24,14 +24,16 @@ from typing import Any, Literal
 #   pr    — photoreceptor layer segmentation (BMEIS/OB-OPR) (sese_pr)
 #   bm    — Bruch's membrane layer segmentation             (sese_bm; host venv, GPU)
 #   layers— full layer stack: 11 IOWA reference layers + BM (IOWA binary + sese_bm)
-TaskName = Literal["ga", "fluid", "onl", "pr", "bm", "layers"]
+#   sdretinanet — SD-RetinaNet: 12 layer boundaries + 7 lesion classes
+#           (Fazekas et al., arXiv 2509.20864; retinanet-spectralis_main.sif)
+TaskName = Literal["ga", "fluid", "onl", "pr", "bm", "layers", "sdretinanet"]
 
 # All tasks the platform knows about (and that the PlaceholderAdapter can mock).
 # Whether a task can actually run in a given deployment is decided by the active
 # adapter: the OptimaAdapter only ``supports()`` a task that has a configured,
 # enabled model-runner — that is the gate that keeps ``ga`` off until the IOWA
 # layer segmenter + a GPU host are available (see the project plan).
-SUPPORTED_TASKS: set[TaskName] = {"ga", "fluid", "onl", "pr", "bm", "layers"}
+SUPPORTED_TASKS: set[TaskName] = {"ga", "fluid", "onl", "pr", "bm", "layers", "sdretinanet"}
 
 # The server emits only raw artifacts; ``primary_metric`` is None for every task
 # because the Java backend computes the clinical metric from those artifacts.
@@ -71,5 +73,11 @@ TASK_METADATA: dict[TaskName, dict[str, Any]] = {
         "output_kind": "layer",
         "reference_modality": "oct",
         "primary_metric": None,  # Java derives any per-layer metric from the CSVs
+    },
+    "sdretinanet": {
+        "display_name": "SD-RetinaNet layers + lesions (12 boundaries, IRF/SRF/PED/SHRM/SDD/ORT/HRF)",
+        "output_kind": "segmentation",
+        "reference_modality": "oct",
+        "primary_metric": None,  # Java computes ETDRS thicknesses + lesion volumes
     },
 }

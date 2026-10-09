@@ -106,6 +106,16 @@ def build_ae() -> AE:
 
 def serve() -> None:
     settings = config.settings
+    if not settings.scp_enabled:
+        # Internet-facing hosts: no modality listener at all. Only the
+        # app-facing /describe + /verify HTTP endpoints run (the ingest URL is
+        # unused without C-STORE, so only the shared token is required).
+        if not settings.ingest_token:
+            raise SystemExit("dicom-scp: DICOM_SCP_INGEST_TOKEN is required")
+        LOG.warning("dicom-scp running DESCRIBE/VERIFY-ONLY (DICOM_SCP_SCP_ENABLED=false): "
+                    "no C-STORE, no worklist C-FIND, port %s is NOT bound", settings.port)
+        describe.serve_forever(settings)
+        return
     if not settings.ingest_url or not settings.ingest_token:
         raise SystemExit(
             "dicom-scp: DICOM_SCP_INGEST_URL and DICOM_SCP_INGEST_TOKEN are required")

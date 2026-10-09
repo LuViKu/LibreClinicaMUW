@@ -142,17 +142,16 @@ public class EventDefinitionsApiController {
     /* Per-event-definition retinal-inference task config (2026-06-22)   */
     /* ================================================================= */
 
-    /** Tasks the runner registry recognises. Mirrors ALLOWED_RERUN_TASKS
-     *  in RetinalResultsApiController + the CHECK constraint on
+    /** Tasks the runner registry recognises. Same list as rerun-as
+     *  (RetinalJobFollower.STARTABLE_TASKS) + the CHECK constraint on
      *  event_definition_retinal_task.
      *  2026-06-25 hotfix: `layers` added. The matching Liquibase
      *  `lc-muw-2026-06-24-event-def-retinal-tasks-layers` already
      *  broadened the CHECK constraint; the matching SPA view's
      *  RETINAL_TASK_OPTIONS already lists `layers`. This validator
      *  was the last stop where the request 400'd before reaching
-     *  the DB. Mirrors RetinalResultsApiController.ALLOWED_RERUN_TASKS. */
-    private static final Set<String> ALLOWED_RETINAL_TASKS =
-            Set.of("fluid", "ga", "onl", "pr", "layers");
+     *  the DB. */
+    private static final List<String> ALLOWED_RETINAL_TASKS = RetinalJobFollower.STARTABLE_TASKS;
 
     /**
      * GET — list the default retinal-inference tasks the upload portal
@@ -469,11 +468,12 @@ public class EventDefinitionsApiController {
                     return ResponseEntity.badRequest().body(Map.of("message",
                             "Modality " + w.modalityId() + " is not an active entry of study " + studyOid));
                 }
+                // DR-039 — only a modality marked as an OCT one is analysed.
                 if (!w.tasks().isEmpty()
-                        && !VisitImagingPlan.acceptsKind(kindsById.get(w.modalityId()), "e2e")) {
+                        && !VisitImagingPlan.acceptsOctVolumes(kindsById.get(w.modalityId()))) {
                     return ResponseEntity.badRequest().body(Map.of("message",
-                            "Modality " + w.modalityId() + " does not accept OCT volumes, "
-                                    + "so no inference task can run on it"));
+                            "Modality " + w.modalityId() + " is not marked as an OCT modality "
+                                    + "(kindsAccepted lacks \"oct\"), so no inference task can run on it"));
                 }
             }
 

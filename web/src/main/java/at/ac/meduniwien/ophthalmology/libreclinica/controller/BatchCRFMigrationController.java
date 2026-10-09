@@ -88,8 +88,10 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 // 2026-06-28 — heritage null-analysis suppress; per-site
 // null-safety review is the deferred follow-up.
-@SuppressWarnings("all")
 public class BatchCRFMigrationController implements Runnable {
+
+    /** The name {@code createLogFile} gives a migration log: no path separator, no dots but the extension. */
+    private static final java.util.regex.Pattern LOG_FILE_NAME = java.util.regex.Pattern.compile("logFile_[A-Za-z0-9-]+\\.txt");
 
     @Autowired
     private DataSource dataSource;
@@ -138,7 +140,21 @@ public class BatchCRFMigrationController implements Runnable {
     }
 
     @RequestMapping(value = "/forms/migrate/{filename}/downloadLogFile")
-    public void getLogFile(@PathVariable("filename") String fileName, HttpServletResponse response) throws Exception {
+    public void getLogFile(@PathVariable("filename") String fileName, HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
+
+        // The same role the migration needs (Study Director or Data Manager), and only a log file by its own name.
+        StudyUserRoleBean sessionRole = (StudyUserRoleBean) request.getSession().getAttribute("userRole");
+        Role sessionRoleName = sessionRole == null ? null : sessionRole.getRole();
+        if (sessionRole == null || !sessionRole.isActive()
+                || !(Role.STUDYDIRECTOR.equals(sessionRoleName) || Role.COORDINATOR.equals(sessionRoleName))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+        if (!LOG_FILE_NAME.matcher(fileName).matches()) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
 
         String batchFormMigrationRelDir = getFilePath() + File.separator;
         File fileToDownload = getFile(fileName, batchFormMigrationRelDir);

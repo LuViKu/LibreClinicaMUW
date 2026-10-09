@@ -24,6 +24,8 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 
@@ -76,6 +78,26 @@ public class DicomIngestApiController {
 
     private final DataSource dataSource;
 
+    /** Null (hand-built controllers) reads as "not required". */
+    private DeidentificationPolicy deidPolicy;
+
+    @Autowired(required = false)
+    void setDeidentificationPolicy(DeidentificationPolicy deidPolicy) {
+        this.deidPolicy = deidPolicy;
+    }
+
+    /** DR-039 — starts a worklist-bound OCT volume's analyses; detach-only until wired. */
+    private RetinalJobFollower follower;
+
+    /**
+     * DR-039 — a DICOM OCT volume the worklist files to a visit starts the
+     * visit plan's analyses, as an uploaded one does.
+     */
+    @Autowired(required = false)
+    void setRetinalDispatch(RemoteRetinalInferenceClient remote, RetinalInferenceApiController inference) {
+        this.follower = new RetinalJobFollower(dataSource, remote, inference);
+    }
+
     @Autowired
     public DicomIngestApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
@@ -96,7 +118,14 @@ public class DicomIngestApiController {
             String sourceAeTitle,
             String dicomPath,        // path under the shared ingest store
             String previewPngPath,   // nullable
-            String pixelSha256       // DR-036 — SHA-256 of the decoded pixels; nullable
+            String pixelSha256,      // DR-036 — SHA-256 of the decoded pixels; nullable
+            // DR-039 — device and OCT-volume classification; all nullable (an
+            // older sidecar sends none, and the file is then classified from
+            // its SOP class and modality alone)
+            String manufacturer,
+            String manufacturerModelName,
+            Integer numberOfFrames,
+            Boolean octVolume
     ) {}
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -104,6 +133,14 @@ public class DicomIngestApiController {
     public ResponseEntity<?> ingest(
             @RequestBody DicomIngestRequest req,
             @RequestHeader(value = TOKEN_HEADER, required = false) String token) {
+
+        // The C-STORE hand-off files a camera's DICOM as received, unverified
+        // and carrying the hospital's patient. Refused whenever
+        // de-identification is required, internet-facing or not; the sidecar
+        // then answers the camera with a failure instead of keeping the file.
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            return DeidUploadGate.response(403, java.util.List.of("dicomHandoffClosed"));
+        }
 
         // Shared-secret gate — mirrors the sidecar's own auth check.
         String expected = cfg("core.dicom.ingest.token", "");
@@ -159,6 +196,7 @@ public class DicomIngestApiController {
                 ImageIngestBinding.tickPerformed(
                         dataSource, ins.id(), ins.target(), "dicom", ins.deviceKey(),
                         req.laterality(), null);
+                startAnalyses(ins.id(), req);
             }
             LOG.info("DICOM ingest: ingest_item_id={} status={}{}", ins.id(), ins.status(),
                     held ? " (held back, same picture as ingest_item " + twin.ingestItemId() + ")" : "");
@@ -183,6 +221,30 @@ public class DicomIngestApiController {
             LOG.error("DICOM ingest INSERT failed: {}", e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "DICOM ingest failed"));
         }
+    }
+
+    /**
+     * DR-039 — the visit plan's analyses for a worklist-bound OCT volume,
+     * started by the system. The follower applies the study's inference
+     * switch and the plan. Never fails the hand-off: the image is kept, and
+     * a job that could not start is what "Auswertung starten" is for.
+     */
+    private void startAnalyses(long ingestItemId, DicomIngestRequest req) {
+        if (follower == null || !Boolean.TRUE.equals(octVolumeOf(req))) return;
+        try {
+            RetinalJobFollower.Ensured e = follower.ensure(ingestItemId, IngestBindService.Actor.system(), false);
+            LOG.info("DICOM ingest: ingest_item {} is an OCT volume — {} analysis(es) started{}",
+                    ingestItemId, e.started(), e.skippedBecause() == null ? "" : " (" + e.skippedBecause() + ")");
+        } catch (java.sql.SQLException | RuntimeException e) {
+            LOG.error("DICOM ingest: ingest_item {} is filed, but its analyses could not start: {}",
+                    ingestItemId, e.getMessage());
+        }
+    }
+
+    /** The sidecar's verdict when it gave one, else the SOP class / modality / frame count. */
+    private static Boolean octVolumeOf(DicomIngestRequest r) {
+        return r.octVolume() != null ? r.octVolume()
+                : OctVolumes.classify(r.sopClassUid(), r.modality(), r.numberOfFrames());
     }
 
     private static Map<String, Object> dupBody(long id) {
@@ -253,6 +315,9 @@ public class DicomIngestApiController {
                 .studyInstanceUid(r.studyInstanceUid())
                 .seriesInstanceUid(r.seriesInstanceUid())
                 .modality(r.modality())
+                // DR-039 — a C-STOREd OCT volume is analysable like an uploaded one.
+                .octVolume(octVolumeOf(r))
+                .manufacturer(r.manufacturer(), r.manufacturerModelName())
                 .sourceAeTitle(r.sourceAeTitle())
                 .pixelSha256(isBlank(r.pixelSha256()) ? null : r.pixelSha256().trim())
                 // P3.4 — a camera that identifies itself classifies its own

@@ -77,7 +77,6 @@ public class BeanPropertyRuleRunner extends RuleRunner{
                     if(ruleSetRule.getStatus()==Status.AVAILABLE)
                     {
 	                    RuleBean rule = ruleSetRule.getRuleBean();
-	             //       StudyBean currentStudy = rule.getStudy();//TODO:Fix me!
 	                    StudyDAO sdao = new StudyDAO(ds);
 	                    StudyBean currentStudy = (StudyBean) sdao.findByPK(rule.getStudyId());
 	                    ExpressionBeanObjectWrapper eow = new ExpressionBeanObjectWrapper(ds, currentStudy, rule.getExpression(), ruleSet,studySubjectBeanId, studyEventDaoHib, studyEventDefDaoHib);

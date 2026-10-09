@@ -10,6 +10,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useSitesStore } from '@/stores/sites'
 import { useAuthStore } from '@/stores/auth'
+import { mayBuildStudy, maySysadminOnly } from '@/lib/studyBuildAccess'
 import { useConfirm } from '@/composables/useConfirm'
 import SkeletonList from '@/components/SkeletonList.vue'
 import type { StudyIdentity } from '@/types/study'
@@ -32,10 +33,9 @@ const auth = useAuthStore()
 const confirm = useConfirm()
 
 const parentOid = computed(() => auth.user?.activeStudy?.oid ?? null)
-const canManage = computed(() => {
-  const role = auth.user?.role
-  return role === 'Administrator' || role === 'Data Manager'
-})
+const canManage = computed(() => mayBuildStudy(auth.user?.role))
+// Disable and restore are sysadmin-only in the backend (roleMayLifecycleStudy).
+const canLifecycle = computed(() => maySysadminOnly(auth.user?.role))
 
 onMounted(() => { if (parentOid.value) sites.load(parentOid.value) })
 
@@ -182,7 +182,7 @@ const visibleRows = computed(() => sites.rows)
               {{ t('sites.pi') }}: {{ site.principalInvestigator || '—' }}
             </div>
           </div>
-          <div v-if="canManage" class="flex items-center gap-2 text-xs shrink-0">
+          <div v-if="canLifecycle" class="flex items-center gap-2 text-xs shrink-0">
             <button
               v-if="site.status !== 'removed'"
               class="text-rose-600 hover:underline"

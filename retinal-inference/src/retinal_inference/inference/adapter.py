@@ -7,6 +7,8 @@ returns a process-wide singleton; the FastAPI app and the worker share it.
 
 from __future__ import annotations
 
+import contextvars
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Literal
@@ -71,6 +73,15 @@ class RetinalInferenceAdapter(ABC):
 
 
 _singleton: RetinalInferenceAdapter | None = None
+
+
+# Set by the /run handler for the duration of one request (asyncio.to_thread
+# copies the context into the worker thread). Adapters that spawn subprocesses
+# poll it and terminate the child when it is set, so an abandoned request does
+# not leave a SLURM job running.
+cancel_event: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "ri_cancel_event", default=None
+)
 
 
 def get_adapter() -> RetinalInferenceAdapter:

@@ -32,6 +32,9 @@
 #     /var/lib/libreclinica/dicom-ingest, DICOM port bound to the
 #     camera-facing address only. Behind the `dicom` profile, so it
 #     starts only where COMPOSE_PROFILES includes it.
+#   - dicom-verify: internet-facing counterpart of dicom-scp (profile
+#     `dicom-verify`): the same image with the SCP off - HTTP /describe +
+#     /verify only, no DICOM port. Never run together with dicom-scp.
 #   - smtp/mailcrab: not started in production (the systemd ExecStart in
 #     libreclinica.service names the services explicitly and omits smtp).
 
@@ -56,7 +59,28 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/ecrf.conf:/etc/nginx/conf.d/default.conf:ro
+      # Per-deployment edge rules, included by ecrf.conf. Defaults are the
+      # internal deployment's (edge-none.conf: the old 1024m body limit, no rate
+      # limits; the other two are empty). The internet-facing deployment sets
+      # LIBRECLINICA_NGINX_EDGE_CONF=./deploy/nginx/internet-facing.conf,
+      # LIBRECLINICA_NGINX_EDGE_HTTP_CONF=./deploy/nginx/internet-facing-http.conf and
+      # LIBRECLINICA_NGINX_REALIP_CONF=/etc/libreclinica/nginx-realip.conf in
+      # /etc/libreclinica/env (setup-ubuntu-host.sh does this when run with
+      # INTERNET_FACING=true).
+      - ${LIBRECLINICA_NGINX_EDGE_CONF:-./deploy/nginx/edge-none.conf}:/etc/nginx/ecrf-edge.conf:ro
+      - ${LIBRECLINICA_NGINX_REALIP_CONF:-./deploy/nginx/empty.conf}:/etc/nginx/ecrf-realip.conf:ro
+      - ${LIBRECLINICA_NGINX_EDGE_HTTP_CONF:-./deploy/nginx/empty.conf}:/etc/nginx/ecrf-edge-http.conf:ro
       - /etc/libreclinica/tls:/etc/libreclinica/tls:ro
+      # Server blocks for other apps on this VM (DR-038). The setup script puts
+      # a block here only once its certificate exists; empty is fine.
+      - /etc/libreclinica/nginx-sites:/etc/nginx/sites:ro
+    # `default` MUST stay listed: once `networks:` is set, Compose stops
+    # attaching the service to the project network implicitly, and without it
+    # nginx cannot reach libreclinica:8080. `edge` is the external network
+    # shared with other apps' compose projects (DutyPlan, DR-038).
+    networks:
+      - default
+      - edge
 
   libreclinica:
     image: ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG:-latest}
@@ -67,11 +91,16 @@ services:
     # Compose concatenates ports lists across files, so a second entry would
     # double-bind 8080 and fail to publish. Production sets
     # LIBRECLINICA_BIND_ADDR=0.0.0.0 in /etc/libreclinica/env (written by
-    # setup-ubuntu-host.sh) so the separate-host reverse proxy can reach it;
+    # setup-ubuntu-host.sh) so a separate-host reverse proxy can reach it;
     # narrow it to the VM's internal IP there if you want a tighter bind.
-    # Access control is the campus perimeter's job (no local firewall by
-    # design — see deploy/README.md § Prerequisites).
+    # The internal deployment relies on the campus perimeter rather than a host
+    # firewall; the internet-facing deployment (INTERNET_FACING=true) binds
+    # 127.0.0.1 and installs one — see deploy/README.md § Internet-facing.
     environment:
+      # Internet-facing switch (app side of deploy/nginx/internet-facing.conf):
+      # disables the public portals, device and internal endpoints in the app.
+      # Off unless /etc/libreclinica/env says otherwise.
+      LIBRECLINICA_DEPLOYMENT_INTERNET_FACING: "${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}"
       # Skip the demo Liquibase context (subjects + CRFs + dn_item_data
       # seed) — production starts on a clean schema.
       LIQUIBASE_CONTEXTS: ""
@@ -124,7 +153,9 @@ services:
       # The base compose hard-codes POSTGRES_PASSWORD=clinica which is
       # fine for dev. Production reads the host-generated secret from
       # /etc/libreclinica/env (see libreclinica.service EnvironmentFile).
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinica}
+      # No fallback: the setup script always writes it, and a silent "clinica"
+      # would put the database behind a password published in the repository.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - run deploy/setup-ubuntu-host.sh, or pass --env-file /etc/libreclinica/env}
     volumes:
       # Replace the named volume with a stable host path so backups can
       # read it directly and disk-image snapshots are straightforward.
@@ -148,7 +179,7 @@ services:
       # via the systemd EnvironmentFile), so override the URL to use it. Harmless
       # for the placeholder adapter (no DB connection), but prevents an auth
       # failure the moment a real adapter that talks to Postgres lands.
-      RETINAL_INFERENCE_DB_URL: postgresql://clinica:${POSTGRES_PASSWORD:-clinica}@db:5432/libreclinica
+      RETINAL_INFERENCE_DB_URL: postgresql://clinica:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - run deploy/setup-ubuntu-host.sh, or pass --env-file /etc/libreclinica/env}@db:5432/libreclinica
       # Per-task model-runner endpoints (used when RETINAL_INFERENCE_ADAPTER=optima).
       # Empty by default so prod stays on the placeholder until a runner image is
       # published + deployed (see retinal-inference/runners/). Set in
@@ -209,8 +240,15 @@ services:
       DICOM_SCP_AE_TITLE: ${DICOM_SCP_AE_TITLE:-LIBRECLINICA}
       # The camera's own AE title. Leaving this blank accepts an association
       # from anything that can reach the port — set it.
+      # NOT made `:?` (required) on purpose: Compose interpolates the whole
+      # file, profiles or not, so a `:?` here would stop every host without the
+      # `dicom` profile (the internal deployment today) from starting at all.
+      # The internet-facing deployment publishes no DICOM port and runs no
+      # dicom-scp (it runs dicom-verify below instead).
       DICOM_SCP_ALLOWED_CALLING_AE_TITLES: ${DICOM_SCP_ALLOWED_CALLING_AE_TITLES:-}
-      # Must equal core.dicom.ingest.token in datainfo.properties.
+      # Must equal core.dicom.ingest.token in datainfo.properties. Blank is
+      # allowed for the same reason as above; setup-ubuntu-host.sh --dicom
+      # mints it, and warns if the AE-title allow-list is still empty.
       DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
       # INFO keeps the per-association summary lines and suppresses
       # pynetdicom's dataset dumps, which would otherwise put PatientName
@@ -221,6 +259,9 @@ services:
       # app reaches it at core.dicom.describe.url. 0 turns it off, which
       # turns DICOM uploads into a 503 — never into files stored as-is.
       DICOM_SCP_DESCRIBE_PORT: ${DICOM_SCP_DESCRIBE_PORT:-8081}
+      # Match libreclinica.ingest.deidentification.required on the app: always
+      # strict (private tags dropped, extended attribute list cleared).
+      DICOM_SCP_DEIDENTIFY_STRICT: ${DICOM_SCP_DEIDENTIFY_STRICT:-${LIBRECLINICA_INGEST_DEIDENTIFICATION_REQUIRED:-${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}}}
     volumes:
       # Stable host path under the backup root, like the other stores. The
       # app reads the same directory to serve image previews, so the two
@@ -229,3 +270,44 @@ services:
       # DR-029: the unified ingest store (core.ingest.storePath) the app writes
       # uploads to. Same bind in both containers — see the runbook, §7.
       - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
+
+  # Internet-facing hosts: describe/verify-only sidecar. The app needs the
+  # sidecar's HTTP endpoints for every authenticated DICOM upload (/describe,
+  # and /verify, the de-identification check the nightly scanner also uses),
+  # but an internet-facing host must never listen for a camera. Same image as
+  # dicom-scp with DICOM_SCP_SCP_ENABLED=false: no C-STORE, no worklist C-FIND,
+  # port 11112 is never bound and nothing is published. The network alias
+  # `dicom-scp` keeps core.dicom.describe.url (http://dicom-scp:8081/describe)
+  # working unchanged.
+  # MUTUALLY EXCLUSIVE with dicom-scp (same alias, same stores): never put both
+  # `dicom` and `dicom-verify` in COMPOSE_PROFILES. setup-ubuntu-host.sh sets
+  # exactly one: dicom-verify in INTERNET_FACING mode, dicom with --dicom.
+  dicom-verify:
+    image: ghcr.io/luviku/libreclinicamuw/dicom-scp:${LIBRECLINICA_DICOM_IMAGE_TAG:-${LIBRECLINICA_IMAGE_TAG:-latest}}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["dicom-verify"]
+    # No `ports:` - deliberately, and never add one.
+    networks:
+      default:
+        aliases:
+          - dicom-scp
+    environment:
+      DICOM_SCP_SCP_ENABLED: "false"
+      # Must equal core.dicom.ingest.token on the app (setup-ubuntu-host.sh
+      # mints and pairs it in internet-facing mode too).
+      DICOM_SCP_INGEST_TOKEN: ${DICOM_SCP_INGEST_TOKEN:-}
+      DICOM_SCP_LOG_LEVEL: ${DICOM_SCP_LOG_LEVEL:-INFO}
+      DICOM_SCP_DESCRIBE_PORT: ${DICOM_SCP_DESCRIBE_PORT:-8081}
+      # Always strict here: this service exists only for the internet-facing
+      # mode, where de-identification is required.
+      DICOM_SCP_DEIDENTIFY_STRICT: "true"
+    volumes:
+      - /var/lib/libreclinica/dicom-ingest:/var/lib/libreclinica/dicom-ingest
+      - /var/lib/libreclinica/ingest:/var/lib/libreclinica/ingest
+
+networks:
+  # Created by setup-ubuntu-host.sh and by the systemd unit's ExecStartPre;
+  # external, so `compose down` never removes it.
+  edge:
+    external: true

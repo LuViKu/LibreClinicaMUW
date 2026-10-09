@@ -43,9 +43,12 @@ const RetinalCorrectionFullscreen = defineAsyncComponent(
   () => import('@/components/RetinalCorrectionFullscreen.vue'),
 )
 import { useSegmentationEnvelope, clearSegmentationEnvelopeCache } from '@/composables/useSegmentationEnvelope'
-import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
+import type { FluidPayload, GaPayload, ThicknessPayload, SdRetinaNetPayload, RetinalJobDetail } from '@/api/retinal'
+import { hasFundusGeometry } from '@/lib/retinalGeometry'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
-import PageHeader from '@/components/PageHeader.vue'
+import PageHeader, { type TrailItem } from '@/components/PageHeader.vue'
+import { jobRoute, STARTABLE_TASKS, type StartableTask } from '@/lib/retinalJobs'
+import { formatDate } from '@/lib/dateFormat'
 
 /**
  * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
@@ -117,11 +120,11 @@ function onCorrectionSaveError(message: string): void {
   )
 }
 
-// This view serves two routes:
-//   /retinal-jobs/:jobId               — canonical, by global job id
-//   /subjects/:subjectLabel/jobs/:seq  — per-subject deep link (2026-06-26)
-// For the deep link we resolve (label, seq) → jobId once via the backend
-// resolver; everything below keys off the resolved jobId exactly as before.
+// This view serves two routes, both keyed on the job id:
+//   /subjects/:subjectLabel/jobs/:jobId — canonical (2026-10-09: the job id,
+//                                         no longer a per-subject number)
+//   /retinal-jobs/:jobId                — old bookmarks; replaced by the
+//                                         canonical address once loaded
 const routeJobId = computed<number | null>(() => {
   const j = route.params.jobId
   return typeof j === 'string' && j !== '' ? Number(j) : null
@@ -130,22 +133,19 @@ const subjectLabelParam = computed<string | null>(() => {
   const l = route.params.subjectLabel
   return typeof l === 'string' && l !== '' ? l : null
 })
-const subjectSeqParam = computed<number | null>(() => {
-  const s = route.params.seq
-  return typeof s === 'string' && s !== '' ? Number(s) : null
-})
 const resolvedJobId = ref<number | null>(null)
 const resolving = ref(false)
 const resolveError = ref<string | null>(null)
 /**
- * NaN is the "not resolved yet" sentinel: on the per-subject deep link
- * (/subjects/{label}/jobs/{n}) there is no jobId until the backend resolver
- * returns. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
+ * NaN is the "not resolved yet" sentinel: on the canonical address
+ * (/subjects/{label}/jobs/{jobId}) the id in the URL is not trusted until the
+ * server has confirmed it belongs to that subject. Store lookups (`store.jobs[NaN]`) harmlessly yield undefined, but
  * ANY consumer that turns this into a request URL must guard with
  * `Number.isFinite(jobId.value)` — NaN passes a bare `!= null` check and we
  * shipped GET /retinal-jobs/NaN/segmentation for exactly that reason.
  */
-const jobId = computed<number>(() => routeJobId.value ?? resolvedJobId.value ?? NaN)
+const jobId = computed<number>(() =>
+  (subjectLabelParam.value == null ? routeJobId.value : null) ?? resolvedJobId.value ?? NaN)
 
 const job = computed<RetinalJobDetail | null>(() => store.jobs[jobId.value] ?? null)
 const geometry = computed(() => {
@@ -153,21 +153,67 @@ const geometry = computed(() => {
   if (uuid == null) return null
   return store.geometries[uuid] ?? null
 })
+/** DR-039 — only an `.e2e` source places the scan on a fundus image. */
+const fundusGeometry = computed(() => (hasFundusGeometry(geometry.value) ? geometry.value : null))
+/** DR-039 — a DICOM OCT volume: no SLO, so no fundus panel to draw. */
+const isDicomSource = computed<boolean>(() =>
+  job.value?.sourceFormat === 'dicom' || geometry.value?.source_format === 'dicom')
+const sourceFormatText = computed<string>(() => {
+  const f = job.value?.sourceFormat
+  return f === 'e2e' || f === 'dicom' ? t(`retinal.header.sourceFormat.${f}`) : (f ?? '')
+})
+const deviceText = computed<string>(() =>
+  [job.value?.deviceManufacturer, job.value?.deviceModel].filter((v) => !!v && v.trim()).join(' '))
+const spacingOrderText = computed<string>(() => {
+  const o = job.value?.spacingOrder
+  return o === 'standard' || o === 'swapped' || o === 'standard-assumed'
+    ? t(`retinal.header.spacingOrder.${o}`) : (o ?? '')
+})
 const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
 const displayError = computed<string | null>(() => loadError.value ?? resolveError.value)
 
-// 2026-06-26 — breadcrumb trail on the per-subject deep link
-// (/subjects/{label}/jobs/{n}): "Studienteilnehmer > {label} > Job #{n}".
-// The by-id route carries no label in the URL, so it renders no trail. The
-// job is the H1; register and subject are its ancestors.
-const trail = computed(() => {
-  const label = subjectLabelParam.value
-  if (label == null) return []
-  return [
-    { label: t('nav.subjectMatrix'), to: '/subjects' },
-    { label, to: `/subjects/${encodeURIComponent(label)}` },
-  ]
+// Trail: "Studienteilnehmer › {label} › {visit} · {date}", ancestors only
+// (the job is the H1). 2026-10-09: built from the job itself, so the by-id
+// route has one too; a scan filed to no visit reads "nicht zugeordnet",
+// which has no page and so is not a link. The visit is not in the URL: a
+// scan can be re-filed (DR-035), and the trail follows it.
+const trail = computed<TrailItem[]>(() => {
+  const j = job.value
+  const label = j?.subjectLabel ?? subjectLabelParam.value
+  if (!j && label == null) return []
+  const items: TrailItem[] = [{ label: t('nav.subjectMatrix'), to: '/subjects' }]
+  if (label) items.push({ label, to: `/subjects/${encodeURIComponent(label)}` })
+  if (j?.studyEventId != null && j.visitName) {
+    items.push({
+      label: j.visitDate ? `${j.visitName} · ${formatDate(j.visitDate)}` : j.visitName,
+      to: `/events/${j.studyEventId}`,
+    })
+  } else if (j) {
+    items.push({ label: t('retinal.trail.unassigned') })
+  }
+  return items
+})
+
+/**
+ * 2026-10-09 — the scan's other analyses, as a switcher above the results.
+ * Labels are resolved here rather than by a function called from the
+ * template (see the note on statusLabelText below).
+ */
+const siblingTabs = computed(() => {
+  const j = job.value
+  const sibs = j?.siblings ?? []
+  if (!j || sibs.length < 2) return []
+  return sibs.map((s) => {
+    const key = `retinal.task.${s.task}`
+    const translated = t(key)
+    return {
+      jobId: s.jobId,
+      label: translated === key ? String(s.task).toUpperCase() : translated,
+      to: jobRoute({ jobId: s.jobId, subjectLabel: j.subjectLabel }),
+      current: s.jobId === j.jobId,
+    }
+  })
 })
 
 /**
@@ -246,19 +292,26 @@ function onHoverBscan(z: number | null) {
 
 async function load() {
   try {
-    if (routeJobId.value != null) {
-      // Canonical by-id route.
+    if (routeJobId.value != null && subjectLabelParam.value == null) {
+      // The by-id address.
       resolvedJobId.value = routeJobId.value
       await store.loadJob(routeJobId.value, true)
-    } else if (subjectLabelParam.value != null && subjectSeqParam.value != null) {
-      // Per-subject deep link — resolve (label, seq) → jobId first. Keeps a
-      // separate resolving/resolveError state because there's no jobId to key
-      // the store's per-job loading/error maps on until the resolve returns.
+      // 2026-10-09 — an old bookmark or a link that knew only the id: show
+      // the job at its canonical address, replacing this history entry.
+      const loaded = store.jobs[routeJobId.value]
+      if (loaded?.subjectLabel) {
+        await router.replace(jobRoute(loaded))
+        return
+      }
+    } else if (subjectLabelParam.value != null && routeJobId.value != null) {
+      // The canonical address: the server answers the job only when it
+      // belongs to this subject. Keeps its own resolving/resolveError state,
+      // as a 404 here is about the pair, not the job.
       resolving.value = true
       resolveError.value = null
       try {
-        const detail = await store.loadJobBySubjectSeq(
-          subjectLabelParam.value, subjectSeqParam.value)
+        const detail = await store.loadJobBySubject(
+          subjectLabelParam.value, routeJobId.value)
         resolvedJobId.value = detail?.jobId ?? null
         if (detail == null) resolveError.value = 'not found'
       } catch (e) {
@@ -298,7 +351,7 @@ function closeRerunMenuOnEscape(ev: KeyboardEvent): void {
 // route params (not jobId) because jobId is itself derived from the resolve —
 // watching it would loop on the per-subject path.
 watch(
-  () => [routeJobId.value, subjectLabelParam.value, subjectSeqParam.value],
+  () => [routeJobId.value, subjectLabelParam.value],
   () => { void load() },
 )
 
@@ -307,6 +360,7 @@ const isGa = computed(() => job.value?.task === 'ga')
 const isOnl = computed(() => job.value?.task === 'onl')
 const isPr = computed(() => job.value?.task === 'pr')
 const isThickness = computed(() => isOnl.value || isPr.value)
+const isSdRetinaNet = computed(() => job.value?.task === 'sdretinanet')
 
 const fluidPayload = computed<FluidPayload | null>(() => {
   if (!isFluid.value || !job.value) return null
@@ -319,6 +373,10 @@ const gaPayload = computed<GaPayload | null>(() => {
 const thicknessPayload = computed<ThicknessPayload | null>(() => {
   if (!isThickness.value || !job.value) return null
   return job.value.outputPayload as unknown as ThicknessPayload
+})
+const sdPayload = computed<SdRetinaNetPayload | null>(() => {
+  if (!isSdRetinaNet.value || !job.value) return null
+  return job.value.outputPayload as unknown as SdRetinaNetPayload
 })
 
 interface KpiTile {
@@ -410,7 +468,76 @@ const kpiTiles = computed<KpiTile[]>(() => {
       },
     ]
   }
+  if (sdPayload.value) {
+    // sdretinanet — CRT (central 1 mm ILM–BM) next to the three
+    // exudative lesion volumes, matching the fluid strip's IRF / SRF /
+    // PED tiles. The other lesion classes (SHRM, SDD, ORT, HRF) and the
+    // ETDRS layer table stay in the raw-payload tree for now.
+    const sp = sdPayload.value
+    const lesions = sp.lesions ?? {}
+    const totalSlices = totalBscanCount.value
+    function sdSubtitle(label: 'irf' | 'srf' | 'ped', value: number | null | undefined): string {
+      if (value == null || !Number.isFinite(value)) return ''
+      if (value <= 0) return t('retinal.kpi.subtitle.notDetected')
+      if (totalSlices > 0) {
+        return t('retinal.kpi.subtitle.affected', {
+          count: affectedBscanCount(label),
+          total: totalSlices,
+        })
+      }
+      return ''
+    }
+    return [
+      {
+        label: t('retinal.kpi.crt'),
+        value: formatNumber(sp.crt_um),
+        unit: 'µm',
+        subtitle: t('retinal.kpi.subtitle.crtCentral'),
+        tone: 'thickness',
+      },
+      {
+        label: t('retinal.kpi.irf'),
+        value: formatNumber(lesions.IRF?.volume_mm3),
+        unit: 'mm³',
+        subtitle: sdSubtitle('irf', lesions.IRF?.volume_mm3),
+        tone: 'irf',
+      },
+      {
+        label: t('retinal.kpi.srf'),
+        value: formatNumber(lesions.SRF?.volume_mm3),
+        unit: 'mm³',
+        subtitle: sdSubtitle('srf', lesions.SRF?.volume_mm3),
+        tone: 'srf',
+      },
+      {
+        label: t('retinal.kpi.ped'),
+        value: formatNumber(lesions.PED?.volume_mm3),
+        unit: 'mm³',
+        subtitle: sdSubtitle('ped', lesions.PED?.volume_mm3),
+        tone: 'ped',
+      },
+    ]
+  }
   return []
+})
+
+/**
+ * sdretinanet — reasons the CRT / ETDRS numbers need a human look. The
+ * runner centres the ETDRS grid on the fovea it detects; when it could
+ * not (no pixel geometry, a fovea it flags for review, or a grid that
+ * fell back to the scan centre) the numbers are still shown, but the
+ * operator must see why they may be off-centre or missing.
+ */
+const sdCautions = computed<string[]>(() => {
+  const sp = sdPayload.value
+  if (!sp) return []
+  const out: string[] = []
+  if (sp.geometry === 'missing') out.push(t('retinal.sdretinanet.caution.geometryMissing'))
+  if (sp.fovea?.needs_review) out.push(t('retinal.sdretinanet.caution.foveaNeedsReview'))
+  if (sp.grid_center?.source === 'scan_center_fallback') {
+    out.push(t('retinal.sdretinanet.caution.gridCenterFallback'))
+  }
+  return out
 })
 
 /* -------- ETDRS sub-totals table ------------------------------------ */
@@ -610,7 +737,9 @@ const etdrsRowGroups = computed<{ type: 'circle' | 'ring'; rows: EtdrsRow[] }[]>
 
 const overlayTask = computed<FundusOverlayTask>(() => {
   const t = job.value?.task
-  if (t === 'fluid' || t === 'onl' || t === 'pr' || t === 'ga') return t
+  // sdretinanet passes through so the overlay does not look for fluid
+  // projection PNGs; it draws only the ETDRS grid + B-scan positions.
+  if (t === 'fluid' || t === 'onl' || t === 'pr' || t === 'ga' || t === 'sdretinanet') return t
   return 'fluid'
 })
 
@@ -808,7 +937,8 @@ const lateralityLongText = computed<string>(() => {
  * since the subtitle is informational only.
  */
 function affectedBscanCount(label: 'irf' | 'srf' | 'ped'): number {
-  const series = (fluidPayload.value?.per_bscan_mm2 ?? {})[label]
+  // sdretinanet emits the same lower-case per-B-scan keys as fluid.
+  const series = (fluidPayload.value?.per_bscan_mm2 ?? sdPayload.value?.per_bscan_mm2 ?? {})[label]
   if (!Array.isArray(series)) return 0
   return series.reduce<number>((n, v) => (Number(v) > 1e-9 ? n + 1 : n), 0)
 }
@@ -906,9 +1036,11 @@ async function onRetry(): Promise<void> {
 // 2026-06-25 — `layers` returns the IOWA 11-surface stack + BM in
 // one job (feeds the BscanViewer layers overlay + the CRT compute).
 // `bm` is intentionally NOT here; `layers` already covers it.
-// Mirrors ALLOWED_RERUN_TASKS in RetinalResultsApiController.java.
-type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr' | 'layers'
-const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr', 'layers'] as const
+// `sdretinanet` returns SD-RetinaNet's 12 boundaries + 7 lesion classes
+// (read-only — no layer-correction fullscreen).
+// The list lives in lib/retinalJobs (mirrors RetinalJobFollower.STARTABLE_TASKS).
+type RerunTask = StartableTask
+const RERUN_TASKS: readonly RerunTask[] = STARTABLE_TASKS
 const rerunMenuOpen = ref(false)
 const rerunning = computed<boolean>(() => !!store.rerunAsInflight[jobId.value])
 
@@ -938,9 +1070,9 @@ async function onRerunAs(task: RerunTask): Promise<void> {
   rerunMenuOpen.value = false
   let outcome: RerunNotice | null = null
   try {
-    const newJobId = await store.rerunJobAs(jobId.value, task)
-    outcome = { kind: 'success', task, jobId: newJobId }
-    await router.push(`/retinal-jobs/${newJobId}`)
+    const resp = await store.rerunJobAs(jobId.value, task)
+    outcome = { kind: 'success', task, jobId: resp.jobId }
+    await router.push(jobRoute(resp))
   } catch (e) {
     // 2026-06-22 — surface every rerun-as failure through the global
     // error toast so the operator gets immediate feedback. Without
@@ -953,13 +1085,13 @@ async function onRerunAs(task: RerunTask): Promise<void> {
     // own message text for the rest so the toast prefix is actionable.
     const apiErr = e as {
       status?: number
-      body?: { existingJobId?: number; message?: string } | string | null
+      body?: { existingJobId?: number; subjectLabel?: string; message?: string } | string | null
     }
     const body = (apiErr.body && typeof apiErr.body === 'object') ? apiErr.body : null
     const existing = body?.existingJobId
     if (typeof existing === 'number' && existing > 0) {
       outcome = { kind: 'duplicate', task, jobId: existing }
-      await router.push(`/retinal-jobs/${existing}`)
+      await router.push(jobRoute({ jobId: existing, subjectLabel: body?.subjectLabel }))
     } else {
       const status = apiErr.status
       const serverMsg = body?.message ?? (typeof apiErr.body === 'string' ? apiErr.body : '')
@@ -1069,6 +1201,24 @@ onBeforeUnmount(stopInflightPoll)
 
         <template v-else-if="job">
           <PageHeader v-if="trail.length" :trail="trail" />
+          <nav
+            v-if="siblingTabs.length"
+            :aria-label="t('retinal.siblings.label')"
+            class="flex flex-wrap items-center gap-1.5 mb-3"
+            data-testid="retinal-view-siblings"
+          >
+            <RouterLink
+              v-for="s in siblingTabs"
+              :key="s.jobId"
+              :to="s.to"
+              :aria-current="s.current ? 'page' : undefined"
+              class="px-2.5 py-1 rounded-full border text-[12px] font-medium"
+              :class="s.current
+                ? 'bg-muw-blue text-white border-muw-blue'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+              :data-testid="`retinal-view-sibling-${s.jobId}`"
+            >{{ s.label }}</RouterLink>
+          </nav>
           <!-- ════════ Page header ════════ -->
           <div class="flex items-start justify-between gap-6 mb-5">
             <div class="min-w-0">
@@ -1129,6 +1279,30 @@ onBeforeUnmount(stopInflightPoll)
                     </span>
                   </span>
                 </span>
+              </div>
+              <!-- DR-039 — where the scan came from: its format, the device
+                   that recorded it and, for a DICOM, how its pixel spacing
+                   was read. Absent for jobs from before this was recorded. -->
+              <div
+                v-if="job.sourceFormat"
+                class="flex items-center gap-x-5 gap-y-1 flex-wrap mt-1.5 text-[12.5px] text-slate-500"
+                data-testid="retinal-view-source"
+              >
+                <span>{{ t('retinal.header.sourceLabel') }}
+                  <span class="font-mono text-slate-700" data-testid="retinal-view-source-format">{{ sourceFormatText }}</span>
+                </span>
+                <template v-if="deviceText">
+                  <span class="text-slate-500">·</span>
+                  <span>{{ t('retinal.header.deviceLabel') }}
+                    <span class="text-slate-700" data-testid="retinal-view-device">{{ deviceText }}</span>
+                  </span>
+                </template>
+                <template v-if="job.sourceFormat === 'dicom' && job.spacingOrder">
+                  <span class="text-slate-500">·</span>
+                  <span>{{ t('retinal.header.spacingLabel') }}
+                    <span class="text-slate-700" data-testid="retinal-view-spacing-order">{{ spacingOrderText }}</span>
+                  </span>
+                </template>
               </div>
             </div>
             <div class="flex items-center gap-2.5 shrink-0">
@@ -1269,6 +1443,13 @@ onBeforeUnmount(stopInflightPoll)
             data-testid="retinal-view-inflight"
           >
             {{ inflightMessage }}
+            <!-- DR-039 — why it stopped, in the job's own words (a refusal
+                 names the device or the sidecar's reason). -->
+            <p
+              v-if="job.status === 'failed' && job.statusMessage"
+              class="mt-1.5 font-medium"
+              data-testid="retinal-view-status-message"
+            >{{ t('retinal.header.statusMessageLabel') }} {{ job.statusMessage }}</p>
           </div>
           <div
             v-else-if="!job.primaryMetric"
@@ -1322,6 +1503,19 @@ onBeforeUnmount(stopInflightPoll)
             {{ t('retinal.empty.noKpi') }}
           </div>
 
+          <!-- sdretinanet — fovea / grid-centre caution. Sits right under
+               the KPI strip because it qualifies the CRT tile. -->
+          <div
+            v-if="!armGate.hideAi.value && sdCautions.length"
+            class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+            role="note"
+            data-testid="retinal-view-sd-caution"
+          >
+            <ul class="list-disc pl-4 space-y-0.5">
+              <li v-for="msg in sdCautions" :key="msg">{{ msg }}</li>
+            </ul>
+          </div>
+
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5 items-stretch">
             <section
               class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] flex flex-col"
@@ -1335,15 +1529,16 @@ onBeforeUnmount(stopInflightPoll)
               </div>
               <div class="p-4 flex-1 flex items-center">
                 <div
-                  v-if="!job.fundusUrl || !geometry"
-                  class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-xs text-slate-500"
+                  v-if="!job.fundusUrl || !fundusGeometry"
+                  class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-xs text-slate-500 px-4 text-center"
+                  data-testid="retinal-view-fundus-empty"
                 >
-                  {{ t('retinal.empty.fundusNotAvailable') }}
+                  {{ isDicomSource ? t('retinal.empty.noSloInDicom') : t('retinal.empty.fundusNotAvailable') }}
                 </div>
                 <div v-else class="w-full">
                   <FundusOverlay
                     :fundus-url="job.fundusUrl"
-                    :geometry="geometry"
+                    :geometry="fundusGeometry"
                     :payload="job.outputPayload"
                     :task="overlayTask"
                     :laterality="job.laterality"

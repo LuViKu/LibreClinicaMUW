@@ -23,6 +23,9 @@ import type { DiscrepancyNote, NoteField } from '@/types/note'
 import { fieldNoteSummary, notesOnField } from '@/lib/fieldNotes'
 import { listIngestByEvent, type IngestItem, type VisitPlanRow } from '@/api/ingest'
 import RemoveVisitImageDialog from '@/components/ingest/RemoveVisitImageDialog.vue'
+import ScanAnalyses from '@/components/ingest/ScanAnalyses.vue'
+import { ingestKindLabel, isDicomOctVolume } from '@/lib/ingestKind'
+import { userMayViewRetinalMetrics } from '@/lib/retinalAccess'
 import RemoveEventCrfDialog from '@/components/RemoveEventCrfDialog.vue'
 import { formatDate } from '@/lib/dateFormat'
 import PageHeader from '@/components/PageHeader.vue'
@@ -53,6 +56,18 @@ const role = computed(() => auth.user?.role ?? null)
 const mayEnterData = computed(() => !!role.value && canEnterData(role.value))
 const mayRestoreCrf = computed(() => !!role.value && canRestoreCrf(role.value))
 const mayBindImages = computed(() => !!role.value && canBindVisitImages(role.value))
+/*
+ * 2026-10-09 — "Auswertung starten" on a filed OCT scan. The same rule as
+ * Retry and rerun-as on the job page: a run writes its results into the
+ * visit's CRF, so only a binding that enters data may start one; not on a
+ * signed or locked visit, which the server refuses.
+ */
+const mayStartAnalysis = computed<boolean>(() => !visitSealed.value && (auth.permits('enterData') ?? (
+  auth.hasRole('Investigator')
+  || auth.hasRole('CRC')
+  || auth.hasRole('Data Manager')
+  || auth.hasRole('Administrator'))))
+const mayOpenMetrics = computed(() => userMayViewRetinalMetrics(auth.user))
 function crfLink(eventCrfOid: string): string {
   return eventCrfLink(userRolesFromAuth(auth), eventCrfOid)
 }
@@ -673,7 +688,8 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                   </div>
                   <div class="mt-1 text-[11px] leading-tight text-slate-600">
                     <div>
-                      <span class="font-mono uppercase">{{ img.kind }}</span>
+                      <span class="font-mono uppercase" :data-testid="`event-detail-image-kind-${img.id}`">{{
+                        isDicomOctVolume(img) ? ingestKindLabel(t, img) : img.kind }}</span>
                       <span v-if="img.device"> · {{ img.device }}</span>
                     </div>
                     <div class="text-slate-500">
@@ -681,6 +697,13 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                       <span v-else>—</span>
                       · {{ sourceLabel(img) }}
                     </div>
+                    <ScanAnalyses
+                      :item="img"
+                      :subject-label="event?.subjectLabel ?? null"
+                      :can-start="mayStartAnalysis"
+                      :can-open="mayOpenMetrics"
+                      @changed="loadVisitImages(eventId)"
+                    />
                     <button
                       v-if="!visitSealed && mayBindImages"
                       type="button"
@@ -759,6 +782,7 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           v-for="crfId in retinalCrfIds"
           :key="`retinal-${crfId}`"
           :event-crf-id="crfId"
+          :subject-label="event?.subjectLabel ?? null"
         />
 
         <!-- Pluggable study-module SPI — event-detail panels slot.

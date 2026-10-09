@@ -31,13 +31,18 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { GeometryJson } from '@/api/retinal'
+import type { FundusGeometryJson } from '@/api/retinal'
 import { artifactUrl } from '@/api/retinal'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 
 const { t } = useI18n()
 
-export type FundusOverlayTask = 'fluid' | 'onl' | 'pr' | 'ga'
+/**
+ * {@code sdretinanet} has no en-face projection or per-task indicator;
+ * it gets the ETDRS grid + B-scan positions only (every task-specific
+ * branch below compares against the other tasks by name).
+ */
+export type FundusOverlayTask = 'fluid' | 'onl' | 'pr' | 'ga' | 'sdretinanet'
 
 /**
  * 2026-06-22 — interactive ETDRS-region IDs the operator can
@@ -60,7 +65,7 @@ interface Props {
   /** Absolute URL of the {@code fundus.png} companion. */
   fundusUrl: string
   /** Parsed {@code geometry.json}. */
-  geometry: GeometryJson
+  geometry: FundusGeometryJson
   /** Wave 2 output_payload (per-task shape). */
   payload: Record<string, unknown>
   /** Task discriminator selecting the per-B-scan indicator strategy. */

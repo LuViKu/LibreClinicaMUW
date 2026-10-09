@@ -320,8 +320,10 @@ class NamdDecisionEndpointIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].studyEventId").value(STUDY_EVENT_ID))
                 .andExpect(jsonPath("$[0].od.hemorrhage").value(true))
-                .andExpect(jsonPath("$[0].od.bcvaLossAttributedToNamd").value(false))
-                .andExpect(jsonPath("$[0].os.hemorrhage").value(false))
+                // Never recorded is null, not false: the rule engine must be able
+                // to tell "no" from "nobody asked".
+                .andExpect(jsonPath("$[0].od.bcvaLossAttributedToNamd").doesNotExist())
+                .andExpect(jsonPath("$[0].os.hemorrhage").doesNotExist())
                 .andExpect(jsonPath("$[0].os.bcvaLossAttributedToNamd").value(true));
     }
 

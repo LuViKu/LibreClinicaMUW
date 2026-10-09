@@ -85,21 +85,6 @@ private static RuleSetRuleDao ruleSetRuleDao;
 
     }
 
-    
-    //JN following throwing a bizzare error of staleObjectStateException, TODO check this later.
-/*    public void testSaveOrUpdate() {
-       RuleSetRuleAuditDao ruleSetRuleAuditDao = (RuleSetRuleAuditDao) getContext().getBean("ruleSetRuleAuditDao");
-       RuleSetRuleDao ruleSetRuleDao = (RuleSetRuleDao) getContext().getBean("ruleSetRuleDao");
-        RuleSetRuleBean ruleSetRuleBean = new RuleSetRuleBean();
-    
-         ruleSetRuleBean = ruleSetRuleDao.findById(3);
-      //  ruleSetRuleBean.setId(3);
-        RuleSetRuleAuditBean ruleSetRuleAuditBean = new RuleSetRuleAuditBean();
-        ruleSetRuleAuditBean.setRuleSetRuleBean(ruleSetRuleBean);
-        ruleSetRuleAuditBean = ruleSetRuleAuditDao.saveOrUpdate(ruleSetRuleAuditBean);
-
-        assertNotNull("Persistant id is null", ruleSetRuleAuditBean.getId());
-    }*/
     public void tearDown(){
         try {
             ruleSetRuleDao.getSessionFactory().getCurrentSession().close();

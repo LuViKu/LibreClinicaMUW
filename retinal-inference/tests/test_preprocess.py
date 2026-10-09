@@ -228,6 +228,32 @@ def test_preprocess_persists_companion_files(client, monkeypatch, tmp_path) -> N
     assert fovea["source"] == "volume-center-mvp"
     assert fovea["bscan_z"] == 1
     assert fovea["ascan_x"] == 2
+    assert geom["source_format"] == "e2e"
+
+
+def test_preprocess_e2e_reports_source_format_and_device(client, monkeypatch, fake_dcm_payload) -> None:
+    import io as _io
+
+    ds = pydicom.dcmread(_io.BytesIO(fake_dcm_payload))
+    ds.Manufacturer = "Heidelberg Retina Angiograph"
+    ds.ManufacturerModelName = "SPECTRALISHX202"
+    buf = _io.BytesIO()
+    ds.save_as(buf, enforce_file_format=True)
+    payload = buf.getvalue()
+
+    def fake_prepare(e2e_path, out_dir, scan_index=0):
+        (Path(out_dir) / "bscan.dcm").write_bytes(payload)
+        return Path(out_dir)
+
+    monkeypatch.setattr(preprocess_module, "prepare_bscan_dcm", fake_prepare)
+    files, data = _multipart()
+    r = client.post("/preprocess", files=files, data=data,
+                    headers={"X-MUW-Inference-Token": "secret-test-token"})
+    assert r.status_code == 200, r.text
+    assert r.headers["X-MUW-Source-Format"] == "e2e"
+    assert r.headers["X-MUW-Manufacturer"] == "Heidelberg Retina Angiograph"
+    assert r.headers["X-MUW-Manufacturer-Model"] == "SPECTRALISHX202"
+    assert "fluid" in r.headers["X-MUW-Device-Tasks"].split(",")
 
 
 def test_preprocess_dedups_on_resubmit(client, monkeypatch, tmp_path) -> None:

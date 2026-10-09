@@ -139,7 +139,7 @@ public class RestoreSubjectServlet extends SecureController {
                                         item.setStatus(Status.AVAILABLE);
                                         item.setUpdater(ub);
                                         item.setUpdatedDate(new Date());
-                                        iddao.update(item);
+                                        iddao.updateStatusOnly(item);
                                     }
                                 }
                             }

@@ -56,6 +56,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -151,7 +152,7 @@ public class RetinalJobArtifactsApiController {
         }
         try {
             if (isCompanion) {
-                String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
+                String e2eUuid = RetinalJobAccess.artifactKey(row.e2ePath);
                 // 2026-06-19 — pass the job's scan_index so the
                 // resolver looks under scan-N/ for multi-volume uploads
                 // (preprocess sidecar layout change observed 2026-06-18).
@@ -234,6 +235,7 @@ public class RetinalJobArtifactsApiController {
     @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation")
     public ResponseEntity<?> streamSegmentation(@PathVariable("jobId") long jobId,
+                                                @RequestParam(name = "part", required = false) String part,
                                                 HttpSession session,
                                                 HttpServletResponse response) {
         ResponseEntity<?> guard = access().guardSession(session);
@@ -269,7 +271,9 @@ public class RetinalJobArtifactsApiController {
 
         SegmentationEnvelopeLoader.SegmentationEnvelope env;
         try {
-            env = SegmentationEnvelopeLoader.load(row.task, dir);
+            // part: sdretinanet serves its layer boundaries by default and its
+            // lesion masks for part=lesions; other tasks ignore it
+            env = SegmentationEnvelopeLoader.load(row.task, dir, part);
         } catch (IOException ioEx) {
             LOG.error("Failed to load segmentation envelope for job {} (task={}): {}",
                     jobId, row.task, ioEx.getMessage());
