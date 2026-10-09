@@ -181,16 +181,33 @@ public final class RetinalJobFollower {
      * an unbound file whose jobs still claim a visit.
      */
     public Detached detach(long ingestItemId, IngestBindService.Actor actor) throws SQLException {
+        return detach(ingestItemId, actor, "scan removed from its visit before this job ran",
+                "retinal jobs detached from the visit");
+    }
+
+    /**
+     * The same, on a dismissal: a dismissed file is not study data, so nothing
+     * new may be computed from it. Finished jobs stay as they are, so a
+     * restore followed by a bind attaches their results again, and the
+     * cancelled ones are revived where the visit's plan wants them.
+     */
+    public Detached detachForDismissal(long ingestItemId, IngestBindService.Actor actor) throws SQLException {
+        return detach(ingestItemId, actor, "scan dismissed before this job ran",
+                "retinal jobs cancelled — file dismissed");
+    }
+
+    private Detached detach(long ingestItemId, IngestBindService.Actor actor, String statusMessage,
+                            String auditLabel) throws SQLException {
         try (Connection c = dataSource.getConnection()) {
             // Still filed at this point: the unbind runs after this.
             Integer visit = visitOf(c, ingestItemId);
             int cancelled;
             try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE retinal_inference_job SET status = ?, "
-                            + "status_message = 'scan removed from its visit before this job ran' "
+                    "UPDATE retinal_inference_job SET status = ?, status_message = ? "
                             + " WHERE ingest_item_id = ? AND status IN ('queued','remote_pending','parked')")) {
                 ps.setString(1, RetinalInferenceJobStatus.CANCELLED.dbValue());
-                ps.setLong(2, ingestItemId);
+                ps.setString(2, statusMessage);
+                ps.setLong(3, ingestItemId);
                 cancelled = ps.executeUpdate();
             }
             int detached;
@@ -204,7 +221,7 @@ public final class RetinalJobFollower {
             Detached out = new Detached(detached, cancelled);
             if (!out.nothing()) {
                 audit(AuditTypeIds.RETINAL_JOBS_DETACHED, ingestItemId, actor,
-                        "retinal jobs detached from the visit", "attached",
+                        auditLabel, "attached",
                         "detached=" + detached + ";cancelled=" + cancelled, visit);
                 LOG.info("ingest_item {}: {} retinal job(s) detached, {} cancelled",
                         ingestItemId, detached, cancelled);
