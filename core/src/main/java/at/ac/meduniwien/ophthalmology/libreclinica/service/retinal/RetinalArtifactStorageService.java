@@ -88,6 +88,14 @@ public class RetinalArtifactStorageService {
 
     /** Resolve the artifact store base from the institutional config. */
     protected String storePath() {
+        return configuredStorePath();
+    }
+
+    /**
+     * The configured artifact store base, for callers that need the root
+     * without an instance — the retention sweep confines its deletes to it.
+     */
+    public static String configuredStorePath() {
         try {
             String raw = CoreResources.getField("core.retinalInference.artifactStorePath");
             if (raw != null && !raw.isBlank()) return raw.trim();
@@ -109,13 +117,22 @@ public class RetinalArtifactStorageService {
      * {@code <bscanStorePath>/<e2eUuid>/}; the resolvers below read them back.
      */
     protected String bscanStorePath() {
+        return configuredBscanStorePath(storePath());
+    }
+
+    /** The configured B-scan store base, falling back under the configured artifact store. */
+    public static String configuredBscanStorePath() {
+        return configuredBscanStorePath(configuredStorePath());
+    }
+
+    private static String configuredBscanStorePath(String artifactStorePath) {
         try {
             String raw = CoreResources.getField("core.retinalInference.bscanStorePath");
             if (raw != null && !raw.isBlank()) return raw.trim();
         } catch (Exception ignored) {
             // CoreResources unavailable in some test contexts.
         }
-        return Path.of(storePath(), "bscans").toString();
+        return Path.of(artifactStorePath, "bscans").toString();
     }
 
     /** Companion file: PHI-redacted DICOM the preprocess sidecar wrote. */
