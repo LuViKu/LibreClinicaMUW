@@ -11,6 +11,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 
 /**
@@ -28,6 +30,8 @@ import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 final class RefusalTolerantDataSource extends SimpleDriverDataSource {
 
     private static final int ATTEMPTS = 6;
+
+    private static final Logger LOG = LoggerFactory.getLogger(RefusalTolerantDataSource.class);
 
     @Override
     public Connection getConnection() throws SQLException {
@@ -49,6 +53,9 @@ final class RefusalTolerantDataSource extends SimpleDriverDataSource {
                 return opener.open();
             } catch (SQLException e) {
                 if (attempt >= ATTEMPTS || !refused(e)) throw e;
+                // Visible in the test log, so a rise in refusals does not go unnoticed.
+                LOG.warn("Test database refused connection attempt {} of {}; retrying: {}",
+                        attempt, ATTEMPTS, e.getMessage());
                 try {
                     Thread.sleep(250L * attempt);
                 } catch (InterruptedException ie) {
