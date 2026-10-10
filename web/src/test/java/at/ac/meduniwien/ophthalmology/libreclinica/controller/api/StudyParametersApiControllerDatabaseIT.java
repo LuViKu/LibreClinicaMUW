@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,7 +26,6 @@ import java.sql.ResultSet;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Phase E.6 {@code study-params} — happy-path Testcontainers IT for
@@ -47,7 +48,7 @@ class StudyParametersApiControllerDatabaseIT extends AbstractApiControllerDataba
 
     private MockMvc mockMvc() {
         StudyParametersApiController controller = new StudyParametersApiController(DATA_SOURCE);
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

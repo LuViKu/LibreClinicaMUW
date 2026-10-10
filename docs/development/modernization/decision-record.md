@@ -917,7 +917,7 @@ A static coverage survey (2026-09-30) mapped the 421 JSPs to 97 screens: **31 co
 ## DR-037 — Two support windows set the order of platform upgrades: PostgreSQL 17 now, Spring Boot 4 next
 
 **Date:** 2026-09-30
-**Status:** Accepted for PostgreSQL. Proposed for Spring Boot 4 (a plan, not started).
+**Status:** Accepted for PostgreSQL. Spring Boot 4: accepted and under way — built through stage 2 on `spike/muw-spring-boot-4`, stage 3 (live-stack verification, merge, release) open; see "Outcome of point 2".
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Related:** [DR-018](#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included) (JSP retirement), DR-011 (connection pool, open), the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) §9 (R4), the MIGRATION.md risk register (R9, R10), `docs/operations/postgresql-17-upgrade.md`.
 
@@ -945,9 +945,9 @@ The two are not alike. The database upgrade is operational and bounded: a dump a
 - **CI runs the integration tests twice** until production is on 17.
 - **The framework risk is accepted for now,** with compensating controls, and is tracked as risk R9 until the Boot 4 decision is taken.
 
-**Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started.
+**Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started. The Boot 4 migration is reversible until released: rollback is the previous image.
 
-**Spike result (2026-09-30).** [spring-boot-4-spike-2026-09-30.md](spring-boot-4-spike-2026-09-30.md) built, tested and started the tree on Spring Boot 4.1.1, on branch `spike/muw-spring-boot-4`. That branch is a measurement, not for merging.
+**Spike result (2026-09-30).** [spring-boot-4-spike-2026-09-30.md](spring-boot-4-spike-2026-09-30.md) built, tested and started the tree on Spring Boot 4.1.1, on branch `spike/muw-spring-boot-4`. That branch was a measurement when written; it has since become the migration branch (see "Outcome of point 2").
 
 - **Compile:** 32 errors in 6 files, none of them in the legacy servlets, Jersey or the SPA API.
   - **Where:** Boot bootstrap and `SecurityConfig` (23), the two heritage base DAOs (4), `BatchCRFMigrationController` (3) and one test.
@@ -963,6 +963,14 @@ The two are not alike. The database upgrade is operational and bounded: a dump a
 - **Estimate:** 8–16 developer-days. That covers the compile fixes, a review of 97 `save`/`saveOrUpdate` call sites, the Jackson 2-or-3 choice and verification. DR-018 deletions would save only about 2–4 of those days.
 - **Consequence for timing:** waiting for the mid-2027 bake-in saves little and keeps an unsupported Spring for nine more months.
 - **Recommendation:** start the migration as its own phase, as soon as the current retirement PRs have landed. Keep Liquibase pinned, because Boot 4.1 would pull the FSL-licensed 5.x, and keep the logback pin.
+
+**Outcome of point 2 (2026-10-08).** The migration was started as its own phase on `spike/muw-spring-boot-4`, in stages. It is built through stage 2 and is not on lc-develop.
+
+- **Stage 1 — platform:** Spring Boot 4.1.1, Spring 7.0.x, Security 7.1.x, Hibernate 7.4.x, Tomcat 11. `save`/`saveOrUpdate` were replaced and all 97 call sites reviewed: one real defect (an audit-row cascade that would have thrown under Hibernate 7), fixed. See [the call-site review](spring-boot-4-hibernate-7-call-sites.md).
+- **Stage 2 — Jackson:** the application moved to Jackson 3 on one shared mapper configured to read and write what Jackson 2 did; the wire and the stored JSON are pinned by tests recorded on Jackson 2. One deliberate wire change (the job-admin dates are ISO-8601 UTC strings) and one stable message for unreadable request bodies. See [the Jackson 3 stage](spring-boot-4-jackson-3.md).
+- **Found on the way, fixed in separate commits:** three endpoints that answered 500/415 through the `pages` dispatcher's converter list (no `String`/`Resource` converter; present on lc-develop too, fix is cherry-pickable), and `/%70ages/...`, which Spring 7's path parsing turned into a 500 and which now answers 400 from a filter ahead of the security chain (no allow/deny decision changes; `SecurityConfigMatcherEquivalenceTest` is unchanged and green).
+- **Kept pinned:** Liquibase 4.31.1 (Boot 4.1's BOM manages 5.x, FSL-licensed) and logback 1.5.34.
+- **Stage 3 (open):** the authenticated smoke on a live stack, then merge and release (draft [release notes](../../operations/release-notes-1.5.0-beta.17-muw.md)). Rollback is the previous image.
 
 ---
 

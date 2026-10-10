@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -25,9 +27,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -224,7 +227,7 @@ public class RemidioGatewayClient {
     private final Settings settings;
     private final Transport transport;
     private final Downloader downloader;
-    private final ObjectMapper json = new ObjectMapper();
+    private final ObjectMapper json = Json.mapper();
 
     private volatile String bearer;
     private volatile String clientAuthToken;
@@ -375,7 +378,7 @@ public class RemidioGatewayClient {
             throw new RemidioException(RemidioException.Reason.UNAUTHORIZED, r.status(), statusCodeOf(r),
                     "the Remidio account login was refused (HTTP " + r.status() + ")");
         }
-        String token = dataOf(r, "/api/user/loginUser").asText(null);
+        String token = dataOf(r, "/api/user/loginUser").asString(null);
         if (token == null || token.isBlank()) {
             throw new RemidioException(RemidioException.Reason.MALFORMED, r.status(), statusCodeOf(r),
                     "the Remidio login answered without a token");
@@ -392,7 +395,7 @@ public class RemidioGatewayClient {
             throw new RemidioException(RemidioException.Reason.UNAUTHORIZED, 401, statusCodeOf(r),
                     "the Remidio gateway did not accept the login for this client pair");
         }
-        String token = dataOf(r, "/api/gateway/getAuthToken").asText(null);
+        String token = dataOf(r, "/api/gateway/getAuthToken").asString(null);
         if (token == null || token.isBlank()) {
             throw new RemidioException(RemidioException.Reason.MALFORMED, r.status(), statusCodeOf(r),
                     "the Remidio gateway answered getAuthToken without a token");
@@ -442,7 +445,7 @@ public class RemidioGatewayClient {
         JsonNode root;
         try {
             root = r.body() == null || r.body().isBlank() ? null : json.readTree(r.body());
-        } catch (IOException notJson) {
+        } catch (JacksonException notJson) {
             root = null;
         }
         String code = root == null ? null : text(root.path("status"), "statusCode");
@@ -477,14 +480,14 @@ public class RemidioGatewayClient {
         String id = text(ed, "id");
         if (id == null) return null;
         List<String> devices = new ArrayList<>();
-        for (JsonNode d : ed.path("deviceType")) devices.add(d.asText());
+        for (JsonNode d : ed.path("deviceType")) devices.add(Json.text(d));
         List<Image> images = new ArrayList<>();
         JsonNode groups = e.path("images");
         if (groups.isObject()) {
-            groups.fields().forEachRemaining(g -> {
+            groups.properties().forEach(g -> {
                 JsonNode variants = g.getValue();
                 if (!variants.isObject()) return;
-                variants.fields().forEachRemaining(v -> {
+                variants.properties().forEach(v -> {
                     for (JsonNode i : v.getValue()) {
                         images.add(new Image(text(i, "id"), text(i, "examId"), instant(i.get("date")),
                                 text(i, "laterality"), text(i, "field"),
@@ -504,20 +507,20 @@ public class RemidioGatewayClient {
         if (n == null) return null;
         JsonNode v = n.get(field);
         if (v == null || v.isNull()) return null;
-        String s = v.asText().trim();
+        String s = Json.text(v).trim();
         return s.isEmpty() ? null : s;
     }
 
     private static Integer intOrNull(JsonNode v) {
-        return v == null || !v.isNumber() ? null : v.asInt();
+        return v == null || !v.isNumber() ? null : v.asInt(0);
     }
 
     /** Epoch milliseconds (what the API sends) or an ISO instant; null otherwise. */
     static Instant instant(JsonNode v) {
         if (v == null || v.isNull()) return null;
-        if (v.isNumber()) return Instant.ofEpochMilli(v.asLong());
+        if (v.isNumber()) return Instant.ofEpochMilli(v.asLong(0L));
         try {
-            return Instant.parse(v.asText());
+            return Instant.parse(Json.text(v));
         } catch (RuntimeException notAnInstant) {
             return null;
         }
@@ -525,7 +528,7 @@ public class RemidioGatewayClient {
 
     private static String statusCodeOf(Response r) {
         try {
-            JsonNode root = new ObjectMapper().readTree(r.body());
+            JsonNode root = Json.mapper().readTree(r.body());
             return text(root.path("status"), "statusCode");
         } catch (Exception any) {
             return null;

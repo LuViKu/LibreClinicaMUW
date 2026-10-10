@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Phase E.6 build-study tracker — operator-discretion task ack IT.
@@ -89,7 +90,7 @@ class BuildStudyAcknowledgeDatabaseIT extends AbstractApiControllerDatabaseIT {
         BuildStudyApiController controller = new BuildStudyApiController(
                 DATA_SOURCE,
                 new SiteVisibilityFilter(DATA_SOURCE));
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

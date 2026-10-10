@@ -75,7 +75,7 @@ The `_explore/` directory carries its own `node_modules/` and `package.json` so 
 
 1. **Scoping & estimation** — count features per role to size the SPA effort
 2. **Acceptance criteria** — for each SPA component, the corresponding catalogue entry is the "definition of done" for feature parity
-3. **Permission model** — the per-role feature lists are the source of truth for what each role needs to see in the SPA's authorization layer (replacing the current `security-config.xml` URL-pattern-based gating)
+3. **Permission model** — the per-role feature lists are the source of truth for what each role needs to see in the SPA's authorization layer (replacing the current URL-pattern-based gating in `SecurityConfig.java`, formerly `security-config.xml`)
 4. **Backend API extraction** — the servlets cross-referenced here are the endpoints that need to become JSON APIs in Phase D, before the SPA can replace the JSP UI in Phase E
 
 See [MIGRATION.md](../../../../MIGRATION.md) for how Phase E fits into the broader modernization, and [decision-record.md](../decision-record.md) for the rationale behind a hybrid SPA approach (data entry + dashboards) versus a full rewrite.

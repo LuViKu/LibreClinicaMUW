@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 import java.io.IOException;
@@ -57,7 +59,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -138,7 +140,7 @@ public class CrfsApiController {
     private static final Logger LOG = LoggerFactory.getLogger(CrfsApiController.class);
 
     /** #26 binding store — serialises/parses the terminology fill map (jsonb). */
-    private static final ObjectMapper TERMINOLOGY_JSON = new ObjectMapper();
+    private static final ObjectMapper TERMINOLOGY_JSON = Json.strict();
 
     private final DataSource dataSource;
     private final CrfSpreadsheetParserService parserService;
@@ -1021,12 +1023,7 @@ public class CrfsApiController {
                                         f.fromProperty(), toKey));
                             }
                         }
-                        String fillJson;
-                        try {
-                            fillJson = TERMINOLOGY_JSON.writeValueAsString(fills);
-                        } catch (Exception e) {
-                            fillJson = "[]";
-                        }
+                        String fillJson = fillMapJson(fills);
                         ps.setInt(1, crfVersionId);
                         ps.setString(2, it.name().trim());
                         ps.setString(3, ac.system().trim());
@@ -1072,6 +1069,30 @@ public class CrfsApiController {
      * re-hydrate {@code Item.autocomplete}. Best-effort — a failure yields an
      * empty map (fork degrades to marker-only recovery).
      */
+    /** The {@code crf_item_terminology.fill_map} JSON for one item's fill list. */
+    static String fillMapJson(List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills) {
+        try {
+            return TERMINOLOGY_JSON.writeValueAsString(fills);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    /** Inverse of {@link #fillMapJson}; a malformed map recovers system-only (empty list). */
+    static List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> parseFillMap(String fillJson) {
+        List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills = new ArrayList<>();
+        if (fillJson != null && !fillJson.isBlank()) {
+            try {
+                fills = TERMINOLOGY_JSON.readValue(fillJson,
+                        TERMINOLOGY_JSON.getTypeFactory().constructCollectionType(
+                                List.class, CrfVersionAuthoringRequest.Item.Autocomplete.Fill.class));
+            } catch (Exception e) {
+                // malformed fill map — recover system-only
+            }
+        }
+        return fills;
+    }
+
     private Map<String, CrfVersionAuthoringRequest.Item.Autocomplete> loadItemTerminology(int crfVersionId) {
         Map<String, CrfVersionAuthoringRequest.Item.Autocomplete> out = new HashMap<>();
         final String sql = "SELECT item_name, code_system, fill_map "
@@ -1085,16 +1106,7 @@ public class CrfsApiController {
                     String system = rs.getString(2);
                     String fillJson = rs.getString(3);
                     if (name == null || name.isBlank() || system == null || system.isBlank()) continue;
-                    List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills = new ArrayList<>();
-                    if (fillJson != null && !fillJson.isBlank()) {
-                        try {
-                            fills = TERMINOLOGY_JSON.readValue(fillJson,
-                                    TERMINOLOGY_JSON.getTypeFactory().constructCollectionType(
-                                            List.class, CrfVersionAuthoringRequest.Item.Autocomplete.Fill.class));
-                        } catch (Exception e) {
-                            // malformed fill map — recover system-only
-                        }
-                    }
+                    List<CrfVersionAuthoringRequest.Item.Autocomplete.Fill> fills = parseFillMap(fillJson);
                     out.put(name, new CrfVersionAuthoringRequest.Item.Autocomplete(system, fills));
                 }
             }

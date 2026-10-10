@@ -10,6 +10,8 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.filter;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.Locale;
 
 import jakarta.servlet.Filter;
@@ -19,6 +21,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.jsp.jstl.core.Config;
@@ -43,11 +46,33 @@ public final class LocaleFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
-        HttpServletRequest req = (HttpServletRequest)request;
+        // Tomcat 11 reports "Accept-Language: *" as Locale.ROOT. Spring's RequestContextFilter
+        // (LocaleContextHolder) and Spring Security's message lookups then ask for a ROOT
+        // bundle and fail with a 500 before any controller runs. Hand every downstream
+        // consumer a request that never reports a language-less locale.
+        HttpServletRequest req = new WildcardLocaleRequest((HttpServletRequest)request);
         HttpServletResponse resp = (HttpServletResponse)response;
         updateLocale(req,resp,LocaleResolver.resolveLocale(req));
         if (chain != null)  {
-          chain.doFilter(request, response);
+          chain.doFilter(req, response);
+        }
+    }
+
+    /** Request whose getLocale()/getLocales() never yield a wildcard (language-less) locale. */
+    static final class WildcardLocaleRequest extends HttpServletRequestWrapper {
+        WildcardLocaleRequest(HttpServletRequest request) {
+            super(request);
+        }
+
+        @Override
+        public Locale getLocale() {
+            return LocaleResolver.usableLocales((HttpServletRequest) getRequest()).get(0);
+        }
+
+        @Override
+        public Enumeration<Locale> getLocales() {
+            return Collections.enumeration(
+                    LocaleResolver.usableLocales((HttpServletRequest) getRequest()));
         }
     }
 

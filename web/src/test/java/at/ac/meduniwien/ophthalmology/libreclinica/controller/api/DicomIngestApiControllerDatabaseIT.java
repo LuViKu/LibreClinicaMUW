@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -27,7 +29,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
@@ -103,7 +104,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
         org.mockito.Mockito.when(remote.isConfigured()).thenReturn(false);
         controller.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -173,7 +174,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
                 org.mockito.Mockito.mock(
                         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
         controller.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
-        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new ApiExceptionHandler()).build()
+        ProductionMvc.standalone(controller).setControllerAdvice(new ApiExceptionHandler()).build()
                 .perform(post("/api/v1/internal/dicom-ingest")
                         .header("X-MUW-Dicom-Token", TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -232,7 +233,7 @@ class DicomIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new DicomIngestApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new DicomIngestApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

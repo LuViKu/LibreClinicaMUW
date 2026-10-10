@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -30,7 +32,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The study fields the SPA now binds on create and edit: contact e-mail,
@@ -142,7 +143,7 @@ class StudiesApiControllerIdentityDatabaseIT extends AbstractApiControllerDataba
     /* ------------------------------------------------------------------ */
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new StudiesApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new StudiesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

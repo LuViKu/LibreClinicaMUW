@@ -40,7 +40,7 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;

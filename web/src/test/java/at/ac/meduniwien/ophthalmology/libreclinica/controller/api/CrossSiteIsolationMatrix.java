@@ -34,7 +34,7 @@ import org.junit.jupiter.api.DynamicNode;
 import org.junit.jupiter.api.DynamicTest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * The endpoint matrix: one {@link CrossSiteIsolationSupport.Case} per
@@ -131,7 +131,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
 
     /* ---------------------------------------------------------------------- */
 
-    private static MockHttpServletRequestBuilder rethrow(Callable<MockHttpServletRequestBuilder> body) {
+    private static AbstractMockHttpServletRequestBuilder<?> rethrow(Callable<AbstractMockHttpServletRequestBuilder<?>> body) {
         try {
             return body.call();
         } catch (Exception e) {
@@ -164,7 +164,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
     }
 
-    private static MockHttpServletRequestBuilder bindNeutral(String i, Fx target, Fx itemOwner) {
+    private static AbstractMockHttpServletRequestBuilder<?> bindNeutral(String i, Fx target, Fx itemOwner) {
         return rethrow(() -> {
             int item = itemOwner == null ? neutralUnboundItem() : itemOwner.ingestUnbound;
             return json(post(i + item + "/bind"), "{\"studySubjectId\":" + target.ss + ",\"studyEventId\":"
@@ -594,11 +594,11 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     /** Audit rows the iso users wrote while being refused name the foreign label they typed; they are not site data. */
     static String withoutAuditOfTheTestUsers(String body) {
         try {
-            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
-            com.fasterxml.jackson.databind.JsonNode events = root.get("events");
+            tools.jackson.databind.JsonNode root = new tools.jackson.databind.ObjectMapper().readTree(body);
+            tools.jackson.databind.JsonNode events = root.get("events");
             if (events == null || !events.isArray()) return body;
-            com.fasterxml.jackson.databind.node.ArrayNode kept = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();
-            for (com.fasterxml.jackson.databind.JsonNode e : events) {
+            tools.jackson.databind.node.ArrayNode kept = new tools.jackson.databind.ObjectMapper().createArrayNode();
+            for (tools.jackson.databind.JsonNode e : events) {
                 String actor = e.path("actor").asText("");
                 if (!actor.startsWith("iso_")) kept.add(e);
             }
@@ -692,7 +692,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
         Fx foreign = k.write ? newSet(other) : shared(other);
         if (k.exportOwned) adopt(foreign, userId(user(Who.INV, other)));
-        MockHttpServletRequestBuilder req = k.mixed != null ? k.mixed.apply(own, foreign) : k.req.apply(foreign);
+        AbstractMockHttpServletRequestBuilder<?> req = k.mixed != null ? k.mixed.apply(own, foreign) : k.req.apply(foreign);
         Map<String, String> before = snapshot();
         Resp r = call(req, session);
         Map<String, String> after = snapshot();

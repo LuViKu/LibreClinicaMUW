@@ -40,16 +40,13 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
     }
 
     /**
-     * Deprecated {@link Session#saveOrUpdate} on purpose; see
-     * {@link AbstractDomainDao#saveOrUpdate} for why it is not yet
-     * {@code persist}/{@code merge}.
+     * Persist or merge; see {@link AbstractDomainDao#saveOrUpdate} and
+     * {@link SessionSaveSupport}. Use the returned instance.
      */
-    @SuppressWarnings("deprecation")
     @Transactional
     public T saveOrUpdate(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        getCurrentSession().saveOrUpdate(domainObject);
-        return domainObject;
+        return SessionSaveSupport.saveOrUpdate(getCurrentSession(), domainObject);
     }
 
     public SessionFactory getSessionFactory() {

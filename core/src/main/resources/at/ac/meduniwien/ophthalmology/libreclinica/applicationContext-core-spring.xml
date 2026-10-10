@@ -55,7 +55,6 @@
                 <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms</value>
                 <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.words</value>
                 <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.ws_messages</value>
             </list>
         </property>
     </bean>

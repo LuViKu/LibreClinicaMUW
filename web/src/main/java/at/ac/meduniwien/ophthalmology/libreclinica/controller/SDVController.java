@@ -9,6 +9,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asArrayList;
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asEnumeration;
 
@@ -76,7 +78,6 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Implement the functionality for displaying a table of Event CRFs for Source Data
@@ -255,7 +256,7 @@ public class SDVController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 
@@ -484,7 +485,7 @@ public class SDVController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -42,8 +44,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * {@link ClinicalRecordGuard}: the data-entry endpoints refuse a locked
@@ -56,7 +57,7 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
     private MockMvc mvc() {
         SiteVisibilityFilter filter = new SiteVisibilityFilter(DATA_SOURCE);
         RemoteRetinalInferenceClient remote = Mockito.mock(RemoteRetinalInferenceClient.class);
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventCrfsApiController(DATA_SOURCE, filter,
                                 Mockito.mock(CrfFileStorageService.class),
                                 new EventCrfPresenceRegistry(),
@@ -131,7 +132,7 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("dataEntryWrites")
-    void aLockedSubjectTakesNoData(String label, Supplier<MockHttpServletRequestBuilder> request)
+    void aLockedSubjectTakesNoData(String label, Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         ClinicalWriteFixtures.execute(DATA_SOURCE,
                 "UPDATE study_subject SET status_id = 6 WHERE status_id = 1");
@@ -265,15 +266,15 @@ class ClinicalRecordGuardDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /* ------------------------------------------------------------------ */
 
-    private static Arguments write(String label, Supplier<MockHttpServletRequestBuilder> request) {
+    private static Arguments write(String label, Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label, request);
     }
 
-    private static MockHttpServletRequestBuilder saveHeight() {
+    private static AbstractMockHttpServletRequestBuilder<?> saveHeight() {
         return json(post("/api/v1/eventCrfs/9/items"), "{\"values\":{\"I_HEIGHT_CM\":\"183\"}}");
     }
 
-    private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request,
+    private static AbstractMockHttpServletRequestBuilder<?> json(AbstractMockHttpServletRequestBuilder<?> request,
                                                       String body) {
         return request.contentType(MediaType.APPLICATION_JSON).content(body);
     }

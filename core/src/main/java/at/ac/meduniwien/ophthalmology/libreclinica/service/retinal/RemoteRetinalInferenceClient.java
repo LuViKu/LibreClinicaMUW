@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -297,8 +299,7 @@ public class RemoteRetinalInferenceClient {
         return "OD".equals(l) || "OS".equals(l) ? l : null;
     }
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final tools.jackson.databind.ObjectMapper JSON = Json.mapper();
 
     /**
      * A refusal out of a sidecar error body, or null when the body is not the
@@ -308,12 +309,12 @@ public class RemoteRetinalInferenceClient {
     static RetinalRunRefused refusalOf(int status, String body, ScanSource source) {
         if (status != 422 || body == null || body.isBlank()) return null;
         try {
-            com.fasterxml.jackson.databind.JsonNode detail = JSON.readTree(body).path("detail");
+            tools.jackson.databind.JsonNode detail = JSON.readTree(body).path("detail");
             if (!detail.isObject()) return null;
-            String message = detail.path("message").asText("").trim();
+            String message = detail.path("message").asString("").trim();
             if (message.isEmpty()) return null;
             if (message.length() > 1000) message = message.substring(0, 1000) + "…";
-            String code = detail.path("error").asText("refused");
+            String code = detail.path("error").asString("refused");
             return new RetinalRunRefused(code, message, source);
         } catch (Exception notJson) {
             return null;
@@ -324,7 +325,7 @@ public class RemoteRetinalInferenceClient {
         SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
         rf.setConnectTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
         rf.setReadTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
-        return new RestTemplate(rf);
+        return Json.restTemplate(rf);
     }
 
     /**

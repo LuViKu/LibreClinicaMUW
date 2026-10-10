@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,7 +40,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * A CRF that has been completed stays under administrative editing after it
@@ -54,7 +55,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class AdministrativeEditingDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new EventCrfsApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new EventCrfsApiController(DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE),
                         Mockito.mock(CrfFileStorageService.class),
                         new EventCrfPresenceRegistry(),

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,7 +34,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -117,7 +118,7 @@ class SubjectExportPdfDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new SubjectExportApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

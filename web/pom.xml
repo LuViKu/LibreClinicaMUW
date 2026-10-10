@@ -77,6 +77,29 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
+		<!-- Boot 4 split auto-configuration into modules. The classes
+		     LibreClinicaApplication excludes (DataSource, DataSourceTransactionManager,
+		     HibernateJpa, Quartz, MailSender) live in these four; they used to be
+		     inside spring-boot-autoconfigure. Versions come from the Boot BOM.
+		     The starters that bring them in transitively are not declared here
+		     (no spring-boot-starter-data-jpa/-quartz/-mail): the XML contexts
+		     configure the beans themselves. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-jdbc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-hibernate</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-mail</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-quartz</artifactId>
+		</dependency>
 		<dependency>
 			<!-- Phase E-hardening B1 (2026-06-10): Micrometer Prometheus
 			     registry. Pulls in the Prometheus simpleclient transitively
@@ -445,7 +468,7 @@
 		     what it checks (URL patterns, servlet paths under a context path,
 		     forward dispatches) is container behaviour a mock request does not
 		     have. Test scope only: the WAR still ships without an embedded
-		     container. Version from the Spring Boot BOM, the Tomcat 10.1 line
+		     container. Version from the Spring Boot BOM, the Tomcat 11 line
 		     the Dockerfile deploys on. -->
 		<dependency>
 			<groupId>org.apache.tomcat.embed</groupId>
@@ -485,16 +508,16 @@
 			<artifactId>selenium-java</artifactId>
 		</dependency>
 		<!-- #26 terminology ingest streams FHIR via Jackson's low-level
-		     JsonParser/JsonFactory (com.fasterxml.jackson.core) directly, so
-		     jackson-core must be a DECLARED direct dependency — analyze-only
-		     fails the build on "used undeclared" otherwise. Version managed by
-		     the Spring/Jackson BOM. -->
+		     JsonParser (tools.jackson.core) directly, so jackson-core must be
+		     a DECLARED direct dependency — analyze-only fails the build on
+		     "used undeclared" otherwise. Version managed by Boot's Jackson 3
+		     BOM. -->
 		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
+			<groupId>tools.jackson.core</groupId>
 			<artifactId>jackson-core</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
+			<groupId>tools.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
       <dependency>
@@ -579,7 +602,12 @@
                              autoconfig exclusion classes; all come via the
                              starter-web transitive graph. -->
                         <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot</ignoredUsedUndeclaredDependency>
-                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
+                        <!-- 2026-10-09: ApiExceptionHandlerLiveWiringTest builds the root context like Boot's
+                             (DefaultErrorAttributes lives in spring-boot-webmvc in Boot 4); the module
+                             arrives through spring-boot-starter-web and is runtime-needed, so it must not
+                             be re-declared with test scope. -->
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-webmvc</ignoredUsedUndeclaredDependency>
                         <!-- Phase E.5 A2 + A5: MockMvc IT scaffold + tests
                              import JUnit Jupiter + Hamcrest directly; both
                              land transitively via spring-boot-starter-test.
@@ -668,6 +696,9 @@
                              core needs it at runtime in the WAR (see the
                              used-undeclared entry above). -->
                         <ignoredNonTestScopedDependency>org.apache.pdfbox:pdfbox</ignoredNonTestScopedDependency>
+                        <!-- spring-boot-webmvc: used here only by ApiExceptionHandlerLiveWiringTest
+                             (see the used-undeclared entry above); the WAR needs it at runtime. -->
+                        <ignoredNonTestScopedDependency>org.springframework.boot:spring-boot-webmvc</ignoredNonTestScopedDependency>
                     </ignoredNonTestScopedDependencies>
 		        </configuration>
 		      </plugin>

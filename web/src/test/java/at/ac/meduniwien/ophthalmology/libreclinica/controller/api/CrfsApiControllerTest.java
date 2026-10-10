@@ -29,12 +29,16 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 class CrfsApiControllerTest extends AbstractApiControllerTest {
 
-    private MockMvc mockMvcWith() {
-        return mockMvcFor(new CrfsApiController(mockDataSource(),
+    private CrfsApiController controller() {
+        return new CrfsApiController(mockDataSource(),
                 Mockito.mock(CrfSpreadsheetParserService.class),
                 new CrfJsonToWorkbookAdapter(),
                 new CrfJsonValidator(),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class)));
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class));
+    }
+
+    private MockMvc mockMvcWith() {
+        return mockMvcFor(controller());
     }
 
     @Test

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -29,10 +31,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 2026-07-02 — IT for the subject-randomization picker endpoint
@@ -142,7 +143,7 @@ class SubjectRandomizeEndpointIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mockMvc() {
         GroupClassesApiController controller = new GroupClassesApiController(DATA_SOURCE);
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

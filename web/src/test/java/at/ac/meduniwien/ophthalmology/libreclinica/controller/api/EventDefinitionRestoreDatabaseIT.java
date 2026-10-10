@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,7 +29,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Restoring an event definition gives back what its removal took, as it
@@ -47,7 +48,7 @@ class EventDefinitionRestoreDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final String DEFINITION = "/api/v1/studies/" + STUDY_OID + "/event-definitions/SE_V2_DAY30";
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new EventDefinitionsApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new EventDefinitionsApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

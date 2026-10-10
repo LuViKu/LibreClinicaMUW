@@ -1,3 +1,6 @@
+# Golden fixtures are byte-exact comparisons; never let git rewrite their line endings.
+web/src/test/resources/golden/** -text
+
 # Files that are executed or parsed inside Linux containers or on Linux hosts
 # must be LF in every checkout. On a Windows checkout with core.autocrlf=true
 # they become CRLF, and then:

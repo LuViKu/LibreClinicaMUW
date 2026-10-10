@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,7 +32,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -131,7 +132,7 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     private MockMvc mockMvc() {
         ImageIngestApiController c = new ImageIngestApiController(
                 DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE), new StudySubjectFinder(DATA_SOURCE));
-        return MockMvcBuilders.standaloneSetup(c)
+        return ProductionMvc.standalone(c)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -264,9 +265,9 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         // Asserted on the parsed body rather than with a JSONPath filter: a
         // filter over a present-but-null field still matches the row, so
         // `[?(@.suggestion)]` cannot express "has no suggestion".
-        com.fasterxml.jackson.databind.JsonNode row = null;
-        for (com.fasterxml.jackson.databind.JsonNode n :
-                new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).get("images")) {
+        tools.jackson.databind.JsonNode row = null;
+        for (tools.jackson.databind.JsonNode n :
+                new tools.jackson.databind.ObjectMapper().readTree(body).get("images")) {
             if (n.get("id").asLong() == id) row = n;
         }
         assertNotNull(row, "the unbound row should be listed");

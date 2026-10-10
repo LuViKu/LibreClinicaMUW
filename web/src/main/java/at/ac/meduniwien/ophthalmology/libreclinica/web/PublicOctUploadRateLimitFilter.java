@@ -55,7 +55,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * budget and the commits get their own, larger one. The older portals are
  * left exactly as they were.
  *
- * <p>Wire via {@code SecurityConfig.addFilterBefore(filter, ChannelProcessingFilter.class)}.
+ * <p>Wire via {@code SecurityConfig.addFilterBefore(filter, SecurityConfig.RATE_LIMIT_ANCHOR)}.
  */
 @Component
 public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {

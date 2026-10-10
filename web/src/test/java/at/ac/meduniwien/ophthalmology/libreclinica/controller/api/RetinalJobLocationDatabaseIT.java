@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,15 +24,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
@@ -46,7 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifa
 class RetinalJobLocationDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
     private static RetinalArtifactStorageService store;
 
     @BeforeAll
@@ -61,7 +62,7 @@ class RetinalJobLocationDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private static MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new RetinalResultsApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new RetinalResultsApiController(DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE), store))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

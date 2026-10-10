@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,8 +24,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -32,7 +34,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
@@ -51,7 +52,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectF
 class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
 
     private static Path dir;
 
@@ -72,7 +73,7 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
         } else {
             controller = new IngestInboxApiController(DATA_SOURCE, filter, finder);
         }
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -342,7 +343,7 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
         SiteVisibilityFilter filter = new SiteVisibilityFilter(DATA_SOURCE);
         RemoteRetinalInferenceClient remote = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remote.isConfigured()).thenReturn(true);
-        return MockMvcBuilders.standaloneSetup(new RetinalResultsApiController(DATA_SOURCE, filter,
+        return ProductionMvc.standalone(new RetinalResultsApiController(DATA_SOURCE, filter,
                         Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService.class),
                         null, remote,
                         new at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster(),

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.insertStudy;
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.intQuery;
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.oldStatusOf;
@@ -31,7 +33,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Two removals of the same study at once. The second request passes the
@@ -95,7 +96,7 @@ class StudyLifecycleConcurrencyDatabaseIT extends AbstractApiControllerDatabaseI
     }
 
     private static MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new StudiesApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new StudiesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,7 +28,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The subject identifiers a study requires, against a real database: the
@@ -41,7 +42,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class SubjectIdentifiersDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(buildSubjectsController())
+        return ProductionMvc.standalone(buildSubjectsController())
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

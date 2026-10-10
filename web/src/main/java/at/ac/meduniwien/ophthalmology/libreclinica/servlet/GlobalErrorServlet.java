@@ -123,6 +123,14 @@ public class GlobalErrorServlet extends HttpServlet {
         // its own connection (REQUIRES_NEW equivalent — see
         // AuditEventDAO.insertOperationFailure) so we don't need
         // a Spring transaction here.
+        if (t != null) {
+            LOG.error("GlobalErrorServlet: unhandled exception (status={}, origUri={}, reqId={})",
+                    status, origUri, reqId, t);
+        } else if (status == null || status >= 500) {
+            LOG.error("GlobalErrorServlet: error dispatch without exception (status={}, origUri={}, "
+                    + "message={}, reqId={})", status, origUri,
+                    req.getAttribute(RequestDispatcher.ERROR_MESSAGE), reqId);
+        }
         writeAuditRow(req, t, origUri, reqId);
 
         int statusCode = (status != null) ? status : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;

@@ -15,7 +15,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * DR-033 — what an uploader on an acquisition PC may say about itself, and
@@ -207,8 +207,8 @@ final class UploaderHeartbeat {
 
     private static String text(JsonNode n, String field) {
         JsonNode v = n.get(field);
-        if (v == null || !v.isTextual()) return null;
-        String s = v.asText().strip();
+        if (v == null || !v.isString()) return null;
+        String s = v.stringValue().strip();
         return s.isEmpty() ? null : s;
     }
 
@@ -218,8 +218,19 @@ final class UploaderHeartbeat {
     }
 
     private static int clampInterval(JsonNode v) {
-        if (v == null || !v.canConvertToInt()) return DEFAULT_INTERVAL_SEC;
-        return Math.max(MIN_INTERVAL_SEC, Math.min(MAX_INTERVAL_SEC, v.asInt()));
+        if (v == null || !fitsInt(v)) return DEFAULT_INTERVAL_SEC;
+        return Math.max(MIN_INTERVAL_SEC, Math.min(MAX_INTERVAL_SEC, v.asInt(DEFAULT_INTERVAL_SEC)));
+    }
+
+    /**
+     * Any JSON number inside the int range, a fraction included (1.5 is read as
+     * 1), as Jackson 2's {@code canConvertToInt()} judged it. Jackson 3's
+     * refuses a fraction, which would turn 1.5 into the default interval.
+     */
+    private static boolean fitsInt(JsonNode v) {
+        if (!v.isNumber()) return false;
+        double d = v.asDouble(Double.NaN);
+        return d >= Integer.MIN_VALUE && d <= Integer.MAX_VALUE;
     }
 
     private static Long age(JsonNode n, String field) {
@@ -249,8 +260,8 @@ final class UploaderHeartbeat {
         if (v == null || !v.isArray()) return out;
         for (JsonNode e : v) {
             if (out.size() >= MAX_PROBLEMS) break;
-            if (!e.isTextual()) continue;
-            String code = e.asText().strip();
+            if (!e.isString()) continue;
+            String code = e.stringValue().strip();
             if (CODE.matcher(code).matches() && !out.contains(code)) out.add(code);
         }
         return out;

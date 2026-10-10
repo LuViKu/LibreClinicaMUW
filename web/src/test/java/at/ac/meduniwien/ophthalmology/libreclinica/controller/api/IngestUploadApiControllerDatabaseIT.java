@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,7 +25,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -35,7 +37,6 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -120,7 +121,7 @@ class IngestUploadApiControllerDatabaseIT extends AbstractApiControllerDatabaseI
                 new PublicOctUploadController(DATA_SOURCE, finder),
                 new IngestUploadService(DATA_SOURCE, new IngestArtifactStore(),
                         new DicomDescribeClient("", "")));
-        return MockMvcBuilders.standaloneSetup(c)
+        return ProductionMvc.standalone(c)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

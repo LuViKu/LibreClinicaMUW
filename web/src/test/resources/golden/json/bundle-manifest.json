@@ -1,0 +1,41 @@
+{
+  "schemaVersion" : 1,
+  "generatedAt" : "2026-10-07T10:00:00Z",
+  "generatedBy" : "kuchernig",
+  "study" : "S_STUDY1",
+  "subject" : "S-001",
+  "masking" : "ai-withheld",
+  "acquisitions" : [ {
+    "ingestItemId" : 4711,
+    "kind" : "oct",
+    "sourceKind" : "e2e",
+    "device" : "Heidelberg Spectralis",
+    "laterality" : "OD",
+    "acquisitionDate" : "2026-03-14",
+    "scanIndex" : 2,
+    "sha256" : "abababababababababababababababababababababababababababababababab",
+    "studyEventId" : 12,
+    "eventCrfId" : 34
+  } ],
+  "crfFiles" : [ {
+    "itemDataId" : 99,
+    "itemOid" : "I_FILE",
+    "eventCrfId" : 34
+  } ],
+  "inference" : [ {
+    "jobId" : 5,
+    "task" : "fluid",
+    "primaryMetricValue" : 0.125,
+    "files" : [ "a.npz", "b.csv" ],
+    "note" : null
+  } ],
+  "omitted" : [ {
+    "ref" : "inference/5/fluid.npz",
+    "reason" : "ai-withheld"
+  }, {
+    "ref" : "acq/9",
+    "reason" : "file \"missing\" on disk \uD83D\uDE00 a/b"
+  } ],
+  "fileCount" : 7,
+  "byteSize" : 123456789012
+}

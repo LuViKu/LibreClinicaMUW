@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -37,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * DataTables.net-protocol JSON endpoint for the "Notes & Discrepancies"
@@ -258,7 +259,7 @@ public class ViewNotesDataServlet extends SecureController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 

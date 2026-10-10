@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.insertStudySubject;
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.insertUser;
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.intQuery;
@@ -42,7 +44,6 @@ import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * A system administrator who opens a study they hold no role in (the
@@ -79,7 +80,7 @@ class UnboundAdministratorDataEntryDatabaseIT extends AbstractApiControllerDatab
         UserAccountBean ub = new UserAccountDAO(DATA_SOURCE).findByUserName(ADMIN);
         session = new MockHttpSession();
         session.setAttribute("userBean", ub);
-        MockMvcBuilders.standaloneSetup(new MeApiController(DATA_SOURCE))
+        ProductionMvc.standalone(new MeApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler()).build()
                 .perform(post("/api/v1/me/activeStudy").contentType("application/json")
                         .content("{\"oid\":\"S_DEFAULTS1\"}").session(session))
@@ -139,19 +140,19 @@ class UnboundAdministratorDataEntryDatabaseIT extends AbstractApiControllerDatab
     }
 
     private static MockMvc subjects() {
-        return MockMvcBuilders.standaloneSetup(new SubjectsApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new SubjectsApiController(DATA_SOURCE,
                         Mockito.mock(SecurityManager.class), new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     private static MockMvc events() {
-        return MockMvcBuilders.standaloneSetup(new EventsApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new EventsApiController(DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE), new VisitIntervalCalculator(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     private static MockMvc eventCrfs() {
-        return MockMvcBuilders.standaloneSetup(new EventCrfsApiController(DATA_SOURCE,
+        return ProductionMvc.standalone(new EventCrfsApiController(DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE),
                         Mockito.mock(CrfFileStorageService.class),
                         new EventCrfPresenceRegistry(),

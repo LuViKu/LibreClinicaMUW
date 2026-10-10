@@ -20,14 +20,14 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.web.servlet.error.DefaultErrorAttributes;
+import org.springframework.boot.webmvc.error.DefaultErrorAttributes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockServletContext;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -111,10 +111,8 @@ class ApiExceptionHandlerLiveWiringTest {
     /** What WebMvcConfig provides to the child, minus the heavy component scan. */
     static class ChildBase {
         @Bean
-        MappingJackson2HttpMessageConverter jacksonMessageConverter() {
-            MappingJackson2HttpMessageConverter mc = new MappingJackson2HttpMessageConverter();
-            mc.setSupportedMediaTypes(List.of(MediaType.APPLICATION_JSON));
-            return mc;
+        JacksonJsonHttpMessageConverter jacksonMessageConverter() {
+            return new WebMvcConfig().jacksonMessageConverter();
         }
 
         @Bean
@@ -126,7 +124,7 @@ class ApiExceptionHandlerLiveWiringTest {
 
         @Bean
         RequestMappingHandlerAdapter requestMappingHandlerAdapter(
-                @Qualifier("jacksonMessageConverter") MappingJackson2HttpMessageConverter jackson) {
+                @Qualifier("jacksonMessageConverter") JacksonJsonHttpMessageConverter jackson) {
             WebMvcConfig cfg = new WebMvcConfig();
             return cfg.requestMappingHandlerAdapter(
                     cfg.marshallingHttpMessageConverter(cfg.jaxbMarshaller()), jackson);
@@ -175,7 +173,7 @@ class ApiExceptionHandlerLiveWiringTest {
                 .perform(post("/pages/api/v1/probe/body")
                         .contentType(MediaType.APPLICATION_JSON).content("{not json"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Malformed or missing request body."))
+                .andExpect(jsonPath("$.message").value(ApiExceptionHandler.UNREADABLE_BODY_MESSAGE))
                 .andExpect(jsonPath("$.errors").isArray()));
     }
 
@@ -185,7 +183,7 @@ class ApiExceptionHandlerLiveWiringTest {
             MvcResult r = mvc.perform(post("/pages/api/v1/probe/body")
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message").value("Malformed or missing request body."))
+                    .andExpect(jsonPath("$.message").value(ApiExceptionHandler.UNREADABLE_BODY_MESSAGE))
                     .andReturn();
             assertFalse(r.getResponse().getContentAsString().contains("ProbeController"));
         });

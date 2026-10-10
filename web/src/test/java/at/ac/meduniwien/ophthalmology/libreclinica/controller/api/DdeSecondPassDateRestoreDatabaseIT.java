@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,14 +29,13 @@ import java.util.List;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.LaxParsingSpringLiquibase;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import liquibase.integration.spring.SpringLiquibase;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * {@code lc-muw-2026-09-30-dde-second-pass-date.xml}: a clean second pass of
@@ -138,7 +139,7 @@ class DdeSecondPassDateRestoreDatabaseIT extends AbstractApiControllerDatabaseIT
 
     private static List<String> listedForVerification() throws Exception {
         SiteVisibilityFilter filter = new SiteVisibilityFilter(DATA_SOURCE);
-        String body = MockMvcBuilders.standaloneSetup(new SdvApiController(DATA_SOURCE, filter))
+        String body = ProductionMvc.standalone(new SdvApiController(DATA_SOURCE, filter))
                 .build()
                 .perform(get("/api/v1/sdv")
                         .session(ClinicalWriteFixtures.sessionAs(DATA_SOURCE, "manual_monitor")))

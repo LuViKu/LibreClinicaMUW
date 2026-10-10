@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,7 +24,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -57,7 +58,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 class ApiExceptionHandlerNewHandlersTest {
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new ThrowController())
+        return ProductionMvc.standalone(new ThrowController())
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

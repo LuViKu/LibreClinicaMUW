@@ -14,15 +14,11 @@ import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
 import org.springdoc.webmvc.ui.SwaggerConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.ldap.LdapAutoConfiguration;
-import org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration;
-import org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
+import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
+import org.springframework.boot.quartz.autoconfigure.QuartzAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.annotation.ImportResource;
@@ -70,23 +66,16 @@ import org.springframework.context.annotation.ImportResource;
                 QuartzAutoConfiguration.class,
                 // C.7 removes: MailSenderAutoConfiguration
                 MailSenderAutoConfiguration.class,
-                // C.10/C.14: applicationContext-core-security.xml provides
-                // ocUserDetailsService; UserDetailsServiceAutoConfiguration
-                // excluded to stop Boot's generated-password banner.
-                UserDetailsServiceAutoConfiguration.class,
-                // SecurityAutoConfiguration is NOT excluded — Boot needs to
-                // provide the DelegatingFilterProxyRegistrationBean for
-                // springSecurityFilterChain. SecurityFilterAutoConfiguration
-                // would auto-register a SECOND DelegatingFilterProxy though —
-                // exclude that one specifically.
-                SecurityFilterAutoConfiguration.class,
-                // C.13 removes: LiquibaseAutoConfiguration
-                LiquibaseAutoConfiguration.class,
-                // Phase C.14: LdapAutoConfiguration tries to wire
-                // ObjectDirectoryMapper using ConverterUtils which is not in
-                // our pinned spring-ldap version. LDAP usage is via
-                // contextSource + ldapAuthenticationProvider XML beans.
-                LdapAutoConfiguration.class,
+                // Boot 4 split auto-configuration into modules. The Boot 3
+                // exclusions UserDetailsServiceAutoConfiguration,
+                // SecurityFilterAutoConfiguration, LiquibaseAutoConfiguration
+                // and LdapAutoConfiguration are gone with them: their modules
+                // (spring-boot-security, -liquibase, -ldap) are not on this
+                // classpath, so there is nothing to exclude. If spring-boot-security
+                // is ever added, exclude UserDetailsServiceAutoConfiguration (the
+                // ocUserDetailsService in applicationContext-core-security.xml
+                // replaces it) and the SecurityFilterAutoConfiguration decision
+                // needs a second look.
                 // Phase E.5 follow-up (2026-06-01): springdoc bean-creation
                 // configs excluded from the ROOT context so the same beans
                 // can be re-imported by WebMvcConfig into the `pages`

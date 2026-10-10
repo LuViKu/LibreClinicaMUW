@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -30,7 +32,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Removing a subject group class in the SPA does what legacy
@@ -54,7 +55,7 @@ class GroupClassRemovalCascadeDatabaseIT extends AbstractApiControllerDatabaseIT
     private int removedOnItsOwn;
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new GroupClassesApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new GroupClassesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

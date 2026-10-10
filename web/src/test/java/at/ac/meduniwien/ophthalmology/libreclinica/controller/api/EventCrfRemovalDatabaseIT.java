@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -40,7 +42,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Removing an event CRF in the SPA does what legacy
@@ -63,7 +64,7 @@ class EventCrfRemovalDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     private MockMvc mockMvc() {
         SiteVisibilityFilter visibility = new SiteVisibilityFilter(DATA_SOURCE);
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventCrfRemovalApiController(DATA_SOURCE, visibility),
                         new EventCrfsApiController(DATA_SOURCE, visibility,
                                 Mockito.mock(CrfFileStorageService.class),

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,7 +17,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
@@ -35,7 +36,7 @@ class StudySubjectSearchApiControllerDatabaseIT extends AbstractApiControllerDat
     private static final String BASE = "/api/v1/study-subjects/search";
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new StudySubjectSearchApiController(
                                 DATA_SOURCE,
                                 new SiteVisibilityFilter(DATA_SOURCE),

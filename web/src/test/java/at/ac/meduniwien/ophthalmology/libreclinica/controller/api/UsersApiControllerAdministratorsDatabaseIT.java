@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +41,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The user-administration surface the SPA now uses in full: creating,
@@ -202,7 +203,7 @@ class UsersApiControllerAdministratorsDatabaseIT extends AbstractApiControllerDa
                 .thenReturn("{bcrypt}$2a$10$hashedplaceholder");
         UsersApiController controller = new UsersApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE),
                 securityManager, Mockito.mock(AuthoritiesDao.class), new SsoProperties());
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

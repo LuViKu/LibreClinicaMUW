@@ -18,8 +18,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploaderHeartbeat.Invalid;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploaderHeartbeat.Observed;

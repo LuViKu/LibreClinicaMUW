@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,8 +36,8 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterAll;
@@ -48,7 +50,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
@@ -210,7 +211,7 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                         at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
         org.mockito.Mockito.when(remote.isConfigured()).thenReturn(false);
         c.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
-        return MockMvcBuilders.standaloneSetup(c)
+        return ProductionMvc.standalone(c)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

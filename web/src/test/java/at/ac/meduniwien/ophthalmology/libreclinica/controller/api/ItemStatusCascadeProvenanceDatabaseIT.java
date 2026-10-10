@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -38,7 +40,6 @@ import org.mockito.Mockito;
 import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * A status cascade hides or shows a value; it does not author it. Every
@@ -110,7 +111,7 @@ class ItemStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void cancellingAndRestoringAnEventKeepsTheProvenance() throws Exception {
-        MockMvc events = MockMvcBuilders.standaloneSetup(
+        MockMvc events = ProductionMvc.standalone(
                         new EventsApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE), null))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
         events.perform(delete("/api/v1/events/" + eventToCancel).session(session())
@@ -125,7 +126,7 @@ class ItemStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void removingAndRestoringASubjectKeepsTheProvenance() throws Exception {
-        MockMvc subjects = MockMvcBuilders.standaloneSetup(buildSubjectsController())
+        MockMvc subjects = ProductionMvc.standalone(buildSubjectsController())
                 .setControllerAdvice(new ApiExceptionHandler()).build();
         subjects.perform(post("/api/v1/subjects/PROV-SS/remove").session(session()))
                 .andExpect(status().is2xxSuccessful());
@@ -138,7 +139,7 @@ class ItemStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void restoringAnEventCrfKeepsTheProvenance() throws Exception {
-        MockMvc eventCrfs = MockMvcBuilders.standaloneSetup(new EventCrfsApiController(
+        MockMvc eventCrfs = ProductionMvc.standalone(new EventCrfsApiController(
                         DATA_SOURCE,
                         new SiteVisibilityFilter(DATA_SOURCE),
                         Mockito.mock(CrfFileStorageService.class),
@@ -182,7 +183,7 @@ class ItemStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatabas
     }
 
     private static MockMvc definitions() {
-        return MockMvcBuilders.standaloneSetup(new EventDefinitionsApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new EventDefinitionsApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
     }
 

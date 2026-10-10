@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 
 /**
@@ -41,7 +41,7 @@ public class PagesExceptionResolverConfig {
 
     @Bean
     public ExceptionHandlerExceptionResolver pagesExceptionHandlerExceptionResolver(
-            @Qualifier("jacksonMessageConverter") MappingJackson2HttpMessageConverter jacksonMessageConverter) {
+            @Qualifier("jacksonMessageConverter") JacksonJsonHttpMessageConverter jacksonMessageConverter) {
         ExceptionHandlerExceptionResolver resolver = new ExceptionHandlerExceptionResolver();
         // Same converters (and so the same Jackson settings) as the
         // handler adapter in WebMvcConfig.

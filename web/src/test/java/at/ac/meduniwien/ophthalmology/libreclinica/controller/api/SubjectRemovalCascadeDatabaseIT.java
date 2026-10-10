@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,7 +37,6 @@ import org.mockito.Mockito;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Removing a study subject in the SPA and restoring it gives back what the
@@ -73,7 +74,7 @@ class SubjectRemovalCascadeDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(buildSubjectsController())
+        return ProductionMvc.standalone(buildSubjectsController())
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

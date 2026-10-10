@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,8 +60,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 import org.junit.jupiter.api.BeforeAll;
 import org.mockito.Mockito;
 
@@ -629,7 +630,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         NamdClinicalApiController namd = new NamdClinicalApiController(DATA_SOURCE, FILTER);
         namd.setCrtComputeService(Mockito.mock(
                 at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.class));
-        MVC = MockMvcBuilders.standaloneSetup(
+        MVC = ProductionMvc.standalone(
                         new MeApiController(DATA_SOURCE),
                         new SubjectsApiController(DATA_SOURCE, securityManager, FILTER),
                         new EventCrfsApiController(DATA_SOURCE, FILTER,
@@ -705,7 +706,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         }
     }
 
-    static Resp call(MockHttpServletRequestBuilder req, MockHttpSession session) throws Exception {
+    static Resp call(AbstractMockHttpServletRequestBuilder<?> req, MockHttpSession session) throws Exception {
         MockHttpServletResponse r = mvc().perform(req.session(session)).andReturn().getResponse();
         byte[] bytes = r.getContentAsByteArray();
         return new Resp(r.getStatus(), text(bytes), r.getContentType());
@@ -738,7 +739,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         return before.equals(after) ? "" : " [and it changed tables " + diff(before, after) + "]";
     }
 
-    static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder b, String body) {
+    static AbstractMockHttpServletRequestBuilder<?> json(AbstractMockHttpServletRequestBuilder<?> b, String body) {
         return b.contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
@@ -790,7 +791,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
     /** One endpoint, and how to call it for a set of records. */
     static final class Case {
         final String key;
-        final Function<Fx, MockHttpServletRequestBuilder> req;
+        final Function<Fx, AbstractMockHttpServletRequestBuilder<?>> req;
         boolean write;
         Kind kind = Kind.STRICT;
         List<Who> roles = List.of(Who.INV, Who.CRC, Who.MON, Who.RA, Who.DIR);
@@ -801,7 +802,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         String noControl;
         String note = "";
         /** The call for a foreign record that needs both sites' records (own, foreign). */
-        java.util.function.BiFunction<Fx, Fx, MockHttpServletRequestBuilder> mixed;
+        java.util.function.BiFunction<Fx, Fx, AbstractMockHttpServletRequestBuilder<?>> mixed;
         /** A string the positive control's body must carry instead of the site marker. */
         Function<Fx, String> ownContains;
         /** Drops from a body what the test itself put there (audit rows of the iso users) before it is searched. */
@@ -815,7 +816,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         /** The records' export jobs / schedules belong to the caller (own) or to a user of the other site. */
         boolean exportOwned;
 
-        Case(String key, Function<Fx, MockHttpServletRequestBuilder> req) {
+        Case(String key, Function<Fx, AbstractMockHttpServletRequestBuilder<?>> req) {
             this.key = key;
             this.req = req;
         }
@@ -827,7 +828,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         Case alsoRefused(Predicate<Resp> p) { this.alsoRefused = p; return this; }
         Case noControl(String why) { this.noControl = why; return this; }
         Case note(String n) { this.note = n; return this; }
-        Case mixed(java.util.function.BiFunction<Fx, Fx, MockHttpServletRequestBuilder> m) { this.mixed = m; return this; }
+        Case mixed(java.util.function.BiFunction<Fx, Fx, AbstractMockHttpServletRequestBuilder<?>> m) { this.mixed = m; return this; }
         Case ownContains(Function<Fx, String> f) { this.ownContains = f; return this; }
         Case allowEcho() { this.allowEcho = true; return this; }
         Case emptyNotFoundOk() { this.emptyNotFoundOk = true; return this; }
@@ -839,7 +840,7 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
 
     static final List<Case> CASES = new ArrayList<>();
 
-    static Case c(String key, Function<Fx, MockHttpServletRequestBuilder> req) {
+    static Case c(String key, Function<Fx, AbstractMockHttpServletRequestBuilder<?>> req) {
         Case k = new Case(key, req);
         CASES.add(k);
         return k;

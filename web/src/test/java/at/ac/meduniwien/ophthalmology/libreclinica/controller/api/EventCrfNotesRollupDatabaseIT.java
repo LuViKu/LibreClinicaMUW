@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -26,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The CRF view shows each existing note on the item it is about.
@@ -50,7 +51,7 @@ class EventCrfNotesRollupDatabaseIT extends AbstractApiControllerDatabaseIT {
                 return attachments;
             }
         };
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventCrfsApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE),
                                 storage, new EventCrfPresenceRegistry(),
                                 new RetinalResultItemDataPopulator(DATA_SOURCE)))
