@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
@@ -368,7 +369,9 @@ final class RemidioPullService {
                     .acquisitionDate(date)
                     .acquisitionDateSource(date == null ? null : IngestItemRepository.ACQ_SOURCE_DEVICE)
                     .remidioImageId(image.id())
-                    .candidateStudySubjectId(target == null ? candidateSubject : null);
+                    .candidateStudySubjectId(target == null ? candidateSubject : null)
+                    // DR-040 — the only active location, or none until the Remidio account is assigned one.
+                    .originLocationId(LocationScope.defaultLocationId(c));
             if (target != null) {
                 item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), policy);
             }

@@ -26,6 +26,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * <p>OID is server-generated as {@code S_<UNIQUE_PROTOCOL_ID>}
  * matching the parent-study OID convention.
+ *
+ * <p>{@code locationId} (DR-040) is the place the site is at; see
+ * {@code LocationChoice}.
  */
 @Schema(name = "CreateSiteRequest")
 public record CreateSiteRequest(
@@ -42,5 +45,11 @@ public record CreateSiteRequest(
         String facilityContactDegree,
         String facilityContactPhone,
         String facilityContactEmail,
-        Integer initialPrincipalInvestigatorUserId
+        Integer initialPrincipalInvestigatorUserId,
+        /**
+         * DR-040 — the site's location, one the caller may use. Optional
+         * while exactly one active location exists (that one is used);
+         * required once there are several.
+         */
+        Integer locationId
 ) {}

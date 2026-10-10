@@ -202,9 +202,12 @@ public class StudiesApiController {
                             "body", "missing"))));
         }
 
-        // Shape-level validation (no DAO calls).
+        // Shape-level validation (no DAO calls), and the location (DR-040): the
+        // one named, or the only active one; required once there are several.
         List<ValidationErrorBody.FieldError> errors =
                 validateCreateStudyShape(body);
+        LocationChoice.Result where = LocationChoice.resolve(dataSource, me, body.locationId());
+        if (where.error() != null) errors.add(where.error());
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
@@ -245,6 +248,7 @@ public class StudiesApiController {
         toCreate.setStatus(Status.PENDING);
         toCreate.setOwner(me);
         toCreate.setParentStudyId(0);
+        toCreate.setLocationId(where.locationId());
 
         StudyBean persisted = studyDao.create(toCreate);
         if (persisted == null || persisted.getId() == 0) {

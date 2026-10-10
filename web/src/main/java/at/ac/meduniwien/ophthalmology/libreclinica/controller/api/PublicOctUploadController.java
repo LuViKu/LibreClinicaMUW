@@ -34,6 +34,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eDeidentificationVerifier;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
@@ -1254,7 +1255,11 @@ public class PublicOctUploadController {
                 // DR-034 — the study's OCT-volume catalogue entry, when it has
                 // exactly one; what the visit's imaging plan is checked against.
                 .imagingModalityId(imagingModalityId)
-                .candidateStudySubjectId(candidateStudySubjectId);
+                .candidateStudySubjectId(candidateStudySubjectId)
+                // DR-040 — the only active location, or none until the source is assigned. A signed-in
+                // uploader's scan is moved to the location of their study afterwards
+                // (IngestUploadApiController#attributeOctUpload).
+                .originLocationId(LocationScope.defaultLocationId(c));
         if (!park) {
             ImageIngestBinding.EventTarget target = resolveBindTarget(c, eventCrfId, studyEventId);
             if (target != null) {

@@ -27,6 +27,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
@@ -338,7 +339,10 @@ public class PublicImageUploadController {
                 // handheld camera carries no date anyone here reads.
                 .acquisitionDate(studyDate)
                 .acquisitionDateSource(studyDate == null
-                        ? null : IngestItemRepository.ACQ_SOURCE_OPERATOR);
+                        ? null : IngestItemRepository.ACQ_SOURCE_OPERATOR)
+                // DR-040 — an anonymous upload comes from the only active location, or from none
+                // until an administrator has assigned the source.
+                .originLocationId(LocationScope.defaultLocationId(c));
         if (target != null) {
             item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "portal");
         }
