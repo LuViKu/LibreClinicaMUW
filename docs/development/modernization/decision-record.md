@@ -1139,6 +1139,30 @@ every thickness of such a file would be about 1.5× too large, silently.
 
 ---
 
+## DR-040 — Locations are global, studies are enabled per location, and study-independent data is scoped by location
+
+**Status:** Proposed (2026-10-10). Direction approved by the maintainer; plan: [location-scoping-plan-2026-10-10.md](location-scoping-plan-2026-10-10.md).
+
+**Context.** A "Standort" in the SPA is a study site: a LibreClinica sub-study, defined per study. Nothing else has a place. Device uploads (Export Watcher, Optomed Bridge, Remidio, DICOM receiver, public upload page) reach the inbox with no origin, and `IngestItemVisibility` shows an unfiled file with no origin to everyone who may open the inbox. On the internal deployment, every physician therefore sees every device capture, whichever study or site they work in. A multicenter deployment cannot work like that.
+
+**Decision.**
+
+- **A location is a global entity:** a physical place, managed by system administrators.
+- **Sites are linked, not replaced.** A study is enabled at a location by having a site there. Each site points to one location; a study without sites points to its location directly. Roles, ODM, randomisation and the cross-site isolation keep working on sites.
+- **Every source has a location,** and every arriving file gets the origin location of its source. The sources are: each uploader instance, each DICOM calling AE, the Remidio account and the public upload page.
+- **A user's location scope** is derived from their site and study roles, plus optional explicit assignments for staff without a study role. System administrators have every location.
+- **The inbox, and other study-independent data such as the camera worklist and the Remidio patient sync, are scoped by location.** Study data stays scoped by study and site.
+- **Data of unknown origin** (a source not yet assigned) is visible to system administrators only.
+
+**Consequences.**
+
+- **Day one changes nothing:** the migration creates one location and assigns everything to it. The separation starts with the second location.
+- **The uploader scripts send their instance id with every upload,** not only with the heartbeat. Old scripts keep working at the default location until they are updated.
+- **The site form selects a location instead of free facility fields.**
+- **Before a second location goes live,** its sources, sites and staff assignments have to be in place. An unassigned source's files wait for an administrator.
+
+---
+
 ## Future decisions (open)
 
 *Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*
