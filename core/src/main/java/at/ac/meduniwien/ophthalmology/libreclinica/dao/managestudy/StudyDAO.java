@@ -119,6 +119,8 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         // 52 timing varchar(30),
         // 53 official_title varchar(50)
         // 54 results_reference boolean
+        // 55 oc_oid, 56 old_status_id, 57 mail_notification, 58 contact_email
+        // 59 location_id int (DR-040)
 
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);// sid
@@ -181,6 +183,7 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         this.setTypeExpected(56, TypeNames.INT);
         this.setTypeExpected(57, TypeNames.STRING); // e-mail notification
         this.setTypeExpected(58, TypeNames.STRING); // contact e-mail
+        this.setTypeExpected(59, TypeNames.INT); // location id (DR-040); NULL reads as 0
     }
 
     /**
@@ -610,6 +613,8 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         eb.setOldStatus(Status.get(oldStatusId));
         eb.setMailNotification(((String) hm.get("mail_notification")));
         eb.setContactEmail(((String) hm.get("contact_email")));
+        Integer locationId = (Integer) hm.get("location_id");
+        eb.setLocationId(locationId == null ? 0 : locationId);
         return eb;
     }
 
