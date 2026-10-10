@@ -18,7 +18,8 @@ vi.mock('@/api/client', () => ({
 }))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => () => Promise.resolve(true) }))
 
-import { apiGet } from '@/api/client'
+import { apiGet, apiPost } from '@/api/client'
+import { useNotificationsStore } from '@/stores/notifications'
 import SitesView from '@/views/SitesView.vue'
 import { useAuthStore } from '@/stores/auth'
 import enMessages from '@/locales/en.json'
@@ -65,5 +66,27 @@ describe('SitesView write controls by role', () => {
     }
     const admin = await mountAs('Administrator')
     expect(admin.text()).toContain(enMessages.sites.disable)
+  })
+})
+
+describe('SitesView create', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('confirms a created site with a success notice', async () => {
+    const w = await mountAs('Administrator')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      oid: 'S_NEW', name: 'New Site', status: 'pending', briefSummary: '', principalInvestigator: 'Dr Y',
+    })
+    const open = w.findAll('button').find((b) => b.text() === enMessages.sites.createAction)!
+    await open.trigger('click')
+    await w.find('#site-name').setValue('New Site')
+    await w.find('#site-uid').setValue('new-site')
+    await w.find('#site-pi').setValue('Dr Y')
+    const submit = w.findAll('button').find((b) => b.text() === enMessages.sites.submitCreate)!
+    await submit.trigger('click')
+    await flushPromises()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    const toasts = useNotificationsStore().toasts.map((x) => x.message)
+    expect(toasts).toContain(enMessages.sites.created.replace('{name}', 'New Site'))
   })
 })

@@ -9,6 +9,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useSitesStore } from '@/stores/sites'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { mayBuildStudy, maySysadminOnly } from '@/lib/studyBuildAccess'
 import { useConfirm } from '@/composables/useConfirm'
@@ -102,6 +103,7 @@ async function submitCreate() {
     })
     if (result.ok) {
       createOpen.value = false
+      useNotificationsStore().success(t('sites.created', { name: createForm.value.name.trim() }))
     } else {
       createErrors.value = result.fieldErrors
       createFormError.value = result.message ?? null
