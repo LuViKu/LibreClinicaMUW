@@ -1150,6 +1150,8 @@ every thickness of such a file would be about 1.5× too large, silently.
 - **A location is a global entity:** a physical place, managed by system administrators.
 - **Sites are linked, not replaced.** A study is enabled at a location by having a site there. Each site points to one location; a study without sites points to its location directly. Roles, ODM, randomisation and the cross-site isolation keep working on sites.
 - **Every source has a location,** and every arriving file gets the origin location of its source. The sources are: each uploader instance, each DICOM calling AE, the Remidio account and the public upload page.
+- **Uploaders authenticate with a per-uploader token issued for one location.** The token decides the location and limits the visit lookup and the worklist to it. It is shown once, stored as a hash, revocable and audited, and it can only upload, report heartbeats and fetch the worklist. The anonymous device front door closes once every uploader has its token.
+- **A Standort-Admin right,** granted by a system administrator per person and location, lets selected staff issue and revoke the tokens of their own location. A study role does not include it.
 - **A user's location scope** is derived from their site and study roles, plus optional explicit assignments for staff without a study role. System administrators have every location.
 - **The inbox, and other study-independent data such as the camera worklist and the Remidio patient sync, are scoped by location.** Study data stays scoped by study and site.
 - **Data of unknown origin** (a source not yet assigned) is visible to system administrators only.
@@ -1157,7 +1159,7 @@ every thickness of such a file would be about 1.5× too large, silently.
 **Consequences.**
 
 - **Day one changes nothing:** the migration creates one location and assigns everything to it. The separation starts with the second location.
-- **The uploader scripts send their instance id with every upload,** not only with the heartbeat. Old scripts keep working at the default location until they are updated.
+- **The uploader scripts send their token with every request.** Uploaders without a token keep working at the default location until the anonymous front door is switched off.
 - **The site form selects a location instead of free facility fields.**
 - **Before a second location goes live,** its sources, sites and staff assignments have to be in place. An unassigned source's files wait for an administrator.
 
