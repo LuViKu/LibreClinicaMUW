@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static at.ac.meduniwien.ophthalmology.libreclinica.controller.api.LifecycleFixtures.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,7 +38,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Removing and restoring a site through
@@ -393,7 +394,7 @@ class SitesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabas
                         .session(sysadminSession()))
                 .andExpect(status().isOk());
 
-        MockMvc studies = MockMvcBuilders.standaloneSetup(new StudiesApiController(DATA_SOURCE))
+        MockMvc studies = ProductionMvc.standalone(new StudiesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
         studies.perform(post("/api/v1/studies/" + PARENT + "/status").contentType("application/json")
                         .content("{\"targetStatus\":\"LOCKED\",\"reason\":\"database lock\"}")
@@ -457,7 +458,7 @@ class SitesApiControllerLifecycleDatabaseIT extends AbstractApiControllerDatabas
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new SitesApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new SitesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

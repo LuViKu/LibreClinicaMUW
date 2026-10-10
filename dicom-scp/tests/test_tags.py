@@ -76,3 +76,74 @@ def test_the_digest_travels_in_both_payloads():
     assert tags.extract(ds, "AE")["pixelSha256"] == tags.pixel_sha256(ds)
     assert tags.describe(ds)["pixelSha256"] == tags.pixel_sha256(ds)
     assert tags.extract(_ds(SOPInstanceUID="1.2.3"), "")["pixelSha256"] is None
+
+
+# --- OCT volume classification (describe numberOfFrames / octVolume) ---------
+
+_OPT_SOP = "1.2.840.10008.5.1.4.1.1.77.1.5.4"
+
+
+def test_describe_reports_number_of_frames_and_oct_volume_for_an_opt_volume():
+    d = tags.describe(_ds(SOPClassUID=_OPT_SOP, Modality="OPT", NumberOfFrames="49"))
+    assert d["numberOfFrames"] == 49
+    assert d["octVolume"] is True
+
+
+def test_describe_counts_modality_opt_without_the_sop_class():
+    d = tags.describe(_ds(SOPClassUID="1.2.840.10008.5.1.4.1.1.7.2", Modality="OPT",
+                          NumberOfFrames=25))
+    assert d["octVolume"] is True
+
+
+def test_describe_a_single_oct_frame_is_not_a_volume():
+    d = tags.describe(_ds(SOPClassUID=_OPT_SOP, Modality="OPT", NumberOfFrames="1"))
+    assert d["numberOfFrames"] == 1
+    assert d["octVolume"] is False
+
+
+def test_describe_a_fundus_photo_is_not_an_oct_volume():
+    d = tags.describe(_ds(SOPClassUID="1.2.840.10008.5.1.4.1.1.77.1.5.1", Modality="OP"))
+    assert d["numberOfFrames"] is None
+    assert d["octVolume"] is False
+
+
+def test_describe_a_multi_frame_non_oct_object_is_not_an_oct_volume():
+    d = tags.describe(_ds(SOPClassUID="1.2.840.10008.5.1.4.1.1.77.1.5.1", Modality="OP",
+                          NumberOfFrames="3"))
+    assert d["numberOfFrames"] == 3
+    assert d["octVolume"] is False
+
+
+def test_describe_a_malformed_frame_count_is_none_and_not_a_volume():
+    # As read from a file: the raw element only fails to convert on access.
+    from pydicom.dataelem import RawDataElement
+    from pydicom.tag import Tag
+
+    ds = _ds(SOPClassUID=_OPT_SOP, Modality="OPT")
+    ds[0x00280008] = RawDataElement(Tag(0x00280008), "IS", 4, b"abc ", 0, False, True)
+    d = tags.describe(ds)
+    assert d["numberOfFrames"] is None
+    assert d["octVolume"] is False
+
+
+def test_extract_carries_the_device_and_the_oct_volume_verdict():
+    p = tags.extract(_ds(SOPClassUID=_OPT_SOP, Modality="OPT", NumberOfFrames="97",
+                         Manufacturer="Heidelberg Engineering",
+                         ManufacturerModelName="SPECTRALIS"), "SPECTRALIS_AE")
+    assert p["numberOfFrames"] == 97
+    assert p["octVolume"] is True
+    assert p["manufacturer"] == "Heidelberg Engineering"
+    assert p["manufacturerModelName"] == "SPECTRALIS"
+    q = tags.extract(_ds(SOPInstanceUID="1.2.3"), "")
+    assert q["octVolume"] is False
+    assert q["numberOfFrames"] is None
+    assert q["manufacturer"] is None
+
+
+def test_laterality_accepts_ophthalmic_codes_in_laterality():
+    # A third-party .e2e -> DICOM converter writes Laterality = "OD" (not R/L)
+    # and no ImageLaterality.
+    assert tags.laterality(_ds(Laterality="OD")) == "OD"
+    assert tags.laterality(_ds(Laterality="os")) == "OS"
+    assert tags.laterality(_ds(ImageLaterality="OU")) == "OU"
+    assert tags.laterality(_ds(Laterality="X")) is None

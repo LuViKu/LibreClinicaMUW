@@ -1,5 +1,7 @@
 # Spring Boot 4 spike — 2026-09-30
 
+> **Superseded (2026-10-08).** This is the sizing from the spike, written before the migration. The migration itself was done in two stages on this branch; read those pages for what was actually changed and found: [stage 1, Spring 7 / Security 7 / Hibernate 7 / Tomcat 11 (the `save`/`saveOrUpdate` call-site review)](spring-boot-4-hibernate-7-call-sites.md) and [stage 2, Jackson 2 to Jackson 3](spring-boot-4-jackson-3.md). The outcome is recorded in [DR-037](decision-record.md#dr-037--two-support-windows-set-the-order-of-platform-upgrades-postgresql-17-now-spring-boot-4-next). The estimate and the compile-error counts below are the spike's, kept as measured.
+
 Sizing for [DR-037](decision-record.md#dr-037--two-support-windows-set-the-order-of-platform-upgrades-postgresql-17-now-spring-boot-4-next) point 2: what breaks when the build moves from Boot 3.5.16 to Boot 4.1.1 (Spring 7.0.9, Security 7.1.1, Hibernate 7.4.5, Jakarta EE 11 / Tomcat 11), and in which code.
 
 **Verdict.** The compile surface is small, and the rest of the move is behavioural.

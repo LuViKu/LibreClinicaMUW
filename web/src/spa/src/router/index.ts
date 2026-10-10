@@ -388,7 +388,7 @@ const router = createRouter({
        old bookmarks; this is the human-friendly address the subject's job
        list links to + the one that renders breadcrumbs. */
     {
-      path: '/subjects/:subjectLabel/jobs/:seq(\\d+)',
+      path: '/subjects/:subjectLabel/jobs/:jobId(\\d+)',
       name: 'retinal-job-by-subject',
       component: () => import('@/views/RetinalMetricsView.vue'),
       meta: {

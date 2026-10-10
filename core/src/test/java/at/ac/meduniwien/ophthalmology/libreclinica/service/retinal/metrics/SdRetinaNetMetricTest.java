@@ -21,10 +21,10 @@ import java.util.Map;
 
 import org.junit.Test;
 
-import com.fasterxml.jackson.core.json.JsonReadFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.core.json.JsonReadFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.PixelGeometry;
 
@@ -84,7 +84,7 @@ public class SdRetinaNetMetricTest {
         assertEquals(want.get("fovea_at_search_edge").asBoolean(), fovea.get("at_search_edge"));
 
         Map<String, Object> grid = map(payload().get("grid_center"));
-        assertEquals(expected().get("grid_center").get("source").asText(), grid.get("source"));
+        assertEquals(expected().get("grid_center").get("source").asString(), grid.get("source"));
     }
 
     @Test
@@ -92,9 +92,9 @@ public class SdRetinaNetMetricTest {
         Map<String, Object> etdrs = map(payload().get("etdrs"));
         int checked = 0;
         for (JsonNode row : expected().get("regions")) {
-            String region = row.get("region").asText();
-            String biomarker = row.get("biomarker").asText();
-            String metric = row.get("metric").asText();
+            String region = row.get("region").asString();
+            String biomarker = row.get("biomarker").asString();
+            String metric = row.get("metric").asString();
             double value = row.get("value").asDouble();
             Map<String, Object> reg = map(etdrs.get(region));
             assertClose(region + " coverage", row.get("coverage").asDouble(), reg.get("coverage"));

@@ -33,8 +33,11 @@ import javax.imageio.stream.ImageInputStream;
 
 import org.w3c.dom.Node;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
 
 /**
  * 2026-10-07 — reads SD-RetinaNet output in the OPTIMA group's native
@@ -80,7 +83,7 @@ public final class SdRetinaNetReader {
     private static final Pattern LAYER_DEF = Pattern.compile("^-\\s*([A-Za-z0-9_\\-]+):$");
     private static final Pattern LAYER_ROW = Pattern.compile("^-\\s*(values|confid|uncrtn):\\s*(.*)$");
     private static final String LESION_META_KEY = "Lesions";
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final JsonMapper JSON = Json.mapper();
 
     private SdRetinaNetReader() { }
 
@@ -273,7 +276,12 @@ public final class SdRetinaNetReader {
                 if (metaJson == null) {
                     throw new IOException("lesions/" + bscan + ".png has no '" + LESION_META_KEY + "' metadata");
                 }
-                JsonNode meta = JSON.readTree(metaJson);
+                JsonNode meta;
+                try {
+                    meta = JSON.readTree(metaJson);
+                } catch (JacksonException e) {
+                    throw new IOException("lesions/" + bscan + ".png: unreadable '" + LESION_META_KEY + "' metadata", e);
+                }
                 int mc = meta.path("mc").asInt(-1);
                 int oc = meta.path("oc").asInt(-1);
                 int bc = meta.path("bc").asInt(6);
@@ -306,7 +314,7 @@ public final class SdRetinaNetReader {
     private static List<String> names(JsonNode arr, int count, String prefix) {
         List<String> out = new ArrayList<>();
         if (arr.isArray() && arr.size() == count) {
-            arr.forEach(n -> out.add(n.asText()));
+            arr.forEach(n -> out.add(Json.text(n)));
         } else {
             for (int i = 1; i <= count; i++) out.add(prefix + i);
         }

@@ -271,11 +271,10 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
         // The participant-form fields served the Enketo forms, which are not
         // part of this build. A body that still carries them is read the way
         // the dispatcher reads it, and only the other flags reach the bean.
-        EventCrfAssignmentRequest body = org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
-                .json().build()
-                .readValue("{\"required\":true,\"participantForm\":true,"
-                        + "\"allowAnonymousSubmission\":true,\"submissionUrl\":\"form-1\"}",
-                        EventCrfAssignmentRequest.class);
+        EventCrfAssignmentRequest body = at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc
+                .read(EventCrfAssignmentRequest.class,
+                        "{\"required\":true,\"participantForm\":true,"
+                        + "\"allowAnonymousSubmission\":true,\"submissionUrl\":\"form-1\"}");
         at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean target =
                 new at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean();
 

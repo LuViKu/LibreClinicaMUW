@@ -29,12 +29,16 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 class CrfsApiControllerTest extends AbstractApiControllerTest {
 
-    private MockMvc mockMvcWith() {
-        return mockMvcFor(new CrfsApiController(mockDataSource(),
+    private CrfsApiController controller() {
+        return new CrfsApiController(mockDataSource(),
                 Mockito.mock(CrfSpreadsheetParserService.class),
                 new CrfJsonToWorkbookAdapter(),
                 new CrfJsonValidator(),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class)));
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class));
+    }
+
+    private MockMvc mockMvcWith() {
+        return mockMvcFor(controller());
     }
 
     @Test
@@ -91,7 +95,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 "versionName", "", "text/plain", "v1.0".getBytes());
         mockMvcWith().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
                 .file(file)
-                .file(versionName)
+                .param("versionName", "v1.0")
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
                 .andExpect(status().isUnauthorized());
     }
@@ -104,7 +108,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 "versionName", "", "text/plain", "v1.0".getBytes());
         mockMvcWith().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
                 .file(file)
-                .file(versionName)
+                .param("versionName", "v1.0")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isUnsupportedMediaType())
@@ -120,7 +124,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 "versionName", "", "text/plain", "v1.0".getBytes());
         mockMvcWith().perform(multipart("/api/v1/crfs/F_DEMOS/versions")
                 .file(emptyFile)
-                .file(versionName)
+                .param("versionName", "v1.0")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())

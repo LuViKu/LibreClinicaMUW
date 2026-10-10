@@ -20,7 +20,8 @@ import { useI18n } from 'vue-i18n'
 
 export interface TrailItem {
   label: string
-  to: string
+  /** Absent for an ancestor that has no page of its own (e.g. "nicht zugeordnet"). */
+  to?: string
 }
 
 interface Props {
@@ -50,7 +51,8 @@ const { t } = useI18n()
       data-testid="page-trail"
     >
       <template v-for="(item, i) in props.trail" :key="i">
-        <RouterLink :to="item.to" class="text-slate-600 hover:text-slate-900 hover:underline">{{ item.label }}</RouterLink>
+        <RouterLink v-if="item.to" :to="item.to" class="text-slate-600 hover:text-slate-900 hover:underline">{{ item.label }}</RouterLink>
+        <span v-else class="text-slate-500" data-testid="page-trail-plain">{{ item.label }}</span>
         <svg v-if="i < props.trail.length - 1" class="w-3 h-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <polyline points="9 18 15 12 9 6" />
         </svg>

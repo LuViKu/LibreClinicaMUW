@@ -65,6 +65,30 @@ export interface IngestItem {
   hasPreview: boolean
   suggestion: IngestSuggestion | null
   twin: IngestTwin | null
+  /** 2026-10-09 — a file a retinal analysis can be started on: an OCT volume, `.e2e` or DICOM. */
+  analysable?: boolean
+  /**
+   * DR-039 — a DICOM that is an OCT volume (shown as an OCT scan, source
+   * format DICOM). False for everything else, an `.e2e` included (its kind
+   * says it). Optional so older fixtures need not carry it.
+   */
+  octVolume?: boolean
+  /** The file's Manufacturer / ManufacturerModelName; DICOM only. */
+  manufacturer?: string | null
+  manufacturerModel?: string | null
+  /**
+   * The scan's analyses that are not cancelled — filled in by the visit's
+   * image list only; null elsewhere, and null when the lookup failed (then
+   * nothing is offered to start).
+   */
+  analyses?: ScanAnalysis[] | null
+}
+
+/** One retinal analysis of a filed scan. */
+export interface ScanAnalysis {
+  jobId: number
+  task: string
+  status: string
 }
 
 export interface InboxFilters {
@@ -251,4 +275,22 @@ export function dismissIngestItem(
   reason?: string,
 ): Promise<{ ingestItemId: number; status: string }> {
   return apiPost(`/pages/api/v1/ingest/${id}/dismiss`, { reason: reason ?? null })
+}
+
+/** 202 of {@link startScanAnalysis}: the new job and, when filed to a visit, its canonical address. */
+export interface StartedAnalysis {
+  jobId: number
+  task: string
+  status: string
+  subjectLabel?: string
+}
+
+/**
+ * 2026-10-09 — start one retinal analysis on a filed OCT scan
+ * ("Auswertung starten"). 409 with `existingJobId` (and that job's
+ * `subjectLabel`) when the scan already has the task; other
+ * 409s carry a `code` and a `message` the error toast shows.
+ */
+export function startScanAnalysis(id: number, task: string): Promise<StartedAnalysis> {
+  return apiPost<StartedAnalysis>(`/pages/api/v1/ingest/${id}/analyses`, { task })
 }

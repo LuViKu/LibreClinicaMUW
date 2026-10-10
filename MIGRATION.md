@@ -3,6 +3,7 @@
 **Owner:** Department of Ophthalmology and Optometry, Medical University of Vienna
 **Status (last refreshed 2026-07-09):** **Phases 0, A, B (all sub-phases), C, D-Sec closed.** Phase D-Libs and Phase E remain active. The 1.5.0-beta.4-muw release (lc-develop @ `06509d24d`, 2026-06-26) shipped on the modernised stack: JDK 21 + Spring 6.1.18 + Hibernate 6.4 (jakarta) + Tomcat 10 + JSP/JSTL Jakarta taglibs + bcrypt + reverse-proxy SSO + `at.ac.meduniwien.ophthalmology.libreclinica.*` package namespace. **Post-B runtime bump (2026-07-09, heading to 1.5.0-beta.5-muw): lc-develop now builds + runs on JDK 25 (latest LTS)** — Temurin 25 across the Dockerfile builder + runtime and all CI workflows, with `maven-compiler-plugin` `<source>`/`<target>` 25. Two Java-25 CI breakages were fixed in the same pass: `maven-dependency-plugin`'s ASM was pinned to 9.10.1 (so `analyze-only` can read class-file major version 69), and `liquibase-core` was re-pinned to 3.6.3 (Liquibase 4.x drops the heritage `modifyColumn` change type used by `migration/2.5/changeLogCreateTables.xml`; the 4.x upgrade + CVE-2022-0839 remain deferred to Phase D-Libs). **Liquibase 4 done (2026-10-02, D-Libs):** `liquibase-core` 4.31.1, with `LaxParsingSpringLiquibase` for the `modifyColumn` elements and `SerialPostgresDatabase` for `serial` columns; closes CVE-2022-0839. Never downgrade to 3.x on an upgraded database (see the D-Libs table and [deploy runbook §5](docs/operations/deploy-runbook.md#5-rollback)).
 **Target:** Spring Boot 3 + Java 21 → 25 (LTS) + Jakarta EE + library replacement (full re-platform)
+**Refresh 2026-10-08 (Spring Boot 4, branch `spike/muw-spring-boot-4`, not yet on lc-develop):** the DR-037 migration is built through stage 2. **Stage 1** moved the platform to Spring Boot 4.1.1 (Spring 7.0.x, Security 7.1.x, Hibernate 7.4.x, Tomcat 11 / jakarta servlet 6.1) — [Hibernate 7 call-site review](docs/development/modernization/spring-boot-4-hibernate-7-call-sites.md). **Stage 2** moved the application from Jackson 2 to Jackson 3 (`tools.jackson`) with the wire contract and the stored JSON unchanged — [Jackson 3 stage](docs/development/modernization/spring-boot-4-jackson-3.md). Both stages pass the unit suites and the database ITs. **Stage 3 (open):** verify on a live stack (SPA login, the admin jobs list, the authenticated smoke), then merge and release — see [DR-037](docs/development/modernization/decision-record.md#dr-037--two-support-windows-set-the-order-of-platform-upgrades-postgresql-17-now-spring-boot-4-next) and the draft [release notes](docs/operations/release-notes-1.5.0-beta.17-muw.md). The original sizing is the [spike report](docs/development/modernization/spring-boot-4-spike-2026-09-30.md) (superseded).
 **Refresh 2026-09-30:** Spring Boot 3.5 reached open-source end of life on 2026-06-30 (3.5.16, which this project runs, was the last free release), and PostgreSQL 14 reaches end of life on 2026-11-12 — see [DR-037](docs/development/modernization/decision-record.md) and the risk register. The legacy JSP layer is being retired in full under [DR-018](docs/development/modernization/decision-record.md), sequenced by the [JSP retirement plan](docs/development/modernization/jsp-retirement-plan-2026-09-30.md).
 **Posture:** **Released, independent fork — no upstream sync** (as of 2026-06-26; supersedes the original Eclipse-Transformer cherry-pick framing in DR-003). The fork no longer merges or cherry-picks from upstream LibreClinica.
 **Estimated effort (original 2026-05-28):** 12–18 months · 2–3 developers FTE. **Actual to date:** ~5 weeks of one-developer-with-AI-assist (2026-05-28 → 2026-06-28) to ship Phases 0 + A + B + C + D-Sec to lc-develop. The remaining D-Libs + Phase E work is incremental + parallelisable.
@@ -22,18 +23,18 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 | Layer | From | To | Phase |
 |-------|------|----|----|
 | Java | 11 | **21 (B) → 25 (LTS, 2026-07)** | B |
-| Spring Framework | 5.1.4 | **6.1+** | B |
-| Spring Boot | n/a | **3.x** | C |
-| Spring Security | 5.1.4 | **6.x** | B |
+| Spring Framework | 5.1.4 | **6.1+** (B), then **7.0** (F) | B, F |
+| Spring Boot | n/a | **3.x** (C), then **4.1** (F, branch `spike/muw-spring-boot-4`) | C, F |
+| Spring Security | 5.1.4 | **6.x** (B), then **7.1** (F) | B, F |
 | ~~Spring WS~~ | ~~3.0.10~~ | **removed** | B (#31, 2026-05-29) |
 | Servlet API | `javax.servlet` 3.1 | **`jakarta.servlet` 6.0** | B |
 | JPA | `javax.persistence` | **`jakarta.persistence`** | B |
-| Hibernate ORM | 5.4.2 | **6.4+** | B |
+| Hibernate ORM | 5.4.2 | **6.4+** (B), then **7.4** (F) | B, F |
 | Tomcat | 9 (standalone WAR) | **embedded** (executable JAR) | C |
 | JSTL | 1.1.2 | **Jakarta JSTL 3.0+** | B |
 | Configuration | XML `applicationContext-*.xml` | **Java config + `@ConfigurationProperties` + env vars** | C |
 | Liquibase | 3.6.3 | **4.31.1** (done 2026-10-02) | D |
-| Jackson | 2.9.8 | **2.18+** | A → B |
+| Jackson | 2.9.8 | **2.18+** (A → B), then **3.1** `tools.jackson` (F) | A → B, F |
 | Logback | 1.1.3 | **1.5+** | A → B |
 | Castor XML | 1.4.1 (abandoned 2014) | **Jakarta JAXB / Jackson XML / MOXy** | D (forced by B) |
 | iText | 2.1.2 (last permissive) | **OpenPDF 1.4+** | D |
@@ -57,6 +58,7 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 | **C — Spring Boot 3 conversion** | C.0 boot-contract characterisation, C.4 EMF + transactionManager → Java `@Configuration`, C.14 `SpringBootServletInitializer` cliff (Boot owns root context + filters + SecurityFilterChain) | **✅ Closed (boot conversion); residue open** | Boot autoconfiguration owns the lifecycle. **Not yet retired:** 10 XML application contexts (~120 DAO, service and security beans) are still imported by `LibreClinicaApplication`, `datainfo.properties` is still the configuration source, and the pool is DBCP 1.x (DR-011). Finishing this is plan item R4, after the legacy servlets that use those beans are deleted |
 | **D — Authentication modernization + library long-tail** | D-Sec (10/11 sub-phases: bcrypt + lazy rehash; institution-agnostic SSO via reverse-proxy pre-auth, DR-014/015; sso-deployment-guide.md cookbook draft); D-Libs (long tail untouched) | **⚠️ D-Sec substantially closed; D-Libs open** | D.10 e-sig re-auth scaffolded behind flag (legal ratification pending). Operator tasks remain: SAMLtest.id SP-metadata upload; MedUni Wien IT institutional SP registration for production cutover |
 | **E — UI modernization** | E.1 SPA scaffold, E.4 M1 foundations, E.5 follow-ups, E.6 study-nurse polish, E-hardening B integration | **🚧 Active** | Vue 3 + Vite + Tailwind v4 SPA serves the Investigator, Monitor, Data Manager and Administrator workspaces and the imaging screens (the listing-page wave has shipped). The whole JSP layer is now being retired ([DR-018](docs/development/modernization/decision-record.md), [plan](docs/development/modernization/jsp-retirement-plan-2026-09-30.md)) |
+| **F — Spring Boot 4 ([DR-037](docs/development/modernization/decision-record.md#dr-037--two-support-windows-set-the-order-of-platform-upgrades-postgresql-17-now-spring-boot-4-next))** | Stage 1: Boot 4.1.1, Spring 7, Security 7, Hibernate 7, Tomcat 11; stage 2: Jackson 3; stage 3: live-stack verification, merge, release | **🚧 Built on `spike/muw-spring-boot-4` (stages 1–2); stage 3 open** | Core and web unit suites and all database ITs pass on the new stack; the WAR starts on Tomcat 11. Not on lc-develop yet. Liquibase stays pinned at 4.31.1 and logback at 1.5.34 |
 
 **Net:** the modernization spine (Phase 0 → D-Sec) is **done**. The release train is on lc-develop. The remaining work is **D-Libs** (parallel, no dependency cliff) and **incremental Phase E** (one feature wave at a time per clinical priority).
 
@@ -457,7 +459,7 @@ Continuous through all phases. Target end-of-Phase-B: 30% line coverage on `core
 | R6 | Upstream ReliaTec also migrates to Jakarta, making divergence un-necessary | L | L | Accept; we retain optionality to re-converge later |
 | R7 | Validation overhead per phase blows out timeline | M | M | Plan validation cycles per phase exit; not per dep bump |
 | R8 | GWT menu widget cannot be cleanly replaced without UI regressions | L | L | Moot: the widget is referenced only by the unused SiteMesh decorator; deleted with the JSP retirement |
-| R9 | Spring Boot 3.5 / Spring Framework 6.2 receive no more open-source fixes (OSS end of life 2026-06-30) | H | H | Plan the Boot 4 migration ([DR-037](docs/development/modernization/decision-record.md)); retiring the JSP layer first shrinks it; watch advisories for 3.5 meanwhile |
+| R9 | Spring Boot 3.5 / Spring Framework 6.2 receive no more open-source fixes (OSS end of life 2026-06-30) | H | H | Plan the Boot 4 migration ([DR-037](docs/development/modernization/decision-record.md)); retiring the JSP layer first shrinks it; watch advisories for 3.5 meanwhile **Status 2026-10-08:** built through stage 2 on `spike/muw-spring-boot-4`; stage 3 (live-stack verification, merge, release) is open. |
 | R10 | PostgreSQL 14 reaches end of life on 2026-11-12 | H | M | Move to PostgreSQL 17 before that date: dev/test/CI first, production by the upgrade runbook ([DR-037](docs/development/modernization/decision-record.md)) |
 
 ---

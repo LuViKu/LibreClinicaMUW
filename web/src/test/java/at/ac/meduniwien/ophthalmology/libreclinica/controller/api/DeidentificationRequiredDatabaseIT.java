@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -33,8 +35,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterAll;
@@ -47,8 +49,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -189,7 +190,7 @@ class DeidentificationRequiredDatabaseIT extends AbstractApiControllerDatabaseIT
                         new DicomDescribeClient(
                                 "http://127.0.0.1:" + STUB.getAddress().getPort() + "/describe", TOKEN)));
         c.setDeidentificationPolicy(DeidentificationPolicy.of(required));
-        return MockMvcBuilders.standaloneSetup(c).setControllerAdvice(new ApiExceptionHandler()).build();
+        return ProductionMvc.standalone(c).setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     private MockHttpSession dm() {
@@ -224,7 +225,7 @@ class DeidentificationRequiredDatabaseIT extends AbstractApiControllerDatabaseIT
         return sb.toString();
     }
 
-    private static MockHttpServletRequestBuilder compliantE2e(byte[] bytes, String name) throws Exception {
+    private static AbstractMockHttpServletRequestBuilder<?> compliantE2e(byte[] bytes, String name) throws Exception {
         return multipart(BASE + "/commit")
                 .file(new MockMultipartFile("file", name, "application/octet-stream", bytes))
                 .param("patientId", LABEL)
@@ -235,7 +236,7 @@ class DeidentificationRequiredDatabaseIT extends AbstractApiControllerDatabaseIT
                 .param("deidSha256", sha256(bytes));
     }
 
-    private static MockHttpServletRequestBuilder compliantDicom(byte[] bytes, String name) throws Exception {
+    private static AbstractMockHttpServletRequestBuilder<?> compliantDicom(byte[] bytes, String name) throws Exception {
         return multipart(BASE + "/commit")
                 .file(new MockMultipartFile("file", name, "application/dicom", bytes))
                 .param("patientId", LABEL)

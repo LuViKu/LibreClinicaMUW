@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,7 +31,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Removing an event definition in the SPA does what legacy
@@ -47,7 +48,7 @@ class EventDefinitionRemovalCascadeDatabaseIT extends AbstractApiControllerDatab
     private static final int STUDY_ID = 1;
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new EventDefinitionsApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new EventDefinitionsApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

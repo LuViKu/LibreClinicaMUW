@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,13 +27,12 @@ import java.sql.SQLException;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * The writers that change CRF values outside the CRF form keep the rules the
@@ -52,14 +53,14 @@ class ClinicalValueWritersDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private MockMvc flags() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new NamdClinicalApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
 
     private MockMvc portal() {
-        return MockMvcBuilders.standaloneSetup(new PublicBcvaEntryController(DATA_SOURCE))
+        return ProductionMvc.standalone(new PublicBcvaEntryController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -152,7 +152,7 @@ public class RetinalJobArtifactsApiController {
         }
         try {
             if (isCompanion) {
-                String e2eUuid = RetinalJobAccess.e2eUuidFromPath(row.e2ePath);
+                String e2eUuid = RetinalJobAccess.artifactKey(row.e2ePath);
                 // 2026-06-19 — pass the job's scan_index so the
                 // resolver looks under scan-N/ for multi-volume uploads
                 // (preprocess sidecar layout change observed 2026-06-18).

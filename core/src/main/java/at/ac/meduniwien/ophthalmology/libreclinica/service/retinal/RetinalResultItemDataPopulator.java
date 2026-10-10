@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -18,8 +20,9 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,7 +62,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtCo
 public class RetinalResultItemDataPopulator {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalResultItemDataPopulator.class);
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
 
     /**
      * Mapping from the fluid runner's output_payload key to the binding role
@@ -368,7 +371,7 @@ public class RetinalResultItemDataPopulator {
                         payload = (payloadJson == null || payloadJson.isBlank())
                                 ? JSON.createObjectNode()
                                 : JSON.readTree(payloadJson);
-                    } catch (com.fasterxml.jackson.core.JsonProcessingException jsonEx) {
+                    } catch (JacksonException jsonEx) {
                         LOG.warn("Malformed output_payload JSON for job {}: {}",
                                 jobId, jsonEx.getMessage());
                         payload = JSON.createObjectNode();

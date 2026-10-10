@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -24,8 +26,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Per-node health of the remote retinal-inference cluster, for the sysadmin
@@ -80,7 +83,7 @@ public final class RetinalClusterHealth {
                              String gpuName,
                              String error) { }
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = Json.mapper();
 
     private final Duration timeout;
     private final HttpClient http;
@@ -140,7 +143,7 @@ public final class RetinalClusterHealth {
         JsonNode json;
         try {
             json = MAPPER.readTree(body == null ? "" : body);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return new NodeStatus(spec.name(), spec.url(), "unhealthy", List.of(), EXPECTED_TASKS,
                     latencyMs, null, null, null, "unparseable /health body");
         }
@@ -159,7 +162,7 @@ public final class RetinalClusterHealth {
         List<String> supported = new ArrayList<>();
         JsonNode tasks = json.get("supported_tasks");
         if (tasks != null && tasks.isArray()) {
-            for (JsonNode t : tasks) supported.add(t.asText());
+            for (JsonNode t : tasks) supported.add(Json.text(t));
         }
         Collections.sort(supported);
         List<String> missing = new ArrayList<>();
@@ -188,7 +191,7 @@ public final class RetinalClusterHealth {
 
     private static String text(JsonNode json, String field) {
         JsonNode n = json.get(field);
-        return n == null || n.isNull() ? null : n.asText();
+        return n == null || n.isNull() ? null : Json.text(n);
     }
 
     // ---- I/O -----------------------------------------------------------------

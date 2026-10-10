@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -51,7 +53,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * DataTables-protocol JSON endpoint for the "Events for Subjects"
@@ -261,7 +262,7 @@ public class ListEventsForSubjectsDataServlet extends SecureController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 
@@ -286,7 +287,7 @@ public class ListEventsForSubjectsDataServlet extends SecureController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
@@ -24,8 +26,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploaderHeartb
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploaderHeartbeat.Parsed;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -96,7 +99,7 @@ public class UploaderHeartbeatApiController {
     private static final long CAP_WARN_EVERY_MS = 10 * 60_000L;
 
     private final DataSource dataSource;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = Json.mapper();
     private volatile long lastCapWarn;
 
     @Autowired
@@ -131,7 +134,7 @@ public class UploaderHeartbeatApiController {
             hb = UploaderHeartbeat.parse(node);
         } catch (Invalid e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return ResponseEntity.badRequest().body(Map.of("message", "the heartbeat is not JSON"));
         }
 

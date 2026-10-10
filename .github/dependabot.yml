@@ -20,6 +20,7 @@ updates:
       jackson:
         patterns:
           - "com.fasterxml.jackson*"
+          - "tools.jackson*"
       hibernate:
         patterns:
           - "org.hibernate*"

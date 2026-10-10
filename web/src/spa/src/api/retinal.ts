@@ -92,6 +92,36 @@ export interface RetinalJobDetail {
    * null falls through to the existing rendering.
    */
   subjectArm: 'AI_SHOWN' | 'AI_HIDDEN' | null
+  /**
+   * 2026-10-09 — where the job lives: the subject's label (its canonical
+   * address is /subjects/<label>/jobs/<jobId>, see lib/retinalJobs.jobRoute),
+   * the visit's id, name and ISO date. All null when the scan is filed to
+   * no visit. Optional so older fixtures need not carry them.
+   */
+  subjectLabel?: string | null
+  studyEventId?: number | null
+  visitName?: string | null
+  visitDate?: string | null
+  /** Every live analysis of the same scan, this one included, oldest first. */
+  siblings?: RetinalJobSibling[]
+  /** Why the job stopped (failed / cancelled); null otherwise. Optional for older fixtures. */
+  statusMessage?: string | null
+  /**
+   * DR-039 — what the preprocess step reported about the scan: the format
+   * it arrived in, the recording device and, for a DICOM, how its pixel
+   * spacing was read. Null for jobs that ran before this was recorded.
+   */
+  sourceFormat?: ScanSourceFormat | null
+  deviceManufacturer?: string | null
+  deviceModel?: string | null
+  spacingOrder?: SpacingOrder | null
+}
+
+/** Another analysis of the scan a job read. */
+export interface RetinalJobSibling {
+  jobId: number
+  task: RetinalTask
+  status: RetinalJobStatus
 }
 
 /**
@@ -131,13 +161,6 @@ export interface RetinalJobSummary {
    * because parked jobs (event_crf_id NULL) have no event binding.
    */
   studyEventId?: number | null
-  /**
-   * 2026-06-26 — stable 1-based per-subject sequence number (ordered by
-   * enqueued_at, append-only). Used to show "Job #n" per subject and to
-   * build the /subjects/{label}/jobs/{n} deep link. Only the per-subject
-   * list endpoint computes it; null on the per-event-crf list.
-   */
-  subjectSeq?: number | null
   primaryMetric: PrimaryMetric | null
 }
 
@@ -270,12 +293,16 @@ export interface SdRetinaNetPayload {
  *   - mm → fundus px (slice):   multiply by {@code 1 / slice_mm_per_px}
  */
 export interface GeometryJson {
+  /**
+   * DR-039 — null for a DICOM source: a DICOM OCT volume carries no SLO, so
+   * there is no fundus.png and nothing to place the B-scans on.
+   */
   fundus: {
     width_px: number
     height_px: number
     lateral_mm_per_px: number
     slice_mm_per_px: number
-  }
+  } | null
   bscan: {
     dim_x_ascans: number
     dim_y_rows: number
@@ -284,7 +311,10 @@ export interface GeometryJson {
     pixel_lateral_mm: number
     pixel_slice_mm: number
   }
-  /** One polyline per B-scan in fundus-pixel space; `z` is the slice index. */
+  /**
+   * One polyline per B-scan in fundus-pixel space; `z` is the slice index.
+   * Empty for a DICOM source.
+   */
   bscan_positions_fundus_px: Array<{
     z: number
     x1: number
@@ -292,18 +322,18 @@ export interface GeometryJson {
     x2: number
     y2: number
   }>
-  /** Bounding box of the OCT scan footprint on the fundus image (fundus px). */
+  /** Bounding box of the OCT scan footprint on the fundus image (fundus px); null for a DICOM source. */
   scan_bbox_fundus_px: {
     x: number
     y: number
     width: number
     height: number
-  }
+  } | null
   /**
    * Fovea estimate — MVP uses {@code volume-center-mvp} (volume center +
    * B-scan/A-scan derivation). Future replacement (true detection) will
    * change the {@code source} string only; consumers should not rely on
-   * the value for medical decision-making.
+   * the value for medical decision-making. Null for a DICOM source.
    */
   fovea_estimate_fundus_px: {
     x: number
@@ -311,7 +341,31 @@ export interface GeometryJson {
     bscan_z: number
     ascan_x: number
     source: string
-  }
+  } | null
+  /** DR-039 — the format the scan arrived in; absent in geometry written before it. */
+  source_format?: ScanSourceFormat
+  /** DR-039 — how a DICOM's PixelSpacing was read; `.e2e` writes "standard". */
+  spacing_order?: SpacingOrder
+  /** DR-039 — the recording device, from the file. */
+  device?: { manufacturer: string | null; model: string | null } | null
+}
+
+/** DR-039 — `e2e` or `dicom`. */
+export type ScanSourceFormat = 'e2e' | 'dicom'
+
+/**
+ * DR-039 — how a DICOM's PixelSpacing pair was read: `standard` [axial,
+ * lateral]; `swapped` [lateral, axial] (a third-party converter's order,
+ * resolved physically for Heidelberg); `standard-assumed` (another vendor,
+ * taken as stored).
+ */
+export type SpacingOrder = 'standard' | 'swapped' | 'standard-assumed'
+
+/** Geometry that can be drawn on a fundus image: an `.e2e` source's. */
+export type FundusGeometryJson = GeometryJson & {
+  fundus: NonNullable<GeometryJson['fundus']>
+  scan_bbox_fundus_px: NonNullable<GeometryJson['scan_bbox_fundus_px']>
+  fovea_estimate_fundus_px: NonNullable<GeometryJson['fovea_estimate_fundus_px']>
 }
 
 const BASE = '/pages/api/v1/retinal-jobs'
@@ -343,17 +397,16 @@ export async function getJob(jobId: number): Promise<RetinalJobDetail> {
 }
 
 /**
- * 2026-06-26 — resolve a stable per-subject sequence number to the job
- * detail via {@code GET /subjects/{label}/retinal-jobs/{seq}}, so the SPA
- * can deep-link the {@code /app/subjects/{label}/jobs/{n}} URL. Returns the
- * same shape as {@link getJob} (artifact URLs context-prefixed).
+ * 2026-10-09 — the job at its canonical address,
+ * {@code GET /subjects/{label}/retinal-jobs/{jobId}}: 404 unless the job is
+ * filed to a visit of that subject. Same shape as {@link getJob}.
  */
-export async function getJobBySubjectSeq(
+export async function getJobBySubject(
   subjectLabel: string,
-  seq: number,
+  jobId: number,
 ): Promise<RetinalJobDetail> {
   const dto = await apiGet<RetinalJobDetail>(
-    `/pages/api/v1/subjects/${encodeURIComponent(subjectLabel)}/retinal-jobs/${seq}`,
+    `/pages/api/v1/subjects/${encodeURIComponent(subjectLabel)}/retinal-jobs/${jobId}`,
   )
   return {
     ...dto,
@@ -683,11 +736,15 @@ export interface RetinalJobRerunAsResponse {
   jobId: number
   task: string
   status: string
+  /** 2026-10-09 — the new job's subject, for its canonical address; absent when it has no visit. */
+  subjectLabel?: string
 }
 
 export interface RetinalJobRerunAsConflict {
   message: string
   existingJobId: number
+  /** 2026-10-09 — the existing job's subject, for its canonical address; absent when it has no visit. */
+  subjectLabel?: string
 }
 
 export function rerunRetinalJobAs(

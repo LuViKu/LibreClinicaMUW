@@ -120,7 +120,7 @@ class SecurityConfigInternetFacingTest {
             base(http, true, false);
             http.addFilterBefore(
                     new InternetFacingPathBlockFilter(SecurityConfig.internetFacingDeniedPaths(false)),
-                    org.springframework.security.web.access.channel.ChannelProcessingFilter.class);
+                    SecurityConfig.RATE_LIMIT_ANCHOR);
             return http.build();
         }
     }
@@ -146,7 +146,7 @@ class SecurityConfigInternetFacingTest {
             base(http, true, true);
             http.addFilterBefore(
                     new InternetFacingPathBlockFilter(SecurityConfig.internetFacingDeniedPaths(true)),
-                    org.springframework.security.web.access.channel.ChannelProcessingFilter.class);
+                    SecurityConfig.RATE_LIMIT_ANCHOR);
             return http.build();
         }
     }

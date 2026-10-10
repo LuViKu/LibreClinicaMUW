@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -25,7 +27,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -168,7 +169,7 @@ class RetinalBlindingEndpointDatabaseIT extends AbstractApiControllerDatabaseIT 
                 .thenReturn(java.util.Set.of(studyId));
         RemoteRetinalInferenceClient remote = Mockito.mock(RemoteRetinalInferenceClient.class);
         Mockito.when(remote.isConfigured()).thenReturn(false);
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new RetinalResultsApiController(
                         DATA_SOURCE, filter, Mockito.mock(RetinalArtifactStorageService.class),
                         new StudySubjectFinder(DATA_SOURCE), remote,

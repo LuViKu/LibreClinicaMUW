@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -37,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableResponse;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * DataTables.net server-side JSON endpoint for the admin "List
@@ -160,7 +161,7 @@ public class ListSubjectDataServlet extends SecureController {
 
         response.setContentType("application/json;charset=UTF-8");
         try (OutputStream out = response.getOutputStream()) {
-            new ObjectMapper().writeValue(out, payload);
+            Json.mapper().writeValue(out, payload);
         }
     }
 

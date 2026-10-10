@@ -34,7 +34,7 @@ import org.junit.jupiter.api.DynamicNode;
 import org.junit.jupiter.api.DynamicTest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * The endpoint matrix: one {@link CrossSiteIsolationSupport.Case} per
@@ -131,7 +131,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
 
     /* ---------------------------------------------------------------------- */
 
-    private static MockHttpServletRequestBuilder rethrow(Callable<MockHttpServletRequestBuilder> body) {
+    private static AbstractMockHttpServletRequestBuilder<?> rethrow(Callable<AbstractMockHttpServletRequestBuilder<?>> body) {
         try {
             return body.call();
         } catch (Exception e) {
@@ -164,7 +164,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
     }
 
-    private static MockHttpServletRequestBuilder bindNeutral(String i, Fx target, Fx itemOwner) {
+    private static AbstractMockHttpServletRequestBuilder<?> bindNeutral(String i, Fx target, Fx itemOwner) {
         return rethrow(() -> {
             int item = itemOwner == null ? neutralUnboundItem() : itemOwner.ingestUnbound;
             return json(post(i + item + "/bind"), "{\"studySubjectId\":" + target.ss + ",\"studyEventId\":"
@@ -270,7 +270,10 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     private static void retinal() {
         String r = V1 + "/retinal-jobs/";
         c("RetinalResultsApiController#getJob", f -> get(r + f.job));
-        c("RetinalResultsApiController#getJobBySubjectSeq", f -> get(V1 + "/subjects/" + f.label + "/retinal-jobs/1"));
+        c("RetinalResultsApiController#getJobBySubject", f -> get(V1 + "/subjects/" + f.label + "/retinal-jobs/" + f.job));
+        c("RetinalResultsApiController#getJobBySubject|foreign-job", f -> get(V1 + "/subjects/" + f.label + "/retinal-jobs/" + f.job))
+                .mixed((own, foreign) -> get(V1 + "/subjects/" + own.label + "/retinal-jobs/" + foreign.job))
+                .note("the caller's own subject in the path, another site's job id");
         c("RetinalResultsApiController#listByEventCrf", f -> get(V1 + "/event-crfs/" + f.eventCrf + "/retinal-jobs")).list()
                 .ownContains(f -> "\"jobId\":" + f.job);
         c("RetinalResultsApiController#listByStudySubject", f -> get(V1 + "/study-subjects/" + f.ss + "/retinal-jobs")).list()
@@ -347,6 +350,9 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
                         + ",\"eventCrfId\":" + f.eventCrf + "}")))
                 .write().ownOk(x -> x.ok() && !x.body.contains("\"bound\":[]"))
                 .alsoRefused(x -> x.ok() && x.body.contains("\"bound\":[]"));
+        c("IngestInboxApiController#startAnalysis", f -> json(post(i + f.ingestOct + "/analyses"),
+                "{\"task\":\"fluid\"}")).write()
+                .ownOk(x -> x.status == 202 && x.body.contains("\"jobId\""));
         c("IngestInboxApiController#unbind", f -> json(post(i + f.ingestBound + "/unbind"), "{\"dismiss\":false}")).write();
         c("IngestInboxApiController#dismiss", f -> json(post(i + f.ingestUnbound + "/dismiss"), "{\"reason\":\"x\"}")).write();
         c("IngestInboxApiController#restore", f -> post(i + f.ingestDismissed + "/restore")).write();
@@ -588,11 +594,11 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     /** Audit rows the iso users wrote while being refused name the foreign label they typed; they are not site data. */
     static String withoutAuditOfTheTestUsers(String body) {
         try {
-            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
-            com.fasterxml.jackson.databind.JsonNode events = root.get("events");
+            tools.jackson.databind.JsonNode root = new tools.jackson.databind.ObjectMapper().readTree(body);
+            tools.jackson.databind.JsonNode events = root.get("events");
             if (events == null || !events.isArray()) return body;
-            com.fasterxml.jackson.databind.node.ArrayNode kept = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();
-            for (com.fasterxml.jackson.databind.JsonNode e : events) {
+            tools.jackson.databind.node.ArrayNode kept = new tools.jackson.databind.ObjectMapper().createArrayNode();
+            for (tools.jackson.databind.JsonNode e : events) {
                 String actor = e.path("actor").asText("");
                 if (!actor.startsWith("iso_")) kept.add(e);
             }
@@ -686,7 +692,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
         Fx foreign = k.write ? newSet(other) : shared(other);
         if (k.exportOwned) adopt(foreign, userId(user(Who.INV, other)));
-        MockHttpServletRequestBuilder req = k.mixed != null ? k.mixed.apply(own, foreign) : k.req.apply(foreign);
+        AbstractMockHttpServletRequestBuilder<?> req = k.mixed != null ? k.mixed.apply(own, foreign) : k.req.apply(foreign);
         Map<String, String> before = snapshot();
         Resp r = call(req, session);
         Map<String, String> after = snapshot();

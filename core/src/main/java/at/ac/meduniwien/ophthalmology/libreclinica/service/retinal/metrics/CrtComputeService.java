@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -24,8 +26,9 @@ import java.util.Map;
 import java.util.Optional;
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.PixelGeometry;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactKey;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 
 /**
@@ -89,7 +93,7 @@ public class CrtComputeService {
     private final DataSource dataSource;
     private final RetinalArtifactStorageService artifactStorage;
     private final CrtComputer crtComputer;
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = Json.mapper();
 
     @Autowired
     public CrtComputeService(@Qualifier("dataSource") DataSource dataSource,
@@ -270,7 +274,7 @@ public class CrtComputeService {
      *                 "pixel_lateral_mm": ..., "pixel_slice_mm": ...}}</pre>
      */
     private PixelGeometry loadGeometry(JobRef job) {
-        String e2eUuid = e2eUuidFromPath(job.e2ePath);
+        String e2eUuid = RetinalArtifactKey.of(job.e2ePath);
         if (e2eUuid == null) {
             throw new MetricComputationException(
                     "Job " + job.jobId + " has no e2e_path; cannot resolve geometry.json");
@@ -291,28 +295,16 @@ public class CrtComputeService {
             JsonNode root = jsonMapper.readTree(geom.toFile());
             JsonNode b = root.path("bscan");
             return new PixelGeometry(
-                    b.path("pixel_axial_mm").asDouble(),
-                    b.path("pixel_lateral_mm").asDouble(),
-                    b.path("pixel_slice_mm").asDouble(),
-                    b.path("dim_z_bscans").asInt(),
-                    b.path("dim_y_rows").asInt(),
-                    b.path("dim_x_ascans").asInt());
-        } catch (IOException ioEx) {
+                    b.path("pixel_axial_mm").asDouble(0.0),
+                    b.path("pixel_lateral_mm").asDouble(0.0),
+                    b.path("pixel_slice_mm").asDouble(0.0),
+                    b.path("dim_z_bscans").asInt(0),
+                    b.path("dim_y_rows").asInt(0),
+                    b.path("dim_x_ascans").asInt(0));
+        } catch (JacksonException ioEx) {
             throw new MetricComputationException(
                     "Failed to parse geometry.json for job " + job.jobId + ": " + ioEx.getMessage(), ioEx);
         }
-    }
-
-    /** Mirror of {@code RetinalResultsApiController.e2eUuidFromPath}.
-     *  Kept local so this service can run without pulling the
-     *  web-module controller as a dependency. */
-    private static String e2eUuidFromPath(String e2ePath) {
-        if (e2ePath == null) return null;
-        String base = Paths.get(e2ePath).getFileName().toString();
-        if (base.toLowerCase().endsWith(".e2e")) {
-            base = base.substring(0, base.length() - 4);
-        }
-        return base;
     }
 
     /**

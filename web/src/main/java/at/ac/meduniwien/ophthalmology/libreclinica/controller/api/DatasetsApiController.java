@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 import java.io.File;
@@ -59,7 +61,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetFilterDAO;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -1409,17 +1410,21 @@ public class DatasetsApiController {
      * wire is ever executed as a stored SQL string. An edit replaces the whole
      * set — the wizard has no notion of editing one row.
      */
+    /** The JSON stored in {@code filter} for one wizard filter row. */
+    static String filterJson(DatasetFilterDto f) {
+        return Json.mapper().writeValueAsString(f);
+    }
+
     private void persistFilters(int datasetId, List<DatasetFilterDto> filters, UserAccountBean owner) {
         try {
             List<DatasetFilterDAO.PersistableFilter> rows = new ArrayList<>();
             if (filters != null) {
-                ObjectMapper mapper = new ObjectMapper();
                 for (DatasetFilterDto f : filters) {
                     if (f == null || f.itemOid() == null || f.operator() == null) continue;
                     rows.add(new DatasetFilterDAO.PersistableFilter(
                             f.itemOid() + " " + f.operator(),
                             "",
-                            mapper.writeValueAsString(f)));
+                            filterJson(f)));
                 }
             }
             new DatasetFilterDAO(dataSource).replaceAll(datasetId, owner, rows);

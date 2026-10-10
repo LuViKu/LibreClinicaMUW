@@ -194,6 +194,7 @@ docker run -d --name "$APP_NAME" --network "$NET_NAME" \
 # Liquibase runs during context startup; wait for the log to settle rather than
 # for the health check, which also waits on the whole web application.
 migrated=0
+LIQUIBASE_FAILURE='liquibase\.exception|LiquibaseException|SEVERE.*[Ll]iquibase|Migration failed'
 for _ in $(seq 1 150); do
   logs="$(docker logs "$APP_NAME" 2>&1)"
   # grep on the variable rather than through a pipe: `grep -q` exits at the
@@ -204,9 +205,13 @@ for _ in $(seq 1 150); do
   if grep -qiE 'Successfully released change log lock|Database is up to date' <<<"$logs"; then
     migrated=1
   fi
-  if grep -qiE 'liquibase.*(exception|failed)|Migration failed' <<<"$logs"; then
+  # Match real errors only. Liquibase 4 logs every checksum rewrite at INFO
+  # with the changeset's file name, and several of those contain "failed"
+  # (lc-muw-2026-06-10-audit-event-type-operation-failed.xml), so a loose
+  # "liquibase.*failed" stopped the dry run on its first INFO line.
+  if grep -qiE "$LIQUIBASE_FAILURE" <<<"$logs"; then
     bad "Liquibase reported a failure:"
-    grep -iE 'liquibase.*(exception|failed)|Migration failed' <<<"$logs" | tail -5
+    grep -iE "$LIQUIBASE_FAILURE" <<<"$logs" | tail -5
     exit 1
   fi
   [ "$migrated" = "1" ] && break

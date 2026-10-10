@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
@@ -29,7 +31,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * {@code GET /api/v1/admin/studies}: every study with its sites nested,
@@ -85,7 +86,7 @@ class StudiesAdminApiControllerDatabaseIT extends AbstractApiControllerDatabaseI
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new StudiesAdminApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new StudiesAdminApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -19,9 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,7 +116,7 @@ public class RemidioDashboardClient {
 
     private final Settings settings;
     private final Transport transport;
-    private final ObjectMapper json = new ObjectMapper();
+    private final ObjectMapper json = Json.mapper();
     private volatile String bearer;
 
     public RemidioDashboardClient() {
@@ -288,7 +291,7 @@ public class RemidioDashboardClient {
             throw new RemidioException(RemidioException.Reason.UNAUTHORIZED, r.status(), null,
                     "the Remidio account login was refused (HTTP " + r.status() + ")");
         }
-        String token = dataOf(r, "/api/user/loginUser").asText(null);
+        String token = dataOf(r, "/api/user/loginUser").asString(null);
         if (token == null || token.isBlank()) {
             throw new RemidioException(RemidioException.Reason.MALFORMED, r.status(), null,
                     "the Remidio login answered without a token");
@@ -328,7 +331,7 @@ public class RemidioDashboardClient {
         JsonNode root;
         try {
             root = r.body() == null || r.body().isBlank() ? null : json.readTree(r.body());
-        } catch (IOException notJson) {
+        } catch (JacksonException notJson) {
             root = null;
         }
         String code = root == null ? null : text(root.path("status"), "statusCode");
@@ -349,7 +352,7 @@ public class RemidioDashboardClient {
     private static String text(JsonNode n, String field) {
         JsonNode v = n == null ? null : n.get(field);
         if (v == null || v.isNull()) return null;
-        String s = v.asText().trim();
+        String s = Json.text(v).trim();
         return s.isEmpty() ? null : s;
     }
 

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -23,7 +25,7 @@ import java.util.Set;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.util.UriUtils;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyAccessLog.Action;
@@ -124,7 +126,7 @@ public class LegacyServletTelemetryFilter implements Filter {
     /** Path prefix of the administrators' alias; see {@link LegacyAliasServlet}. */
     static final String ALIAS_PREFIX = "/legacy/";
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
 
     private final LegacyServletDeprecationCatalog catalog;
     private final Set<String> closedPaths;

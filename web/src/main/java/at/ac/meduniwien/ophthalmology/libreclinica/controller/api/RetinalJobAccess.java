@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -27,9 +29,10 @@ import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactKey;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +56,7 @@ final class RetinalJobAccess {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetinalJobAccess.class);
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
 
     /**
      * Companion files the preprocess sidecar writes per e2eUuid. Order is
@@ -114,6 +117,13 @@ final class RetinalJobAccess {
          * {@link AiArmPolicy#armForEvent} needs both to find the arm.
          */
         Integer studyEventId;
+        /** Why the job stopped, when it did; null otherwise. */
+        String statusMessage;
+        /* DR-039 — what the preprocess sidecar reported about the scan; null before it ran. */
+        String sourceFormat;
+        String deviceManufacturer;
+        String deviceModel;
+        String spacingOrder;
     }
 
     /**
@@ -128,7 +138,8 @@ final class RetinalJobAccess {
     JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
-                + "       j.scan_index, j.study_event_id, "
+                + "       j.scan_index, j.study_event_id, j.status_message, "
+                + "       j.source_format, j.device_manufacturer, j.device_model, j.spacing_order, "
                 + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
                 + "       r.bscan_masks_dir, r.confidence, ss.study_id "
                 + "  FROM retinal_inference_job j "
@@ -162,9 +173,127 @@ final class RetinalJobAccess {
                 row.scanIndex = rs.getInt("scan_index");
                 int sev = rs.getInt("study_event_id");
                 row.studyEventId = rs.wasNull() ? null : sev;
+                row.statusMessage = rs.getString("status_message");
+                row.sourceFormat = rs.getString("source_format");
+                row.deviceManufacturer = rs.getString("device_manufacturer");
+                row.deviceModel = rs.getString("device_model");
+                row.spacingOrder = rs.getString("spacing_order");
                 return row;
             }
         }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Where a job lives                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * A job's canonical address in the SPA is {@code /subjects/{label}/jobs/{jobId}};
+     * this is the subject part. A job has one only when it is filed to a visit.
+     */
+    record JobAddress(String subjectLabel) {}
+
+    /** The subjects of these jobs; a job with no visit is absent. */
+    static Map<Long, JobAddress> addressesOf(Connection c, java.util.Collection<Long> jobIds) throws SQLException {
+        Map<Long, JobAddress> out = new java.util.HashMap<>();
+        if (jobIds == null || jobIds.isEmpty()) return out;
+        String sql = "SELECT j.job_id, ss.label FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "  JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                + " WHERE j.job_id = ANY(?)";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setArray(1, c.createArrayOf("bigint", jobIds.toArray(new Long[0])));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.put(rs.getLong(1), new JobAddress(rs.getString(2)));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Adds the job's {@code subjectLabel} to a response body, so the SPA can
+     * go to its canonical address; nothing when
+     * the job has no visit or the lookup fails (the SPA then falls back to
+     * {@code /retinal-jobs/{id}}, which redirects).
+     */
+    static void putAddress(DataSource dataSource, long jobId, Map<String, Object> body) {
+        try (Connection c = dataSource.getConnection()) {
+            JobAddress a = addressOf(c, jobId);
+            if (a == null) return;
+            body.put("subjectLabel", a.subjectLabel());
+        } catch (SQLException e) {
+            LOG.warn("address lookup failed for job {}: {}", jobId, e.getMessage());
+        }
+    }
+
+    /** {@link #addressesOf} for one job; null when it has no visit. */
+    static JobAddress addressOf(Connection c, long jobId) throws SQLException {
+        return addressesOf(c, List.of(jobId)).get(jobId);
+    }
+
+    /**
+     * The visit a job is filed to: its id, the definition's name (with the
+     * occurrence for a repeating one) and its date, ISO yyyy-MM-dd.
+     */
+    record JobVisit(int studyEventId, String name, String date) {}
+
+    static JobVisit visitOf(Connection c, long jobId) throws SQLException {
+        String sql = "SELECT se.study_event_id, sed.name, sed.repeating, se.sample_ordinal, se.date_start "
+                + "  FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "  JOIN study_event_definition sed ON sed.study_event_definition_id = se.study_event_definition_id "
+                + " WHERE j.job_id = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                String name = rs.getString("name");
+                if (rs.getBoolean("repeating")) name = name + " #" + rs.getInt("sample_ordinal");
+                Timestamp start = rs.getTimestamp("date_start");
+                return new JobVisit(rs.getInt("study_event_id"), name,
+                        start == null ? null : start.toLocalDateTime().toLocalDate().toString());
+            }
+        }
+    }
+
+    /** One analysis of the same scan, for the job page's switcher. */
+    record SiblingJob(long jobId, String task, String status) {}
+
+    /**
+     * The analyses of the scan this job read, itself included, oldest first:
+     * the jobs on the same ingest item, and for rows from before jobs had one,
+     * the same digest and scan index. Cancelled ones are left out (the job
+     * itself excepted). Only jobs filed to a visit of the same subject count,
+     * so the list shows nothing the job's own visibility does not already
+     * cover; a job with no visit has no siblings.
+     */
+    static List<SiblingJob> siblingsOf(Connection c, long jobId) throws SQLException {
+        String sql = "WITH me AS ("
+                + "  SELECT j.job_id, j.ingest_item_id, j.e2e_sha256, j.scan_index, se.study_subject_id "
+                + "    FROM retinal_inference_job j "
+                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "   WHERE j.job_id = ?) "
+                + "SELECT o.job_id, o.task, o.status "
+                + "  FROM me JOIN retinal_inference_job o "
+                + "    ON (o.job_id = me.job_id OR (o.status <> 'cancelled' AND ("
+                + "          o.ingest_item_id = me.ingest_item_id "
+                + "       OR ((me.ingest_item_id IS NULL OR o.ingest_item_id IS NULL) "
+                + "           AND o.e2e_sha256 = me.e2e_sha256 AND o.scan_index = me.scan_index)))) "
+                + "  LEFT JOIN event_crf oec ON oec.event_crf_id = o.event_crf_id "
+                + "  JOIN study_event ose ON ose.study_event_id = COALESCE(oec.study_event_id, o.study_event_id) "
+                + " WHERE ose.study_subject_id = me.study_subject_id "
+                + " ORDER BY o.job_id";
+        List<SiblingJob> out = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(new SiblingJob(rs.getLong(1), rs.getString(2), rs.getString(3)));
+            }
+        }
+        return out;
     }
 
     /**
@@ -211,14 +340,33 @@ final class RetinalJobAccess {
     /* The files a job produced                                            */
     /* ------------------------------------------------------------------ */
 
-    /** Trim a single trailing ".e2e" — match what the upload controller saves. */
-    static String e2eUuidFromPath(String e2ePath) {
-        if (e2ePath == null) return null;
-        String base = Paths.get(e2ePath).getFileName().toString();
-        if (base.toLowerCase().endsWith(".e2e")) {
-            base = base.substring(0, base.length() - 4);
+    /**
+     * What the operator is told when a job's scan file is gone. Uploads from
+     * before 2026-09-24 lived in an anonymous Docker volume that restarts
+     * emptied, so an old job can still be listed while its .e2e no longer
+     * exists; re-running it can never succeed.
+     */
+    static final String SCAN_FILE_MISSING =
+            "The original scan file is no longer on the server, so this scan cannot be "
+                    + "analysed again. Upload the scan again and assign it to the visit.";
+
+    /** True when a job's scan file cannot be read: no path, a malformed one, or no file there. */
+    static boolean scanFileMissing(String e2ePath) {
+        if (e2ePath == null || e2ePath.isBlank()) return true;
+        try {
+            return !Files.isRegularFile(Paths.get(e2ePath));
+        } catch (java.nio.file.InvalidPathException e) {
+            return true;
         }
-        return base;
+    }
+
+    /**
+     * The scan's companion-directory key (DR-039): the name without
+     * {@code .e2e} for an {@code .e2e}, as always; a path-derived UUID for a
+     * DICOM OCT volume. See {@link RetinalArtifactKey}.
+     */
+    static String artifactKey(String storedPath) {
+        return RetinalArtifactKey.of(storedPath);
     }
 
     List<String> listArtifactNames(String dir) {

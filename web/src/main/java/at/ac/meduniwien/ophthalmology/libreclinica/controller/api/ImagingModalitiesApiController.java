@@ -72,8 +72,13 @@ public class ImagingModalitiesApiController {
     private static final Set<String> ROLES =
             Set.of("performed", "not_performed_reason", "initials");
 
-    /** What a file may be, for {@code kinds_accepted}. */
-    private static final Set<String> KINDS = Set.of("e2e", "dicom", "image", "other");
+    /**
+     * What a file may be, for {@code kinds_accepted} — plus DR-039's
+     * {@code oct} marker: OCT volumes filed under this modality are analysed,
+     * so the imaging plan may set inference tasks on it.
+     */
+    private static final Set<String> KINDS = Set.of("e2e", "dicom", "image", "other",
+            VisitImagingPlan.OCT_MARKER);
 
     private static final Set<String> LATERALITIES = Set.of("OU", "OD", "OS");
 
@@ -568,11 +573,18 @@ public class ImagingModalitiesApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "labelDe and labelEn are required."));
         }
-        for (String k : splitKinds(b.kindsAccepted())) {
+        List<String> kinds = splitKinds(b.kindsAccepted());
+        for (String k : kinds) {
             if (!KINDS.contains(k)) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "message", "kindsAccepted must be a comma-separated subset of " + KINDS));
             }
+        }
+        // DR-039 — the OCT marker says how the volumes that arrive here are
+        // treated; it needs a kind they can arrive as.
+        if (kinds.contains(VisitImagingPlan.OCT_MARKER) && !kinds.contains("e2e") && !kinds.contains("dicom")) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "the oct marker needs e2e or dicom among kindsAccepted"));
         }
         return null;
     }

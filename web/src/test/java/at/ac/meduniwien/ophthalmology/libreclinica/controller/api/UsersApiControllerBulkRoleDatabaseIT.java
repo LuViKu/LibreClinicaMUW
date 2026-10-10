@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,7 +36,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Multi-role (M1 backend) — Testcontainers IT for the additive
@@ -112,13 +113,13 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
                 securityManager,
                 Mockito.mock(AuthoritiesDao.class),
                 new SsoProperties());
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
 
     private MockMvc meMockMvc() {
-        return MockMvcBuilders.standaloneSetup(new MeApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new MeApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

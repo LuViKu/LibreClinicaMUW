@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -25,10 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -106,7 +107,7 @@ class UsersApiControllerSiteLabelDatabaseIT extends AbstractApiControllerDatabas
                 Mockito.mock(SecurityManager.class),
                 Mockito.mock(AuthoritiesDao.class),
                 new SsoProperties());
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -155,8 +156,8 @@ class UsersApiControllerSiteLabelDatabaseIT extends AbstractApiControllerDatabas
         assertNotNull(unbound, "users: " + users);
 
         assertEquals(SITE_NAME, site.path("siteLabel").asText(null));
-        assertNull(parent.path("siteLabel").textValue(), "parent: " + parent);
-        assertNull(unbound.path("siteLabel").textValue(), "unbound: " + unbound);
+        assertNull(parent.path("siteLabel").stringValue(null), "parent: " + parent);
+        assertNull(unbound.path("siteLabel").stringValue(null), "unbound: " + unbound);
     }
 
     @Test
@@ -169,7 +170,7 @@ class UsersApiControllerSiteLabelDatabaseIT extends AbstractApiControllerDatabas
         assertNotNull(parent, "roles: " + roles);
         assertNotNull(site, "roles: " + roles);
 
-        assertNull(parent.path("siteLabel").textValue(), "parent: " + parent);
+        assertNull(parent.path("siteLabel").stringValue(null), "parent: " + parent);
         assertEquals(SITE_NAME, site.path("siteLabel").asText(null));
     }
 }

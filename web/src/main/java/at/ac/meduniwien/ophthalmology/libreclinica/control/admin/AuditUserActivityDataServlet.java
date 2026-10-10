@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -28,7 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionExc
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableRequest;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.datatable.DataTableResponse;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * DataTables.net server-side-processing JSON endpoint for the
@@ -58,7 +60,7 @@ public class AuditUserActivityDataServlet extends SecureController {
             "userName", "loginAttemptDate", "loginStatus", "details");
 
     private AuditUserLoginDao auditUserLoginDao;
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = Json.mapper();
     private Locale locale;
 
     @Override

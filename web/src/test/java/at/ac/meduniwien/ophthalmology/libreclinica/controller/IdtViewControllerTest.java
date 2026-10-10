@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -39,7 +40,7 @@ class IdtViewControllerTest {
 
     @Test
     void theFlagWritingPostIsGone() throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new IdtViewController()).build();
+        MockMvc mvc = ProductionMvc.standalone(new IdtViewController()).build();
 
         int status = mvc.perform(MockMvcRequestBuilders.post("/auth/api/itemdata/")
                 .contentType(MediaType.APPLICATION_JSON).content("[]")).andReturn().getResponse().getStatus();

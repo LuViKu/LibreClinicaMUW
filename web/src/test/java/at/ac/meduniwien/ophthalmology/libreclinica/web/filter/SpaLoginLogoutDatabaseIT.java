@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.filter;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -69,10 +71,9 @@ import org.springframework.security.web.session.ConcurrentSessionFilter;
 import org.springframework.security.web.session.HttpSessionDestroyedEvent;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.support.GenericWebApplicationContext;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -500,7 +501,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         AuthApiController api = new AuthApiController(
                 beans.getBean("openClinicaLogoutHandler", OpenClinicaSecurityContextLogoutHandler.class),
                 beans.getBean("crfLocker", CRFLocker.class));
-        return MockMvcBuilders.standaloneSetup(api).build()
+        return ProductionMvc.standalone(api).build()
                 .perform(request(method, "/api/v1/auth/logout").session(session));
     }
 
@@ -513,7 +514,7 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     private static ResultActions me(MockHttpSession session) throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MeApiController(DATA_SOURCE)).build();
+        MockMvc mvc = ProductionMvc.standalone(new MeApiController(DATA_SOURCE)).build();
         return mvc.perform(get("/api/v1/me").session(session)).andExpect(status().isOk());
     }
 

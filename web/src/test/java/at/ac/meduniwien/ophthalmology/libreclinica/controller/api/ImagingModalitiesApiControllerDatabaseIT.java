@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -21,7 +23,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -77,7 +78,7 @@ class ImagingModalitiesApiControllerDatabaseIT extends AbstractApiControllerData
     }
 
     private MockMvc mockMvc() {
-        return MockMvcBuilders.standaloneSetup(new ImagingModalitiesApiController(DATA_SOURCE))
+        return ProductionMvc.standalone(new ImagingModalitiesApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -285,6 +286,30 @@ class ImagingModalitiesApiControllerDatabaseIT extends AbstractApiControllerData
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"role\":\"performed\",\"laterality\":\"XX\",\"itemOid\":\""
                         + REAL_ITEM_OID + "\"}")
+                .session(dm()))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** DR-039 — an administrator marks a modality as an OCT one. */
+    @Test
+    void anAdministratorCanMarkAModalityAsAnOctOne() throws Exception {
+        int id = createModality("IT_OCT");
+        mockMvc().perform(put(BASE + "/" + id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"IT_OCT\",\"labelDe\":\"OCT\",\"labelEn\":\"OCT\","
+                                + "\"device\":\"cirrus\",\"kindsAccepted\":\"dicom, OCT\","
+                                + "\"lateralityRequired\":true,\"ordinal\":5}")
+                        .session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kindsAccepted").value("dicom,oct"));
+    }
+
+    @Test
+    void theOctMarkerNeedsAKindAVolumeCanArriveAs() throws Exception {
+        mockMvc().perform(post(BASE)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"IT_OCTONLY\",\"labelDe\":\"x\",\"labelEn\":\"x\","
+                        + "\"kindsAccepted\":\"image,oct\"}")
                 .session(dm()))
                 .andExpect(status().isBadRequest());
     }

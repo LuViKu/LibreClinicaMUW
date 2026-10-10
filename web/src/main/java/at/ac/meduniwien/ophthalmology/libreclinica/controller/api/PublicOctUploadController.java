@@ -774,9 +774,7 @@ public class PublicOctUploadController {
                                             Integer eventCrfId,
                                             boolean dispatchToRemote) {
         String fileNameForLog = savedPath.getFileName().toString();
-        String e2eUuid = fileNameForLog.toLowerCase(Locale.ROOT).endsWith(".e2e")
-                ? fileNameForLog.substring(0, fileNameForLog.length() - 4)
-                : fileNameForLog;
+        String e2eUuid = RetinalJobAccess.artifactKey(savedPath.toString());
         long primaryJobId = jobInfos.isEmpty()
                 ? -1L
                 : ((Number) jobInfos.get(0).get("jobId")).longValue();

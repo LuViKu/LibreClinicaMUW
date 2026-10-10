@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,8 +36,8 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterAll;
@@ -48,7 +50,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
@@ -92,6 +93,8 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final AtomicReference<String> STUB_PATH = new AtomicReference<>();
     private static volatile int stubStatus = 200;
     private static volatile String stubSop = "1.2.826.0.1.3680043.8.498.1";
+    /** DR-039 — the stub describes an OCT volume (Spectralis OPT, 49 frames) instead of a Clarus photo. */
+    private static volatile boolean stubOct = false;
 
     @BeforeAll
     static void overrideConfigAndStartStub() throws Exception {
@@ -114,11 +117,15 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 String preview = path.replaceAll("\\.dcm$", "") + ".png";
                 Files.write(Path.of(preview), PNG);
                 out = ("{\"sopInstanceUid\":\"" + stubSop + "\","
-                        + "\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.1\","
+                        + (stubOct
+                            ? "\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.4\",\"modality\":\"OPT\","
+                                + "\"numberOfFrames\":49,\"octVolume\":true,"
+                                + "\"manufacturer\":\"Heidelberg Engineering\",\"manufacturerModelName\":\"SPECTRALIS\","
+                            : "\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.1\",\"modality\":\"OP\","
+                                + "\"manufacturer\":\"Carl Zeiss Meditec\",\"manufacturerModelName\":\"CLARUS 700\",")
                         + "\"studyInstanceUid\":\"1.2.3\",\"seriesInstanceUid\":\"1.2.3.4\","
-                        + "\"modality\":\"OP\",\"studyDate\":\"2021-01-04\",\"acquisitionDate\":\"2021-01-04\","
-                        + "\"laterality\":\"OD\",\"manufacturer\":\"Carl Zeiss Meditec\","
-                        + "\"manufacturerModelName\":\"CLARUS 700\","
+                        + "\"studyDate\":\"2021-01-04\",\"acquisitionDate\":\"2021-01-04\","
+                        + "\"laterality\":\"OD\","
                         + "\"previewPngPath\":\"" + preview + "\",\"identityRemoved\":true,\"changedTags\":4}")
                         .getBytes(StandardCharsets.UTF_8);
             }
@@ -157,6 +164,7 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     @BeforeEach
     void resetStub() {
         stubStatus = 200;
+        stubOct = false;
         stubSop = "1.2.826.0.1.3680043.8.498." + System.nanoTime();
         STUB_PSEUDONYM.set(null);
         STUB_PATH.set(null);
@@ -170,6 +178,9 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                     + "(SELECT ingest_item_id FROM ingest_item WHERE source_kind IN ('upload', 'portal-oct'))");
             exec(c, "DELETE FROM ingest_item WHERE source_kind IN ('upload', 'portal-oct')");
             exec(c, "DELETE FROM study_setting WHERE setting_key LIKE 'ingest.%'");
+            exec(c, "DELETE FROM event_definition_imaging WHERE imaging_modality_id IN "
+                    + "(SELECT imaging_modality_id FROM imaging_modality WHERE code = 'UPLOAD_OCT_IT')");
+            exec(c, "DELETE FROM imaging_modality WHERE code = 'UPLOAD_OCT_IT'");
         }
     }
 
@@ -194,7 +205,13 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 new PublicOctUploadController(DATA_SOURCE, finder),
                 new PublicImageUploadController(DATA_SOURCE, finder),
                 new IngestUploadService(DATA_SOURCE, new IngestArtifactStore(), describe));
-        return MockMvcBuilders.standaloneSetup(c)
+        // DR-039 — the dispatch wired as in the app; no GPU host, so started jobs land queued.
+        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient remote =
+                org.mockito.Mockito.mock(
+                        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient.class);
+        org.mockito.Mockito.when(remote.isConfigured()).thenReturn(false);
+        c.setRetinalDispatch(remote, org.mockito.Mockito.mock(RetinalInferenceApiController.class));
+        return ProductionMvc.standalone(c)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -312,8 +329,13 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         long id = idOf(r);
         try (Connection c = DATA_SOURCE.getConnection();
              ResultSet rs = row(c, id, "sop_instance_uid, modality, deidentified_at, preview_png_path, "
-                     + "content_type, laterality, acquisition_date, device, stored_path")) {
+                     + "content_type, laterality, acquisition_date, device, stored_path, "
+                     + "oct_volume, manufacturer, manufacturer_model")) {
             assertEquals(stubSop, rs.getString("sop_instance_uid"));
+            // DR-039 — classified on arrival: a fundus photograph is not an OCT volume.
+            assertEquals(Boolean.FALSE, rs.getObject("oct_volume"));
+            assertEquals("Carl Zeiss Meditec", rs.getString("manufacturer"));
+            assertEquals("CLARUS 700", rs.getString("manufacturer_model"));
             assertEquals("OP", rs.getString("modality"));
             assertNotNull(rs.getTimestamp("deidentified_at"));
             assertEquals("application/dicom", rs.getString("content_type"));
@@ -583,6 +605,103 @@ class PublicUploadControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
         mockMvc().perform(delete(BASE + "/items/" + id)).andExpect(status().isConflict());
         assertEquals(1, countRows("ingest_item_id = " + id));
+    }
+
+    /* ---------------- DR-039: an OCT volume filed at upload ---------------- */
+
+    /** An OCT modality for the Spectralis on the plan of study_event 3's definition. */
+    private static void octPlanForVisit3(String tasks) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            int sed = LifecycleFixtures.intQuery(
+                    "SELECT study_event_definition_id FROM study_event WHERE study_event_id = 3");
+            int modality = LifecycleFixtures.insertOne(c,
+                    "INSERT INTO imaging_modality (study_id, code, label_de, label_en, device, kinds_accepted, "
+                            + "laterality_required, ordinal, status_id, created_by_user_id) "
+                            + "VALUES (1, 'UPLOAD_OCT_IT', 'OCT', 'OCT', 'spectralis', 'dicom,oct', false, 95, 1, 1) "
+                            + "RETURNING imaging_modality_id");
+            exec(c, "INSERT INTO event_definition_imaging (study_event_definition_id, imaging_modality_id, "
+                    + "requirement, laterality, retinal_tasks, created_by_user_id) VALUES (" + sed + ", "
+                    + modality + ", 'optional', NULL, '" + tasks + "', 1)");
+        }
+    }
+
+    private static String jobsOf(long ingestItemId) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT string_agg(task || ':' || status || ':' || COALESCE(study_event_id::text, '-'), "
+                             + "',' ORDER BY task) FROM retinal_inference_job WHERE ingest_item_id = ?")) {
+            ps.setLong(1, ingestItemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    private long uploadToVisit3(int salt) throws Exception {
+        return idOf(mockMvc().perform(multipart(BASE + "/commit")
+                .file(part("export.dcm", "application/dicom", dicomBytes(salt)))
+                .param("studyEventId", "3")
+                .param("scanDate", "2021-01-04"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("BOUND"))
+                .andReturn());
+    }
+
+    @Test
+    void aDicomOctVolumeUploadedToAVisitStartsThePlansAnalyses() throws Exception {
+        octPlanForVisit3("fluid,ga");
+        stubOct = true;
+        long id = uploadToVisit3(40);
+        assertEquals("fluid:queued:3,ga:queued:3", jobsOf(id), "the plan's tasks, on the scan, at its visit");
+    }
+
+    @Test
+    void aFundusDicomUploadedToAVisitStartsNothing() throws Exception {
+        octPlanForVisit3("fluid");
+        long id = uploadToVisit3(41);
+        assertNull(jobsOf(id));
+    }
+
+    @Test
+    void undoingAnOctUploadCancelsItsAnalysesAndRemovesIt() throws Exception {
+        octPlanForVisit3("fluid,ga");
+        stubOct = true;
+        long id = uploadToVisit3(42);
+        assertEquals("fluid:queued:3,ga:queued:3", jobsOf(id));
+        Path stored;
+        try (Connection c = DATA_SOURCE.getConnection(); ResultSet rs = row(c, id, "stored_path")) {
+            stored = Path.of(rs.getString("stored_path"));
+        }
+
+        mockMvc().perform(delete(BASE + "/items/" + id)).andExpect(status().isNoContent());
+
+        assertNull(jobsOf(id), "nothing had started: the cancelled jobs go with the upload");
+        assertEquals(0, countRows("ingest_item_id = " + id));
+        assertFalse(Files.exists(stored));
+    }
+
+    @Test
+    void undoingAnOctUploadWhoseAnalysisIsRunningKeepsItUnattached() throws Exception {
+        octPlanForVisit3("fluid,ga");
+        stubOct = true;
+        long id = uploadToVisit3(43);
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            exec(c, "UPDATE retinal_inference_job SET status = 'segmenting' "
+                    + " WHERE ingest_item_id = " + id + " AND task = 'fluid'");
+        }
+
+        mockMvc().perform(delete(BASE + "/items/" + id)).andExpect(status().isNoContent());
+
+        assertEquals("fluid:segmenting:-,ga:cancelled:-", jobsOf(id),
+                "the running analysis keeps going, unattached; the queued one is cancelled");
+        try (Connection c = DATA_SOURCE.getConnection();
+             ResultSet rs = row(c, id, "status, bound_study_event_id, stored_path")) {
+            assertEquals("DISMISSED", rs.getString("status"), "out of the visit and out of the queue");
+            rs.getInt("bound_study_event_id");
+            assertTrue(rs.wasNull());
+            assertTrue(Files.exists(Path.of(rs.getString("stored_path"))), "the running job still reads it");
+        }
     }
 
     /* ---------------- per-study gate ---------------- */

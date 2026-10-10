@@ -68,6 +68,7 @@ public class UpdateStudyServlet extends SecureController {
 
     @Override
     public void processRequest() throws Exception {
+        CreateStudyServlet.ensureOptionMaps();
         resetPanel();
         panel.setStudyInfoShown(false);
         panel.setOrderedData(true);

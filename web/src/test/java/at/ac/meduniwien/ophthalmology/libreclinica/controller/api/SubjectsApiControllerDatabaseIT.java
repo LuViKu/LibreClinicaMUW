@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,7 +19,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Phase E.5 #1 — first happy-path IT against a Testcontainers Postgres.
@@ -41,7 +42,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         // out as a ServletException with the real cause, giving us a useful
         // stack trace if the IT regresses. Production wraps via the advice;
         // the wrapping is already pinned by SubjectsApiControllerTest.
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        MockMvc mockMvc = ProductionMvc.standalone(controller).build();
 
         mockMvc.perform(get("/api/v1/subjects").session(authenticatedSession()))
                 .andExpect(status().isOk())
@@ -66,7 +67,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void matchPreflightReturnsEmptyArrayWhenNoMatch() throws Exception {
         SubjectsApiController controller = buildSubjectsController();
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        MockMvc mockMvc = ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 
@@ -100,7 +101,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
 
         SubjectsApiController controller = buildSubjectsController();
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        MockMvc mockMvc = ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 
@@ -137,7 +138,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
 
         SubjectsApiController controller = buildSubjectsController();
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        MockMvc mockMvc = ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 
@@ -173,7 +174,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
 
         SubjectsApiController controller = buildSubjectsController();
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        MockMvc mockMvc = ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 
@@ -257,7 +258,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
 
         SubjectsApiController controller = buildSubjectsController();
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        MockMvc mockMvc = ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 
@@ -298,7 +299,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     @Test
     void matchPreflightReturns400WhenAnyFieldMissing() throws Exception {
         SubjectsApiController controller = buildSubjectsController();
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        MockMvc mockMvc = ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
 

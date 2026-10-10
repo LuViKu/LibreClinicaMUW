@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import javax.sql.DataSource;
 
 import java.util.Locale;
@@ -24,7 +26,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Phase E.4 M13 — base class for `/pages/api/v1/**` controller
@@ -136,7 +137,7 @@ abstract class AbstractApiControllerTest {
      * standaloneSetup would otherwise emit).
      */
     protected final MockMvc mockMvcFor(Object... controllers) {
-        return MockMvcBuilders.standaloneSetup(controllers)
+        return ProductionMvc.standalone(controllers)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -40,8 +42,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationS
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -58,7 +60,6 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * R1.2 — the security settings on the password-policy page: the account
@@ -156,7 +157,7 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
     private MockMvc adminMvc() {
         AdminApiController controller = new AdminApiController(DATA_SOURCE,
                 Mockito.mock(DatabaseChangeLogDao.class), jpa.getBean(ConfigurationDao.class));
-        return MockMvcBuilders.standaloneSetup(controller)
+        return ProductionMvc.standalone(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -374,7 +375,7 @@ class AdminSecuritySettingsDatabaseIT extends AbstractApiControllerDatabaseIT {
     void theSystemAuditLogNamesTheSettingThatChanged() throws Exception {
         save("{\"lockoutEnabled\":false}");
 
-        MockMvc audit = MockMvcBuilders.standaloneSetup(
+        MockMvc audit = ProductionMvc.standalone(
                         new AuditApiController(DATA_SOURCE, new SiteVisibilityFilter(DATA_SOURCE)))
                 .build();
         JsonNode rows = JSON.readTree(audit.perform(get("/api/v1/audit/system").session(sysadmin()))

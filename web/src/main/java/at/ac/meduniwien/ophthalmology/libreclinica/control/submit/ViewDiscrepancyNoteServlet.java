@@ -99,8 +99,17 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
     public static final String ERROR_FLAG = "errorFlag";
     public static final String FROM_BOX = "fromBox";
 
-    public String exceptionName = resexception.getString("no_permission_to_create_discrepancy_note");
-    public String noAccessMessage = respage.getString("you_may_not_create_discrepancy_note") + respage.getString("change_study_contact_sysadmin");
+    // Read at request time, never in a field initialiser: resexception and respage
+    // are static bundles that SecureController.process sets, and they are still
+    // null when this is the first servlet instantiated after a start. The NPE
+    // there made Tomcat mark the servlet unavailable (404 until restart).
+    private String exceptionName() {
+        return resexception.getString("no_permission_to_create_discrepancy_note");
+    }
+
+    private String noAccessMessage() {
+        return respage.getString("you_may_not_create_discrepancy_note") + respage.getString("change_study_contact_sysadmin");
+    }
 
     // locked, so don't
     // allow to enter notes
@@ -123,8 +132,8 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
             return;
         }
 
-        addPageMessage(noAccessMessage);
-        throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName, "1");
+        addPageMessage(noAccessMessage());
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName(), "1");
     }
 
     @Override
@@ -456,8 +465,8 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
             }
 
             if (notessub.getStudyId() != currentStudy.getId() && currentStudy.getId() != parentStudyForNoteSub) {
-                addPageMessage(noAccessMessage);
-                throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName, "1");
+                addPageMessage(noAccessMessage());
+                throw new InsufficientPermissionException(Page.MENU_SERVLET, exceptionName(), "1");
             }
         }
 

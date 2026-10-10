@@ -1,0 +1,36 @@
+# Golden fixtures are byte-exact comparisons; never let git rewrite their line endings.
+web/src/test/resources/golden/** -text
+
+# Files that are executed or parsed inside Linux containers or on Linux hosts
+# must be LF in every checkout. On a Windows checkout with core.autocrlf=true
+# they become CRLF, and then:
+#   - a script with a CRLF shebang fails with "bad interpreter"
+#     (/bin/bash^M), e.g. a cluster cron script;
+#   - retinal-inference/docker-entrypoint.sh crash-loops in its container,
+#     because it is COPYed into the image as-is;
+#   - a CRLF Dockerfile/heredoc breaks RUN lines.
+# The index is already LF for all of these; this only pins the working tree.
+*.sh                      text eol=lf
+*.bash                    text eol=lf
+*.py                      text eol=lf
+*.service                 text eol=lf
+*.timer                   text eol=lf
+*.def                     text eol=lf
+Dockerfile                text eol=lf
+Dockerfile.*              text eol=lf
+*.dockerfile              text eol=lf
+.dockerignore             text eol=lf
+docker-entrypoint*        text eol=lf
+
+# Server config COPYed or bind-mounted into Linux containers.
+deploy/nginx/*.conf                      text eol=lf
+docker/sso/apache-shib/*.conf            text eol=lf
+docker/sso/apache-shib/*.xml             text eol=lf
+
+# Extensionless scripts executed through their shebang.
+tools/git-hooks/pre-commit text eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1                     text eol=crlf
+
+.gitattributes             text eol=lf

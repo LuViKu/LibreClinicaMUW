@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,7 +41,6 @@ import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * A removal or restore that fails part-way changes nothing: the event
@@ -66,7 +67,7 @@ class CascadeRollbackDatabaseIT extends AbstractApiControllerDatabaseIT {
     private MockMvc mockMvc() {
         DataSource ds = failingOnValues(DATA_SOURCE);
         SiteVisibilityFilter visibility = new SiteVisibilityFilter(ds);
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventDefinitionsApiController(ds),
                         new SubjectsApiController(ds, Mockito.mock(SecurityManager.class), visibility),
                         new EventCrfRemovalApiController(ds, visibility))

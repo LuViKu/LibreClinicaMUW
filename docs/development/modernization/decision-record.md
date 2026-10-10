@@ -917,7 +917,7 @@ A static coverage survey (2026-09-30) mapped the 421 JSPs to 97 screens: **31 co
 ## DR-037 — Two support windows set the order of platform upgrades: PostgreSQL 17 now, Spring Boot 4 next
 
 **Date:** 2026-09-30
-**Status:** Accepted for PostgreSQL. Proposed for Spring Boot 4 (a plan, not started).
+**Status:** Accepted for PostgreSQL. Spring Boot 4: accepted and under way — built through stage 2 on `spike/muw-spring-boot-4`, stage 3 (live-stack verification, merge, release) open; see "Outcome of point 2".
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Related:** [DR-018](#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included) (JSP retirement), DR-011 (connection pool, open), the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) §9 (R4), the MIGRATION.md risk register (R9, R10), `docs/operations/postgresql-17-upgrade.md`.
 
@@ -945,9 +945,9 @@ The two are not alike. The database upgrade is operational and bounded: a dump a
 - **CI runs the integration tests twice** until production is on 17.
 - **The framework risk is accepted for now,** with compensating controls, and is tracked as risk R9 until the Boot 4 decision is taken.
 
-**Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started.
+**Reversible** — the database move until the runbook runs in production (the old data directory is kept for rollback); the Boot 4 plan until it is started. The Boot 4 migration is reversible until released: rollback is the previous image.
 
-**Spike result (2026-09-30).** [spring-boot-4-spike-2026-09-30.md](spring-boot-4-spike-2026-09-30.md) built, tested and started the tree on Spring Boot 4.1.1, on branch `spike/muw-spring-boot-4`. That branch is a measurement, not for merging.
+**Spike result (2026-09-30).** [spring-boot-4-spike-2026-09-30.md](spring-boot-4-spike-2026-09-30.md) built, tested and started the tree on Spring Boot 4.1.1, on branch `spike/muw-spring-boot-4`. That branch was a measurement when written; it has since become the migration branch (see "Outcome of point 2").
 
 - **Compile:** 32 errors in 6 files, none of them in the legacy servlets, Jersey or the SPA API.
   - **Where:** Boot bootstrap and `SecurityConfig` (23), the two heritage base DAOs (4), `BatchCRFMigrationController` (3) and one test.
@@ -963,6 +963,14 @@ The two are not alike. The database upgrade is operational and bounded: a dump a
 - **Estimate:** 8–16 developer-days. That covers the compile fixes, a review of 97 `save`/`saveOrUpdate` call sites, the Jackson 2-or-3 choice and verification. DR-018 deletions would save only about 2–4 of those days.
 - **Consequence for timing:** waiting for the mid-2027 bake-in saves little and keeps an unsupported Spring for nine more months.
 - **Recommendation:** start the migration as its own phase, as soon as the current retirement PRs have landed. Keep Liquibase pinned, because Boot 4.1 would pull the FSL-licensed 5.x, and keep the logback pin.
+
+**Outcome of point 2 (2026-10-08).** The migration was started as its own phase on `spike/muw-spring-boot-4`, in stages. It is built through stage 2 and is not on lc-develop.
+
+- **Stage 1 — platform:** Spring Boot 4.1.1, Spring 7.0.x, Security 7.1.x, Hibernate 7.4.x, Tomcat 11. `save`/`saveOrUpdate` were replaced and all 97 call sites reviewed: one real defect (an audit-row cascade that would have thrown under Hibernate 7), fixed. See [the call-site review](spring-boot-4-hibernate-7-call-sites.md).
+- **Stage 2 — Jackson:** the application moved to Jackson 3 on one shared mapper configured to read and write what Jackson 2 did; the wire and the stored JSON are pinned by tests recorded on Jackson 2. One deliberate wire change (the job-admin dates are ISO-8601 UTC strings) and one stable message for unreadable request bodies. See [the Jackson 3 stage](spring-boot-4-jackson-3.md).
+- **Found on the way, fixed in separate commits:** three endpoints that answered 500/415 through the `pages` dispatcher's converter list (no `String`/`Resource` converter; present on lc-develop too, fix is cherry-pickable), and `/%70ages/...`, which Spring 7's path parsing turned into a 500 and which now answers 400 from a filter ahead of the security chain (no allow/deny decision changes; `SecurityConfigMatcherEquivalenceTest` is unchanged and green).
+- **Kept pinned:** Liquibase 4.31.1 (Boot 4.1's BOM manages 5.x, FSL-licensed) and logback 1.5.34.
+- **Stage 3 (open):** the authenticated smoke on a live stack, then merge and release (draft [release notes](../../operations/release-notes-1.5.0-beta.17-muw.md)). Rollback is the previous image.
 
 ---
 
@@ -1021,6 +1029,113 @@ DutyPlan has its own certificate, so the eCRF certificate is never reissued for 
 **Consequences.** One more certificate to renew (second cron line in
 [deploy/nginx/README.md](../../../deploy/nginx/README.md)). nginx keeps `default`
 in its network list explicitly; without it, it would lose the eCRF backend.
+
+---
+
+## DR-039 — OCT volumes are accepted as DICOM, and every analysis states the devices it supports
+
+**Status:** Proposed (2026-10-09)
+
+**Context.** Retinal analysis ran only on Heidelberg `.e2e` files. Every step assumed
+them: job creation (`kind = 'e2e'`), the VM-side preprocessing (e2e → `bscan.dcm`,
+geometry from the e2e headers) and the artifact naming (the stored file's name
+without `.e2e`). A Spectralis scan exported as DICOM was filed but never analysed,
+and nothing told the operator. The multicenter deployment changes the picture:
+partner sites may only be able to deliver DICOM (from a PACS export, or from another
+vendor's device), and the internet-facing upload already accepts DICOM because the
+browser can de-identify it. All models in use today are trained on Spectralis data;
+numbers computed on another device's scan would look valid and be wrong.
+
+A DICOM made by a third-party `.e2e` → DICOM converter was found with
+`PixelSpacing = [lateral, axial]`, the reverse of the standard order. Read as stored,
+every thickness of such a file would be about 1.5× too large, silently.
+
+**Decision.**
+
+- **An OCT volume is recognised by what it is, not by its file format.** A DICOM
+  object of the Ophthalmic Tomography IOD (SOP class `1.2.840.10008.5.1.4.1.1.77.1.5.4`
+  or Modality `OPT`) with more than one frame is an OCT volume, from any vendor, and
+  takes the same path as an `.e2e`: bind to a visit, the imaging plan picks the
+  analyses, the job follows the file (DR-035). The DICOM sidecar classifies the file
+  when it describes it (upload) or receives it (C-STORE); `ingest_item.oct_volume`
+  keeps the answer, with the file's manufacturer and model. An OPT object whose
+  frame count was never recorded is not analysed. `RetinalJobFollower.isAnalysable`
+  is the one place this is asked (bind, plan catch-up, per-scan start, rerun-as,
+  inbox, visit page).
+- **A modality is analysed only when it says so.** An imaging-catalogue entry
+  carries the explicit marker `oct` in `kinds_accepted` (set by an administrator,
+  "OCT-Volumen auswerten"); only a marked entry may carry plan tasks, and a DICOM
+  OCT volume of unknown modality is filed under the one marked entry that accepts
+  `dicom` and matches its device. Every entry that accepted `.e2e` was marked by
+  the migration, so every existing plan keeps its tasks; a fundus camera that also
+  exports DICOM is not marked and offers no tasks.
+- **A volume filed on arrival starts its analyses on arrival.** A DICOM OCT volume
+  uploaded straight to a visit, or bound to one by the worklist on C-STORE, starts
+  the visit plan's tasks at once, as an `.e2e` upload does (the study's inference
+  switch applies; the C-STORE hand-off stays closed where de-identification is
+  required). Taking such an upload back within the undo window handles its jobs the
+  DR-035 way: queued ones are cancelled, and removed with the upload when none had
+  started; if one is already running or done, the scan leaves the visit and is
+  dismissed instead, and that analysis keeps its result, unattached.
+- **One artifact key per stored scan.** The companion directory
+  (`bscan.dcm`, `geometry.json`, `fundus.png`) of an `.e2e` stays its name without
+  `.e2e`; any other stored path gets a name-based UUID of the normalised path
+  (`RetinalArtifactKey`). Existing artifacts keep their directories.
+- **Nothing identifying leaves the VM.** The VM-side preprocessing de-identifies a
+  DICOM volume completely (as it already does for the DICOM it synthesises from an
+  `.e2e`) and writes the same normalised `bscan.dcm` the cluster receives today. Only
+  that file is sent; a DICOM is refused outright where no preprocess service is
+  configured.
+- **The geometry comes from the file, or the analysis does not run.** Pixel and
+  B-scan spacing are read from the DICOM (top level, shared or per-frame functional
+  groups, or the B-scan positions). For a Heidelberg device, which `PixelSpacing`
+  value is axial is decided physically (Spectralis samples depth at ~3.87 µm) and
+  recorded as `standard` or `swapped`; an ambiguous file is refused. Another vendor's
+  order is kept and recorded as `standard-assumed`. If the spacing cannot be
+  determined the preprocessing refuses the file: millimetre metrics on a guessed
+  scale are worse than none.
+- **Each analysis declares the devices it supports**, in one place in the sidecar
+  (`retinal_inference/devices.py`), reported on `/health` and, per scan, in the
+  `X-MUW-Device-Tasks` header of `/preprocess`. Today every task declares Heidelberg
+  Spectralis only. The app does not send a DICOM volume to the cluster for a task
+  that is not on that list (the cluster refuses it as well): the job fails with
+  "fluid is validated for Heidelberg Spectralis only; this scan is from …", and the
+  job page shows the device. Adding a vendor is adding a validated model and widening
+  its declaration, not changing the pipeline.
+- **A refusal is the job's message.** A 422 `{"detail": {"error", "message"}}` from
+  `/preprocess` or `/run` becomes the job's status message instead of "returned null".
+- **An operator can start one analysis on one filed scan**, not only through the
+  visit's imaging plan or the re-run of an existing job.
+
+**Consequences.**
+
+- Before DICOM-derived results are used clinically, the same Spectralis scan exported
+  as `.e2e` and as DICOM must give the same thicknesses and volumes. The procedure:
+  upload both exports, file them to a visit, run the same task on each, and run
+  [`deploy/compare-oct-jobs.sh`](../../../deploy/compare-oct-jobs.sh)
+  `<e2e-job> <dicom-job>` on the VM; it prints both jobs' source, device, spacing
+  order, stored geometry (dimensions, voxel spacing, scan depth and width) and every
+  numeric result value side by side with the difference. Until that has been
+  signed off for a release, the DICOM path is for validation only.
+- A DICOM volume carries no SLO, so the B-scan position overlay on the fundus image
+  and the fovea estimate from the SLO are unavailable for it; the viewer says "Kein
+  SLO-Bild in der DICOM-Datei".
+- Every job now records its source format, device and spacing order
+  (`retinal_inference_job.source_format`, `device_manufacturer`, `device_model`,
+  `spacing_order`); a DICOM job with no single eye takes the eye the sidecar read
+  from the file.
+- An administrator who wants another vendor's OCT analysed marks its modality; the
+  device gate then still refuses every task not validated for that vendor, visibly.
+- Two defects in the shared path were fixed with this: reusing an already
+  preprocessed scan dropped its geometry (metrics fell back to pixel units), and the
+  reuse probe and the companion resolver looked in `scan-(i+1)/` while the sidecar
+  writes index 0 at the root and index `i` in `scan-<i>/`, so scan 0 of a two-volume
+  `.e2e` was analysed and shown with scan 1's volume.
+- Heidelberg-only assumptions inside the runners (`pr` forces the manufacturer tag;
+  `sdretinanet` is a Spectralis build) stay; the device declaration keeps other
+  vendors away from them.
+- DICOM received by C-STORE arrives with the full hospital identity. It goes through
+  the same de-identification before analysis; nothing changes about how it is stored.
 
 ---
 

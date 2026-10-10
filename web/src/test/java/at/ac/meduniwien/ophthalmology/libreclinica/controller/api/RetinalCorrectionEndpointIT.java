@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,7 +40,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * 2026-06-26 — IT for the layer-segmentation correction endpoints
@@ -159,7 +160,7 @@ class RetinalCorrectionEndpointIT extends AbstractApiControllerDatabaseIT {
 
     /** P3.6 — the correction endpoints moved to the artifacts controller. */
     private MockMvc buildMockMvc() {
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                 new RetinalJobArtifactsApiController(DATA_SOURCE, visibilityFilter, artifactStore))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

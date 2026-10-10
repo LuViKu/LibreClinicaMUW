@@ -72,6 +72,7 @@ public class UpdateStudyServletNew extends SecureController {
 
     @Override
     public void processRequest() throws Exception {
+        CreateStudyServlet.ensureOptionMaps();
         resetPanel();
         FormProcessor fp = new FormProcessor(request);
         Validator v = new Validator(request);

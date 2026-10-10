@@ -28,13 +28,14 @@ import { ref } from 'vue'
 import {
   fetchGeometry,
   getJob,
-  getJobBySubjectSeq,
+  getJobBySubject,
   listEventCrfJobs,
   listSubjectJobs,
   retryRetinalJob,
   rerunRetinalJobAs,
   type GeometryJson,
   type RetinalJobDetail,
+  type RetinalJobRerunAsResponse,
   type RetinalJobSummary,
 } from '@/api/retinal'
 
@@ -86,11 +87,11 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
    * resolved jobId so the rest of the view works exactly as the by-id
    * path. Re-throws on error so the view can surface a not-found state.
    */
-  async function loadJobBySubjectSeq(
+  async function loadJobBySubject(
     subjectLabel: string,
-    seq: number,
+    jobId: number,
   ): Promise<RetinalJobDetail | null> {
-    const detail = await getJobBySubjectSeq(subjectLabel, seq)
+    const detail = await getJobBySubject(subjectLabel, jobId)
     jobs.value = { ...jobs.value, [detail.jobId]: detail }
     return detail
   }
@@ -177,11 +178,11 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
   async function rerunJobAs(
     sourceJobId: number,
     task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers' | 'sdretinanet',
-  ): Promise<number> {
+  ): Promise<RetinalJobRerunAsResponse> {
     rerunAsInflight.value = { ...rerunAsInflight.value, [sourceJobId]: true }
     try {
-      const resp = await rerunRetinalJobAs(sourceJobId, task)
-      return resp.jobId
+      // The whole response: it carries the new job's canonical address.
+      return await rerunRetinalJobAs(sourceJobId, task)
     } finally {
       const next = { ...rerunAsInflight.value }
       delete next[sourceJobId]
@@ -221,7 +222,7 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
     retryInflight,
     rerunAsInflight,
     loadJob,
-    loadJobBySubjectSeq,
+    loadJobBySubject,
     loadGeometry,
     loadEventCrfJobs,
     loadSubjectJobs,

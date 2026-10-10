@@ -121,6 +121,13 @@ public final class IngestItemRepository {
             set("status", "UNBOUND", Types.VARCHAR);
         }
 
+        private static String clip(String v, int max) {
+            if (v == null) return null;
+            String t = v.trim();
+            if (t.isEmpty()) return null;
+            return t.length() > max ? t.substring(0, max) : t;
+        }
+
         private Builder set(String column, Object value, int sqlType) {
             int existing = columns.indexOf(column);
             if (existing >= 0) {
@@ -185,6 +192,18 @@ public final class IngestItemRepository {
         }
         public Builder sourceAeTitle(String v) { return set("source_ae_title", v, Types.VARCHAR); }
         public Builder modality(String v) { return set("modality", v, Types.VARCHAR); }
+
+        /**
+         * DR-039 — whether this DICOM is an OCT volume ({@link OctVolumes});
+         * null when it could not be told.
+         */
+        public Builder octVolume(Boolean v) { return set("oct_volume", v, Types.BOOLEAN); }
+
+        /** DR-039 — the file's Manufacturer / ManufacturerModelName, trimmed to the column. */
+        public Builder manufacturer(String manufacturer, String model) {
+            set("manufacturer", clip(manufacturer, 128), Types.VARCHAR);
+            return set("manufacturer_model", clip(model, 128), Types.VARCHAR);
+        }
 
         /* ---------------- DICOM identity ---------------- */
 

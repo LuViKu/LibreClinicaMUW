@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -63,7 +65,7 @@ import org.testcontainers.utility.DockerImageName;
  *       filesystem. Subclasses build a minimal collaborator graph by
  *       hand via {@link #buildSubjectsController()} + siblings.</li>
  *   <li><strong>No automatic MockMvc wiring.</strong> Subclasses build
- *       their own MockMvc via {@code MockMvcBuilders.standaloneSetup(...)}
+ *       their own MockMvc via {@code ProductionMvc.standalone(...)}
  *       — same pattern as {@link AbstractApiControllerTest}. The
  *       lightweight setup keeps boot time at &lt;1 sec on warm Docker.</li>
  * </ul>
@@ -149,7 +151,7 @@ public abstract class AbstractApiControllerDatabaseIT {
                 .withPassword("clinica");
         POSTGRES.start();
 
-        SimpleDriverDataSource ds = new SimpleDriverDataSource();
+        SimpleDriverDataSource ds = new RefusalTolerantDataSource();
         ds.setDriver(new org.postgresql.Driver());
         ds.setUrl(POSTGRES.getJdbcUrl());
         ds.setUsername(POSTGRES.getUsername());

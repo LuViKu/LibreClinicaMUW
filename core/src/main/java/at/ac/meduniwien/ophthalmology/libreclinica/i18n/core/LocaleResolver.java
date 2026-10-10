@@ -12,7 +12,10 @@ package at.ac.meduniwien.ophthalmology.libreclinica.i18n.core;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import org.springframework.web.servlet.i18n.SessionLocaleResolver;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
@@ -42,6 +45,12 @@ public final class LocaleResolver {
 			for(
 			Enumeration<Locale> locales = request.getLocales(); locales.hasMoreElements();) {
 				Locale locale = locales.nextElement();
+				// "Accept-Language: *" (sent by Node's fetch) is parsed by Tomcat 11 as
+				// Locale.ROOT. It names no language: skip it, before it can reach
+				// ResourceBundleProvider's thread-local, and try the next one.
+				if(isWildcard(locale)) {
+				    continue;
+				}
 				ResourceBundleProvider.updateLocale(locale);
 				if(isQualifiedLocale(locale)) {
 				    locale = ResourceBundleProvider.getFormatBundle(locale).getLocale();
@@ -52,6 +61,33 @@ public final class LocaleResolver {
 			}
         }
 		return getDefaultLocale();
+	}
+
+	/**
+	 * True for a locale that names no language (Locale.ROOT, as produced by
+	 * "Accept-Language: *"), or null.
+	 */
+	public final static boolean isWildcard(Locale locale) {
+	    return locale == null || locale.getLanguage().isEmpty();
+	}
+
+	/**
+	 * The request's accepted locales without wildcard entries, in preference
+	 * order. Never empty: falls back to the default locale, as the Servlet
+	 * specification does for a request without a usable Accept-Language.
+	 */
+	public final static List<Locale> usableLocales(HttpServletRequest request) {
+	    List<Locale> usable = new ArrayList<>();
+	    for(Enumeration<Locale> e = request.getLocales(); e != null && e.hasMoreElements();) {
+	        Locale l = e.nextElement();
+	        if(!isWildcard(l)) {
+	            usable.add(l);
+	        }
+	    }
+	    if(usable.isEmpty()) {
+	        usable.add(getDefaultLocale());
+	    }
+	    return usable;
 	}
 
 	/**

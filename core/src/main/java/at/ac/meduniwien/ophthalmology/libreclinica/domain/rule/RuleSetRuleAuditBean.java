@@ -18,7 +18,6 @@ import org.hibernate.annotations.Type;
 
 import java.util.Date;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
@@ -47,7 +46,11 @@ public class RuleSetRuleAuditBean extends AbstractMutableDomainObject {
     /**
      * @return the ruleSetBean
      */
-    @OneToOne(cascade = CascadeType.ALL)
+    // No cascade: an audit row points at a rule set (rule) that already exists,
+    // often a detached instance. Cascading PERSIST into it fails on Hibernate 7
+    // ("detached entity passed to persist"); Hibernate 6's saveOrUpdate
+    // used to re-attach it. The row is also never meant to remove its subject.
+    @OneToOne
     @JoinColumn(name = "rule_set_rule_id")
     public RuleSetRuleBean getRuleSetRuleBean() {
         return ruleSetRuleBean;

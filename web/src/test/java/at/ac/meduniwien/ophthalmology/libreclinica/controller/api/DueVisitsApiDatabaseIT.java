@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,7 +23,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -47,10 +48,10 @@ class DueVisitsApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         SiteVisibilityFilter filter = Mockito.mock(SiteVisibilityFilter.class);
         Mockito.when(filter.visibleStudyIds(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(visible);
-        return MockMvcBuilders
-                // The interval calculator is only touched by the scheduling
-                // endpoints, which this file does not exercise.
-                .standaloneSetup(new EventsApiController(
+        // The interval calculator is only touched by the scheduling
+        // endpoints, which this file does not exercise.
+        return ProductionMvc
+                .standalone(new EventsApiController(
                         DATA_SOURCE, filter, null))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

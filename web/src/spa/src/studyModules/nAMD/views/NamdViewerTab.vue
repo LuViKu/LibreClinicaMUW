@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n'
 import FundusOverlay, { type EtdrsRegion, type FundusOverlayTask } from '@/components/FundusOverlay.vue'
 import RetinalVisitComparison from '@/components/RetinalVisitComparison.vue'
 import { useRetinalJobStore } from '@/stores/retinalJob'
+import { hasFundusGeometry } from '@/lib/retinalGeometry'
 import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import NamdScanFrame from '../components/NamdScanFrame.vue'
@@ -81,6 +82,8 @@ const geometry = computed(() => {
   if (uuid == null) return null
   return store.geometries[uuid] ?? null
 })
+/** DR-039 — only an `.e2e` source places the scan on a fundus image. */
+const fundusGeometry = computed(() => (hasFundusGeometry(geometry.value) ? geometry.value : null))
 
 /** OCT slice scrolled in NamdScanFrame; synced into FundusOverlay's bscan locator. */
 const nSlices = computed(() => geometry.value?.bscan?.dim_z_bscans ?? props.data.nSlices ?? 49)
@@ -209,7 +212,7 @@ function formatNumber(v: number): string {
         </div>
         <div class="p-4 flex-1 flex items-center">
           <div
-            v-if="!job?.fundusUrl || !geometry"
+            v-if="!job?.fundusUrl || !fundusGeometry"
             class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-xs text-slate-500"
           >
             {{ t('studyModules.namd.viewer2.fundusEmpty') }}
@@ -217,7 +220,7 @@ function formatNumber(v: number): string {
           <div v-else class="w-full">
             <FundusOverlay
               :fundus-url="job.fundusUrl"
-              :geometry="geometry"
+              :geometry="fundusGeometry"
               :payload="job.outputPayload"
               :task="overlayTask"
               :laterality="props.data.patient.eye"

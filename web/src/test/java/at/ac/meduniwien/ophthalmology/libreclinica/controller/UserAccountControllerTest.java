@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -17,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -54,7 +55,7 @@ class UserAccountControllerTest {
 
     @Test
     void anOrdinaryLoggedInUserIsRefusedBeforeAnythingIsCreated() throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new UserAccountController()).build();
+        MockMvc mvc = ProductionMvc.standalone(new UserAccountController()).build();
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userBean", account(UserType.USER, true));
 
@@ -65,7 +66,7 @@ class UserAccountControllerTest {
 
     @Test
     void aRequestWithoutASessionUserIsUnauthorized() throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new UserAccountController()).build();
+        MockMvc mvc = ProductionMvc.standalone(new UserAccountController()).build();
 
         mvc.perform(post("/auth/api/v1/createuseraccount")
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))

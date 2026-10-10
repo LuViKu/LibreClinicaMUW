@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -19,12 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.EventCrfVersionMigrationService;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /**
  * Moving existing event CRFs to another CRF version
@@ -58,7 +59,7 @@ class EventCrfMigrationApiControllerDatabaseIT extends AbstractApiControllerData
     }
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new EventCrfMigrationApiController(
+        return ProductionMvc.standalone(new EventCrfMigrationApiController(
                         DATA_SOURCE, new EventCrfVersionMigrationService(DATA_SOURCE)))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

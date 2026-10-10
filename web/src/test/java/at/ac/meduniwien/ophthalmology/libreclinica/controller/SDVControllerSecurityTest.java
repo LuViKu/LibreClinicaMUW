@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -37,7 +39,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.ui.ModelMap;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
@@ -247,7 +248,7 @@ class SDVControllerSecurityTest {
     @ValueSource(strings = {"/handleSDVPost", "/handleSDVGet", "/handleSDVRemove",
             "/sdvStudySubject", "/unSdvStudySubject", "/sdvStudySubjects"})
     void aGetCannotChangeSdvState(String path) throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        MockMvc mvc = ProductionMvc.standalone(controller).build();
         mvc.perform(get(path)
                         .session(httpSession(Role.MONITOR))
                         .param("crfId", String.valueOf(OWN_EVENT_CRF))

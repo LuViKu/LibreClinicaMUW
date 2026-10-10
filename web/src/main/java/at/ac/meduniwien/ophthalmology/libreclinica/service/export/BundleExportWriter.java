@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.export;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -27,7 +29,7 @@ import java.util.zip.ZipOutputStream;
 
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +71,7 @@ public final class BundleExportWriter {
 
     private static final Logger LOG = LoggerFactory.getLogger(BundleExportWriter.class);
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = Json.mapper();
 
     /** Kinds already compressed; deflating them costs CPU and gains nothing. */
     private static final List<String> STORE_AS_IS =
@@ -121,7 +123,7 @@ public final class BundleExportWriter {
                 // Last, deliberately: a bundle without a manifest is an
                 // incomplete bundle, so a truncated download is detectable.
                 writeBytes(zos, "manifest.json",
-                        JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
+                        manifestBytes(manifest));
                 zos.finish();
             }
             return new Result(s.filesWritten(), s.bytesWritten(), s.omitted(), manifest);
@@ -221,14 +223,14 @@ public final class BundleExportWriter {
                     : masked == subjects.size() ? "ai-withheld" : "mixed");
             manifest.put("subjects", subjectSections);
             manifest.put("omitted", omitted.stream()
-                    .map(o -> Map.of("ref", o.ref(), "reason", o.reason()))
+                    .map(BundleExportWriter::omission)
                     .toList());
             manifest.put("fileCount", written);
             manifest.put("byteSize", bytes);
 
             if (zos != null) {
                 writeBytes(zos, "manifest.json",
-                        JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest));
+                        manifestBytes(manifest));
                 zos.finish();
             }
             return new Result(written, bytes, omitted, manifest);
@@ -629,7 +631,20 @@ public final class BundleExportWriter {
     /* manifest                                                            */
     /* ------------------------------------------------------------------ */
 
-    private static Map<String, Object> manifest(String subjectLabel, String studyOid,
+    /** The {@code manifest.json} entry: pretty-printed, one stable layout. */
+    static byte[] manifestBytes(Map<String, Object> manifest) throws IOException {
+        return JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest);
+    }
+
+    /** One omission as a manifest line; ordered, so the bytes do not depend on {@code Map.of}'s per-JVM salt. */
+    private static Map<String, Object> omission(Omission o) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ref", o.ref());
+        m.put("reason", o.reason());
+        return m;
+    }
+
+    static Map<String, Object> manifest(String subjectLabel, String studyOid,
                                                 String generatedBy, Policy policy,
                                                 List<Map<String, Object>> acquisitions,
                                                 List<Map<String, Object>> crfFiles,
@@ -647,7 +662,7 @@ public final class BundleExportWriter {
         m.put("crfFiles", crfFiles);
         m.put("inference", inference);
         m.put("omitted", omitted.stream()
-                .map(o -> Map.of("ref", o.ref(), "reason", o.reason()))
+                .map(BundleExportWriter::omission)
                 .toList());
         m.put("fileCount", filesWritten);
         m.put("byteSize", bytes);

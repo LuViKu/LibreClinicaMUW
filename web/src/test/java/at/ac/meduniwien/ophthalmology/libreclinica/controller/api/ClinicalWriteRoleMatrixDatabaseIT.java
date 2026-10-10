@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,7 +47,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResult
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.RetinalMetricComputer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,8 +60,7 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 /**
  * The role matrix of the SPA's clinical-data write APIs
@@ -93,7 +94,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 Mockito.mock(RetinalArtifactStorageService.class),
                 Mockito.mock(RetinalMetricComputer.class),
                 new RetinalJobStatusBroadcaster());
-        return MockMvcBuilders.standaloneSetup(
+        return ProductionMvc.standalone(
                         new EventCrfsApiController(DATA_SOURCE, filter,
                                 Mockito.mock(CrfFileStorageService.class),
                                 new EventCrfPresenceRegistry(),
@@ -111,7 +112,10 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         retinalInference,
                         new RetinalResultsApiController(DATA_SOURCE, filter,
                                 Mockito.mock(RetinalArtifactStorageService.class),
-                                null, remote, new RetinalJobStatusBroadcaster(), retinalInference))
+                                null, remote, new RetinalJobStatusBroadcaster(), retinalInference),
+                        new IngestInboxApiController(DATA_SOURCE, filter,
+                                new at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder(DATA_SOURCE),
+                                remote, retinalInference))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -154,6 +158,8 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 write("retry a retinal analysis", () -> post("/api/v1/retinal-jobs/1/retry")),
                 write("re-run a retinal analysis",
                         () -> json(post("/api/v1/retinal-jobs/1/rerun-as"), "{\"task\":\"fluid\"}")),
+                write("start a retinal analysis on a filed scan",
+                        () -> json(post("/api/v1/ingest/1/analyses"), "{\"task\":\"fluid\"}")),
                 // Binding a scan to a visit: IngestBindAuthorization.
                 write("bind a parked scan",
                         () -> json(patch("/api/v1/retinal-jobs/1/bind"), "{\"eventCrfId\":1}")),
@@ -209,7 +215,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writesAMonitorMayNotMake")
-    void aMonitorIsRefused(String label, Supplier<MockHttpServletRequestBuilder> request)
+    void aMonitorIsRefused(String label, Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         int monitor = userId("manual_monitor");
         int auditRowsBefore = auditRowsBy(monitor);
@@ -246,7 +252,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writesTheResearchAssistantsMayNotMake")
     void aResearchAssistantIsRefusedWhereTheRuleIsNarrower(
-            String label, MockHttpSession session, Supplier<MockHttpServletRequestBuilder> request)
+            String label, MockHttpSession session, Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         mvc().perform(request.get().session(session))
                 .andExpect(status().isForbidden())
@@ -392,6 +398,10 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                         () -> post("/api/v1/retinal-jobs/999999/retry")),
                 permitted("re-run a retinal analysis", "manual_investigator", 404,
                         () -> json(post("/api/v1/retinal-jobs/999999/rerun-as"), "{\"task\":\"fluid\"}")),
+                permitted("start a retinal analysis on a filed scan", "manual_investigator", 404,
+                        () -> json(post("/api/v1/ingest/999999/analyses"), "{\"task\":\"fluid\"}")),
+                permitted("start a retinal analysis on a filed scan as ra", Role.RESEARCHASSISTANT, 404,
+                        () -> json(post("/api/v1/ingest/999999/analyses"), "{\"task\":\"fluid\"}")),
                 permitted("bind a parked scan", "manual_dm", 404,
                         () -> json(patch("/api/v1/retinal-jobs/999999/bind"), "{\"eventCrfId\":9}")),
                 permitted("bulk-bind parked scans", "manual_dm", 200,
@@ -407,7 +417,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writesAPermittedRoleMayMake")
     void aPermittedRoleGetsPastTheCheck(String label, MockHttpSession session, int expectedStatus,
-                                        Supplier<MockHttpServletRequestBuilder> request)
+                                        Supplier<AbstractMockHttpServletRequestBuilder<?>> request)
             throws Exception {
         MvcResult result = mvc().perform(request.get().session(session)).andReturn();
         String body = result.getResponse().getContentAsString();
@@ -534,22 +544,22 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     /* Helpers                                                            */
     /* ------------------------------------------------------------------ */
 
-    private static Arguments write(String label, Supplier<MockHttpServletRequestBuilder> request) {
+    private static Arguments write(String label, Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label, request);
     }
 
     private static Arguments permitted(String label, String userName, int expectedStatus,
-                                       Supplier<MockHttpServletRequestBuilder> request) {
+                                       Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label + " as " + userName, sessionAs(userName), expectedStatus, request);
     }
 
     private static Arguments permitted(String label, Role role, int expectedStatus,
-                                       Supplier<MockHttpServletRequestBuilder> request) {
+                                       Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label, investigatorHolding(role), expectedStatus, request);
     }
 
     private static Arguments narrower(String label, Role role,
-                                      Supplier<MockHttpServletRequestBuilder> request) {
+                                      Supplier<AbstractMockHttpServletRequestBuilder<?>> request) {
         return Arguments.of(label + " as " + role.getName(), investigatorHolding(role), request);
     }
 
@@ -559,7 +569,7 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
         return session;
     }
 
-    private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request,
+    private static AbstractMockHttpServletRequestBuilder<?> json(AbstractMockHttpServletRequestBuilder<?> request,
                                                       String body) {
         return request.contentType(MediaType.APPLICATION_JSON).content(body);
     }

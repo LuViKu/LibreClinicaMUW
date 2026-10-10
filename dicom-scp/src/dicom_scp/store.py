@@ -48,6 +48,15 @@ def render_preview(ds: Dataset, out: Path) -> Path | None:
         from PIL import Image
 
         arr = ds.pixel_array
+        # A multi-frame object (an OCT volume: one B-scan per frame) decodes to
+        # (frames, rows, cols) or (frames, rows, cols, samples). Without this,
+        # a greyscale volume was taken for one colour image: its first three
+        # columns became R, G, B, one row per B-scan - a thin striped strip.
+        # The middle frame is the central B-scan, through the fovea on a
+        # macular volume.
+        frames = int(getattr(ds, "NumberOfFrames", 1) or 1)
+        if frames > 1 and arr.ndim >= 3 and arr.shape[0] == frames:
+            arr = arr[frames // 2]
         if arr.ndim == 2:  # monochrome
             a = arr.astype("float32")
             lo, hi = float(a.min()), float(a.max())

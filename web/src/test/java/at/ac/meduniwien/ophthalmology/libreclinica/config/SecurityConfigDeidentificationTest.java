@@ -81,7 +81,7 @@ class SecurityConfigDeidentificationTest {
         @Bean SecurityFilterChain chain(HttpSecurity http) throws Exception {
             base(http, true);
             http.addFilterBefore(new InternetFacingPathBlockFilter(SecurityConfig.DEIDENTIFICATION_CLOSED_PATHS),
-                    org.springframework.security.web.access.channel.ChannelProcessingFilter.class);
+                    SecurityConfig.RATE_LIMIT_ANCHOR);
             return http.build();
         }
     }

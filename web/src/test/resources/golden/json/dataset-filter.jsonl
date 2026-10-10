@@ -1,0 +1,3 @@
+{"itemOid":"I_VISUS","operator":"gte","value":"0.5","values":null}
+{"itemOid":"I_SEX","operator":"in","value":null,"values":["m","f"]}
+{"itemOid":"I_NOTE","operator":"contains","value":"Müller \"x\"","values":[]}

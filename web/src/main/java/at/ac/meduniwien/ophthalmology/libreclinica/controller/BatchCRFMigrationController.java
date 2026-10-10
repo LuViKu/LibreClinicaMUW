@@ -339,6 +339,10 @@ public class BatchCRFMigrationController implements Runnable {
     }
 
     public void executeMigrationAction(HelperObject helperObject, EventCRFBean eventCRFBean) {
+        // The entities below come from the DAOs, which load them in sessions that
+        // are already closed, so they are detached; merge applies them to this
+        // run's own session (Hibernate 7 has no saveOrUpdate/reattach). Nothing
+        // reads them afterwards, so the managed copies that merge returns are not needed.
         Session session = helperObject.getSession();
 
         EventCrf eventCrf = helperObject.getEventCrfDao().findById(eventCRFBean.getId());
@@ -351,7 +355,7 @@ public class BatchCRFMigrationController implements Runnable {
         eventCrf.setSdvUpdateId(helperObject.getUserAccountBean().getId());
         eventCrf.setUpdateId(helperObject.getUserAccountBean().getId());
         eventCrf.setCrfVersion(crfVersion);
-        session.saveOrUpdate(eventCrf);
+        session.merge(eventCrf);
 
         String status_before_update = null;
         SubjectEventStatus eventStatus = null;
@@ -366,7 +370,7 @@ public class BatchCRFMigrationController implements Runnable {
                 studySubject.setStatus(status);
             }
             studySubject.setUpdateId(helperObject.getUserAccountBean().getId());
-            session.saveOrUpdate(studySubject);
+            session.merge(studySubject);
 
         }
 
@@ -380,7 +384,7 @@ public class BatchCRFMigrationController implements Runnable {
             studyEvent.setSubjectEventStatusId(eventStatus.getId());
         }
 
-        session.saveOrUpdate(studyEvent);
+        session.merge(studyEvent);
     }
 
     public ResponseEntity<HelperObject> runPreviewTest(TransferObject transferObject, HttpServletRequest request) throws Exception {
