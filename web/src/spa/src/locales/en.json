@@ -1405,7 +1405,8 @@
       "facilityName": "Facility name",
       "facilityCity": "City",
       "facilityContactEmail": "Contact email"
-    }
+    },
+    "created": "Site “{name}” created."
   },
   "crfLibrary": {
     "title": "CRF Library",

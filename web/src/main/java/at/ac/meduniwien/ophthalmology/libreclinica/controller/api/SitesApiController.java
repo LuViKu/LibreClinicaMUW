@@ -207,18 +207,24 @@ public class SitesApiController {
         toCreate.setStatus(Status.PENDING);
         toCreate.setOwner(me);
         toCreate.setParentStudyId(parent.getId());
+        // The OID goes in with the insert: StudyDAO.create keeps a preset OID
+        // when it is free (and varies it when it is not). Setting it afterwards
+        // took a second StudyDAO.update, which dereferences the old status a
+        // brand-new site does not have — the site was saved, and the request
+        // still ended in a 500.
+        toCreate.setOid("S_" + body.uniqueProtocolId().trim().toUpperCase());
 
-        StudyBean persisted = studyDao.create(toCreate);
-        if (persisted == null || persisted.getId() == 0) {
+        StudyBean created = studyDao.create(toCreate);
+        if (created == null || created.getId() == 0) {
             LOG.warn("StudyDAO.create returned no row for site name={} parentOid={}",
                     body.name(), parentOid);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist new site"));
         }
-
-        String generatedOid = "S_" + body.uniqueProtocolId().trim().toUpperCase();
-        persisted.setOid(generatedOid);
-        studyDao.update(persisted);
+        // Read it back: the insert may have varied the OID, and create() does
+        // not write the stored one onto the bean.
+        StudyBean persisted = studyDao.findByPK(created.getId());
+        String generatedOid = persisted.getOid();
 
         // Optional auto-bind of the initial Principal Investigator on
         // the new site. INVESTIGATOR is legal on sites (per A7's
