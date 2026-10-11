@@ -23,16 +23,11 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.NonNull;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -67,22 +62,30 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens
  * {@code /public/%75pload/commit} past the door while the dispatcher still
  * routes it to the upload controller.
  *
- * <p>Not guarded: {@code public/bcva-entry} (no file, no device), everything
- * else, and any request that carries a signed-in session (the staff routes
- * have their own checks; the session is read from the HTTP session directly,
- * because this filter runs ahead of the security context).
+ * <p>Not guarded: {@code public/bcva-entry} (no file, no device) and
+ * everything else; staff upload through {@code /ingest/upload}, which has its
+ * own checks. A signed-in session does <em>not</em> get past the door on a
+ * guarded path: the controllers behind it check nothing themselves, so a
+ * session would see every location, and a same-origin browser upload sends
+ * its cookie even when the page means to upload as an uploader.
  *
  * <h2>The rules, in order</h2>
  * <ol>
  *   <li>The header is present. It must be shaped like a token
  *       ({@link UploaderTokens#wellFormed}) and name an active uploader at an
- *       available location ({@link IngestSourceService#findActiveByToken}: one
+ *       available location ({@link IngestSourceService#lookupActiveByToken}: one
  *       unique-index read, never cached, so a revoked or replaced token stops
  *       working on the next request). Otherwise
  *       <strong>401 {@code {"message":"uploader token rejected"}}</strong>.
  *       Otherwise the {@link IngestSourceService.Source} goes on the request.
  *       Two headers, an empty one, or a source that is not an uploader are
- *       rejected as well.</li>
+ *       rejected as well. A lookup that fails (the database cannot be reached)
+ *       is <strong>503 {@code {"message":"uploader token could not be
+ *       checked"}}</strong> with {@code Retry-After}: never a pass, and not
+ *       counted as a rejection, so an outage does not leave a working uploader
+ *       limited once the database is back. (The untokened path cannot tell
+ *       an outage apart: {@code LocationScope.availableCount} reads 0, so the
+ *       answer is 401 {@code required}.)</li>
  *   <li>No header (the Optomed worklist's legacy
  *       {@code X-MUW-Optomed-Token} does not count: a shared secret cannot
  *       say which location is asking). The <em>anonymous door</em>: the
@@ -108,8 +111,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens
  * <p><strong>Logging.</strong> A line carries the method, the path and the
  * outcome, at most one per outcome a minute. Never a token, never a hash.
  *
- * <p>Wire via {@code SecurityConfig.addFilterBefore(filter, PublicOctUploadRateLimitFilter.class)}
- * so it runs ahead of the rate limiter, which keys its budget by the source.
+ * <p>Mounted by {@code SecurityConfig.addDeviceFilters} ahead of the rate
+ * limiter, which keys its budget by the source.
  */
 public class UploaderTokenFilter extends OncePerRequestFilter {
 
@@ -124,6 +127,7 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     static final String MESSAGE_REQUIRED = "uploader token required";
     static final String MESSAGE_REJECTED = "uploader token rejected";
     static final String MESSAGE_LIMITED = "too many rejected uploader tokens";
+    static final String MESSAGE_UNAVAILABLE = "uploader token could not be checked";
 
     /** Rejected tokens one address may present per window before it is answered 429. */
     static final int MAX_FAILURES = 60;
@@ -168,7 +172,8 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     private enum Outcome {
         REQUIRED("no token, front door closed"),
         REJECTED("token rejected"),
-        LIMITED("too many rejected tokens from one address");
+        LIMITED("too many rejected tokens from one address"),
+        UNAVAILABLE("token could not be checked (database)");
 
         final String text;
 
@@ -193,12 +198,14 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     private volatile long lastSweepMs = Long.MIN_VALUE / 2;
 
     private final AtomicLong[] loggedAt = {
-            new AtomicLong(Long.MIN_VALUE / 2), new AtomicLong(Long.MIN_VALUE / 2), new AtomicLong(Long.MIN_VALUE / 2)};
-    private final AtomicInteger[] suppressed = {new AtomicInteger(), new AtomicInteger(), new AtomicInteger()};
+            new AtomicLong(Long.MIN_VALUE / 2), new AtomicLong(Long.MIN_VALUE / 2), new AtomicLong(Long.MIN_VALUE / 2),
+            new AtomicLong(Long.MIN_VALUE / 2)};
+    private final AtomicInteger[] suppressed = {new AtomicInteger(), new AtomicInteger(), new AtomicInteger(),
+            new AtomicInteger()};
 
     /** The production filter: the real services, {@code datainfo.properties} and the wall clock. */
     public UploaderTokenFilter(IngestSourceService sources, LocationScope locations) {
-        this(sources::findActiveByToken, locations::availableCount,
+        this(sources::lookupActiveByToken, locations::availableCount,
                 UploaderTokenFilter::coreResourcesField, System::currentTimeMillis);
     }
 
@@ -245,10 +252,8 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
             return;
         }
         UploaderSources.clear(request);
-        if (signedIn(request)) {
-            chain.doFilter(request, response);
-            return;
-        }
+        // A session is no way past the door: these controllers check nothing
+        // themselves, and a browser's same-origin upload carries its cookie.
 
         long now = clock.getAsLong();
         Enumeration<String> values = request.getHeaders(TOKEN_HEADER);
@@ -274,7 +279,15 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
             return;
         }
 
-        IngestSourceService.Source source = ambiguous || !UploaderTokens.wellFormed(token) ? null : find(token);
+        IngestSourceService.Source source;
+        try {
+            source = ambiguous || !UploaderTokens.wellFormed(token) ? null : find(token);
+        } catch (LookupFailed outage) {
+            // Not the uploader's fault: no rejection is counted. The scripts treat it like any other 5xx.
+            note(Outcome.UNAVAILABLE, request, now);
+            respond(response, 503, MESSAGE_UNAVAILABLE, 30);
+            return;
+        }
         if (source == null) {
             recordFailure(address, now);
             note(Outcome.REJECTED, request, now);
@@ -288,7 +301,10 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /** The active uploader a token belongs to, or null; a lookup that blows up is a refusal, never a pass. */
+    /**
+     * The active uploader a token belongs to, or null. A lookup that blows up is
+     * never a pass: it throws {@link LookupFailed}, which answers 503.
+     */
     private IngestSourceService.Source find(String token) {
         try {
             return lookup.apply(token)
@@ -297,7 +313,16 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
                     .orElse(null);
         } catch (RuntimeException e) {
             LOG.warn("uploader token lookup failed ({})", e.getClass().getSimpleName());
-            return null;
+            throw new LookupFailed();
+        }
+    }
+
+    /** The token could not be checked at all (the database is unreachable). */
+    private static final class LookupFailed extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        LookupFailed() {
+            super(null, null, false, false);
         }
     }
 
@@ -315,27 +340,6 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
             }
         }
         return false;
-    }
-
-    /**
-     * Whether the request carries a signed-in session. This filter runs ahead of
-     * the security context, which is not loaded yet (and the thread-local holder
-     * is not to be trusted at this point), so the session is read directly: the
-     * context the login stored there, authenticated and not the anonymous token.
-     */
-    static boolean signedIn(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session == null) return false;
-        try {
-            return session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY)
-                    instanceof SecurityContext ctx && isUser(ctx.getAuthentication());
-        } catch (IllegalStateException invalidated) {
-            return false;
-        }
-    }
-
-    private static boolean isUser(Authentication a) {
-        return a != null && a.isAuthenticated() && !(a instanceof AnonymousAuthenticationToken);
     }
 
     /** An untokened request is served only while the door is not shut by setting and there is exactly one place. */

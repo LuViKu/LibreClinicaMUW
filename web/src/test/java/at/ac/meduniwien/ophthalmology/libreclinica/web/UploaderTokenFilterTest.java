@@ -67,6 +67,8 @@ class UploaderTokenFilterTest {
     private final AtomicInteger locationReads = new AtomicInteger();
     private final Map<String, String> settings = new HashMap<>();
     private final AtomicLong clock = new AtomicLong(1_000_000L);
+    /** While true, the lookup fails as an unreachable database does. */
+    private boolean outage;
 
     private UploaderTokenFilter filter;
 
@@ -79,6 +81,7 @@ class UploaderTokenFilterTest {
         return new UploaderTokenFilter(
                 token -> {
                     lookedUp.add(token);
+                    if (outage) throw new IllegalStateException("database unreachable");
                     return Optional.ofNullable(sources.get(token));
                 },
                 () -> {
@@ -222,12 +225,12 @@ class UploaderTokenFilterTest {
     }
 
     @Test
-    void aFailingLookupIsARefusalNeverAPass() throws Exception {
+    void aFailingLookupIsNeverAPass() throws Exception {
         UploaderTokenFilter broken = new UploaderTokenFilter(
                 t -> { throw new IllegalStateException("database down"); }, () -> 1, settings::get, clock::get);
         Outcome o = new Outcome(request("POST", RESOLVE, UploaderTokens.generate()));
         broken.doFilter(o.request, o.response, o.chain);
-        assertAnswered(o, 401, "uploader token rejected");
+        assertAnswered(o, 503, "uploader token could not be checked");
     }
 
     @Test
@@ -455,18 +458,20 @@ class UploaderTokenFilterTest {
     }
 
     @Test
-    void aRequestWithASignedInSessionIsNeverTouched() throws Exception {
+    void aSignedInSessionIsNoWayPastTheDoor() throws Exception {
+        // Two locations: a session without a token is refused like anyone else ...
         locations.set(2);
-        MockHttpServletRequest r = request("POST", RESOLVE, UploaderTokens.generate());
-        r.setSession(signedInSession());
-        Outcome o = run(r);
-        assertTrue(o.passed());
-        assertNull(o.source());
-        assertTrue(lookedUp.isEmpty(), "the header of a signed-in user is not even looked at");
-
         MockHttpServletRequest noHeader = request("GET", WORKLIST, null);
         noHeader.setSession(signedInSession());
-        assertTrue(run(noHeader).passed());
+        assertAnswered(run(noHeader), 401, "uploader token required");
+
+        // ... and a session with a token is bound to that token's location, as a browser's upload is.
+        String good = issue(uploader(7, 3));
+        MockHttpServletRequest withToken = request("POST", RESOLVE, good);
+        withToken.setSession(signedInSession());
+        Outcome o = run(withToken);
+        assertTrue(o.passed());
+        assertEquals(7L, o.source().id());
     }
 
     @Test
@@ -522,6 +527,26 @@ class UploaderTokenFilterTest {
         withGood.setRemoteAddr("10.9.9.9");
         assertAnswered(run(withGood), 429, "too many rejected uploader tokens");
         assertEquals(UploaderTokenFilter.MAX_FAILURES, lookedUp.size());
+    }
+
+    @Test
+    void aLookupThatFailsIsAnswered503AndIsNotCountedAgainstTheAddress() throws Exception {
+        String good = issue(uploader(7, 3));
+        outage = true;
+        for (int i = 0; i < UploaderTokenFilter.MAX_FAILURES * 2; i++) {
+            MockHttpServletRequest r = request("POST", RESOLVE, good);
+            r.setRemoteAddr("10.9.9.9");
+            Outcome o = run(r);
+            assertAnswered(o, 503, "uploader token could not be checked");
+            assertNotNull(o.response.getHeader("Retry-After"));
+        }
+        // The database is back: the same uploader from the same address is served at once, not 429.
+        outage = false;
+        MockHttpServletRequest after = request("POST", RESOLVE, good);
+        after.setRemoteAddr("10.9.9.9");
+        Outcome o = run(after);
+        assertTrue(o.passed());
+        assertEquals(7L, o.source().id());
     }
 
     @Test
