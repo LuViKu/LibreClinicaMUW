@@ -479,10 +479,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-ExportWatcher.ps1 
 # and point the device's export at that folder.
 ```
 
-While one location exists the public front door takes no secret, so the
-watcher needs no setup beyond this; since DR-040 it can also carry an uploader
-token, which every PC needs once a second location exists (see "Uploader tokens
-and locations" below). Settings are in
+In single-location mode (the default) the public front door takes no secret,
+so the watcher needs no setup beyond this; since DR-040 it can also carry an
+uploader token, which every PC needs in multi-location mode (see "Uploader
+tokens and locations" below). Settings are in
 `%ProgramData%\LibreClinica\export-watcher.json`, the log beside them (counts
 and pseudonymous labels only, never names or filenames).
 Before switching it on, check the readers on a real export:
@@ -523,6 +523,23 @@ shown **once**, when it is issued; the platform keeps only a hash of it and its
 first eight characters (the *Token (Anfang)* column), so a lost token is
 replaced, never looked up.
 
+**Single or multi: chosen at deploy time.** `LIBRECLINICA_DEPLOYMENT_LOCATIONS`
+in `/etc/libreclinica/env` sets the location mode; the number of locations
+never changes it.
+
+| | `single` (default; the internal VM) | `multi` |
+|---|---|---|
+| Locations | exactly one; *Neuer Standort* is not offered and a second is refused | any number |
+| Upload without a token | works, filed at the one location | `401 uploader token required`, from the first location on |
+| Upload with a valid token | works, filed under that uploader | works, for that uploader's location only |
+| A study, source or file without a location | belongs to the one location | system administrators only, until assigned |
+
+Any other value stops the start, and so does `single` on a database with more
+than one active location (the log says which: set `multi`, or disable all but
+one location). In single mode every start gives the one location to studies,
+sources and unfiled files that have none (audit type 208), so a later switch to
+multi finds nothing without a place.
+
 **Who may issue one.** System administrators, for every location, and a
 **Standort-Admin**, for their own location only. A system administrator grants
 that right per person and location under **System → Standorte** (the
@@ -554,9 +571,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -Heartbe
 # a refused token reads: …: HTTP 401 - Token abgelehnt - bitte in den Einstellungen pruefen (token-rejected); uploader token: set
 ```
 
-**When the platform answers 401.** A request without a token is served as
-before only while `core.ingest.anonymousDeviceUploads` is `allowed` (the
-default) **and exactly one location is active**; otherwise the answer is
+**When the platform answers 401.** In multi mode a request without a token is
 `401 {"message":"uploader token required"}`. A token that is unknown, revoked,
 replaced or at a disabled location is `401 {"message":"uploader token
 rejected"}`. The programs treat a 401 as the platform not accepting them, never
@@ -568,20 +583,24 @@ round) tries again at the normal interval. Once the token is right the waiting
 files go through by themselves. The heartbeat is refused as well, so such a PC
 may simply look silent on System Status; its tray icon and `-Heartbeat` say why.
 
-**Creating the second location closes the anonymous front door.** With two or
-more active locations (the platform notices within 15 seconds) an untokened
-device request is answered 401, because the
-platform can no longer tell where it belongs. So every uploader needs its token
-**before** the second location is created. The uploaders that would stop are
-those seen in the last seven days that have never reported with a token;
-`GET /api/v1/admin/ingest-sources/anonymous-uploaders` (system administrators)
-counts and names them, and System → Standorte is to show that number before a
-second location is created. `core.ingest.anonymousDeviceUploads=denied` in
-`datainfo.properties` closes the door earlier, on a single-location
-installation, for example once every PC has its token. The older shared
-`core.optomed.worklist.token` stays accepted for the worklist during the
-rollout; it names no location, so it is meant to go when the second location is
-created.
+**Switching from single to multi** is a deploy step, done once:
+
+1. Still in single mode, issue a token for every acquisition PC and enter it in
+   its settings (the steps above). In single mode a token already works, and the
+   PC's files are filed under its name.
+2. Wait until *Uploader und Tokens* says that no program sends without a token
+   any more. It counts the programs seen in the last seven days that have never
+   reported with one (`GET /api/v1/admin/ingest-sources/anonymous-uploaders`,
+   system administrators). Every program it counts stops at the switch.
+3. Set `LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi` in `/etc/libreclinica/env`
+   and restart the stack.
+4. Create the further locations on **System → Standorte**, assign them their
+   sites and people, and the DICOM and Remidio sources on the *Quellen* tab.
+
+The older shared `core.optomed.worklist.token` is accepted for the worklist
+only in single mode; it names no location, so in multi mode the bridge needs
+its uploader token. Going back from multi to single works only while at most
+one location is active.
 
 **Rotating or revoking a token.** *Token ersetzen* makes a new token at once
 and the old one stops working that moment: the PC reports "Token abgelehnt" and
@@ -595,11 +614,10 @@ which uploader - never the token itself).
 **DICOM cameras and the Remidio account have no token.** A DICOM camera is
 known by its **calling AE title**, the Remidio pull by the Remidio *site* it
 lists (`core.remidio.siteCustomId`). The first file from either makes a source
-with no location yet. Assign each on **System → Standorte → Quellen**. While
-one location exists, an unassigned source files at it and nothing needs doing.
-With several, what an unassigned source sends waits for a system
-administrator, and assigning the source puts those files into that location's
-inbox at once. The DICOM receiver accepts any calling AE title when
+with no location in multi mode; in single mode it gets the one location and
+nothing needs doing. In multi mode assign each on **System → Standorte →
+Quellen**: until then what it sends waits for a system administrator, and
+assigning the source puts those files into that location's inbox at once. The DICOM receiver accepts any calling AE title when
 `DICOM_SCP_ALLOWED_CALLING_AE_TITLES` is empty (its default), so the app makes
 **at most 200 DICOM sources** and files a title past that without one (one log
 line an hour says so). Set the allow-list to the cameras' AE titles and the

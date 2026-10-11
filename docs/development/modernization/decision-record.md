@@ -1141,7 +1141,7 @@ every thickness of such a file would be about 1.5× too large, silently.
 
 ## DR-040 — Locations are global, studies are enabled per location, and study-independent data is scoped by location
 
-**Status:** Proposed (2026-10-10). Direction approved by the maintainer; plan: [location-scoping-plan-2026-10-10.md](location-scoping-plan-2026-10-10.md).
+**Status:** Proposed (2026-10-10), amended 2026-10-11 (the location mode). Direction approved by the maintainer; plans: [location-scoping-plan-2026-10-10.md](location-scoping-plan-2026-10-10.md), [location-mode-plan-2026-10-11.md](location-mode-plan-2026-10-11.md).
 
 **Context.** A "Standort" in the SPA is a study site: a LibreClinica sub-study, defined per study. Nothing else has a place. Device uploads (Export Watcher, Optomed Bridge, Remidio, DICOM receiver, public upload page) reach the inbox with no origin, and `IngestItemVisibility` shows an unfiled file with no origin to everyone who may open the inbox. On the internal deployment, every physician therefore sees every device capture, whichever study or site they work in. A multicenter deployment cannot work like that.
 
@@ -1150,7 +1150,8 @@ every thickness of such a file would be about 1.5× too large, silently.
 - **A location is a global entity:** a physical place, managed by system administrators.
 - **Sites are linked, not replaced.** A study is enabled at a location by having a site there. Each site points to one location; a study without sites points to its location directly. Roles, ODM, randomisation and the cross-site isolation keep working on sites.
 - **Every source has a location,** and every arriving file gets the origin location of its source. The sources are: each uploader (an acquisition-PC program, or a browser upload page opened with a link that carries an uploader token), each DICOM calling AE and the Remidio account.
-- **Uploaders authenticate with a per-uploader token issued for one location.** The token decides the location and limits the visit lookup and the worklist to it. It is shown once, stored as a hash, revocable and audited, and it can only upload, report heartbeats and fetch the worklist. The anonymous device front door closes once every uploader has its token.
+- **Uploaders authenticate with a per-uploader token issued for one location.** The token decides the location and limits the visit lookup and the worklist to it. It is shown once, stored as a hash, revocable and audited, and it can only upload, report heartbeats and fetch the worklist.
+- **Single- or multi-location is a deploy-time mode** (`LIBRECLINICA_DEPLOYMENT_LOCATIONS`, default `single`), never the number of locations (amendment, 2026-10-11). Single: exactly one location, a second cannot be created, uploaders may send without a token, and what has no place belongs to the one location. Multi: any number of locations, a token is required from the first location on, and what has no place belongs to none. A runtime switch triggered by creating a location would silently stop every untokened uploader; a deploy step with a restart is deliberate.
 - **A Standort-Admin right,** granted by a system administrator per person and location, lets selected staff issue and revoke the tokens of their own location. A study role does not include it.
 - **A user's location scope** is derived from their site and study roles, plus optional explicit assignments for staff without a study role. System administrators have every location.
 - **The inbox, and other study-independent data such as the camera worklist and the Remidio patient sync, are scoped by location.** Study data stays scoped by study and site.
@@ -1158,11 +1159,12 @@ every thickness of such a file would be about 1.5× too large, silently.
 
 **Consequences.**
 
-- **Day one changes nothing:** the migration creates one location and assigns everything to it. The separation starts with the second location.
-- **The uploader scripts send their token with every request.** Uploaders without a token keep working at the default location until the anonymous front door is switched off.
+- **Day one changes nothing:** the migration creates one location and assigns everything to it, and existing deployments stay in single mode.
+- **The uploader scripts send their token with every request.** In single mode uploaders without a token keep working at the one location.
 - **The site form selects a location instead of free facility fields.**
+- **Switching to multi** is a deploy step: every uploader gets its token first (single mode accepts it already), then the mode is changed and the stack restarted. Single mode on a database with several active locations refuses to start, and every single-mode start gives the one location to what has none, so the switch finds nothing unplaced.
 - **Before a second location goes live,** its sources, sites and staff assignments have to be in place. An unassigned source's files wait for an administrator.
-- **Creating the second location closes the anonymous device front door:** untokened device requests are served only while exactly one location exists. The per-study site is called "Prüfzentrum" from phase 4 on, so that "Standort" means only the global place.
+- The per-study site is called "Prüfzentrum" from phase 4 on, so that "Standort" means only the global place.
 
 ---
 

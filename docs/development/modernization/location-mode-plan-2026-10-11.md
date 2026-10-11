@@ -1,6 +1,6 @@
 # Plan: single- or multi-location is a deploy-time mode (DR-040 amendment)
 
-**Status:** proposed, 2026-10-11. Changes phase 2 ([PR #419](https://github.com/LuViKu/LibreClinicaMUW/pull/419)) before it merges, so the count-based behaviour never ships.
+**Status:** accepted and built, 2026-10-11, on the phase 2 branch ([PR #419](https://github.com/LuViKu/LibreClinicaMUW/pull/419)), so the count-based behaviour never ships. `core.ingest.anonymousDeviceUploads` was dropped, and single mode with several active locations refuses to start, as recommended.
 **Background:** [location-scoping-plan-2026-10-10.md](location-scoping-plan-2026-10-10.md), DR-040 in [decision-record.md](decision-record.md).
 
 ## Why
@@ -36,7 +36,7 @@ A rejected token stays a 401 in single mode. A wrong token is a misconfiguration
 ## What goes away
 
 - **The count-based door** in `UploaderTokenFilter` (`doorOpen`, `exactlyOneLocation`, the 15 s cache, `forgetLocationCount`). This also closes the "untokened request during an outage is answered 401 *required*" limit, because the door no longer reads the database.
-- **`core.ingest.anonymousDeviceUploads`**, from both `datainfo.properties` files and the filter. It never shipped, so nothing has to be migrated. Its only remaining use would be refusing untokened uploads on a single-location install. The internet-facing mode already answers the device endpoints with 404, so the setting would protect nothing there. *Recommendation: drop it. If tokens should be required on the internal VM before a switch, keep it as a single-mode-only option instead.*
+- **`core.ingest.anonymousDeviceUploads`**, from both `datainfo.properties` files and the filter. It never shipped, so nothing has to be migrated. Its only remaining use would be refusing untokened uploads on a single-location install. The internet-facing mode already answers the device endpoints with 404, so the setting would protect nothing there. Dropped.
 - **The second-location warning** in `LocationEditDialog.vue` (the anonymous-uploaders check and its acknowledgement).
 
 `GET /api/v1/admin/ingest-sources/anonymous-uploaders` stays, repurposed as the pre-switch check (see "Switching").
