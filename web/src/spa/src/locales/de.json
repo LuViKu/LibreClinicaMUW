@@ -4655,6 +4655,17 @@
     },
     "empty": "An diesem Standort gibt es noch keinen Uploader. Mit „Uploader anlegen“ erhalten Sie den Token für einen Erfassungs-PC.",
     "noLocation": "Für Ihr Konto ist kein Standort freigegeben, an dem Sie Uploader verwalten dürfen.",
+    "preSwitch": {
+      "title": "Vor einer Umstellung auf mehrere Standorte",
+      "count": "{n} Programm sendet noch keinen Token | {n} Programme senden noch keinen Token",
+      "hint": "Gezählt sind die Programme, die sich in den letzten 7 Tagen ohne Token gemeldet haben. Solange diese Installation für einen Standort eingerichtet ist, nimmt der Server ihre Dateien an; nach einer Umstellung auf mehrere Standorte (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi) weist er sie ab. Stellen Sie erst um, wenn hier 0 steht.",
+      "none": "Alle Programme, die sich in den letzten 7 Tagen gemeldet haben, senden einen Token.",
+      "unknown": "Ob noch Programme ohne Token senden, ließ sich nicht prüfen.",
+      "show": "Programme anzeigen",
+      "unnamed": "ohne Namen",
+      "seen": "zuletzt gesehen {when}",
+      "more": "… und {n} weitere"
+    },
     "column": {
       "name": "Name",
       "token": "Token (Anfang)",

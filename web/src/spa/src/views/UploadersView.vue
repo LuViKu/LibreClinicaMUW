@@ -27,6 +27,14 @@
  * notice. The one thing no notice may carry is the token: it appears only in
  * its own dialog (UploaderTokenDialog), once, and is let go of when that
  * dialog closes.
+ *
+ * Before a switch to multi mode. In single-location mode the server still
+ * takes files from programs that send no token; after a switch to multi mode
+ * (`LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi`) it turns them away. So a system
+ * administrator in single mode sees how many programs reported in the last
+ * 7 days without a token, and which: the switch is safe once that reads 0.
+ * Nobody else is asked about it (the server answers a Standort-Admin 403),
+ * multi mode has no use for it, and a failed read is a quiet note.
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -42,9 +50,12 @@ import UploaderTokenDialog from '@/components/UploaderTokenDialog.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useUploadersStore } from '@/stores/uploaders'
+import { useAdminIngestSourcesStore } from '@/stores/adminIngestSources'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useConfirm } from '@/composables/useConfirm'
 import { formatAgo, formatInstant, secondsSince } from '@/lib/byteFormat'
+import { programName } from '@/lib/uploaderPrograms'
+import type { AnonymousUploaders } from '@/types/ingestSource'
 import type { ManagedUploader } from '@/types/uploader'
 
 const { t, locale } = useI18n()
@@ -52,8 +63,47 @@ const auth = useAuthStore()
 const store = useUploadersStore()
 const notifications = useNotificationsStore()
 const confirm = useConfirm()
+const sources = useAdminIngestSourcesStore()
 
-onMounted(() => { void store.load() })
+onMounted(() => {
+  void store.load()
+  void loadPreSwitch()
+})
+
+/** Reads the list again, and the pre-switch count with it: a PC that now sends its token drops out. */
+function refresh() {
+  void store.load()
+  void loadPreSwitch()
+}
+
+/* ------------------------------ Before a switch to multi mode ------------------------------ */
+
+/** Only a system administrator may ask, and only single mode has a switch ahead. */
+const preSwitchApplies = computed(() => auth.isSysAdmin && auth.locationMode === 'single')
+
+type PreSwitch =
+  | { state: 'idle' }
+  | { state: 'ready'; anonymous: AnonymousUploaders }
+  | { state: 'failed' }
+const preSwitch = ref<PreSwitch>({ state: 'idle' })
+/** Counts the reads, so that an older answer does not overwrite a newer one. */
+let preSwitchSeq = 0
+
+async function loadPreSwitch(): Promise<void> {
+  if (!preSwitchApplies.value) return
+  const seq = ++preSwitchSeq
+  const result = await sources.fetchAnonymousUploaders()
+  if (seq !== preSwitchSeq) return
+  preSwitch.value = result.ok ? { state: 'ready', anonymous: result.anonymous } : { state: 'failed' }
+}
+
+function preSwitchLabel(i: AnonymousUploaders['instances'][number]): string {
+  return [
+    i.displayName?.trim() || t('uploaders.preSwitch.unnamed'),
+    programName(i.kind),
+    t('uploaders.preSwitch.seen', { when: ago(i.lastSeenAt) }),
+  ].join(' · ')
+}
 
 /* ------------------------------ The location shown ------------------------------ */
 
@@ -229,6 +279,47 @@ async function revoke(u: ManagedUploader, event: Event) {
         </template>
       </PageHeader>
 
+      <!-- Single mode, system administrator: how many programs a switch to multi mode would turn away. -->
+      <section
+        v-if="preSwitchApplies && preSwitch.state !== 'idle'"
+        class="mb-4 rounded-md border px-3 py-2.5 text-xs leading-relaxed"
+        :class="preSwitch.state === 'ready' && preSwitch.anonymous.count > 0
+          ? 'border-amber-300 bg-amber-50 text-amber-950'
+          : 'border-slate-200 bg-slate-50 text-slate-600'"
+        aria-labelledby="uploaders-preswitch-title"
+        data-testid="uploaders-preswitch"
+        :data-state="preSwitch.state"
+      >
+        <h2 id="uploaders-preswitch-title" class="sr-only">{{ t('uploaders.preSwitch.title') }}</h2>
+        <template v-if="preSwitch.state === 'ready'">
+          <p v-if="preSwitch.anonymous.count === 0" data-testid="uploaders-preswitch-none">
+            {{ t('uploaders.preSwitch.none') }}
+          </p>
+          <template v-else>
+            <p class="text-[13px] font-semibold" data-testid="uploaders-preswitch-count">
+              {{ t('uploaders.preSwitch.count', preSwitch.anonymous.count) }}
+            </p>
+            <p class="mt-1">{{ t('uploaders.preSwitch.hint') }}</p>
+            <details v-if="preSwitch.anonymous.instances.length > 0" class="mt-1.5">
+              <summary class="cursor-pointer font-medium muw-focus rounded-sm">{{ t('uploaders.preSwitch.show') }}</summary>
+              <ul class="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5" data-testid="uploaders-preswitch-list">
+                <li v-for="(u, i) in preSwitch.anonymous.instances" :key="i" data-testid="uploaders-preswitch-item">
+                  {{ preSwitchLabel(u) }}
+                </li>
+              </ul>
+              <p
+                v-if="preSwitch.anonymous.count > preSwitch.anonymous.instances.length"
+                class="mt-1"
+                data-testid="uploaders-preswitch-more"
+              >
+                {{ t('uploaders.preSwitch.more', { n: preSwitch.anonymous.count - preSwitch.anonymous.instances.length }) }}
+              </p>
+            </details>
+          </template>
+        </template>
+        <p v-else class="italic" data-testid="uploaders-preswitch-unknown">{{ t('uploaders.preSwitch.unknown') }}</p>
+      </section>
+
       <p
         v-if="!selected"
         class="rounded-md border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-600"
@@ -258,7 +349,7 @@ async function revoke(u: ManagedUploader, event: Event) {
             class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-50 muw-focus"
             :disabled="store.isLoading"
             data-testid="uploaders-refresh"
-            @click="store.load()"
+            @click="refresh()"
           >
             {{ t('uploaders.refresh') }}
           </button>

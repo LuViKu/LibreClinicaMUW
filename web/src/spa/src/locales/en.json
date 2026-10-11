@@ -4655,6 +4655,17 @@
     },
     "empty": "This location has no uploader yet. “Create uploader” gives you the token for an acquisition PC.",
     "noLocation": "No location is enabled for your account to manage uploaders at.",
+    "preSwitch": {
+      "title": "Before a switch to several locations",
+      "count": "{n} program still sends no token | {n} programs still send no token",
+      "hint": "Counted are the programs that reported in the last 7 days without a token. While this installation is set up for a single location, the server accepts their files; after a switch to several locations (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi) it turns them away. Switch only once this reads 0.",
+      "none": "Every program that reported in the last 7 days sends a token.",
+      "unknown": "Whether programs still send no token could not be checked.",
+      "show": "Show the programs",
+      "unnamed": "unnamed",
+      "seen": "last seen {when}",
+      "more": "… and {n} more"
+    },
     "column": {
       "name": "Name",
       "token": "Token (start)",
