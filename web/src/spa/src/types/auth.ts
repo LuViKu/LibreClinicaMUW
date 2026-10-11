@@ -47,7 +47,8 @@ export type AuthState =
 export type AuthenticatedUser =
   Omit<Required<components['schemas']['MeDto']>,
        'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
-       | 'passwordChangeReason' | 'activeStudy' | 'userType' | 'deidentificationRequired'>
+       | 'passwordChangeReason' | 'activeStudy' | 'userType' | 'deidentificationRequired'
+       | 'manageableLocations'>
   & {
     role: UserRole
     source: AuthSource
@@ -59,6 +60,15 @@ export type AuthenticatedUser =
      * ones that are not). Absent/false → today's behaviour.
      */
     deidentificationRequired?: boolean
+    /**
+     * The locations whose uploaders and tokens this session may manage
+     * (phase 2 of the locations): every available location for a system
+     * administrator, the ones a person is Standort-Admin of otherwise, and
+     * none for everyone else. Always an array in the auth store, which
+     * fills in `[]` for an answer from before the field existed; the
+     * Uploaders page and its entry points are available when it is not empty.
+     */
+    manageableLocations: ManageableLocation[]
     email: string | null
     siteLabel: string | null
     locale: string | null
@@ -73,6 +83,18 @@ export type AuthenticatedUser =
     passwordChangeReason: PasswordChangeReason | null
     activeStudy: ActiveStudySummary | null
   }
+
+/**
+ * One entry of `manageableLocations` on `GET /pages/api/v1/me`: a location
+ * the session may issue uploader tokens for. Hand-typed here until
+ * `types/api.ts` is regenerated against the backend.
+ */
+export interface ManageableLocation {
+  id: number
+  /** The location's fixed code, e.g. `MUW-AUGEN`. */
+  code: string
+  name: string
+}
 
 /** UX hint for the ChangePasswordView banner — see AuthenticatedUser. */
 export type PasswordChangeReason = 'first-login' | 'rotation'
