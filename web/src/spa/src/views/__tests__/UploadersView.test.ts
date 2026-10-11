@@ -11,6 +11,9 @@
  * server's 400, 404 and 409 are shown, not swallowed; a Standort-Admin who
  * is no system administrator gets the same page without the System rail and
  * without a call that only an administrator may make.
+ *
+ * The session is in multi mode unless a test says otherwise (two managed
+ * locations); the pre-switch count of single mode has its own block.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -37,11 +40,13 @@ import { useUploadersStore } from '@/stores/uploaders'
 import UploadersView from '@/views/UploadersView.vue'
 import enMessages from '@/locales/en.json'
 import deMessages from '@/locales/de.json'
-import type { AuthenticatedUser, ManageableLocation } from '@/types/auth'
+import type { AuthenticatedUser, LocationMode, ManageableLocation } from '@/types/auth'
+import type { AnonymousUploaders } from '@/types/ingestSource'
 import type { ManagedUploader } from '@/types/uploader'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en: enMessages } })
 const LIST = '/pages/api/v1/uploaders'
+const ANON = '/pages/api/v1/admin/ingest-sources/anonymous-uploaders'
 
 const MUW: ManageableLocation = { id: 1, code: 'MUW-AUGEN', name: 'MUW Augenklinik' }
 const GRAZ: ManageableLocation = { id: 2, code: 'GRAZ', name: 'Klinik Graz' }
@@ -77,20 +82,36 @@ const ALL = [GRAZ_OCT, CLARUS, SPECTRALIS]
 
 const clone = <T,>(v: T): T => structuredClone(v)
 
-function answerGets(over: { uploaders?: ManagedUploader[]; fail?: ApiError } = {}) {
+function answerGets(over: {
+  uploaders?: ManagedUploader[]
+  fail?: ApiError
+  anonymous?: AnonymousUploaders | Error
+} = {}) {
   vi.mocked(apiGet).mockImplementation(async (path: string) => {
     if (path === LIST) {
       if (over.fail) throw over.fail
       return clone(over.uploaders ?? ALL)
     }
+    if (path === ANON && over.anonymous !== undefined) {
+      if (over.anonymous instanceof Error) throw over.anonymous
+      return clone(over.anonymous)
+    }
     throw new Error(`unexpected GET ${path}`)
   })
 }
 
-/** Sets the session the view reads: who is signed in and which locations they manage. */
-function signIn(kind: 'sysadmin' | 'location-admin', manageable: ManageableLocation[]) {
+/**
+ * Sets the session the view reads: who is signed in, which locations they
+ * manage, and the deployment's location mode (`null`: a /me without the field).
+ */
+function signIn(
+  kind: 'sysadmin' | 'location-admin',
+  manageable: ManageableLocation[],
+  mode: LocationMode | null = 'multi',
+) {
   const auth = useAuthStore()
   auth.user = {
+    ...(mode ? { locationMode: mode } : {}),
     username: kind === 'sysadmin' ? 'root' : 'maria',
     displayName: kind === 'sysadmin' ? 'Root' : 'Maria Muster',
     role: kind === 'sysadmin' ? 'Administrator' : 'Data Manager',
@@ -838,6 +859,123 @@ describe('UploadersView', () => {
     it('is centred like the other pages without a rail', async () => {
       await mountView()
       expect(byId('page-header')!.parentElement!.classList.contains('mx-auto')).toBe(true)
+    })
+  })
+
+  describe('before a switch to multi mode: the programs that send no token', () => {
+    const CLARUS_PC = { displayName: 'CLARUS-PC', kind: 'export-watcher', lastSeenAt: '2026-10-12T09:30:00Z' }
+    const BRIDGE_PC = { displayName: null, kind: 'optomed-bridge', lastSeenAt: '2026-10-11T08:00:00Z' }
+    const NEWER = { displayName: 'LAB-7', kind: 'fundus-agent', lastSeenAt: '2026-10-10T08:00:00Z' }
+    const anonReads = () => vi.mocked(apiGet).mock.calls.filter((c) => c[0] === ANON).length
+
+    describe('for a system administrator in single mode', () => {
+      beforeEach(() => signIn('sysadmin', [MUW], 'single'))
+
+      it('says how many programs still send no token, and that a switch would turn them away', async () => {
+        answerGets({ anonymous: { count: 2, instances: [CLARUS_PC, BRIDGE_PC] } })
+        await mountView()
+        expect(anonReads()).toBe(1)
+        expect(byId('uploaders-preswitch')!.getAttribute('data-state')).toBe('ready')
+        expect(text('uploaders-preswitch-count')).toBe('2 programs still send no token')
+        const box = text('uploaders-preswitch')!
+        expect(box).toContain('last 7 days')
+        expect(box).toContain('LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi')
+        expect(box).toContain('turns them away')
+        // The page itself works as before.
+        expect(rowIds()).toEqual(['11', '12'])
+      })
+
+      it('says "1 program sends" for one', async () => {
+        answerGets({ anonymous: { count: 1, instances: [CLARUS_PC] } })
+        await mountView()
+        expect(text('uploaders-preswitch-count')).toBe('1 program still sends no token')
+      })
+
+      it('names the programs on request: the PC, the program and when it was last seen', async () => {
+        answerGets({ anonymous: { count: 5, instances: [CLARUS_PC, BRIDGE_PC, NEWER] } })
+        await mountView()
+        const items = Array.from(document.body.querySelectorAll('[data-testid="uploaders-preswitch-item"]'))
+          .map((li) => li.textContent!.replace(/\s+/g, ' ').trim())
+        expect(items).toHaveLength(3)
+        expect(items[0]).toMatch(/^CLARUS-PC · Export Watcher · last seen /)
+        expect(items[1]).toMatch(/^unnamed · Optomed Bridge · last seen /)
+        // A program the page does not know is shown as the server named it.
+        expect(items[2]).toMatch(/^LAB-7 · fundus-agent · /)
+        expect(text('uploaders-preswitch-more')).toBe('… and 2 more')
+        // Behind a disclosure, so the count stays the one thing the eye meets.
+        expect(document.body.querySelector('[data-testid="uploaders-preswitch"] details')).not.toBeNull()
+      })
+
+      it('says that every program sends a token when none is missing', async () => {
+        answerGets({ anonymous: { count: 0, instances: [] } })
+        await mountView()
+        expect(byId('uploaders-preswitch-count')).toBeNull()
+        expect(text('uploaders-preswitch-none')).toBe('Every program that reported in the last 7 days sends a token.')
+      })
+
+      it('survives a failed read: a quiet note, and the list as usual', async () => {
+        answerGets({ anonymous: new ApiError(500, 'Server Error', null) })
+        await mountView()
+        expect(byId('uploaders-preswitch')!.getAttribute('data-state')).toBe('failed')
+        expect(text('uploaders-preswitch-unknown')).toBe('Whether programs still send no token could not be checked.')
+        expect(byId('uploaders-preswitch-count')).toBeNull()
+        expect(byId('uploaders-error')).toBeNull()
+        expect(rowIds()).toEqual(['11', '12'])
+      })
+
+      it('reads the count again with "Refresh"', async () => {
+        answerGets({ anonymous: { count: 1, instances: [CLARUS_PC] } })
+        await mountView()
+        answerGets({ anonymous: { count: 0, instances: [] } })
+        await click('uploaders-refresh')
+        expect(anonReads()).toBe(2)
+        expect(text('uploaders-preswitch-none')).not.toBeNull()
+      })
+
+      it('speaks German, the working language', async () => {
+        const german = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de: deMessages } })
+        appI18n.global.locale.value = 'de-AT'
+        answerGets({ anonymous: { count: 3, instances: [CLARUS_PC] } })
+        await mountView(german)
+        expect(text('uploaders-preswitch-count')).toBe('3 Programme senden noch keinen Token')
+        const box = text('uploaders-preswitch')!
+        expect(box).toContain('Stellen Sie erst um, wenn hier 0 steht.')
+        expect(box).not.toMatch(/uploaders\./)
+      })
+
+      it('has no structural violations with the count on screen', async () => {
+        answerGets({ anonymous: { count: 2, instances: [CLARUS_PC, BRIDGE_PC] } })
+        await mountView()
+        const rules = {
+          runOnly: { type: 'tag' as const, values: ['wcag2a', 'wcag2aa', 'wcag22aa', 'best-practice'] },
+          rules: { 'color-contrast': { enabled: false }, region: { enabled: false } },
+        }
+        expect(await axe(document.body, rules)).toHaveNoViolations()
+      })
+    })
+
+    it('is not asked for a Standort-Admin, whom the server would answer 403', async () => {
+      signIn('location-admin', [GRAZ], 'single')
+      answerGets({ uploaders: [GRAZ_OCT], anonymous: { count: 2, instances: [CLARUS_PC, BRIDGE_PC] } })
+      await mountView()
+      expect(anonReads()).toBe(0)
+      expect(byId('uploaders-preswitch')).toBeNull()
+    })
+
+    it('is not asked in multi mode, where every program needs its token anyway', async () => {
+      signIn('sysadmin', [MUW, GRAZ], 'multi')
+      answerGets({ anonymous: { count: 2, instances: [CLARUS_PC, BRIDGE_PC] } })
+      await mountView()
+      expect(anonReads()).toBe(0)
+      expect(byId('uploaders-preswitch')).toBeNull()
+    })
+
+    it('reads a /me without the mode as single mode', async () => {
+      signIn('sysadmin', [MUW], null)
+      answerGets({ anonymous: { count: 2, instances: [CLARUS_PC, BRIDGE_PC] } })
+      await mountView()
+      expect(anonReads()).toBe(1)
+      expect(text('uploaders-preswitch-count')).toBe('2 programs still send no token')
     })
   })
 

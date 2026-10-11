@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
 import { readMutationFailure, type MutationFailure } from '@/lib/mutationFailure'
+import { i18n } from '@/i18n'
 import type {
   CreateLocationInput,
   Location,
@@ -234,11 +235,26 @@ function sortedByName(list: Location[]): Location[] {
   return [...list].sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }))
 }
 
-/** What a failed call tells the person; see {@link readMutationFailure}. */
+/**
+ * The server's 409 to a create or restore that would make a second active
+ * location in single-location mode (DR-040 amendment). The page does not offer
+ * either there, so this comes back only when the page and the server disagree.
+ */
+const SINGLE_LOCATION_REFUSAL = 'single-location deployment'
+
+/**
+ * What a failed call tells the person; see {@link readMutationFailure}. The
+ * single-location refusal is the server's code word, not a sentence, so it is
+ * said in the person's language instead.
+ */
 function readFailure(e: unknown, fallbackKey: string): MutationFailure {
-  return readMutationFailure(e, {
+  const failure = readMutationFailure(e, {
     fallback: fallbackKey,
     network: 'adminLocations.error.network',
     unknown: 'adminLocations.error.unknown',
   })
+  if (failure.status === 409 && failure.message === SINGLE_LOCATION_REFUSAL) {
+    return { ...failure, message: i18n.global.t('adminLocations.error.singleLocation') }
+  }
+  return failure
 }

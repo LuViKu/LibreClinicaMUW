@@ -4915,6 +4915,11 @@ export interface components {
             userType?: string;
             deidentificationRequired?: boolean;
             manageableLocations: components["schemas"]["ManageableLocationDto"][];
+            /**
+             * @description The deployment's location mode (LIBRECLINICA_DEPLOYMENT_LOCATIONS), fixed at deploy time: single keeps exactly one active location, multi allows any number and requires an uploader token from every device.
+             * @enum {string}
+             */
+            locationMode: "single" | "multi";
         };
         PermissionsDto: {
             enterData?: boolean;

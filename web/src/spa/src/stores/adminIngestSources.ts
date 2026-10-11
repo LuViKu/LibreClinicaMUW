@@ -69,9 +69,10 @@ export const useAdminIngestSourcesStore = defineStore('adminIngestSources', () =
   }
 
   /**
-   * The uploaders that have never used a token, for the warning before a
-   * second location is created. A read of its own, kept out of the list's
-   * state: it is asked when that dialog opens and answers one question.
+   * The uploaders that have never used a token (the last 7 days): the
+   * pre-switch count the Uploaders page shows in single mode, which has to
+   * read 0 before the deployment is switched to multi. A read of its own,
+   * kept out of the list's state: it answers one question.
    */
   async function fetchAnonymousUploaders(): Promise<AnonymousUploadersResult> {
     try {

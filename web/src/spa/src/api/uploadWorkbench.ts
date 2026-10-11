@@ -7,7 +7,7 @@
  * The two backends answer in the same shapes, so the difference is one
  * parameter here and nowhere else.
  *
- * The uploader token. Once a second location exists the public route answers
+ * The uploader token. In multi-location mode the public route answers
  * 401 unless the request names the location it belongs to with an uploader
  * token (`X-MUW-Uploader-Token`, see `lib/uploaderToken`). {@link authHeaders}
  * is the one place that decides whether a request carries it, and every

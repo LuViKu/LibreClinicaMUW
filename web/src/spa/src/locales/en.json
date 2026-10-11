@@ -4518,6 +4518,7 @@
     "intro": "A location is a physical place, such as a clinic, a department or a partner hospital. A study is active at a location when it has a study site there; this page calls the sites created per study “study sites”. Files from devices belong to the location of their source.",
     "create": "Create location",
     "empty": "There is no location yet.",
+    "singleMode": "This installation is set up for a single location. A second location needs the deployment to be switched (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi, see the deploy README, section “Uploader tokens and locations”).",
     "column": {
       "code": "Code",
       "name": "Name",
@@ -4598,19 +4599,6 @@
       "sources": "Sources",
       "sourcesBadgeAria": "{n} sources without a location"
     },
-    "secondLocation": {
-      "title": "From the second location on, every uploader needs a token",
-      "intro": "Once there is a second location the anonymous front door closes: uploaders and upload pages without a token are turned away, and their files stay where they are until a token is entered. Everything then needs the token of its location.",
-      "checking": "Checking which uploaders have no token yet …",
-      "none": "Every uploader that reported in the last 7 days already uses a token.",
-      "count": "{n} uploader has no token yet but reported in the last 7 days: | {n} uploaders have no token yet but reported in the last 7 days:",
-      "unnamed": "unnamed",
-      "seen": "last seen {when}",
-      "more": "… and {n} more",
-      "toUploaders": "Issue tokens on the “Uploaders and tokens” page (opens in a new tab)",
-      "acknowledge": "I know that these uploaders can no longer upload without a token afterwards",
-      "unknown": "It could not be checked whether uploaders without a token are still running. Check before you create the location: from the second location on they are turned away."
-    },
     "sources": {
       "heading": "Sources",
       "intro": "A source is where device files come from: an uploader on an acquisition PC, a DICOM device (by its AE title) or the Remidio account. Only a system administrator sees the files of a source without a location. Assign the source a location and its waiting files appear in that location’s inbox at once.",
@@ -4651,7 +4639,8 @@
       "detailFailed": "The location could not be loaded (HTTP {status}).",
       "saveFailed": "The change could not be saved (HTTP {status}).",
       "network": "The server could not be reached.",
-      "unknown": "Unknown error."
+      "unknown": "Unknown error.",
+      "singleLocation": "This installation is set up for a single location; a second active location is possible only after switching to LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi."
     }
   },
   "uploaders": {
@@ -4666,6 +4655,17 @@
     },
     "empty": "This location has no uploader yet. “Create uploader” gives you the token for an acquisition PC.",
     "noLocation": "No location is enabled for your account to manage uploaders at.",
+    "preSwitch": {
+      "title": "Before a switch to several locations",
+      "count": "{n} program still sends no token | {n} programs still send no token",
+      "hint": "Counted are the programs that reported in the last 7 days without a token. While this installation is set up for a single location, the server accepts their files; after a switch to several locations (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi) it turns them away. Switch only once this reads 0.",
+      "none": "Every program that reported in the last 7 days sends a token.",
+      "unknown": "Whether programs still send no token could not be checked.",
+      "show": "Show the programs",
+      "unnamed": "unnamed",
+      "seen": "last seen {when}",
+      "more": "… and {n} more"
+    },
     "column": {
       "name": "Name",
       "token": "Token (start)",

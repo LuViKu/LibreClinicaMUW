@@ -4518,6 +4518,7 @@
     "intro": "Ein Standort ist ein physischer Ort, etwa eine Klinik, eine Abteilung oder ein Partnerkrankenhaus. Eine Studie ist an einem Standort aktiv, wenn sie dort einen Studien-Standort hat; so heißen auf dieser Seite die Standorte, die je Studie angelegt werden. Dateien von Geräten gehören zum Standort ihrer Quelle.",
     "create": "Standort anlegen",
     "empty": "Es gibt noch keinen Standort.",
+    "singleMode": "Diese Installation ist für einen einzigen Standort eingerichtet. Ein zweiter Standort setzt die Umstellung beim Deployment voraus (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi, siehe Deploy-README, Abschnitt „Uploader tokens and locations“).",
     "column": {
       "code": "Kürzel",
       "name": "Name",
@@ -4598,19 +4599,6 @@
       "sources": "Quellen",
       "sourcesBadgeAria": "{n} Quellen ohne Standort"
     },
-    "secondLocation": {
-      "title": "Ab dem zweiten Standort braucht jeder Uploader einen Token",
-      "intro": "Sobald es einen zweiten Standort gibt, schließt sich die anonyme Eingangstür: Uploader und Upload-Seiten ohne Token werden dann abgewiesen, und ihre Dateien bleiben liegen, bis ein Token eingetragen ist. Jeder braucht danach den Token seines Standorts.",
-      "checking": "Es wird geprüft, welche Uploader noch keinen Token haben …",
-      "none": "Alle Uploader, die sich in den letzten 7 Tagen gemeldet haben, verwenden bereits einen Token.",
-      "count": "{n} Uploader hat noch keinen Token, hat sich aber in den letzten 7 Tagen gemeldet: | {n} Uploader haben noch keinen Token, haben sich aber in den letzten 7 Tagen gemeldet:",
-      "unnamed": "ohne Namen",
-      "seen": "zuletzt gesehen {when}",
-      "more": "… und {n} weitere",
-      "toUploaders": "Tokens ausstellen auf der Seite „Uploader und Tokens“ (öffnet in einem neuen Tab)",
-      "acknowledge": "Ich weiß, dass diese Uploader danach ohne Token nicht mehr hochladen können",
-      "unknown": "Ob noch Uploader ohne Token arbeiten, konnte nicht geprüft werden. Prüfen Sie das vor dem Anlegen: Ab dem zweiten Standort werden sie abgewiesen."
-    },
     "sources": {
       "heading": "Quellen",
       "intro": "Eine Quelle ist die Herkunft von Gerätedateien: ein Uploader auf einem Erfassungs-PC, ein DICOM-Gerät (über seinen AE-Titel) oder das Remidio-Konto. Dateien einer Quelle ohne Standort sieht nur ein Systemadministrator. Ordnen Sie der Quelle einen Standort zu, erscheinen ihre wartenden Dateien sofort im Eingang dieses Standorts.",
@@ -4651,7 +4639,8 @@
       "detailFailed": "Der Standort konnte nicht geladen werden (HTTP {status}).",
       "saveFailed": "Die Änderung konnte nicht gespeichert werden (HTTP {status}).",
       "network": "Der Server ist nicht erreichbar.",
-      "unknown": "Unbekannter Fehler."
+      "unknown": "Unbekannter Fehler.",
+      "singleLocation": "Diese Installation ist für einen einzigen Standort eingerichtet; ein zweiter aktiver Standort ist erst nach der Umstellung auf LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi möglich."
     }
   },
   "uploaders": {
@@ -4666,6 +4655,17 @@
     },
     "empty": "An diesem Standort gibt es noch keinen Uploader. Mit „Uploader anlegen“ erhalten Sie den Token für einen Erfassungs-PC.",
     "noLocation": "Für Ihr Konto ist kein Standort freigegeben, an dem Sie Uploader verwalten dürfen.",
+    "preSwitch": {
+      "title": "Vor einer Umstellung auf mehrere Standorte",
+      "count": "{n} Programm sendet noch keinen Token | {n} Programme senden noch keinen Token",
+      "hint": "Gezählt sind die Programme, die sich in den letzten 7 Tagen ohne Token gemeldet haben. Solange diese Installation für einen Standort eingerichtet ist, nimmt der Server ihre Dateien an; nach einer Umstellung auf mehrere Standorte (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi) weist er sie ab. Stellen Sie erst um, wenn hier 0 steht.",
+      "none": "Alle Programme, die sich in den letzten 7 Tagen gemeldet haben, senden einen Token.",
+      "unknown": "Ob noch Programme ohne Token senden, ließ sich nicht prüfen.",
+      "show": "Programme anzeigen",
+      "unnamed": "ohne Namen",
+      "seen": "zuletzt gesehen {when}",
+      "more": "… und {n} weitere"
+    },
     "column": {
       "name": "Name",
       "token": "Token (Anfang)",

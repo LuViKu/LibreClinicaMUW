@@ -2,11 +2,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
-  AuthState, AuthenticatedUser, LoginFailure, LoginFailureReason, ManageableLocation,
+  AuthState, AuthenticatedUser, LocationMode, LoginFailure, LoginFailureReason, ManageableLocation,
   PasswordChangeFieldError, PasswordChangeRequest, ProfileFieldError, ProfileUpdateRequest,
   SsoConfig, StudyOption, StudyWritePermissions, UserRole,
 } from '@/types/auth'
-import { manageableLocationsOf, userMayManageUploaders } from '@/lib/locationAccess'
+import {
+  isLocationMode, locationModeOf, manageableLocationsOf, userMayManageUploaders,
+} from '@/lib/locationAccess'
 import { useSubjectsStore } from './subjects'
 import { useEventsStore } from './events'
 import { useNotesStore } from './notes'
@@ -123,6 +125,12 @@ export const useAuthStore = defineStore('auth', () => {
   const manageableLocations = computed<ManageableLocation[]>(() => manageableLocationsOf(user.value))
   /** The session may open the Uploaders page: it manages at least one location. */
   const canManageUploaders = computed(() => userMayManageUploaders(user.value))
+  /**
+   * The deployment's location mode (`/me`'s `locationMode`), fixed at deploy
+   * time: `single` keeps exactly one active location, `multi` allows any
+   * number. An answer without the field (an older server) reads as `single`.
+   */
+  const locationMode = computed<LocationMode>(() => locationModeOf(user.value))
 
   /**
    * Makes the user the server sent complete before it is stored: an answer
@@ -131,10 +139,18 @@ export const useAuthStore = defineStore('auth', () => {
    * always carries the list; the other calls that answer with the user
    * (active study, profile, password) may not, and then the list the session
    * already had stands, since it does not depend on the study or the profile.
+   * The location mode is kept the same way: it belongs to the deployment.
    */
   function adopt(me: AuthenticatedUser): AuthenticatedUser {
-    if (Array.isArray(me.manageableLocations)) return me
-    return { ...me, manageableLocations: manageableLocationsOf(user.value) }
+    let adopted = me
+    if (!Array.isArray(me.manageableLocations)) {
+      adopted = { ...adopted, manageableLocations: manageableLocationsOf(user.value) }
+    }
+    const held = user.value?.locationMode
+    if (!isLocationMode(me.locationMode) && isLocationMode(held)) {
+      adopted = { ...adopted, locationMode: held }
+    }
+    return adopted
   }
 
   /**
@@ -513,6 +529,7 @@ export const useAuthStore = defineStore('auth', () => {
     isTechAdmin,
     manageableLocations,
     canManageUploaders,
+    locationMode,
     bootstrap,
     localLogin,
     loadStudies,

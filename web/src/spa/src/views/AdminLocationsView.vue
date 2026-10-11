@@ -21,6 +21,13 @@
  * tab, "Quellen", lists where device files come from and lets the
  * administrator assign each source a location (LocationSourcesPanel); its
  * badge counts the sources that still have none.
+ *
+ * How many locations may be active is the deployment's choice
+ * (`LIBRECLINICA_DEPLOYMENT_LOCATIONS`, reported by `/me` as `locationMode`).
+ * In single mode, once one location is active, the page offers neither to
+ * create another nor to restore a disabled one, and says instead that a
+ * second location is a deploy step; the server would refuse both with a 409.
+ * Multi mode offers both, as before.
  */
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -36,6 +43,7 @@ import LocationEditDialog from '@/components/LocationEditDialog.vue'
 import LocationSourcesPanel from '@/components/LocationSourcesPanel.vue'
 
 import { useAdminLocationsStore } from '@/stores/adminLocations'
+import { useAuthStore } from '@/stores/auth'
 import { useAdminIngestSourcesStore } from '@/stores/adminIngestSources'
 import { useAdminStudiesStore } from '@/stores/adminStudies'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -44,6 +52,7 @@ import type { Location, LocationUser } from '@/types/location'
 
 const { t, te } = useI18n()
 const store = useAdminLocationsStore()
+const auth = useAuthStore()
 const adminStudies = useAdminStudiesStore()
 const sourcesStore = useAdminIngestSourcesStore()
 const notifications = useNotificationsStore()
@@ -81,6 +90,15 @@ function onTabKeydown(e: KeyboardEvent) {
 }
 
 const activeCount = computed(() => store.locations.filter((l) => l.status === 'available').length)
+
+/** The deployment keeps exactly one active location (`/me`'s `locationMode`). */
+const singleMode = computed(() => auth.locationMode === 'single')
+/**
+ * Single mode with its one location active: a further one can be neither
+ * created nor restored. Until the list has arrived the page cannot tell, so
+ * it offers neither meanwhile rather than a button that may vanish.
+ */
+const atSingleLimit = computed(() => singleMode.value && (!store.loaded || activeCount.value > 0))
 
 function nonBlank(v: string | null | undefined): v is string {
   return v != null && v.trim() !== ''
@@ -302,8 +320,16 @@ async function toggleSiteAdmin(u: LocationUser, event: Event) {
             {{ t('adminLocations.subtitle', { count: store.locations.length, active: activeCount }) }}
           </p>
           <p class="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">{{ t('adminLocations.intro') }}</p>
+          <!-- In single mode a second location is a deploy step, not a click: say so where "create" would be. -->
+          <p
+            v-if="tab === 'locations' && singleMode"
+            class="text-xs text-slate-600 mt-2 max-w-3xl leading-relaxed"
+            data-testid="locations-single-mode"
+          >
+            {{ t('adminLocations.singleMode') }}
+          </p>
         </template>
-        <template v-if="tab === 'locations' && !store.error" #actions>
+        <template v-if="tab === 'locations' && !store.error && !atSingleLimit" #actions>
           <button
             type="button"
             class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium muw-focus"
@@ -461,27 +487,33 @@ async function toggleSiteAdmin(u: LocationUser, event: Event) {
                 >
                   {{ t('adminLocations.action.edit') }}
                 </button>
-                <span class="text-slate-400" aria-hidden="true">·</span>
-                <button
-                  v-if="loc.status === 'removed'"
-                  type="button"
-                  class="text-muw-teal-700 hover:underline muw-focus rounded-sm"
-                  :aria-label="t('adminLocations.action.restoreAria', { name: loc.name })"
-                  :data-testid="`location-restore-${loc.id}`"
-                  @click="restore(loc)"
-                >
-                  {{ t('adminLocations.action.restore') }}
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="text-rose-600 hover:underline muw-focus rounded-sm"
-                  :aria-label="t('adminLocations.action.disableAria', { name: loc.name })"
-                  :data-testid="`location-disable-${loc.id}`"
-                  @click="disable(loc)"
-                >
-                  {{ t('adminLocations.action.disable') }}
-                </button>
+                <!-- In single mode with a location active, a disabled one cannot come back. -->
+                <template v-if="loc.status === 'removed'">
+                  <template v-if="!atSingleLimit">
+                    <span class="text-slate-400" aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      class="text-muw-teal-700 hover:underline muw-focus rounded-sm"
+                      :aria-label="t('adminLocations.action.restoreAria', { name: loc.name })"
+                      :data-testid="`location-restore-${loc.id}`"
+                      @click="restore(loc)"
+                    >
+                      {{ t('adminLocations.action.restore') }}
+                    </button>
+                  </template>
+                </template>
+                <template v-else>
+                  <span class="text-slate-400" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    class="text-rose-600 hover:underline muw-focus rounded-sm"
+                    :aria-label="t('adminLocations.action.disableAria', { name: loc.name })"
+                    :data-testid="`location-disable-${loc.id}`"
+                    @click="disable(loc)"
+                  >
+                    {{ t('adminLocations.action.disable') }}
+                  </button>
+                </template>
               </div>
             </td>
           </tr>

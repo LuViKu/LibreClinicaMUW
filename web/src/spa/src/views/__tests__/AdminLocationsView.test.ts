@@ -12,7 +12,11 @@
  * and unassigning a person confirm too; each assigned person carries a
  * Standort-Admin checkbox that grants or withdraws the right to manage the
  * location's uploaders. (The Quellen section has its own file:
- * AdminLocationsSources.test.ts.)
+ * AdminLocationsSources.test.ts; single- versus multi-location mode has
+ * AdminLocationsView.locationMode.test.ts.)
+ *
+ * Two locations are active here, so the session is in multi mode
+ * throughout: that is the mode in which every action is offered.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -33,10 +37,12 @@ vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
 
 import { apiGet, apiPost, apiPut, apiDelete, ApiError } from '@/api/client'
 import { i18n as appI18n } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import AdminLocationsView from '@/views/AdminLocationsView.vue'
 import enMessages from '@/locales/en.json'
 import deMessages from '@/locales/de.json'
+import type { AuthenticatedUser } from '@/types/auth'
 import type { Location, LocationDetail } from '@/types/location'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en: enMessages } })
@@ -90,10 +96,8 @@ function answerGets(over: { locations?: Location[]; details?: Record<number, Loc
   const details = over.details ?? DETAILS
   vi.mocked(apiGet).mockImplementation(async (path: string) => {
     if (path === BASE) return clone(locations)
-    // The page also reads the ingest sources for its Quellen tab, and the create dialog asks which
-    // uploaders have no token before a second location; none of the tests here is about them.
+    // The page also reads the ingest sources for its Quellen tab; none of the tests here is about them.
     if (path === '/pages/api/v1/admin/ingest-sources') return []
-    if (path === '/pages/api/v1/admin/ingest-sources/anonymous-uploaders') return { count: 0, instances: [] }
     if (path === '/pages/api/v1/admin/studies') {
       if (over.studiesFail) throw new ApiError(500, 'Server Error', null)
       return clone(STUDIES)
@@ -106,6 +110,17 @@ function answerGets(over: { locations?: Location[]; details?: Record<number, Loc
     }
     throw new Error(`unexpected GET ${path}`)
   })
+}
+
+/** A system administrator on a multi-location deployment: what `/me` says of the session. */
+function signInMulti() {
+  const auth = useAuthStore()
+  auth.user = {
+    username: 'root', displayName: 'Root', role: 'Administrator', userType: 'SYSADMIN',
+    profileComplete: true, mustChangePassword: false, manageableLocations: [], locationMode: 'multi',
+    activeStudy: null,
+  } as unknown as AuthenticatedUser
+  auth.state = 'authenticated'
 }
 
 /** Every wrapper mounted by a test, unmounted afterwards even when the test fails half-way. */
@@ -164,6 +179,7 @@ describe('AdminLocationsView', () => {
     confirmMock.mockReset()
     confirmMock.mockResolvedValue(true)
     answerGets()
+    signInMulti()
   })
   afterEach(() => {
     for (const w of mounted.splice(0)) w.unmount()
@@ -354,6 +370,24 @@ describe('AdminLocationsView', () => {
       expect(document.activeElement).toBe(field('location-code'))
       await click('location-form-cancel')
       expect(document.activeElement).toBe(byId('location-create'))
+    })
+
+    it('creates a second location without asking about uploaders: no lookup, no warning, no tick', async () => {
+      // Graz and the MUW are both active already. Whether a further location may exist is the
+      // deployment's choice (LIBRECLINICA_DEPLOYMENT_LOCATIONS), so the dialog no longer warns.
+      vi.mocked(apiPost).mockResolvedValue(loc({ id: 4, code: 'LINZ-2', name: 'Klinik Linz 2' }))
+      await mountView()
+      await click('location-create')
+      expect(byId('location-second-warning')).toBeNull()
+      expect(byId('location-ack-anonymous')).toBeNull()
+      await type('location-code', 'LINZ-2')
+      await type('location-name', 'Klinik Linz 2')
+      expect((byId('location-form-submit') as HTMLButtonElement).disabled).toBe(false)
+      await click('location-form-submit')
+
+      expect(apiPost).toHaveBeenCalledTimes(1)
+      const paths = vi.mocked(apiGet).mock.calls.map((c) => c[0])
+      expect(paths.some((p) => p.includes('anonymous-uploaders'))).toBe(false)
     })
 
     it('closes on Cancel and on Escape without a request, and opens blank the next time', async () => {

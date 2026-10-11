@@ -278,6 +278,37 @@ describe('useAdminLocationsStore', () => {
     })
   })
 
+  describe('the single-location refusal', () => {
+    const refusal = () => new ApiError(409, 'Conflict', { message: 'single-location deployment' })
+
+    it('turns the 409 of a restore into a sentence and keeps the location disabled', async () => {
+      const removed = { ...GRAZ, status: 'removed' as const }
+      vi.mocked(apiGet).mockResolvedValueOnce([removed, MUW])
+      vi.mocked(apiPost).mockRejectedValueOnce(refusal())
+      const s = useAdminLocationsStore()
+      await s.load()
+      const r = await s.restore(2)
+      expect(r).toMatchObject({ ok: false, status: 409, fieldErrors: {} })
+      expect(r.ok ? '' : r.message).toContain('set up for a single location')
+      expect(s.locations.find((l) => l.id === 2)?.status).toBe('removed')
+    })
+
+    it('turns the 409 of a create into the same sentence, in German too', async () => {
+      i18n.global.locale.value = 'de-AT'
+      vi.mocked(apiPost).mockRejectedValueOnce(refusal())
+      const r = await useAdminLocationsStore().create({ code: 'GRAZ', name: 'Klinik Graz' })
+      expect(r.ok ? '' : r.message).toContain('für einen einzigen Standort eingerichtet')
+    })
+
+    it('leaves the same words with another status alone', async () => {
+      vi.mocked(apiPost).mockRejectedValueOnce(
+        new ApiError(400, 'Bad Request', { message: 'single-location deployment' }),
+      )
+      const r = await useAdminLocationsStore().create({ code: 'GRAZ', name: 'Klinik Graz' })
+      expect(r).toMatchObject({ ok: false, status: 400, message: 'single-location deployment' })
+    })
+  })
+
   describe('assigning people', () => {
     const ANNA = { username: 'anna', displayName: 'Anna Beispiel', canManageSources: false }
 

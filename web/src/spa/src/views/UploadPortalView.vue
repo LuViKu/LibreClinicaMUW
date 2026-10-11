@@ -8,7 +8,7 @@
  * redirect here for a release, because they are in bookmarks and on the
  * QR codes at the cameras.
  *
- * Once a second location exists the page needs to say which one it belongs
+ * In multi-location mode the page needs to say which location it belongs
  * to: the Standort-Admin's link is `/upload#token=mwu_…`, the token is taken
  * from the fragment, kept for the browser session and sent with every request
  * (see `composables/useUploaderTokenIntake` and `api/uploadWorkbench`). With

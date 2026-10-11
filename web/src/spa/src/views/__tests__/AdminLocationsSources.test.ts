@@ -11,6 +11,9 @@
  * and refreshes the locations' file counts that the assignment moved;
  * "not assigned" takes the location away; and the server's 409 (the location
  * is no longer available) and 404 are shown, with the select put back.
+ *
+ * Two locations are active here, so the session is in multi mode, in which
+ * the Standorte tab offers "create".
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -31,10 +34,12 @@ vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
 
 import { apiGet, apiPost, apiPut, apiDelete, ApiError } from '@/api/client'
 import { i18n as appI18n } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import AdminLocationsView from '@/views/AdminLocationsView.vue'
 import enMessages from '@/locales/en.json'
 import deMessages from '@/locales/de.json'
+import type { AuthenticatedUser } from '@/types/auth'
 import type { Location } from '@/types/location'
 import type { IngestSource } from '@/types/ingestSource'
 
@@ -88,8 +93,6 @@ function answerGets(over: { locations?: Location[]; sources?: IngestSource[]; so
       return clone(over.sources ?? SOURCES)
     }
     if (path === '/pages/api/v1/admin/studies') return []
-    // The create dialog's question before a second location; not what these tests are about.
-    if (path === `${SOURCES_URL}/anonymous-uploaders`) return { count: 0, instances: [] }
     throw new Error(`unexpected GET ${path}`)
   })
 }
@@ -147,6 +150,14 @@ describe('System → Standorte → Quellen', () => {
     confirmMock.mockReset()
     confirmMock.mockResolvedValue(true)
     answerGets()
+    // A system administrator on a multi-location deployment, as /me reports it.
+    const auth = useAuthStore()
+    auth.user = {
+      username: 'root', displayName: 'Root', role: 'Administrator', userType: 'SYSADMIN',
+      profileComplete: true, mustChangePassword: false, manageableLocations: [], locationMode: 'multi',
+      activeStudy: null,
+    } as unknown as AuthenticatedUser
+    auth.state = 'authenticated'
   })
   afterEach(() => {
     for (const w of mounted.splice(0)) w.unmount()
