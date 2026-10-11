@@ -404,6 +404,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One location with its studies and sites and its explicitly assigned users */
+        get: operations["getLocation"];
+        /** Edit a location's name and address; the code never changes */
+        put: operations["updateLocation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/locations/{id}/users/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign a user to a location explicitly; assigning an assigned user changes nothing */
+        put: operations["assignLocationUser"];
+        post?: never;
+        /** Remove a user's explicit assignment to a location; removing a missing one changes nothing */
+        delete: operations["unassignLocationUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -2451,6 +2487,58 @@ export interface paths {
         put?: never;
         /** Measure the storage now; the result replaces the page's figures when done */
         post: operations["rescanStorage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every location, removed ones included, with the numbers that decide whether one can be disabled */
+        get: operations["listLocations"];
+        put?: never;
+        /** Create a location */
+        post: operations["createLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/locations/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a disabled location */
+        post: operations["restoreLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/locations/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable a location; refused while a study or site is at it, and for the only available one */
+        post: operations["disableLocation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4762,6 +4850,57 @@ export interface components {
             /** Format: int32 */
             lockoutFailedAttempts?: number;
         };
+        LocationWriteRequest: {
+            /**
+             * @description Create only: 2 to 30 letters, digits, underscore or hyphen; unique without regard to case. Ignored on edit.
+             * @example MUW-AUGEN
+             */
+            code?: string;
+            /** @description At most 100 characters; unique without regard to case. */
+            name?: string;
+            /** @description At most 255 characters. */
+            street?: string;
+            /** @description At most 255 characters. */
+            city?: string;
+            /** @description At most 64 characters. */
+            zip?: string;
+            /** @description At most 64 characters. */
+            country?: string;
+        };
+        LocationDetailDto: {
+            /** Format: int32 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "available" | "removed";
+            street?: string | null;
+            city?: string | null;
+            zip?: string | null;
+            country?: string | null;
+            /** Format: int32 */
+            siteCount: number;
+            /** Format: int32 */
+            studyCount: number;
+            /** Format: int32 */
+            ingestItemCount: number;
+            /** Format: int32 */
+            userCount: number;
+            studies: components["schemas"]["LocationStudyDto"][];
+            users: components["schemas"]["LocationUserDto"][];
+        };
+        LocationStudyDto: {
+            oid: string;
+            name: string;
+            isSite: boolean;
+            parentOid?: string | null;
+            status: string;
+        };
+        LocationUserDto: {
+            username: string;
+            displayName: string;
+            canManageSources: boolean;
+        };
         CreateUserRequest: {
             username?: string;
             firstName?: string;
@@ -4876,6 +5015,8 @@ export interface components {
             contactEmail?: string;
             protocolType?: string;
             phase?: string;
+            /** Format: int32 */
+            locationId?: number;
         };
         ExportRequest: {
             format?: string;
@@ -4952,6 +5093,8 @@ export interface components {
             facilityContactEmail?: string;
             /** Format: int32 */
             initialPrincipalInvestigatorUserId?: number;
+            /** Format: int32 */
+            locationId?: number;
         };
         AcknowledgeRequest: {
             taskId?: string;
@@ -5787,6 +5930,26 @@ export interface components {
         BugReportResponse: {
             delivered?: boolean;
             ticketId?: string;
+        };
+        LocationDto: {
+            /** Format: int32 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "available" | "removed";
+            street?: string | null;
+            city?: string | null;
+            zip?: string | null;
+            country?: string | null;
+            /** Format: int32 */
+            siteCount: number;
+            /** Format: int32 */
+            studyCount: number;
+            /** Format: int32 */
+            ingestItemCount: number;
+            /** Format: int32 */
+            userCount: number;
         };
         UpdateScheduleRequest: {
             format?: string;
@@ -7422,6 +7585,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDetailDto"];
+                };
+            };
+        };
+    };
+    updateLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LocationWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDetailDto"];
+                };
+            };
+        };
+    };
+    assignLocationUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDetailDto"];
+                };
+            };
+        };
+    };
+    unassignLocationUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDetailDto"];
                 };
             };
         };
@@ -11116,6 +11373,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    createLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LocationWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    restoreLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    disableLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
                 };
             };
         };
