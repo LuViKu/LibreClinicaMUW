@@ -107,6 +107,27 @@ def test_store_persists_then_hands_off_and_succeeds(monkeypatch, image_ds):
     assert posted["previewPngPath"] == "/store/a.png"
 
 
+def test_store_hands_off_the_calling_ae_title_trimmed(monkeypatch, image_ds):
+    """DR-040 phase 2: the app makes the calling AE title the ingest source, so it must arrive as the camera
+    wrote it, without the padding an association may carry; the app keys the source on exactly this string."""
+    posted = {}
+    monkeypatch.setattr(store, "persist", lambda *a, **k: ("/store/a.dcm", None))
+    monkeypatch.setattr(server, "post_ingest", lambda url, token, payload, timeout: posted.update(payload) or True)
+
+    assert server._handle_store(_StoreEvent(image_ds, ae_title="  D2-CAMERA   ")) == 0x0000
+    assert posted["sourceAeTitle"] == "D2-CAMERA"
+
+
+def test_store_without_a_calling_ae_title_hands_off_none_not_an_empty_string(monkeypatch, image_ds):
+    """The app files a hand-off with no title under the default-location rule and makes no source of it."""
+    posted = {}
+    monkeypatch.setattr(store, "persist", lambda *a, **k: ("/store/a.dcm", None))
+    monkeypatch.setattr(server, "post_ingest", lambda url, token, payload, timeout: posted.update(payload) or True)
+
+    assert server._handle_store(_StoreEvent(image_ds, ae_title="   ")) == 0x0000
+    assert "sourceAeTitle" in posted and posted["sourceAeTitle"] is None
+
+
 def test_store_ingest_failure_is_reported_so_the_modality_retries(monkeypatch, image_ds):
     monkeypatch.setattr(store, "persist", lambda *a, **k: ("/store/a.dcm", None))
     monkeypatch.setattr(server, "post_ingest", lambda *a, **k: False)
