@@ -569,7 +569,8 @@ files go through by themselves. The heartbeat is refused as well, so such a PC
 may simply look silent on System Status; its tray icon and `-Heartbeat` say why.
 
 **Creating the second location closes the anonymous front door.** With two or
-more active locations an untokened device request is answered 401, because the
+more active locations (the platform notices within 15 seconds) an untokened
+device request is answered 401, because the
 platform can no longer tell where it belongs. So every uploader needs its token
 **before** the second location is created. The uploaders that would stop are
 those seen in the last seven days that have never reported with a token;
