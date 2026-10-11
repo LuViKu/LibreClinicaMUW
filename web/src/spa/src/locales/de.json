@@ -3884,6 +3884,12 @@
       "title": "Aufnahmen hochladen",
       "lead": "OCT-Exporte (.e2e), DICOM-Dateien (Clarus, PlexElite) und Fundusfotos (JPEG/PNG) über eine Seite. Visite einmal wählen, alle Dateien der Visite ablegen — jede Zeile lässt sich danach noch einzeln ändern."
     },
+    "token": {
+      "required": "Diese Seite braucht einen Uploader-Token. Bitte den Link verwenden, den Ihr Standort-Admin Ihnen gegeben hat.",
+      "rejected": "Der Token wurde abgelehnt oder gesperrt. Bitte beim Standort-Admin einen neuen Link anfordern.",
+      "invalidLink": "Der Token im Link ist unvollständig oder ungültig. Bitte den vollständigen Link verwenden, den Ihr Standort-Admin Ihnen gegeben hat.",
+      "rowWaiting": "Wartet auf einen gültigen Upload-Link"
+    },
     "footer": {
       "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
     },
@@ -4688,6 +4694,14 @@
       "copy": "Kopieren",
       "copied": "Token in die Zwischenablage kopiert.",
       "copyFailed": "Das Kopieren hat nicht geklappt. Der Token ist markiert; kopieren Sie ihn mit Strg+C (Mac: Cmd+C).",
+      "copyAria": "Token kopieren",
+      "linkLabel": "Link für die Upload-Seite",
+      "linkCopy": "Link kopieren",
+      "linkCopyAria": "Link für die Upload-Seite kopieren",
+      "linkCopied": "Link in die Zwischenablage kopiert.",
+      "linkCopyFailed": "Das Kopieren hat nicht geklappt. Der Link ist markiert; kopieren Sie ihn mit Strg+C (Mac: Cmd+C).",
+      "linkNote": "Der Token im Link gibt Zugriff zum Hochladen nur für den Standort „{location}“. Geben Sie den Link nur an Personen weiter, die dort Aufnahmen hochladen.",
+      "linkNoteHere": "Der Token im Link gibt Zugriff zum Hochladen nur für diesen Standort. Geben Sie den Link nur an Personen weiter, die dort Aufnahmen hochladen.",
       "saved": "Ich habe den Token gesichert",
       "close": "Schließen",
       "closeHint": "Schließen ist möglich, sobald Sie den Token gesichert haben."

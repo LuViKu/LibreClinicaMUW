@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import { canViewRetinalMetrics } from '@/lib/retinalAccess'
 import { userMayManageUploaders } from '@/lib/locationAccess'
+import { isTokenHash } from '@/lib/uploaderToken'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
@@ -30,8 +31,14 @@ const router = createRouter({
   // Phase E.6 polish — honour the in-route hash so navigations from
   // CrfEntryView post-completion (#events) land on the correct panel
   // of subject-detail instead of the page top.
-  scrollBehavior(to, _from, savedPosition) {
+  scrollBehavior(to, from, savedPosition) {
     if (savedPosition) return savedPosition
+    // The public upload page's uploader token travels as a fragment
+    // (`/upload#token=…`). It is no anchor: looking for an element by it would
+    // put the token into a development-build warning, and taking it out of the
+    // address bar afterwards must not move the page.
+    if (isTokenHash(to.hash)) return false
+    if (isTokenHash(from.hash) && !to.hash && to.path === from.path) return false
     if (to.hash) return { el: to.hash, behavior: 'smooth' }
     return { top: 0 }
   },

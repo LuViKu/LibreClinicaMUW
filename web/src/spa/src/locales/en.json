@@ -3884,6 +3884,12 @@
       "title": "Upload acquisitions",
       "lead": "OCT exports (.e2e), DICOM files (Clarus, PlexElite) and fundus photos (JPEG/PNG) through one page. Pick the visit once, drop every file of the visit — each row can still be changed on its own."
     },
+    "token": {
+      "required": "This page needs an uploader token. Please use the link your location admin gave you.",
+      "rejected": "The token was rejected or revoked. Please ask your location admin for a new link.",
+      "invalidLink": "The token in the link is incomplete or invalid. Please use the complete link your location admin gave you.",
+      "rowWaiting": "Waiting for a valid upload link"
+    },
     "footer": {
       "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
     },
@@ -4688,6 +4694,14 @@
       "copy": "Copy",
       "copied": "Token copied to the clipboard.",
       "copyFailed": "Copying did not work. The token is selected; copy it with Ctrl+C (Mac: Cmd+C).",
+      "copyAria": "Copy token",
+      "linkLabel": "Link for the upload page",
+      "linkCopy": "Copy link",
+      "linkCopyAria": "Copy the link for the upload page",
+      "linkCopied": "Link copied to the clipboard.",
+      "linkCopyFailed": "Copying did not work. The link is selected; copy it with Ctrl+C (Mac: Cmd+C).",
+      "linkNote": "The token in the link gives upload access for the location “{location}” only. Pass the link on only to people who upload acquisitions there.",
+      "linkNoteHere": "The token in the link gives upload access for this location only. Pass the link on only to people who upload acquisitions there.",
       "saved": "I have saved the token",
       "close": "Close",
       "closeHint": "You can close this once you have saved the token."

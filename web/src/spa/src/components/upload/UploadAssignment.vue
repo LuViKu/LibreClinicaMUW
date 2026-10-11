@@ -223,6 +223,14 @@ const withoutVisitLabel = computed(() =>
         </div>
       </template>
 
+      <template v-else-if="props.row.waitingForToken">
+        <!-- Not failed, not lost: the server wants an uploader token this page does not have yet. -->
+        <div class="inline-flex items-center gap-2 text-[12px] text-amber-800" data-testid="row-waiting-token">
+          <EyeBadge :laterality="null" />
+          {{ t('uploadPortal.token.rowWaiting') }}
+        </div>
+      </template>
+
       <template v-else>
         <div class="inline-flex items-center gap-2 text-[12px] text-slate-400">
           <EyeBadge :laterality="null" />

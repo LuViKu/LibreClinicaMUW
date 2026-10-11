@@ -402,6 +402,7 @@ async function revoke(u: ManagedUploader, event: Event) {
       :uploader-name="issued?.uploader.displayName ?? ''"
       :token="issued?.token ?? ''"
       :mode="issued?.mode ?? 'created'"
+      :location-name="issued?.uploader.locationName ?? ''"
       @update:open="onTokenOpen"
     />
   </div>

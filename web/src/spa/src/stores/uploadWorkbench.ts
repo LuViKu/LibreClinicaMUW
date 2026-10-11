@@ -20,7 +20,7 @@
  * inbox, and undo by ingest item.
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { parseE2e, type E2eScan } from '@/lib/e2eParser'
 import { sniffFile, type UploadFormat, type UploadKind } from '@/lib/fileKind'
@@ -31,6 +31,7 @@ import { deidFilename } from '@/lib/deid/filename'
 import { previewToUrl } from '@/lib/deid/preview'
 import type { DeidResult } from '@/lib/deid/pipeline'
 import { useAuthStore } from '@/stores/auth'
+import { UploadTokenError, tokenVersion } from '@/lib/uploaderToken'
 import {
   commitFile,
   listVisibleSubjectLabels,
@@ -101,6 +102,12 @@ export interface UploadRow {
   previewUrl?: string | null
   /** Volumes in the file (an E2E may hold several; the upload name then carries an ordinal). */
   volumeCount?: number
+  /**
+   * The server wants an uploader token this page does not have (or refused
+   * it), so the row could not be identified. It is not failed and not lost:
+   * it waits, and is resolved once when a new link brings a token.
+   */
+  waitingForToken?: boolean
 }
 
 /** A row the batch confirm may send: ready, and — where required — confirmed against its preview. */
@@ -422,8 +429,10 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
             existingJobId: pf.jobId ?? undefined,
           })
         }
-      } catch {
-        // Best-effort: the commit-time unique index still gates the race.
+      } catch (e) {
+        // Best-effort: the commit-time unique index still gates the race. But a
+        // refused token will refuse the next one too: ask no more.
+        if (e instanceof UploadTokenError) break
       }
     }
   }
@@ -460,6 +469,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     try {
       response = await resolveRows(mode.value, payload)
     } catch (e) {
+      if (e instanceof UploadTokenError) {
+        // Not the file's fault and not a failure: the rows keep their place and
+        // wait for a link with a token (the page says so). No retry from here.
+        for (const r of targets) patch(r.rowId, { waitingForToken: true })
+        return
+      }
       const msg = e instanceof Error && e.message ? e.message : 'resolveFailed'
       for (const r of targets) patch(r.rowId, { state: 'error', error: msg })
       return
@@ -482,6 +497,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       candidates: result.candidates,
       selectedCandidate: auto,
       selectedEvent: auto?.matchingEvent ?? null,
+      waitingForToken: undefined,
     })
   }
 
@@ -592,7 +608,10 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     // Sequential rather than parallel: a batch of widefield exports in flight
     // at once is how a phone on clinic Wi-Fi times out on all of them.
     for (const r of targets) {
-      await commitRow(r, r.selectedEvent!.eventCrfId, r.selectedEvent!.studyEventId, false)
+      const refused = await commitRow(r, r.selectedEvent!.eventCrfId, r.selectedEvent!.studyEventId, false)
+      // A refused token refuses the rest of the batch too: stop, the files stay
+      // as they are, and a person sends them again with a new link.
+      if (refused) break
     }
   }
 
@@ -604,17 +623,20 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     await commitRow(row, null, null, true)
   }
 
+  /** Sends one row. Answers whether the server refused the uploader token, which stops a batch. */
   async function commitRow(
     row: UploadRow,
     eventCrfId: number | null,
     studyEventId: number | null,
     withoutVisit: boolean,
-  ): Promise<void> {
-    if (!row.kind) return
+  ): Promise<boolean> {
+    if (!row.kind) return false
+    let tokenRefused = false
     // The OCT route accepts exactly one of {park, eventCrfId, studyEventId};
     // prefer the open CRF, fall back to the planned visit.
     const boundEventCrfId = withoutVisit ? null : eventCrfId
     const boundStudyEventId = withoutVisit || boundEventCrfId != null ? null : studyEventId
+    const stateBefore = row.state
     patch(row.rowId, { state: 'committing' })
     uploadPct.value.set(row.rowId, 0)
     try {
@@ -665,7 +687,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       })
     } catch (e) {
       const status = (e as { status?: number }).status
-      if (status === 409) {
+      if (e instanceof UploadTokenError) {
+        // The server refused the token, not the file: the row goes back to what
+        // it was, ready to be sent again, and the page says what to do.
+        tokenRefused = true
+        patch(row.rowId, { state: stateBefore })
+      } else if (status === 409) {
         const body = (e as { body?: { existingIngestItemId?: number; existingJobId?: number } }).body
         patch(row.rowId, {
           state: 'duplicate',
@@ -682,6 +709,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       uploadPct.value.delete(row.rowId)
       uploadPct.value = new Map(uploadPct.value)
     }
+    return tokenRefused
   }
 
   /* ---------------- undo / dismiss ---------------- */
@@ -800,6 +828,16 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     if (idx === -1) return
     rows.value[idx] = { ...rows.value[idx], ...changes }
   }
+
+  /**
+   * A link with a token arrived (the person pasted a new one into the address
+   * bar of this very page, so nothing was dropped on the floor): resolve the
+   * rows that were waiting for it. Once per token, by a person's own act; a
+   * refusal sets them waiting again and nothing retries by itself.
+   */
+  watch(tokenVersion, () => {
+    if (rows.value.some((r) => r.waitingForToken && r.state === 'parsing')) void resolveAwaiting()
+  })
 
   return {
     mode, rows, uploadPct, batchVisit, patientIdHint, dateHint, deidRequired,

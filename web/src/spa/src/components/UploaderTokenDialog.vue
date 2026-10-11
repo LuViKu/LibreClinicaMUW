@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Modal from '@/components/Modal.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 
 import { useNotificationsStore } from '@/stores/notifications'
+import { uploadPageLink } from '@/lib/uploaderToken'
 
 /**
  * The one moment an uploader token is shown.
@@ -19,6 +20,12 @@ import { useNotificationsStore } from '@/stores/notifications'
  *  - the dialog says in plain words that the token is not shown again and
  *    where to enter it (the settings dialog of the uploader on the
  *    acquisition PC, never the command line);
+ *  - beside the token it offers the link for the browser upload page,
+ *    `<origin><base>upload#token=<token>`, in a field of its own with its own
+ *    copy button. The token sits in the link's fragment, which a browser never
+ *    sends to a server, so it is in no access log; the page takes it out of
+ *    the address bar when it opens. The link is the token under another
+ *    name, shown once like it and to be handled like it;
  *  - it closes only through its own button, which stays disabled until the
  *    person ticks "I have saved the token". Escape, a click on the scrim and
  *    the header's cross would all lose the token without the person
@@ -36,8 +43,10 @@ interface Props {
   token: string
   /** A first token for a new uploader, or the replacement of an existing one. */
   mode: 'created' | 'replaced'
+  /** The location the token belongs to, named in the note about the link. */
+  locationName?: string
 }
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { locationName: '' })
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
 const { t } = useI18n()
@@ -45,7 +54,11 @@ const notifications = useNotificationsStore()
 
 const saved = ref(false)
 const tokenInput = ref<HTMLInputElement | null>(null)
+const linkInput = ref<HTMLInputElement | null>(null)
 const copyButton = ref<HTMLButtonElement | null>(null)
+
+/** Where the browser upload page of this app lives, with the token in its fragment. */
+const uploadLink = computed(() => uploadPageLink(window.location.origin, import.meta.env.BASE_URL, props.token))
 
 // Each time the dialog opens it starts unconfirmed, with the cursor on the
 // copy button: copying is what almost everyone does first.
@@ -60,20 +73,22 @@ watch(
   { immediate: true },
 )
 
-function selectToken() {
-  tokenInput.value?.select()
+function selectField(field: HTMLInputElement | null) {
+  field?.select()
 }
 
-async function copy() {
+/** Copies the token or the link; where there is no clipboard, selects the field so that Ctrl+C does the job. */
+async function copy(what: 'token' | 'link') {
+  const value = what === 'token' ? props.token : uploadLink.value
+  const field = what === 'token' ? tokenInput.value : linkInput.value
   try {
-    await navigator.clipboard.writeText(props.token)
-    notifications.success(t('uploaders.token.copied'))
+    await navigator.clipboard.writeText(value)
+    notifications.success(t(what === 'token' ? 'uploaders.token.copied' : 'uploaders.token.linkCopied'))
   } catch {
-    // No clipboard (an insecure context, a refused permission): select the
-    // token so that Ctrl+C does the job, and say so.
-    tokenInput.value?.focus()
-    selectToken()
-    notifications.info(t('uploaders.token.copyFailed'))
+    // No clipboard (an insecure context, a refused permission): say so.
+    field?.focus()
+    selectField(field)
+    notifications.info(t(what === 'token' ? 'uploaders.token.copyFailed' : 'uploaders.token.linkCopyFailed'))
   }
 }
 
@@ -136,19 +151,56 @@ function close() {
           :value="props.token"
           class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-[13px] text-slate-900 muw-focus"
           data-testid="uploader-token-value"
-          @focus="selectToken"
-          @click="selectToken"
+          @focus="selectField(tokenInput)"
+          @click="selectField(tokenInput)"
         />
         <button
           ref="copyButton"
           type="button"
           class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 muw-focus"
+          :aria-label="t('uploaders.token.copyAria')"
           data-testid="uploader-token-copy"
-          @click="copy"
+          @click="copy('token')"
         >
           {{ t('uploaders.token.copy') }}
         </button>
       </div>
+    </div>
+
+    <!-- The same token as a link for the browser upload page: in the fragment, so it reaches no access log. -->
+    <div class="mt-4">
+      <FieldLabel for="uploader-link-value">{{ t('uploaders.token.linkLabel') }}</FieldLabel>
+      <div class="flex items-stretch gap-2">
+        <input
+          id="uploader-link-value"
+          ref="linkInput"
+          type="text"
+          readonly
+          spellcheck="false"
+          autocomplete="off"
+          :value="uploadLink"
+          class="min-w-0 flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-[12px] text-slate-900 muw-focus"
+          data-testid="uploader-link-value"
+          @focus="selectField(linkInput)"
+          @click="selectField(linkInput)"
+        />
+        <button
+          type="button"
+          class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 muw-focus"
+          :aria-label="t('uploaders.token.linkCopyAria')"
+          data-testid="uploader-link-copy"
+          @click="copy('link')"
+        >
+          {{ t('uploaders.token.linkCopy') }}
+        </button>
+      </div>
+      <p class="mt-1.5 text-[11px] leading-relaxed text-slate-500" data-testid="uploader-link-note">
+        {{
+          props.locationName
+            ? t('uploaders.token.linkNote', { location: props.locationName })
+            : t('uploaders.token.linkNoteHere')
+        }}
+      </p>
     </div>
 
     <label class="mt-4 flex items-start gap-2 text-sm text-slate-800">
