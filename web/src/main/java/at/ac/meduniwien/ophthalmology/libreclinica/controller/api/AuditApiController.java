@@ -849,7 +849,8 @@ public class AuditApiController {
      *   <li>Study, user and dataset rows: the entity name, which holds the
      *       changed column or the export label (Phase E.6); configuration
      *       rows: the key of the setting that changed (2026-09-30); location
-     *       rows: the location's code (DR-040).</li>
+     *       rows: the location's code and ingest-source rows the source's
+     *       display name, the uploader or AE title they are about (DR-040).</li>
      *   <li>Failures: the operation that failed.</li>
      *   <li>Ingest rows: the file's reference. Rows written before the
      *       reference was recorded hold a bare column marker; for those it is
@@ -864,7 +865,7 @@ public class AuditApiController {
             return r.entityId() > 0 ? context.file(r.entityId()) : null;
         }
         if ((r.on("study") || r.on("user_account") || r.on("dataset") || r.on("configuration")
-                || r.on("location"))
+                || r.on("location") || r.on("ingest_source"))
                 && entityName != null && !entityName.isBlank()) {
             return entityName;
         }
