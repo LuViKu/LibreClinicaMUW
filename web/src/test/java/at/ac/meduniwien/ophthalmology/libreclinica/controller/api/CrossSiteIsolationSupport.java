@@ -119,6 +119,8 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         final String tag;
         /** Uuid prefix every patient / e2e uuid of this site starts with. */
         final String uuidPrefix;
+        /** DR-040 — the location this site is at ({@link #LA} or {@link #LB}). */
+        int location;
 
         Site(int id, String oid, String tag, String uuidPrefix) {
             this.id = id;
@@ -204,6 +206,15 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
 
     static Site A;
     static Site B;
+    /**
+     * DR-040 — two places. Site A, Default Study and Study X are at LA (the location the migration
+     * created); site B is at LB. Two active locations also mean there is no default location, so every
+     * file written without a signed-in uploader needs its place named.
+     */
+    static int LA;
+    static int LB;
+    /** The site whose user is making the call being built, for the fixtures that must belong to the caller's place. */
+    static volatile Site HOME;
     /** A second top-level study the multi-study user also works in. */
     static int studyX;
     static String studyXOid;
@@ -272,6 +283,15 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
             B = new Site(b, "S_ISOB", "ISOB", "b0000000-0000-4000");
             studyX = LifecycleFixtures.insertStudy(c, null, "STUDYX", "Study X", "S_STUDYX", 1);
             studyXOid = "S_STUDYX";
+            LA = LifecycleFixtures.intQuery("SELECT min(location_id) FROM location");
+            if (LifecycleFixtures.intQuery("SELECT count(*) FROM location WHERE code = 'ISO-LB'") == 0) {
+                exec(c, "INSERT INTO location (code, name) VALUES ('ISO-LB', 'Isolation second place')");
+            }
+            LB = LifecycleFixtures.intQuery("SELECT location_id FROM location WHERE code = 'ISO-LB'");
+            A.location = LA;
+            B.location = LB;
+            exec(c, "UPDATE study SET location_id = " + LA + " WHERE study_id IN (" + a + ", " + studyX + ")");
+            exec(c, "UPDATE study SET location_id = " + LB + " WHERE study_id = " + b);
             for (Site s : new Site[] {A, B}) {
                 for (Who w : new Who[] {Who.INV, Who.CRC, Who.MON, Who.RA, Who.DIR}) {
                     String user = user(w, s);
@@ -514,30 +534,50 @@ abstract class CrossSiteIsolationSupport extends AbstractApiControllerDatabaseIT
         return String.format("%s%063d", site.tag.toLowerCase().charAt(3) == 'a' ? "a" : "b", n * 10 + which);
     }
 
-    /** A parked retinal job (no visit yet) with no site marker, to bind into a target. */
+    /** The place of the caller whose request is being built: the home site's location, else LA. */
+    private static int homeLocation() {
+        Site home = HOME;
+        return home != null ? home.location : LA;
+    }
+
+    /**
+     * A parked retinal job (no visit yet) with no site marker, to bind into a target. Its scan is a device
+     * file at the caller's place: a job with neither a visit nor an ingest item is a system administrator's.
+     */
     static long neutralParkedJob() throws Exception {
         int n = SEQ.incrementAndGet();
         long id = 800000L + n;
         try (Connection c = DATA_SOURCE.getConnection()) {
+            int item = LifecycleFixtures.insertOne(c,
+                    "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
+                            + "laterality, received_at, status, sha256, byte_size, origin_location_id) VALUES ('e2e', "
+                            + "'upload', 'neutral-oct', '/dev/null/neutral-" + n + ".e2e', 'neutral-" + n
+                            + ".e2e', 'OD', now(), 'UNBOUND', '" + String.format("c%063d", n + 500000) + "', 20, "
+                            + homeLocation() + ") RETURNING ingest_item_id");
             exec(c, "INSERT INTO retinal_inference_job (job_id, task, e2e_path, eye_laterality, status, "
-                    + "enqueued_at, model_version) VALUES (" + id + ", 'fluid', '/dev/null/neutral-" + n
-                    + ".e2e', 'OD', 'parked', now(), 'v1')");
+                    + "enqueued_at, model_version, ingest_item_id) VALUES (" + id + ", 'fluid', '/dev/null/neutral-"
+                    + n + ".e2e', 'OD', 'parked', now(), 'v1', " + item + ")");
         }
         return id;
     }
 
-    /** An unbound ingest item that names no patient and no site. */
+    /** An unbound ingest item that names no patient and no site: a device file at the caller's place. */
     static int neutralUnboundItem() throws Exception {
+        return neutralUnboundItem(homeLocation());
+    }
+
+    /** As above, at {@code location}; null leaves its origin unknown (a system administrator's). */
+    static int neutralUnboundItem(Integer location) throws Exception {
         int n = SEQ.incrementAndGet();
         Path p = fileRoot.resolve("neutral-" + n + ".jpg");
         Files.write(p, ("neutral " + n).getBytes(StandardCharsets.UTF_8));
         try (Connection c = DATA_SOURCE.getConnection()) {
             return LifecycleFixtures.insertOne(c,
                     "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
-                            + "laterality, received_at, status, sha256, byte_size) VALUES ('image', 'upload', "
-                            + "'neutral-cam', '" + p.toString().replace('\\', '/') + "', 'neutral-" + n
+                            + "laterality, received_at, status, sha256, byte_size, origin_location_id) VALUES ('image', "
+                            + "'upload', 'neutral-cam', '" + p.toString().replace('\\', '/') + "', 'neutral-" + n
                             + ".jpg', 'OD', now(), 'UNBOUND', '" + String.format("c%063d", n)
-                            + "', 20) RETURNING ingest_item_id");
+                            + "', 20, " + (location == null ? "NULL" : location) + ") RETURNING ingest_item_id");
         }
     }
 

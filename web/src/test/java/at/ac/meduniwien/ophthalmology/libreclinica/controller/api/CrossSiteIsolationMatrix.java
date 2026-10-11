@@ -674,6 +674,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
 
     private static void attempt(Case k, Who w, Site home, String name) throws Exception {
         Site other = home == A ? B : A;
+        HOME = home;
         MockHttpSession session = loginAs(w, home);
         Fx own = k.write ? newSet(home) : shared(home);
         if (k.exportOwned) adopt(own, userId(user(w, home)));

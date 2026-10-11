@@ -250,24 +250,32 @@ class CrossSiteIsolationDatabaseIT extends CrossSiteIsolationSupport {
     }
 
     /**
-     * Items from anonymous / device ingress carry no origin and stay visible and
-     * workable across studies: the internal deployment's behaviour is unchanged.
+     * DR-040 — a device or anonymous file has no study, so its place decides: the people who work at its
+     * location see it and nobody else does, and one of unknown origin is a system administrator's. (The
+     * whole rule, with every read and state change, is pinned in {@link LocationVisibilityDatabaseIT}.)
      */
     @Test
-    void anItemWithNoOriginStaysVisibleAcrossStudies() throws Exception {
-        int neutral = neutralUnboundItem();
-        assertEquals(null, originOf(neutral));
-        for (Site site : new Site[] {A, B}) {
-            MockHttpSession s = loginAs(Who.CRC, site);
-            Resp list = call(get("/api/v1/ingest/inbox"), s);
-            assertEquals(200, list.status, list.snippet());
-            assertTrue(list.body.contains("\"id\":" + neutral + ","), site.tag + " lists the origin-less item: " + list.snippet());
-            assertEquals(200, call(get("/api/v1/ingest/" + neutral), s).status, site.tag + " opens it");
-        }
-        // And either site may dismiss it (current internal behaviour).
-        Resp dismiss = call(json(post("/api/v1/ingest/" + neutral + "/dismiss"), "{\"reason\":\"x\"}"),
-                loginAs(Who.CRC, B));
-        assertEquals(200, dismiss.status, dismiss.snippet());
+    void aDeviceFileBelongsToItsLocationAndOneOfUnknownOriginToAdministrators() throws Exception {
+        int atA = neutralUnboundItem(LA);
+        int nowhere = neutralUnboundItem(null);
+        assertEquals(null, originOf(atA));
+        MockHttpSession a = loginAs(Who.CRC, A);
+        MockHttpSession b = loginAs(Who.CRC, B);
+
+        Resp listA = call(get("/api/v1/ingest/inbox?q=neutral-"), a);
+        assertEquals(200, listA.status, listA.snippet());
+        assertTrue(listA.body.contains("\"id\":" + atA + ","), "site A lists LA's file: " + listA.snippet());
+        assertFalse(listA.body.contains("\"id\":" + nowhere + ","), "and not the one of unknown origin");
+        assertEquals(200, call(get("/api/v1/ingest/" + atA), a).status, "site A opens it");
+        assertEquals(404, call(get("/api/v1/ingest/" + nowhere), a).status);
+
+        Resp listB = call(get("/api/v1/ingest/inbox?q=neutral-"), b);
+        assertFalse(listB.body.contains("\"id\":" + atA + ","), "site B does not list a file of LA");
+        assertEquals(404, call(get("/api/v1/ingest/" + atA), b).status, "nor open it");
+        assertEquals(404, call(json(post("/api/v1/ingest/" + atA + "/dismiss"), "{\"reason\":\"x\"}"), b).status,
+                "nor dismiss it");
+        assertEquals(200, call(json(post("/api/v1/ingest/" + atA + "/dismiss"), "{\"reason\":\"x\"}"), a).status,
+                "site A dismisses its own place's file");
     }
 
     /** Binding needs a target subject the caller can see, even for an item the caller can see. */
