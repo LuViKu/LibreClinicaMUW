@@ -20,7 +20,6 @@ import org.springframework.web.filter.DelegatingFilterProxy;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.OCServletContextListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.OCServletFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListener;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
@@ -390,12 +389,12 @@ public class ServletInfraConfig {
      *
      * <p>Explicit factory for the same reason as the rate limiter's: the filter
      * lives in the {@code .web} package, outside both narrow component scans.
-     * The two services are plain classes over the data source, built here the
-     * way the controllers build theirs.
+     * The token service is a plain class over the data source, built here the
+     * way the controllers build theirs; the door follows the location mode.
      */
     @Bean
     public UploaderTokenFilter uploaderTokenFilter(@Qualifier("dataSource") DataSource dataSource) {
-        return new UploaderTokenFilter(new IngestSourceService(dataSource), new LocationScope(dataSource));
+        return new UploaderTokenFilter(new IngestSourceService(dataSource));
     }
 
     /**

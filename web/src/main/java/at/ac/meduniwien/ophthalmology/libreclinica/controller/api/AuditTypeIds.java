@@ -606,4 +606,15 @@ public final class AuditTypeIds {
     public static final int LOCATION_ADMIN_GRANTED           = 206;
     /** The right taken away (or the assignment that held it removed); {@code old_value} is {@code user=<user name>}. */
     public static final int LOCATION_ADMIN_REVOKED           = 207;
+
+    /*
+     * 208 (lc-muw-2026-10-13-location-mode.xml): written by LocationModeStartup
+     * (core, which repeats it as AUDIT_LOCATION_BACKFILLED) when a start in
+     * single-location mode gave the one location to rows that had none. One row
+     * per table and start, audit_table "location", entity_id the location,
+     * entity_name its code, new_value "<table>=<rows>"; no user. Admin filter.
+     */
+
+    /** The single-location startup placed rows without a location at the one location. */
+    public static final int LOCATION_BACKFILLED              = 208;
 }

@@ -102,7 +102,15 @@ public record MeDto(
          * right at. Anybody else: empty. The SPA offers the uploaders page
          * when this is not empty.
          */
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ManageableLocationDto> manageableLocations
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ManageableLocationDto> manageableLocations,
+        /**
+         * DR-040: the deployment's location mode, {@code single} or
+         * {@code multi}, set at deploy time
+         * ({@code LIBRECLINICA_DEPLOYMENT_LOCATIONS}). In single mode no second
+         * location can be created and uploaders work without a token.
+         */
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {"single", "multi"})
+        String locationMode
 ) {
 
     /** Allowed values of the {@code passwordChangeReason} field. */

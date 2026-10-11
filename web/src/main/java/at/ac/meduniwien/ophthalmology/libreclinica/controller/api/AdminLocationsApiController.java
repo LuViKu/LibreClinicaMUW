@@ -24,6 +24,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody.FieldError;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,7 +64,10 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code GET    /admin/locations} — every location, removed ones
  *       included, ordered by name, with the four counts.</li>
- *   <li>{@code POST   /admin/locations} — create; 201.</li>
+ *   <li>{@code POST   /admin/locations} — create; 201. In single-location
+ *       mode ({@link LocationMode#SINGLE}) 409
+ *       {@code {"message":"single-location deployment"}} while a location is
+ *       available: the deployment serves one place.</li>
  *   <li>{@code GET    /admin/locations/{id}} — the location with its studies
  *       and sites and its explicitly assigned users.</li>
  *   <li>{@code PUT    /admin/locations/{id}} — edit the name and address; the
@@ -71,7 +75,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code POST   /admin/locations/{id}/disable} — 409 while a study or
  *       site that is not removed is still at the location, and for the only
  *       available location (so a study can always be created somewhere).</li>
- *   <li>{@code POST   /admin/locations/{id}/restore}</li>
+ *   <li>{@code POST   /admin/locations/{id}/restore} — in single-location
+ *       mode the same 409 while another location is available.</li>
  *   <li>{@code PUT    /admin/locations/{id}/users/{username}} — assign a user
  *       (idempotent). An optional body {@code {"canManageSources": true|false}}
  *       grants or takes away the user's Standort-Admin right at the location
@@ -191,6 +196,9 @@ public class AdminLocationsApiController {
         List<FieldError> errors = new ArrayList<>(shapeErrors(code, name, street, city, zip, country, true));
 
         return inTransaction("create the location", c -> {
+            if (LocationMode.current() == LocationMode.SINGLE && otherAvailable(c, 0) > 0) {
+                return conflict(SINGLE_MODE);
+            }
             if (code != null && CODE_PATTERN.matcher(code).matches()) {
                 addIfPresent(errors, taken(c, "code", code, 0));
             }
@@ -318,7 +326,9 @@ public class AdminLocationsApiController {
             }
             if (otherAvailable(c, id) == 0) {
                 return conflict("Location " + before.code() + " cannot be disabled: it is the only available "
-                        + "location. Create another one first.");
+                        + (LocationMode.current() == LocationMode.SINGLE
+                                ? "location, and this deployment serves exactly one."
+                                : "location. Create another one first."));
             }
 
             setStatus(c, id, REMOVED, me.getId());
@@ -341,6 +351,9 @@ public class AdminLocationsApiController {
             Stored before = lockRow(c, id);
             if (before == null) return notFound(id);
             if (before.statusId() == AVAILABLE) return ResponseEntity.ok(summaryOf(c, id));
+            if (LocationMode.current() == LocationMode.SINGLE && otherAvailable(c, id) > 0) {
+                return conflict(SINGLE_MODE);
+            }
 
             setStatus(c, id, AVAILABLE, me.getId());
             audit(c, AuditTypeIds.LOCATION_RESTORED, me.getId(), id, before.code(), "removed", "available");
@@ -543,6 +556,9 @@ public class AdminLocationsApiController {
     private static ResponseEntity<?> notFound(int id) {
         return ResponseEntity.status(404).body(Map.of("message", "No location with id " + id));
     }
+
+    /** The 409 of a second available location in single-location mode; the SPA keys on this text. */
+    static final String SINGLE_MODE = "single-location deployment";
 
     private static ResponseEntity<?> conflict(String message) {
         return ResponseEntity.status(409).body(Map.of("message", message));

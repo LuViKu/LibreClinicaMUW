@@ -39,6 +39,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequire
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
@@ -297,7 +298,8 @@ public class MeApiController {
                 ub.isTechAdmin() ? "TECHADMIN" : ub.isSysAdmin() ? "SYSADMIN" : "USER",
                 DeidentificationPolicy.required(deidPolicy),
                 // Soft-failed to none inside: a lookup that breaks must not cost the user their session.
-                locationAdmin.manageableLocations(ub)
+                locationAdmin.manageableLocations(ub),
+                LocationMode.current().wire()
         );
 
         return ResponseEntity.ok(dto);

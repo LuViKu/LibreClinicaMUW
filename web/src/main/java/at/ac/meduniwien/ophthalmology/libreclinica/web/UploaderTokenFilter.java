@@ -15,9 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
-import java.util.function.UnaryOperator;
+import java.util.function.Supplier;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -32,8 +31,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SecurityConfig;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens;
 
@@ -83,17 +81,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens
  *       is <strong>503 {@code {"message":"uploader token could not be
  *       checked"}}</strong> with {@code Retry-After}: never a pass, and not
  *       counted as a rejection, so an outage does not leave a working uploader
- *       limited once the database is back. (The untokened path cannot tell
- *       an outage apart: {@code LocationScope.availableCount} reads 0, so the
- *       answer is 401 {@code required}.)</li>
+ *       limited once the database is back.</li>
  *   <li>No header (the Optomed worklist's legacy
  *       {@code X-MUW-Optomed-Token} does not count: a shared secret cannot
- *       say which location is asking). The <em>anonymous door</em>: the
- *       request is served, with no source, only while
- *       {@value #DOOR_KEY} is not {@code denied} (default {@code allowed})
- *       <em>and</em> exactly one location is active. Otherwise
- *       <strong>401 {@code {"message":"uploader token required"}}</strong>.
- *       Creating the second location is the switch.</li>
+ *       say which location is asking). The <em>anonymous door</em> is the
+ *       deployment's {@link LocationMode}, never the number of locations: in
+ *       single mode the request is served with no source (and filed at the one
+ *       location); in multi mode it is
+ *       <strong>401 {@code {"message":"uploader token required"}}</strong> from
+ *       the first location on. No database read decides it.</li>
  * </ol>
  * A 401 is never a 429: the uploaders keep their files and say so in the tray
  * on the first and file them without a visit on the second.
@@ -105,8 +101,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens
  * {@value #MAX_FAILURES} in {@code 5} minutes the address is answered
  * <strong>429</strong> with {@code Retry-After} before any lookup is made, until
  * its window passes. Idle counters are dropped. A request without a token costs
- * no read at all beyond the location count, which is cached for
- * {@code 15} seconds (it changes only when a location is made or disabled).
+ * no read at all.
  *
  * <p><strong>Logging.</strong> A line carries the method, the path and the
  * outcome, at most one per outcome a minute. Never a token, never a hash.
@@ -121,9 +116,6 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     /** The header an uploader sends on every request to the platform. */
     public static final String TOKEN_HEADER = "X-MUW-Uploader-Token";
 
-    /** {@code allowed} (default) or {@code denied}: whether an untokened request may be served on a one-location install. */
-    public static final String DOOR_KEY = "core.ingest.anonymousDeviceUploads";
-
     static final String MESSAGE_REQUIRED = "uploader token required";
     static final String MESSAGE_REJECTED = "uploader token rejected";
     static final String MESSAGE_LIMITED = "too many rejected uploader tokens";
@@ -132,9 +124,6 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     /** Rejected tokens one address may present per window before it is answered 429. */
     static final int MAX_FAILURES = 60;
     static final long FAILURE_WINDOW_MS = 5 * 60_000L;
-
-    /** How long the number of active locations is trusted. */
-    static final long LOCATION_COUNT_TTL_MS = 15_000L;
 
     /** One log line per outcome this often. */
     static final long LOG_EVERY_MS = 60_000L;
@@ -185,16 +174,11 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     /** A window of rejected tokens from one address. */
     private record Failures(long windowStartMs, int count) {}
 
-    /** The active-location count and when it was read. */
-    private record Counted(int count, long atMs) {}
-
     private final Function<String, Optional<IngestSourceService.Source>> lookup;
-    private final IntSupplier availableLocations;
-    private final UnaryOperator<String> config;
+    private final Supplier<LocationMode> mode;
     private final LongSupplier clock;
 
     private final ConcurrentHashMap<String, Failures> failures = new ConcurrentHashMap<>();
-    private volatile Counted locationCount;
     private volatile long lastSweepMs = Long.MIN_VALUE / 2;
 
     private final AtomicLong[] loggedAt = {
@@ -203,28 +187,17 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     private final AtomicInteger[] suppressed = {new AtomicInteger(), new AtomicInteger(), new AtomicInteger(),
             new AtomicInteger()};
 
-    /** The production filter: the real services, {@code datainfo.properties} and the wall clock. */
-    public UploaderTokenFilter(IngestSourceService sources, LocationScope locations) {
-        this(sources::lookupActiveByToken, locations::availableCount,
-                UploaderTokenFilter::coreResourcesField, System::currentTimeMillis);
+    /** The production filter: the real token lookup, the deployment's location mode and the wall clock. */
+    public UploaderTokenFilter(IngestSourceService sources) {
+        this(sources::lookupActiveByToken, LocationMode::current, System::currentTimeMillis);
     }
 
     /** The test seam: every collaborator is a function. */
-    UploaderTokenFilter(Function<String, Optional<IngestSourceService.Source>> lookup, IntSupplier availableLocations,
-                        UnaryOperator<String> config, LongSupplier clock) {
+    UploaderTokenFilter(Function<String, Optional<IngestSourceService.Source>> lookup, Supplier<LocationMode> mode,
+                        LongSupplier clock) {
         this.lookup = lookup;
-        this.availableLocations = availableLocations;
-        this.config = config;
+        this.mode = mode;
         this.clock = clock;
-    }
-
-    private static String coreResourcesField(String key) {
-        try {
-            return CoreResources.getField(key);
-        } catch (Exception unreadable) {
-            // CoreResources is not initialised outside a booted container: the key reads as unset.
-            return null;
-        }
     }
 
     /* ====================================================================== */
@@ -259,7 +232,7 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
         Enumeration<String> values = request.getHeaders(TOKEN_HEADER);
         if (values == null || !values.hasMoreElements()) {
             // No token: the anonymous door.
-            if (doorOpen(now)) {
+            if (doorOpen()) {
                 chain.doFilter(request, response);
                 return;
             }
@@ -342,42 +315,9 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
         return false;
     }
 
-    /** An untokened request is served only while the door is not shut by setting and there is exactly one place. */
-    private boolean doorOpen(long now) {
-        return !denied() && exactlyOneLocation(now);
-    }
-
-    private final AtomicInteger unrecognisedDoorSetting = new AtomicInteger();
-
-    private boolean denied() {
-        String raw = config.apply(DOOR_KEY);
-        if (raw == null || raw.isBlank()) return false;
-        String v = raw.trim();
-        if ("denied".equalsIgnoreCase(v)) return true;
-        if (!"allowed".equalsIgnoreCase(v) && unrecognisedDoorSetting.getAndIncrement() == 0) {
-            LOG.warn("{} is neither 'allowed' nor 'denied'; reading it as 'allowed'", DOOR_KEY);
-        }
-        return false;
-    }
-
-    private boolean exactlyOneLocation(long now) {
-        Counted c = locationCount;
-        if (c == null || now < c.atMs() || now - c.atMs() >= LOCATION_COUNT_TTL_MS) {
-            int n;
-            try {
-                n = availableLocations.getAsInt();
-            } catch (RuntimeException e) {
-                n = 0; // not knowing is not "one"
-            }
-            c = new Counted(n, now);
-            locationCount = c;
-        }
-        return c.count() == 1;
-    }
-
-    /** Forget the cached location count (a test seam, and a hook for whoever creates a location). */
-    void forgetLocationCount() {
-        locationCount = null;
+    /** An untokened request is served exactly in single-location mode. */
+    private boolean doorOpen() {
+        return mode.get() == LocationMode.SINGLE;
     }
 
     /* ====================================================================== */

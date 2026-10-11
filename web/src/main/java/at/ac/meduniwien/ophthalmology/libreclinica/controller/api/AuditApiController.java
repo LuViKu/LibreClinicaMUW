@@ -943,6 +943,8 @@ public class AuditApiController {
                  AuditTypeIds.UPLOADER_TOKEN_REVOKED, AuditTypeIds.UPLOADER_RENAMED,
                  AuditTypeIds.INGEST_SOURCE_LOCATION_ASSIGNED,
                  AuditTypeIds.LOCATION_ADMIN_GRANTED, AuditTypeIds.LOCATION_ADMIN_REVOKED,
+            // Rows placed at the one location by a single-mode start (208).
+                 AuditTypeIds.LOCATION_BACKFILLED,
             // CRF name / description edit (142) and a batch move of event
             // CRFs to another CRF version (143, one row per run).
                  AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";
