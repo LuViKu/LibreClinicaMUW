@@ -286,6 +286,21 @@ public final class IngestItemRepository {
          */
         public Builder originLocationId(Integer v) { return set("origin_location_id", v, Types.INTEGER); }
 
+        /**
+         * DR-040 phase 2 — the ingest source that delivered the file: the
+         * uploader whose token the request carried, the DICOM calling AE title,
+         * the Remidio account ({@link IngestSourceService}). Its location is the
+         * origin location the file gets ({@link #originLocationId}); assigning an
+         * unassigned source to a location later places the files that carry it
+         * and have no origin yet.
+         *
+         * <p>Null for a file that arrives with no source (a staff upload, an
+         * untokened request during the rollout).
+         */
+        public Builder ingestSourceId(Long v) {
+            return set("ingest_source_id", v == null ? null : Math.toIntExact(v), Types.INTEGER);
+        }
+
         /* ---------------- the binding ---------------- */
 
         /**
