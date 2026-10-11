@@ -556,4 +556,26 @@ public final class AuditTypeIds {
      * something the upload check would have refused; field names and SHA-256 only.
      */
     public static final int DEID_SCAN_FINDING                = 194;
+
+    /*
+     * 195-200 (lc-muw-2026-10-12-audit-types-locations.xml): the administration
+     * of global locations (DR-040, AdminLocationsApiController). All six are
+     * written against audit_table "location": entity_id is the location's id,
+     * entity_name its code. None carries anything personal: the code, the
+     * location's own fields and, for an assignment, the user name. They show in
+     * the system audit log under the admin filter, never in a study's log.
+     */
+
+    /** A location created; {@code new_value} lists the fields it was created with. */
+    public static final int LOCATION_CREATED                 = 195;
+    /** A location's name or address edited; old and new value list the fields that changed. */
+    public static final int LOCATION_UPDATED                 = 196;
+    /** A location disabled (status available to removed). */
+    public static final int LOCATION_DISABLED                = 197;
+    /** A disabled location restored (status removed to available). */
+    public static final int LOCATION_RESTORED                = 198;
+    /** A user assigned to a location; {@code new_value} is {@code user=<user name>}. */
+    public static final int LOCATION_USER_ASSIGNED           = 199;
+    /** A user's assignment to a location removed; {@code old_value} is {@code user=<user name>}. */
+    public static final int LOCATION_USER_UNASSIGNED         = 200;
 }
