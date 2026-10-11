@@ -87,6 +87,8 @@ function answerGets(over: { locations?: Location[]; details?: Record<number, Loc
   const details = over.details ?? DETAILS
   vi.mocked(apiGet).mockImplementation(async (path: string) => {
     if (path === BASE) return clone(locations)
+    // The page also reads the ingest sources for its Quellen tab; none of the tests here is about them.
+    if (path === '/pages/api/v1/admin/ingest-sources') return []
     if (path === '/pages/api/v1/admin/studies') {
       if (over.studiesFail) throw new ApiError(500, 'Server Error', null)
       return clone(STUDIES)
@@ -213,7 +215,8 @@ describe('AdminLocationsView', () => {
 
     it('shows that it is loading until the list arrives', async () => {
       let answer!: (rows: Location[]) => void
-      vi.mocked(apiGet).mockImplementation((() => new Promise((resolve) => { answer = resolve })) as never)
+      vi.mocked(apiGet).mockImplementation(((path: string) =>
+        path === BASE ? new Promise((resolve) => { answer = resolve }) : Promise.resolve([])) as never)
       await mountView()
       expect(document.body.textContent).toContain('Loading…')
       expect(rowIds()).toEqual([])
@@ -524,12 +527,14 @@ describe('AdminLocationsView', () => {
       expect(text('detail-user-bernd')).toContain('Bernd Muster')
     })
 
-    it('marks a person who holds the right to manage the location’s sources', async () => {
+    it('shows who holds the right to manage the location’s uploaders as a ticked box', async () => {
       answerGets({ details: { ...DETAILS, 1: { ...MUW_DETAIL, users: [{ ...ANNA, canManageSources: true }, BERND] } } })
       await mountView()
       await click('location-select-1')
+      expect((byId('location-siteadmin-anna') as HTMLInputElement).checked).toBe(true)
+      expect((byId('location-siteadmin-bernd') as HTMLInputElement).checked).toBe(false)
       expect(text('detail-user-anna')).toContain('Location admin')
-      expect(text('detail-user-bernd')).not.toContain('Location admin')
+      expect(text('detail-user-bernd')).toContain('Location admin')
     })
 
     it('names the parent study by its OID when the study list cannot be read', async () => {
