@@ -391,10 +391,11 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         }
 
         // DR-040: a study or site is created at a location. The bean's own when it
-        // names one, else the only active location, which is what every creation
-        // path (the SPA, the sites API, the legacy create servlets) gets without
-        // having to know about locations. With several, the callers that can ask
-        // (the APIs) do; one that cannot leaves it unassigned for an administrator.
+        // names one, else the default location (single mode: the one location),
+        // which is what every creation path (the SPA, the sites API, the legacy
+        // create servlets) gets without having to know about locations. In multi
+        // mode the callers that can ask (the APIs) do; one that cannot leaves it
+        // unassigned for an administrator.
         int locationId = sb.getLocationId() > 0 ? sb.getLocationId() : defaultLocationIdOrZero();
         if (locationId > 0) {
             variables.put(27, locationId);
@@ -409,7 +410,7 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         return sb;
     }
 
-    /** The only active location (DR-040), or 0 when there are none or several. */
+    /** The default location (DR-040: the one location in single mode), or 0 when there is none. */
     private int defaultLocationIdOrZero() {
         if (ds == null) return 0;
         Integer id = new LocationScope(ds).defaultLocationId();

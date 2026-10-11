@@ -1333,7 +1333,7 @@ public class PublicOctUploadController {
                                   Integer imagingModalityId,
                                   IngestSourceService.Source source) throws SQLException {
         // DR-040 — where it came from: the uploader's source and location, or, for an untokened
-        // request, the only active location (none while several exist and the source is unassigned).
+        // request, the default location (single mode: the one location; multi mode: none).
         // A signed-in uploader's scan is moved to the location of their study afterwards
         // (IngestUploadApiController#attributeOctUpload).
         DeviceScope.Origin origin = DeviceScope.Origin.of(c, source);

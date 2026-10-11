@@ -70,8 +70,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * ingest source: the first file from a title makes an <em>unassigned</em>
  * {@code dicom_ae} source ({@link IngestSourceService}), and every file is
  * stamped with it ({@code ingest_source_id}) and with its location as the
- * origin. A source without a location files at the only active location, and
- * with several nowhere: such a file waits for a system administrator, and
+ * origin. In single-location mode a new source gets the one location; in multi
+ * mode it has none, and its file waits for a system administrator until
  * assigning the source (System &rarr; Standorte &rarr; Quellen) places it. A
  * title that cannot be a source (none, an invalid one, one past the limit
  * below) gets the same default-location rule and no source; the hand-off is
@@ -317,12 +317,13 @@ public class DicomIngestApiController {
     /**
      * DR-040 phase 2 — who sent the file and where that is.
      *
-     * <p>The source is the calling AE title's, made unassigned on first sight.
-     * Its location is the file's origin. While the source has none, the origin
-     * is the only active location, so that a clinic with one location keeps
-     * working before anybody assigns anything; with several locations it is
-     * null, and the file waits for an administrator (and for the source to be
-     * assigned, which places it).
+     * <p>The source is the calling AE title's, made on first sight (with the one
+     * location in single-location mode, unassigned in multi mode). Its location
+     * is the file's origin. While the source has none, the origin is the
+     * default location: in single mode the one location, so a clinic keeps
+     * working before anybody assigns anything; in multi mode null, and the file
+     * waits for an administrator (and for the source to be assigned, which
+     * places it).
      */
     private Origin originOf(Connection c, DicomIngestRequest r) throws SQLException {
         IngestSourceService.Source source = sourceOf(r);

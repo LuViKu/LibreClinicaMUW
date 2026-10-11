@@ -4194,7 +4194,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Uploader programs seen in the last 7 days that have never reported with a token: what stops working when a second location is created */
+        /** Uploader programs seen in the last 7 days that have never reported with a token: what stops working at a switch to multi-location mode */
         get: operations["listAnonymousUploaders"];
         put?: never;
         post?: never;
@@ -4915,10 +4915,7 @@ export interface components {
             userType?: string;
             deidentificationRequired?: boolean;
             manageableLocations: components["schemas"]["ManageableLocationDto"][];
-            /**
-             * @description The deployment's location mode (LIBRECLINICA_DEPLOYMENT_LOCATIONS), fixed at deploy time: single keeps exactly one active location, multi allows any number and requires an uploader token from every device.
-             * @enum {string}
-             */
+            /** @enum {string} */
             locationMode: "single" | "multi";
         };
         PermissionsDto: {

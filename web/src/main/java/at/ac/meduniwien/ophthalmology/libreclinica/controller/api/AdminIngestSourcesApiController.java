@@ -51,8 +51,8 @@ import org.springframework.web.bind.annotation.RestController;
  *       their files still waiting to be filed.</li>
  *   <li>{@code GET /admin/ingest-sources/anonymous-uploaders} — the uploader
  *       programs seen in the last seven days that have never reported with a
- *       token: what stops working when a second location is created, because
- *       that closes the anonymous device front door. The count is of all of
+ *       token: what stops working when the deployment is switched to
+ *       multi-location mode, which requires the token. The count is of all of
  *       them, the list is the newest 50.</li>
  *   <li>{@code PUT /admin/ingest-sources/{id}/location} — assign a source to
  *       a location, or with an explicit {@code null} back to none. Assigning
@@ -106,7 +106,7 @@ public class AdminIngestSourcesApiController {
     }
 
     @Operation(operationId = "listAnonymousUploaders",
-               summary = "Uploader programs seen in the last 7 days that have never reported with a token: what stops working when a second location is created")
+               summary = "Uploader programs seen in the last 7 days that have never reported with a token: what stops working at a switch to multi-location mode")
     @GetMapping(value = "/anonymous-uploaders", produces = MediaType.APPLICATION_JSON_VALUE)
     @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = AnonymousUploadersDto.class)))
     public ResponseEntity<?> listAnonymousUploaders(HttpSession session) {

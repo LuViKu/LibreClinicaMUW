@@ -37,7 +37,8 @@ public class StudyBean extends AuditableEntityBean {
      * study's location, or for a parent study with sites its coordinating
      * location. 0 when the study has none. On create, 0 asks
      * {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO#createStepOne}
-     * for the only active location, when there is exactly one; an update
+     * for the default location (the one location in single-location mode, none
+     * in multi mode); an update
      * never writes it.
      */
     private int locationId = 0;

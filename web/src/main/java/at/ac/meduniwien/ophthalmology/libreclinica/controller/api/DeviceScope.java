@@ -195,8 +195,8 @@ final class DeviceScope {
 
     /**
      * Where a file delivered by a device request comes from: the source's
-     * location and the source, or, with no source, the only active location
-     * (null while several exist) and no source. A staff upload does not use this;
+     * location and the source, or, with no source, the default location (in
+     * single-location mode the one location; in multi mode null) and no source. A staff upload does not use this;
      * it keeps {@link LocationScope#originForStaffUpload}.
      */
     record Origin(Integer locationId, Long ingestSourceId) {

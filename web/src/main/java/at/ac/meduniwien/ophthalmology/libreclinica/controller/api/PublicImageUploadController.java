@@ -344,7 +344,7 @@ public class PublicImageUploadController {
                         String pixelSha256, ImageIngestBinding.EventTarget target,
                         IngestSourceService.Source source) throws SQLException {
         // DR-040 — where it came from: the uploader's source and location, or, for an untokened
-        // request, the only active location (none while several exist and the source is unassigned).
+        // request, the default location (single mode: the one location; multi mode: none).
         DeviceScope.Origin origin = DeviceScope.Origin.of(c, source);
         // P3.1 — the statement lives in IngestItemRepository, shared with the
         // DICOM ingress.

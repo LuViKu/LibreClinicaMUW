@@ -75,9 +75,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingSer
  * of kind {@code remidio}, keyed by the screening site the pull lists
  * ({@code core.remidio.siteCustomId}), made unassigned the first time an image
  * is filed. Every image is stamped with it and with its location as the origin;
- * while the source has none, the origin is the only active location, and with
- * several locations nothing, so the image waits for an administrator and
- * assigning the source places it. What is fetched and how it is de-duplicated
+ * while the source has none (only possible in multi-location mode; single mode
+ * gives every source the one location) the origin is nothing, so the image
+ * waits for an administrator and assigning the source places it. What is fetched and how it is de-duplicated
  * does not depend on any of this.
  *
  * <p><b>Why a count and not just the exam id.</b> An exam is listed before it
@@ -391,7 +391,7 @@ final class RemidioPullService {
 
         long id;
         try (Connection c = dataSource.getConnection()) {
-            // DR-040 — the account's location; while it has none, the only active location, else nothing.
+            // DR-040 — the account's location; while it has none, the default location (none in multi mode).
             Integer origin = account == null ? null : account.locationId();
             if (origin == null) origin = LocationScope.defaultLocationId(c);
             var item = IngestItemRepository

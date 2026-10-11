@@ -277,8 +277,9 @@ public final class IngestItemRepository {
         /**
          * DR-040 — the location the file came from. Staff uploads carry the
          * location of the study they were working in; device and anonymous
-         * ingress carry the only active location, and while a second one
-         * exists and the source is not yet assigned, nothing.
+         * ingress carry their source's location, else the default location: in
+         * single-location mode the one location, in multi mode nothing until
+         * the source is assigned.
          *
          * <p>Null is not a default, it is a statement: the origin is unknown,
          * and the inbox shows the file to system administrators only. Every

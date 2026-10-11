@@ -81,8 +81,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * ({@value #ENABLED_KEY}) still decides whether the path exists at all. A
  * request with no source is an untokened one the front door let in, and goes
  * through the shared-token gate exactly as before; while the shared token is
- * all a bridge sends, it cannot say which location is asking, so once a second
- * location exists the filter has already answered 401 {@code uploader token
+ * all a bridge sends, it cannot say which location is asking, so in
+ * multi-location mode the filter has already answered 401 {@code uploader token
  * required}.
  *
  * <p>Same query as the DICOM worklist and the upload page's visit picker
