@@ -48,7 +48,7 @@ export type AuthenticatedUser =
   Omit<Required<components['schemas']['MeDto']>,
        'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
        | 'passwordChangeReason' | 'activeStudy' | 'userType' | 'deidentificationRequired'
-       | 'manageableLocations'>
+       | 'manageableLocations' | 'locationMode'>
   & {
     role: UserRole
     source: AuthSource
@@ -69,6 +69,13 @@ export type AuthenticatedUser =
      * Uploaders page and its entry points are available when it is not empty.
      */
     manageableLocations: ManageableLocation[]
+    /**
+     * The deployment's location mode, fixed at deploy time
+     * (`LIBRECLINICA_DEPLOYMENT_LOCATIONS`). Optional for /me responses from
+     * before the field existed; read it through the auth store's
+     * `locationMode`, which takes an absent value as `single`.
+     */
+    locationMode?: LocationMode
     email: string | null
     siteLabel: string | null
     locale: string | null
@@ -95,6 +102,14 @@ export interface ManageableLocation {
   code: string
   name: string
 }
+
+/**
+ * How the deployment treats locations (`/me`'s `locationMode`). `single`: one
+ * active location, a second cannot be created or restored, and device uploads
+ * without a token are still served. `multi`: any number of locations, and every
+ * device needs an uploader token. Switching is a deploy step, not a click.
+ */
+export type LocationMode = 'single' | 'multi'
 
 /** UX hint for the ChangePasswordView banner — see AuthenticatedUser. */
 export type PasswordChangeReason = 'first-login' | 'rotation'

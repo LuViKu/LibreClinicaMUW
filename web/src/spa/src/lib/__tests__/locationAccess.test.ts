@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { manageableLocationsOf, userMayManageUploaders } from '@/lib/locationAccess'
+import { isLocationMode, locationModeOf, manageableLocationsOf, userMayManageUploaders } from '@/lib/locationAccess'
 import type { AuthenticatedUser, ManageableLocation } from '@/types/auth'
 
 const MUW: ManageableLocation = { id: 1, code: 'MUW-AUGEN', name: 'MUW Augenklinik' }
@@ -44,5 +44,32 @@ describe('userMayManageUploaders', () => {
     expect(userMayManageUploaders(user({ role: 'Investigator', manageableLocations: [MUW] }))).toBe(true)
     // A system administrator with nothing to manage (every location disabled) has no page to open.
     expect(userMayManageUploaders(user({ userType: 'SYSADMIN', manageableLocations: [] }))).toBe(false)
+  })
+})
+
+describe('locationModeOf', () => {
+  it('reads the mode /me reports', () => {
+    expect(locationModeOf(user({ locationMode: 'multi' }))).toBe('multi')
+    expect(locationModeOf(user({ locationMode: 'single' }))).toBe('single')
+  })
+
+  it('reads an answer from before the field existed, and no session, as single', () => {
+    expect(locationModeOf(user({}))).toBe('single')
+    expect(locationModeOf(null)).toBe('single')
+    expect(locationModeOf(undefined)).toBe('single')
+  })
+
+  it('reads a value it does not know as single, the mode that offers less', () => {
+    expect(locationModeOf(user({ locationMode: 'MULTI' as unknown as 'multi' }))).toBe('single')
+  })
+})
+
+describe('isLocationMode', () => {
+  it('knows the two modes and nothing else', () => {
+    expect(isLocationMode('single')).toBe(true)
+    expect(isLocationMode('multi')).toBe(true)
+    expect(isLocationMode(undefined)).toBe(false)
+    expect(isLocationMode(null)).toBe(false)
+    expect(isLocationMode('both')).toBe(false)
   })
 })

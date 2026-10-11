@@ -526,6 +526,52 @@ describe('useAuthStore', () => {
     })
   })
 
+  /**
+   * The deployment's location mode (DR-040 amendment): `/me` reports it as
+   * `locationMode`; the Standorte page and the Uploaders page read it.
+   */
+  describe('locationMode', () => {
+    it('takes the mode /me reports', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'multi' })
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.locationMode).toBe('multi')
+    })
+
+    it('reads an answer without the field, from an older server, as single', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER })
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.user?.locationMode).toBeUndefined()
+      expect(store.locationMode).toBe('single')
+    })
+
+    it('is single without a user', () => {
+      expect(useAuthStore().locationMode).toBe('single')
+    })
+
+    it('keeps the mode when the active-study answer does not carry it, and takes it when it does', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'multi' })
+      const store = useAuthStore()
+      await store.bootstrap()
+      vi.mocked(apiPost).mockResolvedValueOnce({ ...FIXTURE_USER })
+      await store.pickStudy('S_DEFAULTS1')
+      expect(store.locationMode).toBe('multi')
+
+      vi.mocked(apiPost).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'single' })
+      await store.pickStudy('S_DEFAULTS1')
+      expect(store.locationMode).toBe('single')
+    })
+
+    it('is gone with the session', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'multi' })
+      const store = useAuthStore()
+      await store.bootstrap()
+      store.clearForUnauthorized()
+      expect(store.locationMode).toBe('single')
+    })
+  })
+
   describe('clearForUnauthorized()', () => {
     it('resets local state when authenticated', async () => {
       vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_USER)
