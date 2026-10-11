@@ -136,7 +136,8 @@
       "dataExportTitle": "Datenexport",
       "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen.",
       "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen.",
-      "adminStudiesDesc": "Alle Studien und Standorte der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download."
+      "adminStudiesDesc": "Alle Studien und Standorte der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download.",
+      "adminLocationsDesc": "Die Standorte der Plattform: Anschrift, Studien und Studien-Standorte, Dateien im Eingang und zugewiesene Personen."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -4500,6 +4501,90 @@
       "UNAVAILABLE": "Nicht verfügbar",
       "PRIVATE": "Privat",
       "UNKNOWN": "Unbekannt"
+    }
+  },
+  "adminLocations": {
+    "title": "Standorte",
+    "subtitle": "Standorte: {count} ({active} aktiv)",
+    "intro": "Ein Standort ist ein physischer Ort, etwa eine Klinik, eine Abteilung oder ein Partnerkrankenhaus. Eine Studie ist an einem Standort aktiv, wenn sie dort einen Studien-Standort hat; so heißen auf dieser Seite die Standorte, die je Studie angelegt werden. Dateien von Geräten gehören zum Standort ihrer Quelle.",
+    "create": "Standort anlegen",
+    "empty": "Es gibt noch keinen Standort.",
+    "column": {
+      "code": "Kürzel",
+      "name": "Name",
+      "place": "Ort",
+      "sites": "Studien-Standorte",
+      "studies": "Studien",
+      "files": "Dateien",
+      "users": "Personen",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Aktiv",
+      "removed": "Deaktiviert"
+    },
+    "action": {
+      "edit": "Bearbeiten",
+      "editAria": "Standort {name} bearbeiten",
+      "disable": "Deaktivieren",
+      "disableAria": "Standort {name} deaktivieren",
+      "restore": "Wiederherstellen",
+      "restoreAria": "Standort {name} wiederherstellen"
+    },
+    "dialog": {
+      "createTitle": "Standort anlegen",
+      "editTitle": "Standort bearbeiten",
+      "createSubmit": "Anlegen",
+      "editSubmit": "Speichern",
+      "field": {
+        "code": "Kürzel",
+        "name": "Name",
+        "street": "Straße und Hausnummer",
+        "zip": "PLZ",
+        "city": "Ort",
+        "country": "Land"
+      },
+      "codeHelp": "2 bis 30 Zeichen: Buchstaben, Ziffern, Bindestrich und Unterstrich. Das Kürzel lässt sich später nicht mehr ändern.",
+      "codeFixed": "Das Kürzel ist nach dem Anlegen fest."
+    },
+    "detail": {
+      "close": "Details schließen",
+      "address": "Anschrift",
+      "noAddress": "Keine Anschrift hinterlegt.",
+      "studiesHeading": "Studien und Studien-Standorte",
+      "studiesEmpty": "An diesem Standort gibt es noch keine Studie und keinen Studien-Standort.",
+      "studyBadge": "Studie",
+      "siteBadge": "Studien-Standort",
+      "siteOf": "von {study}",
+      "usersHeading": "Zugewiesene Personen",
+      "usersHelp": "Personen, die diesem Standort ausdrücklich zugewiesen sind, sehen seine Dateien im Eingang, auch ohne Studienrolle an einem seiner Studien-Standorte.",
+      "usersEmpty": "Niemand ist diesem Standort ausdrücklich zugewiesen.",
+      "addLabel": "Person hinzufügen",
+      "addPlaceholder": "Benutzername",
+      "add": "Zuweisen",
+      "remove": "Entfernen",
+      "removeAria": "{user} von diesem Standort entfernen",
+      "siteAdmin": "Standort-Admin",
+      "removedNote": "Der Standort ist deaktiviert. Stellen Sie ihn wieder her, um Personen zuzuweisen."
+    },
+    "created": "Standort „{name}“ angelegt.",
+    "updated": "Standort „{name}“ gespeichert.",
+    "disabled": "Standort „{name}“ deaktiviert.",
+    "restored": "Standort „{name}“ wiederhergestellt.",
+    "assigned": "{user} ist dem Standort „{name}“ zugewiesen.",
+    "unassigned": "{user} ist dem Standort „{name}“ nicht mehr zugewiesen.",
+    "disableTitle": "Standort deaktivieren",
+    "disableConfirm": "Standort „{name}“ deaktivieren? Das geht nur, wenn an ihm keine Studie und kein Studien-Standort mehr aktiv ist. Die Aktion wird im Audit Trail dokumentiert; der Standort lässt sich wiederherstellen.",
+    "restoreTitle": "Standort wiederherstellen",
+    "restoreConfirm": "Standort „{name}“ wiederherstellen? Er ist danach wieder aktiv. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableFailed": "Standort „{name}“ konnte nicht deaktiviert werden. {reason}",
+    "restoreFailed": "Standort „{name}“ konnte nicht wiederhergestellt werden. {reason}",
+    "error": {
+      "loadFailed": "Die Standorte konnten nicht geladen werden (HTTP {status}).",
+      "detailFailed": "Der Standort konnte nicht geladen werden (HTTP {status}).",
+      "saveFailed": "Die Änderung konnte nicht gespeichert werden (HTTP {status}).",
+      "network": "Der Server ist nicht erreichbar.",
+      "unknown": "Unbekannter Fehler."
     }
   },
   "studyLifecycle": {

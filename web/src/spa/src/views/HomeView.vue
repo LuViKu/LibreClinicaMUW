@@ -342,6 +342,17 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     group: 'platform',
   },
   {
+    // The global locations (Standorte) that studies are active at; the API
+    // admits system administrators only, like the study list above.
+    id: 'admin-locations',
+    to: { name: 'admin-locations' },
+    titleKey: 'adminLocations.title',
+    descKey: 'home.administrator.adminLocationsDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => auth.isSysAdmin,
+    group: 'platform',
+  },
+  {
     id: 'modalities',
     to: { name: 'modalities' },
     titleKey: 'modalities.title',

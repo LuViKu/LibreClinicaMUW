@@ -137,6 +137,16 @@ const router = createRouter({
       component: () => import('@/views/AdminStudiesView.vue'),
       meta: { title: 'Studies', role: 'Administrator' as const },
     },
+    /* System → Standorte: the global locations (clinics, departments,
+       partner hospitals) that studies are enabled at and that device files
+       are scoped by. Not the per-study Sites page above. The API admits
+       system administrators only; the view shows its refusal to anyone else. */
+    {
+      path: '/admin/locations',
+      name: 'admin-locations',
+      component: () => import('@/views/AdminLocationsView.vue'),
+      meta: { title: 'Standorte', role: 'Administrator' as const },
+    },
     {
       path: '/admin/password-policy',
       name: 'admin-password-policy',
