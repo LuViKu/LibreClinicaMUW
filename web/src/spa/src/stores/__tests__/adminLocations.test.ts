@@ -328,6 +328,71 @@ describe('useAdminLocationsStore', () => {
     })
   })
 
+  describe('the Standort-Admin right', () => {
+    const ANNA = { username: 'anna', displayName: 'Anna Beispiel', canManageSources: false }
+
+    it('PUTs the flag alone to the encoded username and takes the answer as the open detail', async () => {
+      const granted = detailOf(MUW, { users: [{ ...ANNA, canManageSources: true }] })
+      vi.mocked(apiGet).mockResolvedValueOnce([GRAZ, MUW]).mockResolvedValueOnce(detailOf(MUW, { users: [ANNA] }))
+      vi.mocked(apiPut).mockResolvedValueOnce(granted)
+      const s = useAdminLocationsStore()
+      await s.load()
+      await s.select(1)
+      const r = await s.setCanManageSources(1, 'anna', true)
+      expect(apiPut).toHaveBeenCalledTimes(1)
+      expect(apiPut).toHaveBeenCalledWith(`${BASE}/1/users/anna`, { canManageSources: true })
+      expect(r).toEqual({ ok: true, location: granted })
+      expect(s.detail?.users[0].canManageSources).toBe(true)
+    })
+
+    it('withdraws the right with false, and encodes a username with URL characters', async () => {
+      const withdrawn = detailOf(MUW, { users: [{ ...ANNA, username: 'b.k@muw', canManageSources: false }] })
+      vi.mocked(apiPut).mockResolvedValueOnce(withdrawn)
+      const s = useAdminLocationsStore()
+      const r = await s.setCanManageSources(1, 'b.k@muw', false)
+      expect(apiPut).toHaveBeenCalledWith(`${BASE}/1/users/b.k%40muw`, { canManageSources: false })
+      expect(r.ok).toBe(true)
+    })
+
+    it('hands a refusal to the caller verbatim and keeps the right as it was', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce([GRAZ, MUW]).mockResolvedValueOnce(detailOf(MUW, { users: [ANNA] }))
+      vi.mocked(apiPut).mockRejectedValueOnce(new ApiError(404, 'Not Found', { message: 'anna is not assigned to this location' }))
+      const s = useAdminLocationsStore()
+      await s.load()
+      await s.select(1)
+      const r = await s.setCanManageSources(1, 'anna', true)
+      expect(r).toMatchObject({ ok: false, status: 404, message: 'anna is not assigned to this location' })
+      expect(s.detail?.users[0].canManageSources).toBe(false)
+    })
+  })
+
+  describe('refresh', () => {
+    it('GETs the list again without showing the loading state, and takes the new counts', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce([GRAZ, MUW])
+      const s = useAdminLocationsStore()
+      await s.load()
+      let answer!: (v: Location[]) => void
+      vi.mocked(apiGet).mockImplementationOnce(() => new Promise<Location[]>((r) => { answer = r }))
+      const pending = s.refresh()
+      expect(s.isLoading).toBe(false)
+      answer([GRAZ, { ...MUW, ingestItemCount: 352 }])
+      await pending
+      expect(apiGet).toHaveBeenLastCalledWith(BASE)
+      expect(s.locations.find((l) => l.id === 1)?.ingestItemCount).toBe(352)
+      expect(s.error).toBeNull()
+    })
+
+    it('leaves the list and the error alone when the refresh fails', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce([GRAZ, MUW])
+      const s = useAdminLocationsStore()
+      await s.load()
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(500, 'Server Error', null))
+      await s.refresh()
+      expect(s.locations.map((l) => l.id)).toEqual([2, 1])
+      expect(s.error).toBeNull()
+    })
+  })
+
   it('reset empties everything', async () => {
     vi.mocked(apiGet).mockResolvedValueOnce([GRAZ, MUW]).mockResolvedValueOnce(detailOf(MUW))
     const s = useAdminLocationsStore()

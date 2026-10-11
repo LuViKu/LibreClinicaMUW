@@ -60,6 +60,20 @@ describe('SystemRail', () => {
     expect(onStudies.get('[data-testid="rail-locations"]').attributes('aria-current')).toBeUndefined()
   })
 
+  it('links the uploaders page right after the locations and marks it current there only', async () => {
+    const w = await mountAt('/uploaders')
+    const link = w.get('[data-testid="rail-uploaders"]')
+    expect(link.attributes('href')).toBe('/uploaders')
+    expect(link.attributes('aria-current')).toBe('page')
+    expect(link.text()).toBe(deMessages.uploaders.title)
+    expect(w.get('[data-testid="rail-locations"]').attributes('aria-current')).toBeUndefined()
+    const ids = w.findAll('a[data-testid^="rail-"]').map((a) => a.attributes('data-testid'))
+    expect(ids.indexOf('rail-uploaders')).toBe(ids.indexOf('rail-locations') + 1)
+
+    const onLocations = await mountAt('/admin/locations')
+    expect(onLocations.get('[data-testid="rail-uploaders"]').attributes('aria-current')).toBeUndefined()
+  })
+
   it('marks the audit trail current on its page, though it lives outside /admin', async () => {
     const w = await mountAt('/system/audit-log')
     expect(w.get('[data-testid="rail-audit"]').attributes('aria-current')).toBe('page')
