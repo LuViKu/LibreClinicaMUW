@@ -15,7 +15,9 @@
     3. starts the bridge now.
 
   The token is NOT taken here: paste it into the tray icon's Settings dialog
-  so it is DPAPI-protected on save and never sits in a shell history.
+  so it is DPAPI-protected on save and never sits in a shell history. The
+  same goes for the uploader token (DR-040, field "Uploader-Token") once an
+  administrator has issued this PC one.
 
 .PARAMETER BaseUrl
   The platform's base URL including the context path, e.g.
@@ -109,4 +111,4 @@ if ($p.WaitForExit(4000)) {
     exit 1
 }
 Write-Host "Optomed Bridge running (pid $($p.Id)) - look for the grey circle in the tray."
-Write-Host 'Right-click it -> Settings... -> paste the worklist token -> Enabled. The icon turns teal when enabled.'
+Write-Host 'Right-click it -> Settings... -> paste the worklist token (and the Uploader-Token, once one is issued) -> Enabled. The icon turns teal when enabled.'

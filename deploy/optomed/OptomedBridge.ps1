@@ -28,6 +28,27 @@
                label as a hint. 201 and 409 (already there) both move the file
                into DICOM\_uploaded\.
 
+    token      (DR-040) When an uploader token is set in Settings, EVERY
+               request - worklist, resolve, commit, heartbeat - carries it in
+               the header X-MUW-Uploader-Token, and the platform takes this
+               PC's location from it (the worklist then lists only that
+               location's visits). The worklist still sends the shared
+               X-MUW-Optomed-Token as well while one is set; the platform
+               takes both during the rollout, and a PC with only the uploader
+               token works too. No uploader token set = no such header = the
+               behaviour of before, which the platform serves only while its
+               front door is open. The platform answers 401 "uploader token
+               required" or "uploader token rejected" (any other 401 text
+               counts as rejected). That is NOT a failed lookup and is never
+               treated like a 429: the worklist call leaves the last good
+               worklist as it is (no empty file is written); the upload round
+               ends with every study file still in the Client's DICOM folder
+               (nothing moved to _uploaded\, nothing filed without a visit).
+               The tray says "Token fehlt" or "Token abgelehnt - bitte in den
+               Einstellungen pruefen", the coded problem token-required /
+               token-rejected goes into the heartbeat, and the next fetch and
+               upload round try again at their normal intervals.
+
   Runs at login as a tray icon (see Install-OptomedBridge.ps1). Right-click:
   enable/disable, fetch or upload now, show/hide the Optomed Client, settings,
   open log, exit.
@@ -40,10 +61,14 @@
   it from the menu when a dialog of its own needs answering; it is shown
   again when the bridge exits.
 
-  Settings: %ProgramData%\LibreClinica\optomed-bridge.json. The token is
-  DPAPI-protected to the user who saved it. Log alongside, rotated at 1 MB.
-  Only counts and pseudonymous labels are ever logged - never names, dates of
-  birth or filenames (the Client names folders after the patient).
+  Settings: %ProgramData%\LibreClinica\optomed-bridge.json. Both tokens - the
+  worklist token (TokenProtected) and the uploader token
+  (UploaderTokenProtected) - are DPAPI-protected to the user who saved them.
+  The uploader token is typed into the Settings dialog ("Uploader-Token"),
+  never passed on a command line, and shown there only as "gesetzt" / "nicht
+  gesetzt". Log alongside, rotated at 1 MB. Only counts and pseudonymous
+  labels are ever logged - never names, dates of birth, filenames (the Client
+  names folders after the patient) or a token.
 
 .PARAMETER SelfTest
   Headless check and exit: parse -DicomFile and print the tags this script
@@ -53,7 +78,8 @@
 .PARAMETER Heartbeat
   Headless: send one heartbeat to the platform and print the answer - the
   quickest check that this PC reaches the platform and shows up on the
-  System Status page.
+  System Status page. It prints whether an uploader token is set - never the
+  token - and, on a 401, which of the two refusals it was.
 
   The tray app sends one every HeartbeatIntervalSec (default 120), switched
   on or not (DR-033): whether it runs, whether it is switched on, how many
@@ -82,7 +108,7 @@ $ErrorActionPreference = 'Stop'
 $script:AppName      = 'Optomed Bridge'
 # Shown on the System Status page beside this PC's name. Bump with every
 # change to this script, so a PC still running an old copy stands out.
-$script:Version      = '2026-09-24.2'
+$script:Version      = '2026-10-12.1'
 $script:Kind         = 'optomed-bridge'
 $script:WorklistName = 'worklist_optomed_lumo.txt'   # the one filename the Client imports
 $script:StateDir     = Split-Path -Parent $ConfigPath
@@ -109,12 +135,16 @@ function Write-Log {
 }
 
 # ----------------------------------------------------------------------------
-# settings - a JSON file; the token DPAPI-protected to the saving user
+# settings - a JSON file; the tokens DPAPI-protected to the saving user
 # ----------------------------------------------------------------------------
 function Get-DefaultConfig {
     [pscustomobject]@{
         BaseUrl             = 'https://ecrf.augen.meduniwien.ac.at/LibreClinica'
+        # The shared worklist token (header X-MUW-Optomed-Token), protected.
         TokenProtected      = ''
+        # DR-040 - this PC's own uploader token, protected the same way. Empty =
+        # none: the requests go out without it, as they always did.
+        UploaderTokenProtected = ''
         ClientRoot          = (Join-Path $env:USERPROFILE 'Documents\OptomedClient\Optomed Lumo')
         WorklistIntervalSec = 30
         UploadIntervalMin   = 5
@@ -163,6 +193,8 @@ function Save-Config([pscustomobject]$cfg) {
     $cfg | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
 }
 
+# DPAPI, current-user scope: the saved value is readable by the user who saved
+# it, on this PC. (As in ExportWatcher.ps1 - keep the two word for word.)
 function Protect-Token([string]$plain) {
     if ([string]::IsNullOrEmpty($plain)) { return '' }
     (ConvertTo-SecureString $plain -AsPlainText -Force) | ConvertFrom-SecureString
@@ -190,6 +222,99 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 }
 
 # ----------------------------------------------------------------------------
+# the uploader token (DR-040) - one per uploader, issued for one location
+# The shared part is kept word for word as in OptomedBridge.ps1.
+# ----------------------------------------------------------------------------
+# It travels in the header X-MUW-Uploader-Token on every request to the
+# platform, and nowhere else: never in the log, in a message, in the tray or in
+# the heartbeat. None set = no header = the anonymous request of before.
+$script:TokenHeader   = 'X-MUW-Uploader-Token'
+$script:UpTokenSource = $null    # the saved (protected) value the cached token was read from
+$script:UpTokenPlain  = ''
+
+# 'mwu_' and 43 base64url characters (32 random bytes), as the platform issues it.
+function Test-UploaderTokenFormat([string]$token) {
+    $token -cmatch '^mwu_[A-Za-z0-9_-]{43}\z'
+}
+
+# For the log and the console: whether one is saved, never what it is.
+function Get-UploaderTokenState([pscustomobject]$cfg) {
+    if ([string]$cfg.UploaderTokenProtected) { 'set' } else { 'not set' }
+}
+
+# Unprotected once per saved value, not once per request: a token that cannot
+# be read (saved by another user) is reported once, not at every request.
+function Get-UploaderToken([pscustomobject]$cfg) {
+    $protected = [string]$cfg.UploaderTokenProtected
+    if ($protected -ne $script:UpTokenSource) {
+        $script:UpTokenSource = $protected
+        $script:UpTokenPlain = Unprotect-Token $protected
+    }
+    $script:UpTokenPlain
+}
+
+function Add-UploaderHeader([System.Net.Http.HttpRequestMessage]$req, [pscustomobject]$cfg) {
+    $token = Get-UploaderToken $cfg
+    if ($token) { $req.Headers.TryAddWithoutValidation($script:TokenHeader, $token) | Out-Null }
+}
+
+# Every request to the platform that is not the worklist leaves through here,
+# so that the token is on all of them.
+function Send-DeviceRequest([System.Net.Http.HttpClient]$client, [pscustomobject]$cfg, [string]$method, [string]$path, $content = $null) {
+    $req = New-Object System.Net.Http.HttpRequestMessage $method, (Get-ApiUrl $cfg $path)
+    if ($null -ne $content) { $req.Content = $content }
+    Add-UploaderHeader $req $cfg
+    $client.SendAsync($req).GetAwaiter().GetResult()
+}
+
+function Read-ResponseText($resp) {
+    try { $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() } catch { '' }
+}
+
+# What a 401 from the platform means. It answers {"message":"uploader token
+# required"} to a request that needs a token and carries none, and
+# {"message":"uploader token rejected"} to one whose token is unknown, revoked
+# or belongs to a removed location. Any other 401 text (a proxy, an older
+# platform) counts as a rejection. Whatever the text, a 401 is the platform not
+# accepting this uploader: it must never end with a file filed anywhere.
+function Get-TokenProblemCode([int]$status, [string]$body) {
+    if ($status -ne 401) { return $null }
+    if ($body -match 'uploader token required') { return 'token-required' }
+    'token-rejected'
+}
+
+# The words for the tray, and the same for the icon's tooltip (63 characters).
+function Get-TokenProblemText([string]$code) {
+    if ($code -eq 'token-required') { 'Token fehlt' } else { 'Token abgelehnt - bitte in den Einstellungen pruefen' }
+}
+function Get-TokenProblemTip([string]$code) {
+    if ($code -eq 'token-required') { 'Token fehlt' } else { 'Token abgelehnt - Einstellungen pruefen' }
+}
+
+# The token problem in a set of coded problems (code -> $true), or ''.
+function Get-TokenProblemIn([hashtable]$problems) {
+    foreach ($code in @('token-rejected', 'token-required')) { if ($problems.ContainsKey($code)) { return $code } }
+    ''
+}
+
+# A refused token ends the round it happens in. The throw carries the code
+# (not the token) up to the one place that records it.
+function New-TokenRefusal([string]$code) {
+    $ex = New-Object System.InvalidOperationException ('uploader token refused: ' + $code)
+    $ex.Data['tokenProblem'] = $code
+    $ex
+}
+
+function Get-TokenRefusalCode($errorRecord) {
+    $e = $errorRecord.Exception
+    while ($e) {
+        if ($e.Data.Contains('tokenProblem')) { return [string]$e.Data['tokenProblem'] }
+        $e = $e.InnerException
+    }
+    $null
+}
+
+# ----------------------------------------------------------------------------
 # health - what the heartbeat reports (DR-033). Counts, ages, disk figures and
 # coded problems; never a label, a filename or anything about a patient.
 # The shared part is kept word for word as in ExportWatcher.ps1.
@@ -199,6 +324,8 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 $script:HbHttp = New-Object System.Net.Http.HttpClient
 $script:HbHttp.Timeout = [TimeSpan]::FromSeconds(10)
 $script:HbLastCode = -1           # the last heartbeat's HTTP status; a change is logged, a repeat is not
+$script:HbLastProblem = ''        # ... with the token problem a 401 came with; a change in it is logged too
+$script:HbProblem = ''            # the token problem of the last heartbeat (token-required / token-rejected), for -Heartbeat
 $script:StopSent = $false
 $script:LastActivityUtc = $null   # end of the last worklist fetch or upload round
 $script:LastUploadUtc = $null     # the last 201
@@ -209,6 +336,20 @@ $script:UploadedToday = 0
 $script:Problems = @{ worklist = @{}; upload = @{} }
 
 function Add-Problem([string]$set, [string]$code) { $script:Problems[$set][$code] = $true }
+
+$script:TokenLogged = @{ worklist = ''; upload = '' }   # the token refusal last written to the log, per job; a repeat is not (both retry)
+
+# A token the platform refused, recorded where a job ends: the coded problem for
+# the heartbeat, one line in the log (a refusal that persists is written once,
+# not at every retry) and the words for the tray, which are returned.
+function Write-TokenRefusal([string]$set, [string]$code) {
+    Add-Problem $set $code
+    if ($code -ne $script:TokenLogged[$set]) {
+        $script:TokenLogged[$set] = $code
+        Write-Log "${set}: the platform refused the uploader token ($code) - nothing was changed, the next try is at the normal interval" 'ERROR'
+    }
+    Get-TokenProblemText $code
+}
 
 function Add-Uploaded {
     if ((Get-Date).Date -ne $script:UploadedDay) { $script:UploadedDay = (Get-Date).Date; $script:UploadedToday = 0 }
@@ -312,17 +453,24 @@ function Get-HeartbeatBody([pscustomobject]$cfg, [bool]$running, [string]$stopRe
 # nothing answered).
 function Send-Heartbeat([pscustomobject]$cfg, [bool]$running = $true, [string]$stopReason = '') {
     $code = 0
+    $problem = ''
     try {
         $json = Get-HeartbeatBody $cfg $running $stopReason | ConvertTo-Json -Depth 4 -Compress
         $content = New-Object System.Net.Http.StringContent($json, [Text.Encoding]::UTF8, 'application/json')
-        $resp = $script:HbHttp.PostAsync((Get-ApiUrl $cfg '/api/v1/device/uploader/heartbeat'), $content).GetAwaiter().GetResult()
+        $resp = Send-DeviceRequest $script:HbHttp $cfg 'POST' '/api/v1/device/uploader/heartbeat' $content
         $code = [int]$resp.StatusCode
+        # A 401 usually means no heartbeat arrives at all, so this line and the
+        # tray status of the jobs are the only places the refusal can be seen.
+        if ($code -eq 401) { $problem = Get-TokenProblemCode 401 (Read-ResponseText $resp) }
     } catch { $code = 0 }
-    if ($code -ne $script:HbLastCode) {
+    $script:HbProblem = $problem
+    if ($code -ne $script:HbLastCode -or $problem -ne $script:HbLastProblem) {
         $script:HbLastCode = $code
+        $script:HbLastProblem = $problem
         switch ($code) {
             200     { Write-Log 'heartbeat: reporting to the platform' }
             0       { Write-Log 'heartbeat: the platform does not answer' 'WARN' }
+            401     { Write-Log "heartbeat: the platform refused the uploader token ($problem)" 'WARN' }
             404     { Write-Log 'heartbeat: the platform does not take heartbeats (an older version, or switched off there)' 'WARN' }
             429     { Write-Log 'heartbeat: the platform refused it (HTTP 429: too many uploaders registered, or too many heartbeats from this address)' 'WARN' }
             default { Write-Log "heartbeat: HTTP $code" 'WARN' }
@@ -447,6 +595,10 @@ function Invoke-WorklistFetch([pscustomobject]$cfg) {
     $script:Problems['worklist'] = @{}
     try { Invoke-WorklistFetchCore $cfg }
     catch {
+        # A refused uploader token is neither the network nor a failed fetch:
+        # nothing was written, and the words for the tray are the result.
+        $refused = Get-TokenRefusalCode $_
+        if ($refused) { return (Write-TokenRefusal 'worklist' $refused) }
         $kind = Get-FailureKind $_
         Add-Problem 'worklist' $(if ($kind -eq 'server-unreachable') { $kind } else { 'worklist-failed' })
         throw
@@ -455,8 +607,12 @@ function Invoke-WorklistFetch([pscustomobject]$cfg) {
 }
 
 function Invoke-WorklistFetchCore([pscustomobject]$cfg) {
+    # Two tokens may be saved: the shared worklist token the platform has always
+    # taken, and (DR-040) this PC's own uploader token. Either one is enough to
+    # ask; both are sent when both are set, as the platform takes both during
+    # the rollout and drops the shared one at the end.
     $token = Unprotect-Token $cfg.TokenProtected
-    if (-not $token) { Add-Problem 'worklist' 'no-token'; Write-Log 'worklist: no token configured' 'WARN'; return 'no token' }
+    if (-not $token -and -not (Get-UploaderToken $cfg)) { Add-Problem 'worklist' 'no-token'; Write-Log 'worklist: no token configured' 'WARN'; return 'no token' }
 
     $dropDir = Join-Path $cfg.ClientRoot 'Worklist'
     if (-not (Test-Path $dropDir)) { Add-Problem 'worklist' 'drop-folder-missing'; Write-Log "worklist: drop folder missing: $dropDir" 'ERROR'; return 'drop folder missing' }
@@ -479,17 +635,23 @@ function Invoke-WorklistFetchCore([pscustomobject]$cfg) {
     }
 
     $req = New-Object System.Net.Http.HttpRequestMessage 'GET', (Get-ApiUrl $cfg '/api/v1/device/optomed/worklist.txt')
-    $req.Headers.TryAddWithoutValidation('X-MUW-Optomed-Token', $token) | Out-Null
+    if ($token) { $req.Headers.TryAddWithoutValidation('X-MUW-Optomed-Token', $token) | Out-Null }
+    Add-UploaderHeader $req $cfg
     $resp = $script:Http.SendAsync($req).GetAwaiter().GetResult()
     $body = $resp.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
     if (-not $resp.IsSuccessStatusCode) {
         $code = [int]$resp.StatusCode
+        # 401 is a token the platform does not take, the shared one or the
+        # uploader token (the answer's text says which). Nothing below runs: the
+        # last good worklist stays where it is and no empty file is dropped.
+        if ($code -eq 401) { throw (New-TokenRefusal (Get-TokenProblemCode 401 ([Text.Encoding]::UTF8.GetString($body)))) }
         # 404 is the platform's worklist switched off (it answers 404 while
-        # core.optomed.worklist.enabled=false); 401 a token that does not match.
-        Add-Problem 'worklist' $(switch ($code) { 401 { 'worklist-token-rejected' } 404 { 'worklist-off' } default { 'worklist-failed' } })
+        # core.optomed.worklist.enabled=false).
+        Add-Problem 'worklist' $(switch ($code) { 404 { 'worklist-off' } default { 'worklist-failed' } })
         Write-Log "worklist: HTTP $code" 'ERROR'
         return "HTTP $code"
     }
+    $script:TokenLogged['worklist'] = ''      # the platform took the token: a refusal after this is news again
 
     # Drop only on change. The Client consumes the file, so the reference copy
     # of what was last served lives here, not in the drop folder.
@@ -516,9 +678,15 @@ function Invoke-WorklistFetchCore([pscustomobject]$cfg) {
 function Resolve-Visit([pscustomobject]$cfg, [string]$patientId, [string]$scanDate, [string]$laterality) {
     $payload = @{ scans = @(@{ patientId = $patientId; scanDate = $scanDate; laterality = $laterality }) } | ConvertTo-Json -Depth 4 -Compress
     $content = New-Object System.Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')
-    $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/resolve'), $content).GetAwaiter().GetResult()
+    $resp = Send-DeviceRequest $script:Http $cfg 'POST' '/api/v1/public/upload/resolve' $content
     if (-not $resp.IsSuccessStatusCode) {
-        if ([int]$resp.StatusCode -eq 429) { Add-Problem 'upload' 'rate-limited' }
+        $status = [int]$resp.StatusCode
+        # A 401 is not a lookup that failed - the platform does not take this
+        # uploader as it is. Carrying on and filing the study without a visit, as
+        # a 429 does, would be wrong: the round ends here with every file
+        # untouched (see Invoke-StudyUpload).
+        if ($status -eq 401) { throw (New-TokenRefusal (Get-TokenProblemCode 401 (Read-ResponseText $resp))) }
+        if ($status -eq 429) { Add-Problem 'upload' 'rate-limited' }
         return $null
     }
     $r = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
@@ -540,7 +708,7 @@ function Send-Commit([pscustomobject]$cfg, [string]$path, [hashtable]$fields) {
     foreach ($k in $fields.Keys) {
         if ($null -ne $fields[$k] -and "$($fields[$k])" -ne '') { $mp.Add((New-Object System.Net.Http.StringContent("$($fields[$k])")), $k) }
     }
-    $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/commit'), $mp).GetAwaiter().GetResult()
+    $resp = Send-DeviceRequest $script:Http $cfg 'POST' '/api/v1/public/upload/commit' $mp
     [pscustomobject]@{ Status = [int]$resp.StatusCode; Body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() }
 }
 
@@ -548,7 +716,14 @@ function Send-Commit([pscustomobject]$cfg, [string]$path, [hashtable]$fields) {
 function Invoke-StudyUpload([pscustomobject]$cfg) {
     $script:Problems['upload'] = @{}
     try { Invoke-StudyUploadCore $cfg }
-    catch { Add-Problem 'upload' (Get-FailureKind $_); throw }
+    catch {
+        # A refused uploader token ends the round: the files that went before
+        # were moved one by one as they were taken; the refused one and every
+        # one after it are exactly where they were. Not a failure of any file.
+        $refused = Get-TokenRefusalCode $_
+        if ($refused) { return (Write-TokenRefusal 'upload' $refused) }
+        Add-Problem 'upload' (Get-FailureKind $_); throw
+    }
     finally { $script:LastActivityUtc = [datetime]::UtcNow }
 }
 
@@ -576,6 +751,9 @@ function Invoke-StudyUploadCore([pscustomobject]$cfg) {
                 patientId = $label; scanDate = $date; laterality = $lat
                 device = $cfg.Device; studyEventId = $eventId
             }
+            # A 401 is not this file's failure either: it stays, and the round ends.
+            $refused = Get-TokenProblemCode $r.Status $r.Body
+            if ($refused) { throw (New-TokenRefusal $refused) }
             switch ($r.Status) {
                 201 { $ok++; if ($eventId) { $bound++ }; Move-Uploaded $f; Add-Uploaded }
                 409 { $dup++; Move-Uploaded $f }
@@ -587,10 +765,15 @@ function Invoke-StudyUploadCore([pscustomobject]$cfg) {
                 }
             }
         } catch {
+            if (Get-TokenRefusalCode $_) {             # not this file's failure: up to Invoke-StudyUpload
+                if (($ok + $dup) -gt 0) { Write-Log ("upload: uploaded {0} ({1} bound), {2} already there, then the platform refused the uploader token" -f $ok, $bound, $dup) }
+                throw
+            }
             $fail++; Add-Problem 'upload' (Get-FailureKind $_); Write-Log "upload: $($_.Exception.Message)" 'ERROR'
         }
         Start-Sleep -Milliseconds 750     # the public front door is rate-limited per client
     }
+    $script:TokenLogged['upload'] = ''         # the platform took the token: a refusal after this is news again
     $summary = "uploaded $ok ($bound bound), $dup already there, $fail failed"
     Write-Log "upload: $summary"
     $summary
@@ -640,7 +823,8 @@ if ($Heartbeat) {
     $cfg = Read-Config
     $code = Send-Heartbeat $cfg
     $answer = if ($code -eq 200) { 'recorded' } elseif ($code -eq 0) { 'no answer' } else { "HTTP $code" }
-    Write-Host ("heartbeat as '{0}' ({1} {2}) to {3}: {4}" -f (Get-DisplayName $cfg), $script:Kind, $script:Version, $cfg.BaseUrl, $answer)
+    if ($script:HbProblem) { $answer = "HTTP 401 - $(Get-TokenProblemText $script:HbProblem) ($script:HbProblem)" }
+    Write-Host ("heartbeat as '{0}' ({1} {2}) to {3}: {4}; uploader token: {5}" -f (Get-DisplayName $cfg), $script:Kind, $script:Version, $cfg.BaseUrl, $answer, (Get-UploaderTokenState $cfg))
     if ($code -eq 200) { exit 0 } else { exit 1 }
 }
 
@@ -769,7 +953,7 @@ function Request-ClientHide {
 }
 
 $script:Cfg = Read-Config
-Write-Log "$script:AppName starting (enabled=$($script:Cfg.Enabled))"
+Write-Log "$script:AppName starting (enabled=$($script:Cfg.Enabled), uploader token: $(Get-UploaderTokenState $script:Cfg))"
 
 function New-TrayIcon([bool]$enabled) {
     # Drawn, not shipped: a filled circle, teal when enabled, grey when not.
@@ -803,7 +987,13 @@ $menu.Items.Add('-') | Out-Null
 $exitItem = $menu.Items.Add('Exit')
 $tray.ContextMenuStrip = $menu
 
-function Set-Status([string]$text) { $status.Text = $text; $tray.Text = "$script:AppName - $text".Substring(0, [Math]::Min(63, ("$script:AppName - $text").Length)) }
+# $tip: what the icon's tooltip says when it should not be the status line (the
+# tooltip is 63 characters at most, which the German token texts exceed).
+function Set-Status([string]$text, [string]$tip = '') {
+    if (-not $tip) { $tip = $text }
+    $status.Text = $text
+    $tray.Text = "$script:AppName - $tip".Substring(0, [Math]::Min(63, ("$script:AppName - $tip").Length))
+}
 
 function Show-Problem([string]$text) {
     # One balloon per ten minutes: a dead network must not become a stream of them.
@@ -812,12 +1002,26 @@ function Show-Problem([string]$text) {
     $tray.ShowBalloonTip(5000, $script:AppName, $text, [Windows.Forms.ToolTipIcon]::Warning)
 }
 
+# A refused token needs a person at Settings: the status line and the tooltip
+# say so in words, and so does a balloon (at most one in ten minutes).
 function Invoke-FetchNow {
-    try { Set-Status ('worklist: ' + (Invoke-WorklistFetch $script:Cfg) + ' @ ' + (Get-Date -Format 'HH:mm')) }
+    try {
+        $summary = Invoke-WorklistFetch $script:Cfg
+        $tokenProblem = Get-TokenProblemIn $script:Problems['worklist']
+        $tip = ''
+        if ($tokenProblem) { $tip = Get-TokenProblemTip $tokenProblem; Show-Problem (Get-TokenProblemText $tokenProblem) }
+        Set-Status ('worklist: ' + $summary + ' @ ' + (Get-Date -Format 'HH:mm')) $tip
+    }
     catch { Write-Log "worklist: $($_.Exception.Message)" 'ERROR'; Set-Status 'worklist: failed'; Show-Problem "Worklist fetch failed: $($_.Exception.Message)" }
 }
 function Invoke-UploadNow {
-    try { Set-Status ('upload: ' + (Invoke-StudyUpload $script:Cfg) + ' @ ' + (Get-Date -Format 'HH:mm')) }
+    try {
+        $summary = Invoke-StudyUpload $script:Cfg
+        $tokenProblem = Get-TokenProblemIn $script:Problems['upload']
+        $tip = ''
+        if ($tokenProblem) { $tip = Get-TokenProblemTip $tokenProblem; Show-Problem (Get-TokenProblemText $tokenProblem) }
+        Set-Status ('upload: ' + $summary + ' @ ' + (Get-Date -Format 'HH:mm')) $tip
+    }
     catch { Write-Log "upload: $($_.Exception.Message)" 'ERROR'; Set-Status 'upload: failed'; Show-Problem "Upload failed: $($_.Exception.Message)" }
 }
 
@@ -874,7 +1078,7 @@ $exitItem.Add_Click({ Send-StopHeartbeat $script:Cfg 'exit'; $tray.Visible = $fa
 $settingsItem.Add_Click({
     $f = New-Object Windows.Forms.Form
     $f.Text = "$script:AppName - Settings"; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedDialog'
-    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 368
+    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 436
 
     $y = 14
     function Add-Row([string]$label, [Windows.Forms.Control]$ctl) {
@@ -892,9 +1096,22 @@ $settingsItem.Add_Click({
     $tbName  = New-Object Windows.Forms.TextBox; $tbName.Text = $script:Cfg.DisplayName
     $cbOn    = New-Object Windows.Forms.CheckBox; $cbOn.Text = 'Enabled'; $cbOn.Checked = [bool]$script:Cfg.Enabled
     $cbHide  = New-Object Windows.Forms.CheckBox; $cbHide.Text = 'Hide the Optomed Client window (this icon is the only one)'; $cbHide.Checked = [bool]$script:Cfg.HideClientWindow
+    # The uploader token is never shown, not even masked - only whether one is
+    # saved. Typing a new one replaces it; an empty field keeps it; the tick
+    # removes it (the requests then go without it, as before DR-040).
+    $tbUpTok = New-Object Windows.Forms.TextBox; $tbUpTok.UseSystemPasswordChar = $true
+    $cbUpTokClear = $null
+    if ([bool]$script:Cfg.UploaderTokenProtected) {
+        $cbUpTokClear = New-Object Windows.Forms.CheckBox; $cbUpTokClear.Text = 'Token entfernen (derzeit gesetzt; leer = behalten)'
+        $upTokState = $cbUpTokClear
+    } else {
+        $upTokState = New-Object Windows.Forms.Label; $upTokState.Text = 'derzeit nicht gesetzt (Anfragen ohne Token)'; $upTokState.AutoSize = $true
+    }
 
     Add-Row 'Platform base URL' $tbUrl
     Add-Row 'Worklist token' $tbTok
+    Add-Row 'Uploader-Token' $tbUpTok
+    Add-Row '' $upTokState
     Add-Row 'Optomed Client folder' $tbRoot
     Add-Row 'Device name (on upload)' $tbDev
     Add-Row 'Worklist fetch, every (sec)' $nuFetch
@@ -903,13 +1120,27 @@ $settingsItem.Add_Click({
     Add-Row '' $cbOn
     Add-Row '' $cbHide
 
-    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 328
-    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 328
+    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 396
+    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 396
     $f.Controls.AddRange(@($ok, $cancel)); $f.AcceptButton = $ok; $f.CancelButton = $cancel
 
-    if ($f.ShowDialog() -eq 'OK') {
+    # An Uploader-Token that does not look like one is refused here, with the
+    # dialog shown again and everything typed still in it - never saved as garbage.
+    $answer = 'Cancel'
+    while ($true) {
+        $answer = $f.ShowDialog()
+        if ($answer -ne 'OK') { break }
+        $typed = $tbUpTok.Text.Trim()
+        if (-not $typed -or (Test-UploaderTokenFormat $typed)) { break }
+        [Windows.Forms.MessageBox]::Show("Der Uploader-Token hat nicht das erwartete Format: 'mwu_' gefolgt von 43 Zeichen (Buchstaben, Ziffern, - und _). Bitte genau so einfuegen, wie er angezeigt wurde, ohne Leerzeichen oder Zeilenumbrueche. Es wurde nichts gespeichert.", "$script:AppName - Uploader-Token", 'OK', 'Warning') | Out-Null
+    }
+    if ($answer -eq 'OK') {
         $script:Cfg.BaseUrl = $tbUrl.Text.Trim()
         $script:Cfg.TokenProtected = Protect-Token $tbTok.Text.Trim()
+        $typed = $tbUpTok.Text.Trim()
+        if ($typed) { $script:Cfg.UploaderTokenProtected = Protect-Token $typed }
+        elseif ($null -ne $cbUpTokClear -and $cbUpTokClear.Checked) { $script:Cfg.UploaderTokenProtected = '' }
+        $typed = $null
         $script:Cfg.ClientRoot = $tbRoot.Text.Trim()
         $script:Cfg.Device = $tbDev.Text.Trim()
         $script:Cfg.WorklistIntervalSec = [int]$nuFetch.Value
@@ -922,7 +1153,7 @@ $settingsItem.Add_Click({
         else { Set-ClientWindowVisible $true | Out-Null }
         $enabledItem.Checked = $cbOn.Checked
         Update-Timers
-        Write-Log 'settings saved'
+        Write-Log ("settings saved (uploader token: {0})" -f (Get-UploaderTokenState $script:Cfg))
         if ($script:Cfg.Enabled) { Invoke-FetchNow }
         Send-Heartbeat $script:Cfg | Out-Null
     }
