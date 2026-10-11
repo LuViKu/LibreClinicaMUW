@@ -53,7 +53,10 @@ import org.springframework.stereotype.Component;
  *       or {@link #resolveAutoSource} for a sender they have already
  *       accepted: the first time it is seen it becomes an unassigned source.
  *       The call creates a row, so it belongs behind whatever allow-list the
- *       caller has; it is not a way for the network to make rows.</li>
+ *       caller has; it is not a way for the network to make rows. Where the
+ *       allow-list may be empty (the DICOM receiver's is by default) the
+ *       caller uses the form with a {@code limit}, which stops making sources
+ *       at a fixed count.</li>
  * </ul>
  *
  * <h2>Tokens</h2>
@@ -554,6 +557,31 @@ public class IngestSourceService {
 
     /** As {@link #upsertAutoSource}, returning the whole source (so the caller sees its location in one call). */
     public Source resolveAutoSource(String kind, String sourceKey, String displayName) {
+        return resolveAuto(kind, sourceKey, displayName, null).orElseThrow();
+    }
+
+    /**
+     * As {@link #resolveAutoSource(String, String, String)}, for a sender whose
+     * key a stranger can choose: a source that does not exist yet is made only
+     * while fewer than {@code limit} sources of the kind exist. A source that
+     * does exist is always returned, whatever the count.
+     *
+     * <p>The DICOM receiver's calling AE title is such a key. The receiver
+     * accepts any title when its allow-list is empty (the default), so without
+     * a limit anything that can reach its port could fill the table.
+     *
+     * <p>The count and the insert are one transaction behind an advisory lock,
+     * so the limit is exact however many callers meet a full table at once.
+     * Callers that find the source already there never take the lock.
+     *
+     * @return the source, or empty when it did not exist and the limit is reached
+     *         (nothing was written)
+     */
+    public Optional<Source> resolveAutoSource(String kind, String sourceKey, String displayName, int limit) {
+        return resolveAuto(kind, sourceKey, displayName, limit);
+    }
+
+    private Optional<Source> resolveAuto(String kind, String sourceKey, String displayName, Integer limit) {
         if (!KIND_DICOM_AE.equals(kind) && !KIND_REMIDIO.equals(kind)) {
             throw new IllegalArgumentException("an automatic source is a dicom_ae or a remidio, not " + kind);
         }
@@ -563,12 +591,18 @@ public class IngestSourceService {
             Seen seen = seenBy(c, "s.kind = ? AND s.source_key = ?", kind, key);
             if (seen != null) {
                 touchIfDue(c, seen);
-                return seen.row().toSource();
+                return Optional.of(seen.row().toSource());
             }
         } catch (SQLException e) {
             throw new Failure("read the source", e);
         }
         return inTransaction("create the source", c -> {
+            if (limit != null) {
+                lockAutoSourceCreation(c);
+                Seen made = seenBy(c, "s.kind = ? AND s.source_key = ?", kind, key);
+                if (made != null) return Optional.of(made.row().toSource());   // made while this call waited
+                if (countOfKind(c, kind) >= limit) return Optional.empty();
+            }
             long id;
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO ingest_source (kind, source_key, display_name, created_at, last_used_at) "
@@ -582,7 +616,7 @@ public class IngestSourceService {
                     if (!rs.next()) {
                         // Another caller made it between our look and our insert.
                         Seen won = seenBy(c, "s.kind = ? AND s.source_key = ?", kind, key);
-                        return won.row().toSource();
+                        return Optional.of(won.row().toSource());
                     }
                     id = rs.getLong(1);
                 }
@@ -590,8 +624,32 @@ public class IngestSourceService {
             audit(c, AUDIT_INGEST_SOURCE_CREATED, 0, id, name, null,
                     "kind=" + kind + "; key=" + key + "; location=unassigned");
             LOG.info("ingest sources: {} source id {} seen for the first time", kind, id);
-            return readSource(c, id);
+            return Optional.of(readSource(c, id));
         });
+    }
+
+    /**
+     * Key of the transaction-scoped advisory lock that serialises the making
+     * of limited automatic sources. Arbitrary but fixed; 40_040_001 is the
+     * location writes' (AdminLocationsApiController).
+     */
+    private static final long AUTO_SOURCE_LOCK_KEY = 40_040_002L;
+
+    private static void lockAutoSourceCreation(Connection c) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT pg_advisory_xact_lock(?)")) {
+            ps.setLong(1, AUTO_SOURCE_LOCK_KEY);
+            ps.execute();
+        }
+    }
+
+    private static int countOfKind(Connection c, String kind) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT count(*) FROM ingest_source WHERE kind = ?")) {
+            ps.setString(1, kind);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
     }
 
     /* ====================================================================== */
