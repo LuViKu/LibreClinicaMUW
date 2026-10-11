@@ -144,6 +144,38 @@ final class IngestSourceQueries {
                 rs.getBoolean("revoked") ? "revoked" : "active");
     }
 
+    /** The most instances {@link #anonymousUploaders} lists; its count is the whole number. */
+    static final int ANONYMOUS_LISTED = 50;
+
+    /** An uploader program counts as in use while its last heartbeat is no older than this. */
+    static final int ANONYMOUS_WINDOW_DAYS = 7;
+
+    /**
+     * The uploader programs seen in the last {@value #ANONYMOUS_WINDOW_DAYS}
+     * days that no ingest source names: they have never reported with a token
+     * (a revoked uploader still names its instance, so it is not one of them).
+     * Newest first, at most {@value #ANONYMOUS_LISTED} listed, and the count is
+     * of all of them (the window function counts before the limit).
+     */
+    static AnonymousUploadersDto anonymousUploaders(Connection c) throws SQLException {
+        List<AnonymousUploaderDto> listed = new ArrayList<>();
+        int total = 0;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT count(*) OVER () AS total, ui.display_name, ui.kind, ui.last_seen_at "
+                        + "FROM uploader_instance ui "
+                        + "WHERE ui.last_seen_at >= now() - interval '" + ANONYMOUS_WINDOW_DAYS + " days' "
+                        + "AND NOT EXISTS (SELECT 1 FROM ingest_source s WHERE s.instance_uid = ui.instance_uid) "
+                        + "ORDER BY ui.last_seen_at DESC, ui.uploader_instance_id DESC LIMIT " + ANONYMOUS_LISTED);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                total = rs.getInt("total");
+                listed.add(new AnonymousUploaderDto(rs.getString("display_name"), rs.getString("kind"),
+                        iso(rs.getTimestamp("last_seen_at"))));
+            }
+        }
+        return new AnonymousUploadersDto(total, listed);
+    }
+
     /** The ISO-8601 instant of a timestamp, as the other health endpoints write them; null for null. */
     static String iso(Timestamp t) {
         return t == null ? null : t.toInstant().toString();

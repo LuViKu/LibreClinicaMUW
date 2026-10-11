@@ -4187,6 +4187,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/ingest-sources/anonymous-uploaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Uploader programs seen in the last 7 days that have never reported with a token: what stops working when a second location is created */
+        get: operations["listAnonymousUploaders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/deidentification": {
         parameters: {
             query?: never;
@@ -6736,6 +6753,23 @@ export interface components {
             status?: string;
             parentOid?: string;
             sites?: components["schemas"]["AdminStudyDto"][];
+        };
+        AnonymousUploaderDto: {
+            /** @description The PC's name as the program reports it. */
+            displayName?: string | null;
+            /** @description The program, e.g. export-watcher or optomed-bridge. */
+            kind: string;
+            /** @description The last heartbeat, an ISO-8601 instant. */
+            lastSeenAt: string;
+        };
+        AnonymousUploadersDto: {
+            /**
+             * Format: int32
+             * @description How many uploader programs were seen in the last 7 days and have no token.
+             */
+            count: number;
+            /** @description The newest of them, at most 50, newest first. */
+            instances: components["schemas"]["AnonymousUploaderDto"][];
         };
         CancelEventRequest: {
             reasonCode?: string;
@@ -14014,6 +14048,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IngestSourceDto"][];
+                };
+            };
+        };
+    };
+    listAnonymousUploaders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnonymousUploadersDto"];
                 };
             };
         };

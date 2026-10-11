@@ -91,6 +91,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     /** Individual handlers of otherwise in-scope controllers that are out of scope, with the reason. */
     static final Map<String, String> OUT_OF_SCOPE_HANDLERS = new TreeMap<>(Map.ofEntries(
             Map.entry("SubjectsApiController#create", "creates in the session's own study; no foreign id (label uniqueness is study-wide by design)"),
+            Map.entry("AdminIngestSourcesApiController#listAnonymousUploaders", "system administration (uploader programs without a token: name, kind and last heartbeat); sysadmin only, no study, site or patient data"),
             Map.entry("SubjectsApiController#checkLabel", "label-uniqueness probe; uniqueness is study-wide by design"),
             Map.entry("StudiesApiController#create", "creates a new top-level study (sysadmin); no foreign id")));
 
