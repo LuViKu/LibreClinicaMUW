@@ -902,12 +902,19 @@ public class PublicOctUploadController {
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> preflight(
             @RequestParam("sha256") String sha256,
-            @RequestParam(value = "scanIndex", defaultValue = "0") int scanIndex) {
+            @RequestParam(value = "scanIndex", defaultValue = "0") int scanIndex,
+            HttpServletRequest servletRequest) {
         if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "sha256 must be 64 hex characters"));
         }
         Long existingJobId = findJobBySha256(sha256, scanIndex);
+        // A tokened request hears only of scans that arrived at its own location.
+        IngestSourceService.Source source = UploaderSources.of(servletRequest);
+        if (existingJobId != null && source != null) {
+            Long item = ingestItemOfJob(existingJobId);
+            if (item == null || !DeviceScope.mayName(dataSource, source, item)) existingJobId = null;
+        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("exists", existingJobId != null);
         body.put("jobId", existingJobId);
@@ -1492,6 +1499,22 @@ public class PublicOctUploadController {
      * doesn't have its second volume blocked by the unique constraint.
      * The composite unique index on the DB matches this lookup.
      */
+    /** The ingest item a job hangs off, or null (none, or unreadable). */
+    private Long ingestItemOfJob(long jobId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ingest_item_id FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    long id = rs.getLong(1);
+                    return rs.wasNull() ? null : id;
+                }
+            }
+        } catch (SQLException ignored) { /* best-effort: unknown reads as "not here" */ }
+        return null;
+    }
+
     private Long findJobBySha256(String e2eSha256, int scanIndex) {
         if (e2eSha256 == null || e2eSha256.isBlank()) return null;
         try (Connection c = dataSource.getConnection();

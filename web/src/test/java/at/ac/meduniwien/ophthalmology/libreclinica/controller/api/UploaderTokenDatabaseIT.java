@@ -279,7 +279,7 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     /**
      * A MockMvc over the device controllers, behind the real token filter and
-     * the rate limiter (the internal deployment's, off for strangers). A fresh
+     * the rate limiter (the internal deployment's, which is off). A fresh
      * filter reads the number of locations afresh; a test that changes it asks
      * for a new MockMvc.
      */
@@ -808,6 +808,48 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(409, foreign.getResponse().getStatus());
         assertFalse(bodyOf(foreign).contains("existingIngestItemId"), "another place's is not: " + bodyOf(foreign));
         assertFalse(bodyOf(foreign).contains(String.valueOf(firstId)), bodyOf(foreign));
+    }
+
+    private static String sha256Hex(byte[] bytes) throws Exception {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
+    @Test
+    void thePreflightNamesOnlyFilesThatArrivedAtTheTokensLocation() throws Exception {
+        twoLocations();
+        MockMvc m = mvc();
+        byte[] bytes = png();
+        long id = idOf(commitImage(m, tokenA, bytes, null, null));
+        String sha = sha256Hex(bytes);
+
+        var own = JSON.readTree(bodyOf(m.perform(withToken(device(get(url(UPLOAD + "/preflight")))
+                .param("sha256", sha), tokenA)).andReturn()));
+        assertTrue(own.path("exists").asBoolean(), own.toString());
+        assertEquals(id, own.path("ingestItemId").asLong());
+        String foreign = bodyOf(m.perform(withToken(device(get(url(UPLOAD + "/preflight")))
+                .param("sha256", sha), tokenB)).andReturn());
+        assertFalse(JSON.readTree(foreign).path("exists").asBoolean(), foreign);
+        assertFalse(foreign.contains(String.valueOf(id)), foreign);
+
+        // The older OCT page's preflight, which answers by job.
+        long scanItem = idOf(commitE2e(m, tokenA, EVENT_A, DAY_A));
+        String scanSha;
+        try (Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "SELECT e2e_sha256 FROM retinal_inference_job WHERE ingest_item_id = ? AND scan_index = 0")) {
+            ps.setLong(1, scanItem);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next(), "the visit's plan started a job");
+                scanSha = rs.getString(1);
+            }
+        }
+        var ownScan = JSON.readTree(bodyOf(m.perform(withToken(device(get(url(OCT + "/preflight")))
+                .param("sha256", scanSha), tokenA)).andReturn()));
+        assertTrue(ownScan.path("exists").asBoolean(), ownScan.toString());
+        var foreignScan = JSON.readTree(bodyOf(m.perform(withToken(device(get(url(OCT + "/preflight")))
+                .param("sha256", scanSha), tokenB)).andReturn()));
+        assertFalse(foreignScan.path("exists").asBoolean(), foreignScan.toString());
+        assertTrue(foreignScan.path("jobId").isNull(), foreignScan.toString());
     }
 
     private static long filesUnder(Path root) throws java.io.IOException {

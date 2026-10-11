@@ -167,11 +167,14 @@ public class PublicUploadController {
      */
     @GetMapping(value = "/preflight", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> preflightUpload(@RequestParam("sha256") String sha256,
-                                       @RequestParam(value = "scanIndex", required = false) Integer scanIndex) {
+                                       @RequestParam(value = "scanIndex", required = false) Integer scanIndex,
+                                       HttpServletRequest servletRequest) {
         if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
             return ResponseEntity.badRequest().body(Map.of("message", "sha256 must be 64 hex characters"));
         }
-        return ResponseEntity.ok(uploads.preflight(sha256, scanIndex));
+        // A tokened request hears only of files that arrived at its own location.
+        return ResponseEntity.ok(uploads.preflight(sha256, scanIndex,
+                DeviceScope.itemsOf(dataSource, UploaderSources.of(servletRequest))));
     }
 
     /* ---------------- the upload ---------------- */
