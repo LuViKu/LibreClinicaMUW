@@ -45,6 +45,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient;
@@ -128,9 +129,10 @@ class IngestSourceStampingDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
-    /** Files before sources before places: the keys point that way. */
+    /** Files before sources before places: the keys point that way. Back to single mode. */
     @AfterEach
     void clean() throws Exception {
+        LocationMode.set(LocationMode.SINGLE);
         try (Connection c = DATA_SOURCE.getConnection()) {
             exec(c, "DELETE FROM audit_log_event WHERE audit_table IN ('ingest_item', 'ingest_source')");
             exec(c, "DELETE FROM ingest_item WHERE sop_instance_uid LIKE '" + UID_PREFIX + "%' "
@@ -147,7 +149,7 @@ class IngestSourceStampingDatabaseIT extends AbstractApiControllerDatabaseIT {
     /* ====================================================================== */
 
     @Test
-    void theFirstFileOfACallingAeMakesAnUnassignedSourceOnceAndStampsEveryFile() throws Exception {
+    void theFirstFileOfACallingAeMakesASourceOnceAndStampsEveryFile() throws Exception {
         long first = handoff("D2-CAMERA");
         long second = handoff("D2-CAMERA");
 
@@ -155,7 +157,8 @@ class IngestSourceStampingDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "one source however many files");
         long source = sourceId("dicom_ae", "D2-CAMERA");
         assertEquals("D2-CAMERA", text("SELECT display_name FROM ingest_source WHERE ingest_source_id = " + source));
-        assertNull(locationOfSource(source), "a source seen for the first time has no place yet");
+        assertEquals(Integer.valueOf(defaultId), locationOfSource(source),
+                "single-location mode: a source seen for the first time is at the one location");
         assertEquals(Long.valueOf(source), sourceOfItem(first));
         assertEquals(Long.valueOf(source), sourceOfItem(second));
         assertEquals(1, count("SELECT count(*) FROM audit_log_event WHERE audit_table = 'ingest_source' "
@@ -164,7 +167,18 @@ class IngestSourceStampingDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
-    void anUnassignedSourceWithOneLocationFilesAtThatLocation() throws Exception {
+    void inMultiModeASourceSeenForTheFirstTimeHasNoPlaceEvenWithOneLocation() throws Exception {
+        LocationMode.set(LocationMode.MULTI);
+        long item = handoff("D2-CAMERA");
+        long source = sourceId("dicom_ae", "D2-CAMERA");
+        assertNull(locationOfSource(source), "multi mode: a new camera waits for an administrator");
+        assertNull(originOf(item), "and so does what it sends");
+        sources.assignLocation(source, defaultId, ROOT);
+        assertEquals(Integer.valueOf(defaultId), originOf(item), "assigning the source places the file");
+    }
+
+    @Test
+    void inSingleModeANewSourcesFilesAreAtTheOneLocation() throws Exception {
         assertEquals(1, count("SELECT count(*) FROM location WHERE status_id = 1"), "this check is about one location");
         long item = handoff("D2-CAMERA");
         assertNotNull(sourceOfItem(item), "the file carries its source");
@@ -376,7 +390,8 @@ class IngestSourceStampingDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(1, count("SELECT count(*) FROM ingest_source WHERE kind = 'remidio'"));
         long source = sourceId("remidio", SITE);
         assertEquals("Remidio", text("SELECT display_name FROM ingest_source WHERE ingest_source_id = " + source));
-        assertNull(locationOfSource(source), "the account has no place until an administrator says which");
+        assertEquals(Integer.valueOf(defaultId), locationOfSource(source),
+                "single-location mode: the account is at the one location");
         assertEquals(Long.valueOf(source), sourceOfItem(first));
         assertEquals(Long.valueOf(source), sourceOfItem(second));
         assertEquals(Integer.valueOf(defaultId), originOf(first), "one location: the default");
@@ -512,8 +527,9 @@ class IngestSourceStampingDatabaseIT extends AbstractApiControllerDatabaseIT {
     /* Database and log helpers                                                */
     /* ====================================================================== */
 
-    /** A second active location; with it there is no default location any more. */
+    /** A second active location, which only a multi-location deployment has: no default location any more. */
     private static int location(String code) throws Exception {
+        LocationMode.set(LocationMode.MULTI);
         try (Connection c = DATA_SOURCE.getConnection()) {
             return LifecycleFixtures.insertOne(c, "INSERT INTO location (code, name) VALUES ('" + code
                     + "', 'Second place " + code + "') RETURNING location_id");

@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +41,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.Source;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens;
@@ -63,9 +64,8 @@ class UploaderTokenFilterTest {
 
     private final Map<String, Source> sources = new HashMap<>();
     private final List<String> lookedUp = new ArrayList<>();
-    private final AtomicInteger locations = new AtomicInteger(1);
-    private final AtomicInteger locationReads = new AtomicInteger();
-    private final Map<String, String> settings = new HashMap<>();
+    /** The deployment's location mode as the filter sees it. */
+    private final AtomicReference<LocationMode> mode = new AtomicReference<>(LocationMode.SINGLE);
     private final AtomicLong clock = new AtomicLong(1_000_000L);
     /** While true, the lookup fails as an unreachable database does. */
     private boolean outage;
@@ -84,11 +84,7 @@ class UploaderTokenFilterTest {
                     if (outage) throw new IllegalStateException("database unreachable");
                     return Optional.ofNullable(sources.get(token));
                 },
-                () -> {
-                    locationReads.incrementAndGet();
-                    return locations.get();
-                },
-                settings::get,
+                mode::get,
                 clock::get);
     }
 
@@ -173,7 +169,7 @@ class UploaderTokenFilterTest {
     void aValidTokenBindsItsSourceToTheRequestAndPassesIt() throws Exception {
         Source mine = uploader(7, 3);
         String token = issue(mine);
-        locations.set(2); // the door is shut, the token opens it for its own place
+        mode.set(LocationMode.MULTI); // the door is shut, the token opens it for its own place
 
         Outcome o = post(RESOLVE, token);
 
@@ -181,7 +177,6 @@ class UploaderTokenFilterTest {
         assertEquals(200, o.response.getStatus());
         assertSame(mine, o.source());
         assertEquals(List.of(token), lookedUp);
-        assertEquals(0, locationReads.get(), "a token does not need the location count");
     }
 
     @Test
@@ -227,7 +222,7 @@ class UploaderTokenFilterTest {
     @Test
     void aFailingLookupIsNeverAPass() throws Exception {
         UploaderTokenFilter broken = new UploaderTokenFilter(
-                t -> { throw new IllegalStateException("database down"); }, () -> 1, settings::get, clock::get);
+                t -> { throw new IllegalStateException("database down"); }, mode::get, clock::get);
         Outcome o = new Outcome(request("POST", RESOLVE, UploaderTokens.generate()));
         broken.doFilter(o.request, o.response, o.chain);
         assertAnswered(o, 503, "uploader token could not be checked");
@@ -243,12 +238,11 @@ class UploaderTokenFilterTest {
     void aStaleSourceOnTheRequestNeverSurvivesTheFilter() throws Exception {
         MockHttpServletRequest r = request("POST", RESOLVE, null);
         r.setAttribute(UploaderSources.ATTRIBUTE, uploader(99, 3));
-        Outcome o = run(r); // one location, allowed: served, with no source
+        Outcome o = run(r); // single mode: served, with no source
         assertTrue(o.passed());
         assertNull(o.source());
 
-        locations.set(2);
-        forgetCount();
+        mode.set(LocationMode.MULTI);
         MockHttpServletRequest r2 = request("POST", RESOLVE, UploaderTokens.generate());
         r2.setAttribute(UploaderSources.ATTRIBUTE, uploader(99, 3));
         assertAnswered(run(r2), 401, "uploader token rejected");
@@ -259,7 +253,7 @@ class UploaderTokenFilterTest {
     /* ---------------------------------------------------------------- */
 
     @Test
-    void withNoTokenOneLocationAndTheDoorAllowedTheRequestIsServedAsBefore() throws Exception {
+    void inSingleLocationModeAnUntokenedRequestIsServedAsBefore() throws Exception {
         Outcome o = post(RESOLVE);
         assertTrue(o.passed());
         assertEquals(200, o.response.getStatus());
@@ -268,35 +262,26 @@ class UploaderTokenFilterTest {
     }
 
     @Test
-    void withNoTokenAndTwoLocationsTheAnswerIsTokenRequired() throws Exception {
-        locations.set(2);
+    void inMultiLocationModeAnUntokenedRequestIsToldToSendAToken() throws Exception {
+        // From the first location on: the mode decides, not how many locations exist.
+        mode.set(LocationMode.MULTI);
         assertAnswered(post(RESOLVE), 401, "uploader token required");
+        assertAnswered(post(HEARTBEAT), 401, "uploader token required");
+        assertTrue(lookedUp.isEmpty());
     }
 
     @Test
-    void withNoLocationAtAllTheDoorIsShut() throws Exception {
-        locations.set(0);
-        assertAnswered(post(RESOLVE), 401, "uploader token required");
-    }
-
-    @Test
-    void theSettingDeniedShutsTheDoorOnASingleLocationInstall() throws Exception {
-        settings.put(UploaderTokenFilter.DOOR_KEY, "denied");
-        assertAnswered(post(RESOLVE), 401, "uploader token required");
-        settings.put(UploaderTokenFilter.DOOR_KEY, "  Denied ");
-        assertAnswered(post(RESOLVE), 401, "uploader token required");
-        settings.put(UploaderTokenFilter.DOOR_KEY, "allowed");
+    void theModeIsReadOnEveryRequest() throws Exception {
         assertTrue(post(RESOLVE).passed());
-        settings.put(UploaderTokenFilter.DOOR_KEY, "");
-        assertTrue(post(RESOLVE).passed(), "blank is the default: allowed");
-        settings.put(UploaderTokenFilter.DOOR_KEY, "maybe");
-        assertTrue(post(RESOLVE).passed(), "something else reads as allowed");
+        mode.set(LocationMode.MULTI);
+        assertAnswered(post(RESOLVE), 401, "uploader token required");
+        mode.set(LocationMode.SINGLE);
+        assertTrue(post(RESOLVE).passed());
     }
 
     @Test
     void aTokenOpensAShutDoorForItsOwnPlaceOnly() throws Exception {
-        settings.put(UploaderTokenFilter.DOOR_KEY, "denied");
-        locations.set(3);
+        mode.set(LocationMode.MULTI);
         Source mine = uploader(5, 2);
         Outcome o = post(RESOLVE, issue(mine));
         assertTrue(o.passed());
@@ -305,9 +290,18 @@ class UploaderTokenFilterTest {
     }
 
     @Test
+    void inSingleLocationModeAValidTokenStillBindsItsSource() throws Exception {
+        // An uploader prepared for a later switch already files under its own name.
+        Source mine = uploader(5, 1);
+        Outcome o = post(RESOLVE, issue(mine));
+        assertTrue(o.passed());
+        assertSame(mine, o.source());
+    }
+
+    @Test
     void theLegacyOptomedTokenIsNotAnUploaderToken() throws Exception {
-        // It cannot say which location is asking: with one location the worklist goes on to its own
-        // shared-token gate, with two the door is shut.
+        // It cannot say which location is asking: in single mode the worklist goes on to its own
+        // shared-token gate, in multi mode the door is shut.
         MockHttpServletRequest legacy = request("GET", WORKLIST, null);
         legacy.addHeader("X-MUW-Optomed-Token", "the-shared-secret");
         Outcome one = run(legacy);
@@ -315,8 +309,7 @@ class UploaderTokenFilterTest {
         assertNull(one.source());
         assertTrue(lookedUp.isEmpty(), "the legacy token is never looked up as an uploader token");
 
-        locations.set(2);
-        forgetCount();
+        mode.set(LocationMode.MULTI);
         MockHttpServletRequest again = request("GET", WORKLIST, null);
         again.addHeader("X-MUW-Optomed-Token", "the-shared-secret");
         assertAnswered(run(again), 401, "uploader token required");
@@ -327,42 +320,10 @@ class UploaderTokenFilterTest {
         Source mine = uploader(5, 2);
         MockHttpServletRequest both = request("GET", WORKLIST, issue(mine));
         both.addHeader("X-MUW-Optomed-Token", "the-shared-secret");
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         Outcome o = run(both);
         assertTrue(o.passed());
         assertSame(mine, o.source());
-    }
-
-    @Test
-    void theLocationCountIsReadOnceAndTrustedForFifteenSeconds() throws Exception {
-        assertTrue(post(RESOLVE).passed());
-        assertTrue(post(RESOLVE).passed());
-        assertTrue(post(HEARTBEAT).passed());
-        assertEquals(1, locationReads.get(), "one read for three requests");
-
-        // A second location is made: the old answer stands until its time is up...
-        locations.set(2);
-        clock.addAndGet(UploaderTokenFilter.LOCATION_COUNT_TTL_MS - 1);
-        assertTrue(post(RESOLVE).passed());
-        assertEquals(1, locationReads.get());
-        // ...and then the door shuts by itself.
-        clock.addAndGet(1);
-        assertAnswered(post(RESOLVE), 401, "uploader token required");
-        assertEquals(2, locationReads.get());
-    }
-
-    @Test
-    void aCountThatCannotBeReadIsNotOne() throws Exception {
-        UploaderTokenFilter broken = new UploaderTokenFilter(
-                t -> Optional.empty(), () -> { throw new IllegalStateException("database down"); },
-                settings::get, clock::get);
-        Outcome o = new Outcome(request("POST", RESOLVE, null));
-        broken.doFilter(o.request, o.response, o.chain);
-        assertAnswered(o, 401, "uploader token required");
-    }
-
-    private void forgetCount() {
-        filter.forgetLocationCount();
     }
 
     /* ---------------------------------------------------------------- */
@@ -371,7 +332,7 @@ class UploaderTokenFilterTest {
 
     @Test
     void everyPathAnAnonymousDeviceCanReachIsGuardedUnderTheDeployedContextPath() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         for (String path : new String[] {
                 "/pages/api/v1/public/upload/resolve", "/pages/api/v1/public/upload/commit",
                 "/pages/api/v1/public/upload/patients/search", "/pages/api/v1/public/upload/patients/12/events",
@@ -386,7 +347,7 @@ class UploaderTokenFilterTest {
 
     @Test
     void theMethodDoesNotMatterNoHeadOrGetIsAWayRoundTheDoor() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         for (String method : new String[] {"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"}) {
             assertAnswered(run(request(method, WORKLIST, null)), 401, "uploader token required");
             assertAnswered(run(request(method, RESOLVE, null)), 401, "uploader token required");
@@ -395,7 +356,7 @@ class UploaderTokenFilterTest {
 
     @Test
     void thePathIsMatchedAsTheContainerRoutesItNotAsItIsWritten() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         // An escaped letter, a path parameter: the dispatcher still routes these to the upload controller.
         MockHttpServletRequest escaped = new MockHttpServletRequest("POST", CTX + "/pages/api/v1/public/%75pload/commit");
         escaped.setContextPath(CTX);
@@ -421,7 +382,7 @@ class UploaderTokenFilterTest {
 
     @Test
     void whatIsNotADeviceEndpointIsNotTouched() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         for (String path : new String[] {
                 "/pages/api/v1/public/bcva-entry/S_X/visits", "/pages/api/v1/me", "/pages/api/v1/uploaders",
                 "/pages/api/v1/ingest/upload/commit", "/pages/api/v1/internal/dicom-worklist",
@@ -433,12 +394,11 @@ class UploaderTokenFilterTest {
             assertNull(o.source(), path);
         }
         assertTrue(lookedUp.isEmpty(), "no lookups for paths the filter does not guard");
-        assertEquals(0, locationReads.get());
     }
 
     @Test
     void theLegacyServletsAreNotTouched() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         MockHttpServletRequest r = new MockHttpServletRequest("GET", CTX + "/ListStudySubjects");
         r.setContextPath(CTX);
         r.setServletPath("/ListStudySubjects");
@@ -459,8 +419,8 @@ class UploaderTokenFilterTest {
 
     @Test
     void aSignedInSessionIsNoWayPastTheDoor() throws Exception {
-        // Two locations: a session without a token is refused like anyone else ...
-        locations.set(2);
+        // Multi mode: a session without a token is refused like anyone else ...
+        mode.set(LocationMode.MULTI);
         MockHttpServletRequest noHeader = request("GET", WORKLIST, null);
         noHeader.setSession(signedInSession());
         assertAnswered(run(noHeader), 401, "uploader token required");
@@ -476,7 +436,7 @@ class UploaderTokenFilterTest {
 
     @Test
     void anAnonymousOrUnauthenticatedSessionIsNotASignedInUser() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         MockHttpSession anonymous = new MockHttpSession();
         anonymous.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
                 new SecurityContextImpl(new AnonymousAuthenticationToken("key", "anonymousUser",
@@ -656,8 +616,7 @@ class UploaderTokenFilterTest {
             post(RESOLVE, known);                 // accepted
             post(RESOLVE, unknown);               // rejected
             post(RESOLVE, malformed);             // rejected
-            locations.set(2);
-            forgetCount();
+            mode.set(LocationMode.MULTI);
             post("/pages/api/v1/public/oct-upload/commit");   // required
             for (int i = 0; i < UploaderTokenFilter.MAX_FAILURES + 1; i++) bad("10.7.7.7"); // limited
         });
@@ -686,7 +645,7 @@ class UploaderTokenFilterTest {
 
     @Test
     void aFloodOfRefusalsWritesOneLinePerOutcomeAndMinute() throws Exception {
-        locations.set(2);
+        mode.set(LocationMode.MULTI);
         List<String> lines = logged(() -> {
             for (int i = 0; i < 40; i++) post(RESOLVE);
             for (int i = 0; i < 40; i++) bad("10.5.5." + i); // different addresses: all plain rejections

@@ -50,6 +50,7 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.UploaderTokens;
@@ -836,6 +837,18 @@ class IngestSourceApiDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(List.of("ISA-A", "MUW-AUGEN"), codes(me(admin())), "a removed location is not listed");
         assertEquals(List.of("ISA-A"), codes(me(as("isa_admin_ab"))));
         assertEquals(List.of(), codes(me(as("isa_admin_b"))));
+    }
+
+    @Test
+    void meSaysTheDeploymentsLocationMode() throws Exception {
+        try {
+            LocationMode.set(LocationMode.MULTI);
+            assertEquals("multi", send(get(API + "/me"), as("isa_nobody")).expect(200).get("locationMode").asText());
+            LocationMode.set(LocationMode.SINGLE);
+            assertEquals("single", send(get(API + "/me"), admin()).expect(200).get("locationMode").asText());
+        } finally {
+            LocationMode.set(LocationMode.SINGLE);
+        }
     }
 
     /* ====================================================================== */

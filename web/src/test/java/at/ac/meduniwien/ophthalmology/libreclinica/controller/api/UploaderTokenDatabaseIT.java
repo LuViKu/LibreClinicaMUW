@@ -56,6 +56,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
@@ -204,6 +205,7 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @AfterAll
     static void restoreConfigAndStopStub() throws Exception {
+        LocationMode.set(LocationMode.SINGLE);
         STUB.stop(0);
         java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
         f.setAccessible(true);
@@ -214,10 +216,9 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
-    /** One location (A), the door at its default, a token for each place, no files of the tests. */
+    /** One location (A) in single mode, a token for each place, no files of the tests. */
     @BeforeEach
     void reset() throws Exception {
-        setDoor(null);
         oneLocation();
         sources = new IngestSourceService(DATA_SOURCE);
         // A token can be issued for a place only while it is available.
@@ -252,25 +253,20 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    /** A single-location deployment: location A only. */
     private static void oneLocation() throws SQLException {
+        LocationMode.set(LocationMode.SINGLE);
         try (Connection c = DATA_SOURCE.getConnection()) {
             exec(c, "UPDATE location SET status_id = 5 WHERE location_id = " + locB);
         }
     }
 
+    /** A multi-location deployment with both places active. */
     private static void twoLocations() throws SQLException {
+        LocationMode.set(LocationMode.MULTI);
         try (Connection c = DATA_SOURCE.getConnection()) {
             exec(c, "UPDATE location SET status_id = 1 WHERE location_id = " + locB);
         }
-    }
-
-    /** The front-door setting; null removes it (the default, allowed). */
-    private static void setDoor(String value) throws Exception {
-        java.lang.reflect.Field f = CoreResources.class.getDeclaredField("DATAINFO");
-        f.setAccessible(true);
-        java.util.Properties live = (java.util.Properties) f.get(null);
-        if (value == null) live.remove(UploaderTokenFilter.DOOR_KEY);
-        else live.setProperty(UploaderTokenFilter.DOOR_KEY, value);
     }
 
     /* ---------------------------------------------------------------- */
@@ -291,8 +287,7 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
                 new IngestUploadService(DATA_SOURCE, new IngestArtifactStore(),
                         new DicomDescribeClient("http://127.0.0.1:" + STUB.getAddress().getPort() + "/describe",
                                 DICOM_TOKEN)));
-        UploaderTokenFilter tokens = new UploaderTokenFilter(new IngestSourceService(DATA_SOURCE),
-                new LocationScope(DATA_SOURCE));
+        UploaderTokenFilter tokens = new UploaderTokenFilter(new IngestSourceService(DATA_SOURCE));
         return ProductionMvc.standalone(combined, oct, images, new UploaderHeartbeatApiController(DATA_SOURCE),
                         new OptomedWorklistApiController(DATA_SOURCE))
                 .setControllerAdvice(new ApiExceptionHandler())
@@ -504,7 +499,7 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
-    void withASecondLocationEveryUntokenedDeviceRequestIsToldToSendAToken() throws Exception {
+    void inMultiModeEveryUntokenedDeviceRequestIsToldToSendAToken() throws Exception {
         twoLocations();
         MockMvc m = mvc();
         List<MvcResult> refused = List.of(
@@ -530,12 +525,14 @@ class UploaderTokenDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     @Test
-    void theSettingDeniedShutsTheDoorOnASingleLocationInstallToo() throws Exception {
-        setDoor("denied");
+    void inMultiModeTheDoorIsShutFromTheFirstLocationOn() throws Exception {
+        // Only location A is active: the mode decides, not how many locations exist.
+        LocationMode.set(LocationMode.MULTI);
         MockMvc m = mvc();
         assertDoor(resolve(m, null, LABEL_A, DAY_A), 401, "uploader token required");
-        assertEquals(200, resolve(m, tokenA, LABEL_A, DAY_A).getResponse().getStatus(), "a token still opens it");
-        setDoor("allowed");
+        assertDoor(heartbeat(m, null, "11111111-2222-4333-8444-555555555556"), 401, "uploader token required");
+        assertEquals(200, resolve(m, tokenA, LABEL_A, DAY_A).getResponse().getStatus(), "a token opens it");
+        LocationMode.set(LocationMode.SINGLE);
         assertEquals(200, resolve(mvc(), null, LABEL_A, DAY_A).getResponse().getStatus());
     }
 

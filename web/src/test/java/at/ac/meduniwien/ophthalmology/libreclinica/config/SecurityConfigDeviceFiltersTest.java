@@ -34,7 +34,6 @@ import org.springframework.web.context.support.AnnotationConfigWebApplicationCon
 
 import jakarta.servlet.Filter;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
@@ -61,7 +60,7 @@ class SecurityConfigDeviceFiltersTest {
     /** What the real chain gets: a filter of each kind, none of which is ever asked to filter. */
     private static final Filter BLOCK = new InternetFacingPathBlockFilter("/pages/api/v1/public/**");
     private static final UploaderTokenFilter TOKENS =
-            new UploaderTokenFilter(new IngestSourceService(null), new LocationScope(null));
+            new UploaderTokenFilter(new IngestSourceService(null));
     private static final PublicOctUploadRateLimitFilter RATE_LIMIT = new PublicOctUploadRateLimitFilter(false);
 
     @Configuration

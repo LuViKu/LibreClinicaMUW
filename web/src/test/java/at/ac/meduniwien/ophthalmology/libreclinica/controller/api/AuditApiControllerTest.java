@@ -316,6 +316,15 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
                 at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.AUDIT_INGEST_SOURCE_LOCATION_ASSIGNED);
     }
 
+    /** 208: the single-location startup's placements are admin rows, and core writes the same id. */
+    @Test
+    void variantForTheLocationBackfillAndTheStartupAgreesOnItsId() {
+        assertEquals(208, AuditTypeIds.LOCATION_BACKFILLED);
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.LOCATION_BACKFILLED, null));
+        assertEquals(AuditTypeIds.LOCATION_BACKFILLED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationModeStartup.AUDIT_LOCATION_BACKFILLED);
+    }
+
     /**
      * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
      * the filter parameter and reaches the SQL try-block. With the mock
