@@ -19,6 +19,7 @@
  *   POST   /pages/api/v1/admin/locations/{id}/disable             → Location
  *   POST   /pages/api/v1/admin/locations/{id}/restore             → Location
  *   PUT    /pages/api/v1/admin/locations/{id}/users/{username}    → LocationDetail
+ *          (optional body {@link LocationUserInput}, phase 2)
  *   DELETE /pages/api/v1/admin/locations/{id}/users/{username}    → LocationDetail
  *
  * System administrators only: 401 anonymous, 403 anyone else.
@@ -69,8 +70,21 @@ export interface LocationUser {
   username: string
   /** "First Last". */
   displayName: string
-  /** The Standort-Admin right. Always false until it ships (phase 2). */
+  /**
+   * The Standort-Admin right (phase 2): the person may issue, replace and
+   * revoke the uploader tokens of this location and see its uploaders.
+   * A system administrator grants and withdraws it per person and location.
+   */
   canManageSources: boolean
+}
+
+/**
+ * Optional body of `PUT /admin/locations/{id}/users/{username}`. Absent or
+ * `{}` on an existing assignment keeps the flag; a new assignment starts
+ * with the right withdrawn.
+ */
+export interface LocationUserInput {
+  canManageSources?: boolean
 }
 
 /** A location with the studies and people behind its counts. */

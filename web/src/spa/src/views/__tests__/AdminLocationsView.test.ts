@@ -9,7 +9,10 @@
  * empty string; disabling and restoring ask first, and the 409 refusal of
  * a disable is shown, not swallowed; the detail panel lists the studies
  * and sites of a location and the people assigned to it, and assigning
- * and unassigning a person confirm too.
+ * and unassigning a person confirm too; each assigned person carries a
+ * Standort-Admin checkbox that grants or withdraws the right to manage the
+ * location's uploaders. (The Quellen section has its own file:
+ * AdminLocationsSources.test.ts.)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -87,6 +90,8 @@ function answerGets(over: { locations?: Location[]; details?: Record<number, Loc
   const details = over.details ?? DETAILS
   vi.mocked(apiGet).mockImplementation(async (path: string) => {
     if (path === BASE) return clone(locations)
+    // The page also reads the ingest sources for its Quellen tab; none of the tests here is about them.
+    if (path === '/pages/api/v1/admin/ingest-sources') return []
     if (path === '/pages/api/v1/admin/studies') {
       if (over.studiesFail) throw new ApiError(500, 'Server Error', null)
       return clone(STUDIES)
@@ -213,7 +218,8 @@ describe('AdminLocationsView', () => {
 
     it('shows that it is loading until the list arrives', async () => {
       let answer!: (rows: Location[]) => void
-      vi.mocked(apiGet).mockImplementation((() => new Promise((resolve) => { answer = resolve })) as never)
+      vi.mocked(apiGet).mockImplementation(((path: string) =>
+        path === BASE ? new Promise((resolve) => { answer = resolve }) : Promise.resolve([])) as never)
       await mountView()
       expect(document.body.textContent).toContain('Loading…')
       expect(rowIds()).toEqual([])
@@ -524,12 +530,14 @@ describe('AdminLocationsView', () => {
       expect(text('detail-user-bernd')).toContain('Bernd Muster')
     })
 
-    it('marks a person who holds the right to manage the location’s sources', async () => {
+    it('shows who holds the right to manage the location’s uploaders as a ticked box', async () => {
       answerGets({ details: { ...DETAILS, 1: { ...MUW_DETAIL, users: [{ ...ANNA, canManageSources: true }, BERND] } } })
       await mountView()
       await click('location-select-1')
+      expect((byId('location-siteadmin-anna') as HTMLInputElement).checked).toBe(true)
+      expect((byId('location-siteadmin-bernd') as HTMLInputElement).checked).toBe(false)
       expect(text('detail-user-anna')).toContain('Location admin')
-      expect(text('detail-user-bernd')).not.toContain('Location admin')
+      expect(text('detail-user-bernd')).toContain('Location admin')
     })
 
     it('names the parent study by its OID when the study list cannot be read', async () => {
@@ -694,6 +702,108 @@ describe('AdminLocationsView', () => {
       expect(field('location-assign-username')!.getAttribute('aria-invalid')).toBeNull()
       expect(byId('detail-user-anna')).not.toBeNull()
       expect(toasts()).toEqual([])
+    })
+  })
+
+  describe('the Standort-Admin right', () => {
+    const box = (username: string) => byId(`location-siteadmin-${username}`) as HTMLInputElement
+
+    /** The user clicks the box: the browser flips it, then tells us. */
+    async function toggle(username: string) {
+      const el = box(username)
+      el.checked = !el.checked
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      await flushPromises()
+    }
+
+    it('gives each assigned person a labelled box instead of the old pill, and explains the right', async () => {
+      await mountView()
+      await click('location-select-1')
+      for (const u of ['anna', 'bernd']) {
+        expect(box(u).type).toBe('checkbox')
+        expect(box(u).checked).toBe(false)
+        expect(text(`detail-user-${u}`)).toContain('Location admin')
+      }
+      expect(box('anna').getAttribute('aria-label')).toBe('Location admin right for Anna Beispiel')
+      expect(text('location-detail')).toContain('Location admins see the uploaders of this location')
+      expect(text('location-detail')).toContain('Only a system administrator grants the right')
+    })
+
+    it('grants the right: PUTs the flag alone, keeps the box ticked and confirms with a notice', async () => {
+      vi.mocked(apiPut).mockResolvedValue({ ...MUW_DETAIL, users: [{ ...ANNA, canManageSources: true }, BERND] })
+      await mountView()
+      await click('location-select-1')
+      await toggle('anna')
+
+      expect(vi.mocked(apiPut)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(apiPut)).toHaveBeenCalledWith(`${BASE}/1/users/anna`, { canManageSources: true })
+      expect(box('anna').checked).toBe(true)
+      expect(box('bernd').checked).toBe(false)
+      expect(toasts()).toEqual(['Anna Beispiel is now a location admin of “MUW Augenklinik”.'])
+      expect(byId('location-detail-error')).toBeNull()
+    })
+
+    it('withdraws the right: PUTs false and says so', async () => {
+      answerGets({ details: { ...DETAILS, 1: { ...MUW_DETAIL, users: [{ ...ANNA, canManageSources: true }, BERND] } } })
+      vi.mocked(apiPut).mockResolvedValue({ ...MUW_DETAIL, users: [ANNA, BERND] })
+      await mountView()
+      await click('location-select-1')
+      expect(box('anna').checked).toBe(true)
+      await toggle('anna')
+
+      expect(vi.mocked(apiPut)).toHaveBeenCalledWith(`${BASE}/1/users/anna`, { canManageSources: false })
+      expect(box('anna').checked).toBe(false)
+      expect(toasts()).toEqual(['Anna Beispiel is no longer a location admin of “MUW Augenklinik”.'])
+    })
+
+    it('sends a username that holds URL characters as one encoded path segment', async () => {
+      const odd = { username: 'b.k@muw', displayName: 'B K', canManageSources: false }
+      answerGets({ details: { ...DETAILS, 1: { ...MUW_DETAIL, users: [odd] } } })
+      vi.mocked(apiPut).mockResolvedValue({ ...MUW_DETAIL, users: [{ ...odd, canManageSources: true }] })
+      await mountView()
+      await click('location-select-1')
+      await toggle('b.k@muw')
+      expect(vi.mocked(apiPut)).toHaveBeenCalledWith(`${BASE}/1/users/b.k%40muw`, { canManageSources: true })
+    })
+
+    it('shows the server’s refusal in the panel, puts the box back and confirms nothing', async () => {
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(404, 'Not Found', { message: 'anna is not assigned to this location' }))
+      await mountView()
+      await click('location-select-1')
+      await toggle('anna')
+
+      expect(text('location-detail-error')).toContain('anna is not assigned to this location')
+      expect(box('anna').checked).toBe(false)
+      expect(toasts()).toEqual([])
+      // The refusal is about the right, not about what is typed in the add field.
+      expect(field('location-assign-username')!.getAttribute('aria-invalid')).toBeNull()
+    })
+
+    it('puts a withdrawn right back when the withdrawal is refused', async () => {
+      answerGets({ details: { ...DETAILS, 1: { ...MUW_DETAIL, users: [{ ...ANNA, canManageSources: true }, BERND] } } })
+      vi.mocked(apiPut).mockRejectedValue(new ApiError(500, 'Server Error', null))
+      await mountView()
+      await click('location-select-1')
+      await toggle('anna')
+      expect(box('anna').checked).toBe(true)
+      expect(text('location-detail-error')).toContain('The change could not be saved (HTTP 500).')
+    })
+
+    it('keeps the box where it is on a disabled location, whose people can be removed but not changed', async () => {
+      await mountView()
+      await click('location-select-3')
+      expect(box('carl').disabled).toBe(true)
+    })
+
+    it('leaves the pressed box in place so the cursor stays on it', async () => {
+      vi.mocked(apiPut).mockResolvedValue({ ...MUW_DETAIL, users: [{ ...ANNA, canManageSources: true }, BERND] })
+      await mountView()
+      await click('location-select-1')
+      const before = box('anna')
+      before.focus()
+      await toggle('anna')
+      expect(box('anna')).toBe(before)
+      expect(document.activeElement).toBe(before)
     })
   })
 

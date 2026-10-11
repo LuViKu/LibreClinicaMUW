@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { primaryNavFor, PRIMARY_NAV, PRIMARY_NAV_MAX } from '@/lib/primaryNav'
+import { primaryNavFor, primaryNavForSession, PRIMARY_NAV, PRIMARY_NAV_MAX } from '@/lib/primaryNav'
 import type { UserRole } from '@/types/auth'
 
 /**
@@ -59,5 +59,39 @@ describe('primaryNavFor', () => {
 
   it('is empty while the roles are unknown', () => {
     expect(primaryNavFor([])).toEqual([])
+  })
+})
+
+/**
+ * Before a study is bound every role-based link leads back to the study
+ * picker. A Standort-Admin who holds no study role (a site's IT contact) has
+ * no study to bind at all, and the backend gives them the sentinel role
+ * "Investigator", whose links would be four dead ends; the Uploaders page is
+ * the one place they can go.
+ */
+describe('primaryNavForSession', () => {
+  const MANAGES = { hasActiveStudy: false, canManageUploaders: true }
+
+  it('is the role-based navigation for anyone with a study bound, Standort-Admin or not', () => {
+    for (const canManageUploaders of [false, true]) {
+      expect(primaryNavForSession(['Data Manager'], { hasActiveStudy: true, canManageUploaders }))
+        .toEqual(primaryNavFor(['Data Manager']))
+    }
+  })
+
+  it('offers a Standort-Admin who has no study bound the Uploaders page alone', () => {
+    const nav = primaryNavForSession(['Investigator'], MANAGES)
+    expect(nav).toEqual([{ id: 'uploaders', to: '/uploaders', labelKey: 'uploaders.title' }])
+  })
+
+  it('does so whatever role the fallback projects, and while the roles are still unknown', () => {
+    expect(primaryNavForSession(['Administrator'], MANAGES).map((i) => i.to)).toEqual(['/uploaders'])
+    expect(primaryNavForSession([], MANAGES).map((i) => i.to)).toEqual(['/uploaders'])
+  })
+
+  it('leaves everyone else exactly as it was before a study is bound', () => {
+    const none = { hasActiveStudy: false, canManageUploaders: false }
+    expect(primaryNavForSession(['Investigator'], none)).toEqual(primaryNavFor(['Investigator']))
+    expect(primaryNavForSession([], none)).toEqual([])
   })
 })

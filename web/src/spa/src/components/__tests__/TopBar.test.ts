@@ -29,6 +29,7 @@ async function mountAt(path: string, extra: Record<string, unknown> = {}) {
       { path: '/pick-study', component: { template: '<div />' } },
       { path: '/admin/system-status', component: { template: '<div />' } },
       { path: '/system/audit-log', component: { template: '<div />' } },
+      { path: '/uploaders', component: { template: '<div />' } },
     ],
   })
   await router.push(path)
@@ -96,6 +97,16 @@ describe('TopBar', () => {
     expect(onStatus.get('[data-testid="topbar-system-link"]').attributes('aria-current')).toBe('page')
     const onAudit = await mountAt('/system/audit-log', { userRoles: ['Administrator'] })
     expect(onAudit.get('[data-testid="topbar-system-link"]').attributes('aria-current')).toBe('page')
+  })
+
+  it('keeps the System entry current on the uploaders page, which sits outside both prefixes', async () => {
+    // A Standort-Admin reaches /uploaders without being an administrator, so it is not under /admin/;
+    // for an administrator it is a page of the System section and its rail says so.
+    const w = await mountAt('/uploaders', { userRoles: ['Administrator'] })
+    expect(w.get('[data-testid="topbar-system-link"]').attributes('aria-current')).toBe('page')
+    // Someone without the System entry gets none just because they are on that page.
+    const dm = await mountAt('/uploaders', { userRoles: ['Data Manager'] })
+    expect(dm.find('[data-testid="topbar-system-link"]').exists()).toBe(false)
   })
 
   it('keeps the version and build in the profile menu', async () => {

@@ -80,3 +80,26 @@ export function primaryNavFor(roles: UserRole[], max: number = PRIMARY_NAV_MAX):
   }
   return out
 }
+
+/** The Uploaders page: the one destination of a session that may manage uploaders but has no study bound. */
+export const UPLOADERS_NAV: PrimaryNavItem = { id: 'uploaders', to: '/uploaders', labelKey: 'uploaders.title' }
+
+/**
+ * The top bar's links for a session.
+ *
+ * Before a study is bound every role-based destination is a dead end: the
+ * route guard sends it to the study picker. For most people that is a moment
+ * on the way to picking one. A Standort-Admin who holds no study role (a
+ * site's IT contact) has none to pick, and the backend gives such an account
+ * the sentinel role "Investigator", so the role's four links would only lead
+ * back to the picker, which sends them on to the Uploaders page. They get that
+ * page alone instead. Everyone else, with or without a study, gets exactly
+ * what {@link primaryNavFor} says.
+ */
+export function primaryNavForSession(
+  roles: UserRole[],
+  session: { hasActiveStudy: boolean; canManageUploaders: boolean },
+): PrimaryNavItem[] {
+  if (!session.hasActiveStudy && session.canManageUploaders) return [UPLOADERS_NAV]
+  return primaryNavFor(roles)
+}

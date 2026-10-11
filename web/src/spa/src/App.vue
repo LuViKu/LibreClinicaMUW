@@ -11,7 +11,7 @@ import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInactivityStore } from '@/stores/inactivity'
 import type { UserRole } from '@/types/auth'
-import { primaryNavFor } from '@/lib/primaryNav'
+import { primaryNavForSession } from '@/lib/primaryNav'
 
 const route = useRoute()
 const router = useRouter()
@@ -107,7 +107,10 @@ const displayUserName = computed(() => auth.user?.username ?? '')
 
 /** The role's main destinations for the top bar, labels resolved here so TopBar stays a presenter. */
 const navItems = computed(() =>
-  primaryNavFor(userRoles.value).map((item) => ({ id: item.id, to: item.to, label: t(item.labelKey) })),
+  primaryNavForSession(userRoles.value, {
+    hasActiveStudy: !!auth.user?.activeStudy,
+    canManageUploaders: auth.canManageUploaders,
+  }).map((item) => ({ id: item.id, to: item.to, label: t(item.labelKey) })),
 )
 
 /**

@@ -1,33 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
-import { i18n } from '@/i18n'
+import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { readMutationFailure, type MutationFailure } from '@/lib/mutationFailure'
 import type {
   CreateLocationInput,
   Location,
   LocationDetail,
-  LocationFieldError,
   UpdateLocationInput,
 } from '@/types/location'
 
 const BASE = '/pages/api/v1/admin/locations'
 
-/**
- * A mutation the server refused, or that never got an answer.
- *
- * `fieldErrors` is filled for a 400 (one message per field, keyed by the
- * server's field name: `code`, `name`, `street`, `city`, `zip`, `country`);
- * `message` is the server's own text when it sent one, so the 409 of a
- * disable ("… still in use by 3 studies or sites") reaches the person who
- * asked, and a localised fallback when it did not.
- */
-export interface MutationFailure {
-  ok: false
-  /** The HTTP status; null when no answer arrived. */
-  status: number | null
-  fieldErrors: Record<string, string>
-  message: string
-}
+/** Where the failure type lives now; the edit dialog still imports it from here. */
+export type { MutationFailure }
 export type LocationMutation = { ok: true; location: Location } | MutationFailure
 export type LocationDetailMutation = { ok: true; location: LocationDetail } | MutationFailure
 
@@ -39,7 +24,9 @@ export type LocationDetailMutation = { ok: true; location: LocationDetail } | Mu
  * assigned people, from `GET …/{id}`. Every mutation answers with the
  * changed location, counts included, so the list and the open detail are
  * patched from the answer rather than reloaded: no second request, no
- * flicker, and the counts stay the server's.
+ * flicker, and the counts stay the server's. The one exception is
+ * {@link refresh}, for a change made elsewhere that moves a count (a source
+ * assigned to a location brings its waiting files along).
  */
 export const useAdminLocationsStore = defineStore('adminLocations', () => {
   const locations = ref<Location[]>([])
@@ -65,6 +52,19 @@ export const useAdminLocationsStore = defineStore('adminLocations', () => {
       error.value = readFailure(e, 'adminLocations.error.loadFailed').message
     } finally {
       isLoading.value = false
+    }
+  }
+
+  /**
+   * Fetches the list again without the loading state, for a count that moved
+   * because of a change made elsewhere. A failure leaves the list as it was:
+   * the counts are stale, nothing is wrong with what is shown.
+   */
+  async function refresh(): Promise<void> {
+    try {
+      locations.value = await apiGet<Location[]>(BASE)
+    } catch {
+      /* keep the list that is shown */
     }
   }
 
@@ -124,6 +124,21 @@ export const useAdminLocationsStore = defineStore('adminLocations', () => {
     return changeDetail(() => apiPut<LocationDetail>(`${BASE}/${segment(id)}/users/${segment(username)}`, {}))
   }
 
+  /**
+   * Grants or withdraws the Standort-Admin right of an assigned person: the
+   * right to issue, replace and revoke the uploader tokens of this location.
+   * The body carries the flag alone; the assignment itself is not touched.
+   */
+  async function setCanManageSources(
+    id: number,
+    username: string,
+    canManageSources: boolean,
+  ): Promise<LocationDetailMutation> {
+    return changeDetail(() =>
+      apiPut<LocationDetail>(`${BASE}/${segment(id)}/users/${segment(username)}`, { canManageSources }),
+    )
+  }
+
   async function unassignUser(id: number, username: string): Promise<LocationDetailMutation> {
     return changeDetail(() => apiDelete<LocationDetail>(`${BASE}/${segment(id)}/users/${segment(username)}`))
   }
@@ -177,6 +192,7 @@ export const useAdminLocationsStore = defineStore('adminLocations', () => {
     detailLoading,
     detailError,
     load,
+    refresh,
     select,
     clearSelection,
     create,
@@ -184,6 +200,7 @@ export const useAdminLocationsStore = defineStore('adminLocations', () => {
     disable,
     restore,
     assignUser,
+    setCanManageSources,
     unassignUser,
     reset,
   }
@@ -217,41 +234,11 @@ function sortedByName(list: Location[]): Location[] {
   return [...list].sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }))
 }
 
-function t(key: string, named?: Record<string, unknown>): string {
-  return named ? i18n.global.t(key, named) : i18n.global.t(key)
-}
-
-/**
- * What a failed call tells the person: the server's message when it sent
- * one, per-field messages for a 400, else a localised text naming the
- * status (or the missing connection).
- */
+/** What a failed call tells the person; see {@link readMutationFailure}. */
 function readFailure(e: unknown, fallbackKey: string): MutationFailure {
-  if (e instanceof ApiError) {
-    const body = e.body as { message?: unknown; errors?: unknown } | null
-    const fieldErrors: Record<string, string> = {}
-    if (body && Array.isArray(body.errors)) {
-      for (const fe of body.errors as Array<Partial<LocationFieldError> | null>) {
-        if (typeof fe?.field === 'string' && typeof fe.message === 'string' && !(fe.field in fieldErrors)) {
-          fieldErrors[fe.field] = fe.message
-        }
-      }
-    }
-    const sent = body && typeof body.message === 'string' ? body.message : ''
-    return {
-      ok: false,
-      status: e.status,
-      fieldErrors,
-      message: sent !== '' ? sent : t(fallbackKey, { status: e.status }),
-    }
-  }
-  if (e instanceof ApiNetworkError) {
-    return { ok: false, status: null, fieldErrors: {}, message: t('adminLocations.error.network') }
-  }
-  return {
-    ok: false,
-    status: null,
-    fieldErrors: {},
-    message: e instanceof Error && e.message !== '' ? e.message : t('adminLocations.error.unknown'),
-  }
+  return readMutationFailure(e, {
+    fallback: fallbackKey,
+    network: 'adminLocations.error.network',
+    unknown: 'adminLocations.error.unknown',
+  })
 }
