@@ -36,6 +36,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uploaders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename an uploader; the name stays unique at its location */
+        put: operations["renameUploader"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects/{studySubjectOid}": {
         parameters: {
             query?: never;
@@ -430,11 +447,28 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Assign a user to a location explicitly; assigning an assigned user changes nothing */
+        /** Assign a user to a location explicitly, and grant or revoke their Standort-Admin right; assigning an assigned user with no change to the right changes nothing */
         put: operations["assignLocationUser"];
         post?: never;
         /** Remove a user's explicit assignment to a location; removing a missing one changes nothing */
         delete: operations["unassignLocationUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ingest-sources/{id}/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign a source to a location (or null: back to none); its waiting files are placed at the location in the same transaction */
+        put: operations["assignIngestSourceLocation"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -530,6 +564,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploaders/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke the uploader's token: it is refused from now on. Revoking a revoked uploader changes nothing */
+        post: operations["revokeUploader"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploaders/{id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new token for the uploader: the old one stops working at once, and a revoked uploader is active again */
+        post: operations["replaceUploaderToken"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1576,6 +1644,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{locationId}/uploaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue an uploader for a location; the token is in this answer only and is never shown again */
+        post: operations["issueUploader"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/internal/dicom-ingest": {
         parameters: {
             query?: never;
@@ -2592,6 +2677,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["bindParkedJob"];
+        trace?: never;
+    };
+    "/api/v1/uploaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The uploaders the caller may manage (a system administrator: all; a Standort-Admin: their locations) */
+        get: operations["listManagedUploaders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/terminology/search": {
@@ -4068,6 +4170,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/ingest-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every ingest source of every kind, unassigned ones first, with the files still waiting */
+        get: operations["listIngestSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/deidentification": {
         parameters: {
             query?: never;
@@ -4349,6 +4468,35 @@ export interface components {
              * @enum {string|null}
              */
             legacyRole?: "ra" | "ra2" | null;
+        };
+        UploaderWriteRequest: {
+            /**
+             * @description Required, 1 to 64 characters, unique at the location without regard to case (a revoked uploader keeps its name). No control or invisible formatting characters.
+             * @example Clarus, room 12
+             */
+            displayName?: string;
+        };
+        UploaderDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int32 */
+            locationId: number;
+            locationCode: string;
+            locationName: string;
+            /** @description Unique per location without regard to case. */
+            displayName: string;
+            /** @description The first eight characters of the token after the mwu_ prefix. */
+            tokenHint: string;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            /** @description User name of whoever issued it. */
+            createdBy?: string | null;
+            createdAt: string;
+            lastUsedAt?: string | null;
+            revokedAt?: string | null;
+            /** @description The heartbeat instance the token last reported as. */
+            instanceUid?: string | null;
+            lastHeartbeatAt?: string | null;
         };
         UpdateSubjectRequest: {
             secondaryId?: string;
@@ -4726,6 +4874,12 @@ export interface components {
             };
             permissions?: components["schemas"]["PermissionsDto"];
         };
+        ManageableLocationDto: {
+            /** Format: int32 */
+            id: number;
+            code: string;
+            name: string;
+        };
         MeDto: {
             username?: string;
             displayName?: string;
@@ -4743,6 +4897,7 @@ export interface components {
             activeStudy?: components["schemas"]["ActiveStudyDto"];
             userType?: string;
             deidentificationRequired?: boolean;
+            manageableLocations: components["schemas"]["ManageableLocationDto"][];
         };
         PermissionsDto: {
             enterData?: boolean;
@@ -4901,6 +5056,37 @@ export interface components {
             displayName: string;
             canManageSources: boolean;
         };
+        LocationUserWriteRequest: {
+            /** @description The Standort-Admin right at this location: may issue, revoke and replace the tokens of its uploaders. Absent or null keeps the current value (false for a new assignment). */
+            canManageSources?: boolean | null;
+        };
+        IngestSourceLocationRequest: {
+            /**
+             * Format: int32
+             * @description An available location, or null for "not assigned" (refused for an uploader).
+             */
+            locationId: number | null;
+        };
+        IngestSourceDto: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "uploader" | "dicom_ae" | "remidio" | "portal";
+            /** @description The AE title of a dicom_ae, the account of a remidio; null for an uploader. */
+            sourceKey?: string | null;
+            displayName: string;
+            /** Format: int32 */
+            locationId?: number | null;
+            locationName?: string | null;
+            /**
+             * Format: int32
+             * @description Files of this source that are still unbound (UNBOUND with ingest_source_id = id).
+             */
+            pendingItemCount: number;
+            lastSeenAt?: string | null;
+            /** @enum {string} */
+            status: "active" | "revoked";
+        };
         CreateUserRequest: {
             username?: string;
             firstName?: string;
@@ -4926,6 +5112,14 @@ export interface components {
         };
         ResetPasswordRequest: {
             sendEmail?: boolean;
+        };
+        IssuedUploaderDto: {
+            uploader: components["schemas"]["UploaderDto"];
+            /**
+             * @description mwu_ followed by 43 base64url characters. Shown once; copy it now.
+             * @example mwu_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+             */
+            token: string;
         };
         IngestRequest: {
             system?: string;
@@ -6624,6 +6818,32 @@ export interface operations {
             };
         };
     };
+    renameUploader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UploaderWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploaderDto"];
+                };
+            };
+        };
+    };
     getOne: {
         parameters: {
             query?: never;
@@ -7647,7 +7867,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LocationUserWriteRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -7679,6 +7903,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocationDetailDto"];
+                };
+            };
+        };
+    };
+    assignIngestSourceLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IngestSourceLocationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestSourceDto"];
                 };
             };
         };
@@ -7875,6 +8125,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    revokeUploader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploaderDto"];
+                };
+            };
+        };
+    };
+    replaceUploaderToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedUploaderDto"];
                 };
             };
         };
@@ -9762,6 +10056,32 @@ export interface operations {
             };
         };
     };
+    issueUploader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UploaderWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedUploaderDto"];
+                };
+            };
+        };
+    };
     ingest_1: {
         parameters: {
             query?: never;
@@ -11555,6 +11875,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listManagedUploaders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploaderDto"][];
                 };
             };
         };
@@ -13654,6 +13994,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listIngestSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestSourceDto"][];
                 };
             };
         };
