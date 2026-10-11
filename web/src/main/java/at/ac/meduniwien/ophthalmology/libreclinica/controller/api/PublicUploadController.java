@@ -8,7 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 
@@ -62,6 +65,12 @@ import jakarta.servlet.http.HttpServletRequest;
  * (must NOT be exposed to the public internet), throttled per client by
  * {@code PublicOctUploadRateLimitFilter}. Operator-typed strings are never
  * logged. The two older pages stay mounted for one release and redirect.
+ *
+ * <p>DR-040 phase 2 — behind {@code UploaderTokenFilter} a request may carry the
+ * ingest source of the uploader token it came with ({@link UploaderSources}).
+ * With one, every lookup answers only for the source's location, a visit of
+ * another place reads as unknown, and the files are filed from that source and
+ * location. Without one the page behaves as it always did.
  */
 @RestController
 @RequestMapping("/api/v1/public/upload")
@@ -122,28 +131,32 @@ public class PublicUploadController {
     @GetMapping(value = "/patients/search", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> searchPatientsForUpload(
             @RequestParam("q") String q,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+            @RequestParam(value = "limit", required = false) Integer limit,
+            HttpServletRequest servletRequest) {
         return PublicSubjectSearch.search(studySubjectFinder, q, limit,
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
+                DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, UploaderSources.of(servletRequest)));
     }
 
     /** A subject's visits, for the picker. */
     @GetMapping(value = "/patients/{studySubjectId:[0-9]+}/events", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> listPatientEventsForUpload(@PathVariable("studySubjectId") int studySubjectId) {
-        return oct.listPatientEventsPublic(studySubjectId);
+    public ResponseEntity<?> listPatientEventsForUpload(@PathVariable("studySubjectId") int studySubjectId,
+                                                        HttpServletRequest servletRequest) {
+        return oct.listPatientEventsFor(UploaderSources.of(servletRequest), studySubjectId);
     }
 
     /** Today's scheduled visits — off until the institution enables the list (P1-4 checkpoint C4). */
     @GetMapping(value = "/visits", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> uploadVisits(@RequestParam(value = "date", required = false) String date) {
-        return images.visits(date);
+    public ResponseEntity<?> uploadVisits(@RequestParam(value = "date", required = false) String date,
+                                          HttpServletRequest servletRequest) {
+        return images.visitsFor(UploaderSources.of(servletRequest), date);
     }
 
     /** Per-row resolution: {@code {scans:[{patientId, scanDate, laterality}]}}, the OCT page's shape. */
     @PostMapping(value = "/resolve", consumes = MediaType.APPLICATION_JSON_VALUE,
                  produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> resolveUpload(@RequestBody PublicOctUploadController.ResolveRequest request) {
-        return oct.resolve(request);
+    public ResponseEntity<?> resolveUpload(@RequestBody PublicOctUploadController.ResolveRequest request,
+                                           HttpServletRequest servletRequest) {
+        return oct.resolveFor(UploaderSources.of(servletRequest), request);
     }
 
     /**
@@ -202,14 +215,18 @@ public class PublicUploadController {
         }
         String date = UploadRoute.isBlank(scanDate) ? studyDate : scanDate;
 
+        // A tokened request works for its location: a visit or CRF instance of another place is
+        // treated below as one that does not exist, whatever the caller asks about it.
+        Set<Integer> atLocation = DeviceScope.atLocation(dataSource, source);
+
         if (sniffed.kind() == IngestArtifactStore.Kind.E2E) {
             String pid = patientId;
-            if (UploadRoute.isBlank(pid) && studyEventId != null) {
+            if (UploadRoute.isBlank(pid) && studyEventId != null && visitAtLocation(atLocation, studyEventId)) {
                 pid = UploadRoute.subjectLabelForStudyEvent(dataSource, studyEventId);
             }
             if (UploadRoute.isBlank(pid) && eventCrfId != null) {
                 Integer se = UploadRoute.studyEventIdForEventCrf(dataSource, eventCrfId);
-                if (se != null) pid = UploadRoute.subjectLabelForStudyEvent(dataSource, se);
+                if (se != null && visitAtLocation(atLocation, se)) pid = UploadRoute.subjectLabelForStudyEvent(dataSource, se);
             }
             return UploadRoute.asE2e(oct.commitFrom(source, file, pid == null ? "" : pid, date == null ? "" : date,
                     laterality == null ? "" : laterality, scanIndex, eventCrfId, studyEventId, park,
@@ -221,31 +238,45 @@ public class PublicUploadController {
         Integer visit = studyEventId;
         if (visit == null && eventCrfId != null) {
             visit = UploadRoute.studyEventIdForEventCrf(dataSource, eventCrfId);
-            if (visit == null) {
+            if (visit == null || !visitAtLocation(atLocation, visit)) {
                 return ResponseEntity.status(404).body(Map.of("message", "No event_crf with id " + eventCrfId));
             }
         }
         IngestUploadService.Outcome outcome = uploads.commit(new IngestUploadService.Upload(
                 sniffed, file, patientId, UploadRoute.parseIsoDateOrNull(date), laterality, visit, device,
                 IngestUploadService.Channel.PORTAL, IngestBindService.Actor.system(),
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY)), source);
+                DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, source),
+                null, DeviceScope.itemsOf(dataSource, source)), source);
         if (outcome instanceof IngestUploadService.Created c) {
             LOG.info("public upload: ingest_item {} ({}) {}", c.ingestItemId(), c.format(), c.status());
         }
         return UploadRoute.respond(outcome);
     }
 
+    /** True when nothing narrows the request (no source), or the visit is of a subject enrolled at its location. */
+    private boolean visitAtLocation(Set<Integer> atLocation, int studyEventId) {
+        if (atLocation == null) return true;
+        try (Connection c = dataSource.getConnection()) {
+            return DeviceScope.visitAllowed(c, atLocation, studyEventId);
+        } catch (SQLException e) {
+            LOG.warn("could not check the location of study event {}: {}", studyEventId, e.getMessage());
+            return false;
+        }
+    }
+
     /* ---------------- undo ---------------- */
 
     /** Take back an image or DICOM upload within the window — the OCT route's {@code DELETE /jobs/{id}} covers scans. */
     @DeleteMapping(value = "/items/{ingestItemId:[0-9]+}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> undoUploadItem(@PathVariable("ingestItemId") long ingestItemId) {
-        return UploadRoute.respond(uploads.undo(ingestItemId, IngestBindService.Actor.system()));
+    public ResponseEntity<?> undoUploadItem(@PathVariable("ingestItemId") long ingestItemId,
+                                            HttpServletRequest servletRequest) {
+        return UploadRoute.respond(uploads.undo(ingestItemId, IngestBindService.Actor.system(),
+                UploaderSources.of(servletRequest)));
     }
 
     /** Take back an OCT scan's job within the window. */
     @DeleteMapping(value = "/jobs/{jobId:[0-9]+}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> undoUploadJob(@PathVariable("jobId") long jobId) {
-        return oct.undo(jobId);
+    public ResponseEntity<?> undoUploadJob(@PathVariable("jobId") long jobId, HttpServletRequest servletRequest) {
+        return oct.undoFor(UploaderSources.of(servletRequest), jobId);
     }
 }

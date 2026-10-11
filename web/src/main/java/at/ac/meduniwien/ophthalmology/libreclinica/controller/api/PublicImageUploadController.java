@@ -122,9 +122,10 @@ public class PublicImageUploadController {
     @GetMapping(value = "/patients/search", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> searchPatientsPublic(
             @RequestParam("q") String q,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+            @RequestParam(value = "limit", required = false) Integer limit,
+            HttpServletRequest servletRequest) {
         return PublicSubjectSearch.search(studySubjectFinder, q, limit,
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
+                DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, UploaderSources.of(servletRequest)));
     }
 
     /**
@@ -152,7 +153,16 @@ public class PublicImageUploadController {
      * @return 404 when the feature is off — the path should not announce itself
      */
     @GetMapping(value = "/visits", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> visits(@RequestParam(value = "date", required = false) String date) {
+    public ResponseEntity<?> visits(@RequestParam(value = "date", required = false) String date,
+                                    HttpServletRequest servletRequest) {
+        return visitsFor(UploaderSources.of(servletRequest), date);
+    }
+
+    /**
+     * The day's visits for a request that may carry an uploader's source (DR-040
+     * phase 2): with one, only the visits of subjects enrolled at its location.
+     */
+    ResponseEntity<?> visitsFor(IngestSourceService.Source source, String date) {
         if (!todaysVisitsEnabled()) {
             return ResponseEntity.status(404).body(Map.of("message", "not found"));
         }
@@ -163,7 +173,7 @@ public class PublicImageUploadController {
             List<PortalVisit> out = new ArrayList<>();
             for (ScheduledVisitQuery.ScheduledVisit v : ScheduledVisitQuery.query(
                     dataSource, day, day,
-                    StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY),
+                    DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, source),
                     MAX_VISITS)) {
                 out.add(new PortalVisit(v.studyEventId(), v.subjectLabel(), v.eventLabel(),
                         v.studyName(), v.time() == null ? null : v.time().toString()));
@@ -191,7 +201,7 @@ public class PublicImageUploadController {
 
     @PostMapping(value = "/resolve", consumes = MediaType.APPLICATION_JSON_VALUE,
                  produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> resolve(@RequestBody ResolveRequest req) {
+    public ResponseEntity<?> resolve(@RequestBody ResolveRequest req, HttpServletRequest servletRequest) {
         if (req == null || isBlank(req.patientId())) {
             return ResponseEntity.badRequest().body(Map.of("message", "patientId is required"));
         }
@@ -203,7 +213,7 @@ public class PublicImageUploadController {
         // unauthenticated caller.
         IngestResolutionService.Resolution r = new IngestResolutionService(studySubjectFinder)
                 .resolve(req.patientId(), parseIsoDateOrNull(req.studyDate()),
-                        StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
+                        DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, UploaderSources.of(servletRequest)));
 
         List<ResolveCandidate> candidates = new ArrayList<>(r.candidates().size());
         for (IngestResolutionService.ResolveCandidate c : r.candidates()) {
@@ -269,6 +279,12 @@ public class PublicImageUploadController {
             ImageIngestBinding.EventTarget target = null;
             if (studyEventId != null) {
                 target = ImageIngestBinding.resolveEventTargetForPortal(c, studyEventId, sd);
+                // DR-040 phase 2 — a tokened request names visits of its own location only; any
+                // other visit answers as one that is not scheduled for the date.
+                if (target != null && !DeviceScope.subjectAllowed(c, DeviceScope.atLocation(dataSource, source),
+                        target.studySubjectId())) {
+                    target = null;
+                }
                 if (target == null) {
                     deleteQuietly(saved);
                     return ResponseEntity.badRequest().body(Map.of("message",
@@ -284,9 +300,9 @@ public class PublicImageUploadController {
             IngestTwins.Verdict verdict = IngestTwins.verdict(twin, claimedLabel);
             if (verdict == IngestTwins.Verdict.DUPLICATE) {
                 deleteQuietly(saved);
-                return ResponseEntity.status(409).body(Map.of(
+                return DeviceScope.maskDuplicate(dataSource, source, ResponseEntity.status(409).body(Map.of(
                         "message", "Diese Datei wurde bereits hochgeladen.",
-                        "duplicate", true, "existingIngestItemId", twin.ingestItemId()));
+                        "duplicate", true, "existingIngestItemId", twin.ingestItemId())));
             }
             boolean held = verdict == IngestTwins.Verdict.HELD;
             if (held) target = null;
@@ -309,9 +325,11 @@ public class PublicImageUploadController {
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("imageIngestId", id);
             body.put("status", target == null ? "UNBOUND" : "BOUND");
-            if (held) {
+            if (held && DeviceScope.mayName(dataSource, source, twin.ingestItemId())) {
                 body.put("heldBack", true);
                 body.put("sameImageAs", twin.ingestItemId());
+            } else if (held) {
+                body.put("heldBack", true);
             }
             return ResponseEntity.status(201).body(body);
         } catch (SQLException e) {

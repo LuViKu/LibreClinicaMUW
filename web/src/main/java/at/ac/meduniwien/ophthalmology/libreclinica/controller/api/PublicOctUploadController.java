@@ -181,13 +181,23 @@ public class PublicOctUploadController {
     @PostMapping(path = "/resolve",
                  consumes = MediaType.APPLICATION_JSON_VALUE,
                  produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> resolve(@RequestBody ResolveRequest request) {
+    public ResponseEntity<?> resolve(@RequestBody ResolveRequest request, HttpServletRequest servletRequest) {
+        return resolveFor(UploaderSources.of(servletRequest), request);
+    }
+
+    /**
+     * The lookup for a request that may carry an uploader's source (DR-040
+     * phase 2): with one, a scan resolves only to subjects enrolled at the
+     * source's location, and a subject elsewhere reads as no patient at all.
+     */
+    ResponseEntity<?> resolveFor(IngestSourceService.Source source, ResolveRequest request) {
         if (request == null || request.scans() == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "scans[] is required"));
         }
+        Set<Integer> allowed = DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, source);
         List<ResolveResponseScan> out = new ArrayList<>(request.scans().size());
         for (ResolveRequestScan scan : request.scans()) {
-            out.add(resolveOne(scan));
+            out.add(resolveOne(scan, allowed));
         }
         return ResponseEntity.ok(Map.of("scans", out));
     }
@@ -200,14 +210,13 @@ public class PublicOctUploadController {
      * *search* for another study's subject but would happily *resolve* one and
      * name their study and site back to an unauthenticated caller.
      */
-    private ResolveResponseScan resolveOne(ResolveRequestScan scan) {
+    private ResolveResponseScan resolveOne(ResolveRequestScan scan, Set<Integer> allowed) {
         if (scan == null) {
             return new ResolveResponseScan(null, List.of(), IngestResolutionService.STATE_NO_PATIENT);
         }
         String patientId = scan.patientId() == null ? "" : scan.patientId().trim();
         IngestResolutionService.Resolution r = resolution().resolve(
-                patientId, parseLocalDate(scan.scanDate()),
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
+                patientId, parseLocalDate(scan.scanDate()), allowed);
 
         List<ResolveCandidate> candidates = new ArrayList<>(r.candidates().size());
         for (IngestResolutionService.ResolveCandidate c : r.candidates()) {
@@ -256,7 +265,8 @@ public class PublicOctUploadController {
 
     /**
      * The account-less commit for a request that may carry an uploader's source
-     * (DR-040 phase 2): with one, the scan is filed from that source and location.
+     * (DR-040 phase 2): with one, the scan is filed from that source and
+     * location, and may be bound only to a visit at that location.
      */
     ResponseEntity<?> commitFrom(IngestSourceService.Source source, MultipartFile file, String patientId,
                                  String scanDateRaw, String laterality, int scanIndex, Integer eventCrfId,
@@ -268,8 +278,9 @@ public class PublicOctUploadController {
         if (DeidentificationPolicy.required(deidPolicy)) {
             return DeidUploadGate.accountlessClosed();
         }
-        return commitFile(file, patientId, scanDateRaw, laterality, scanIndex, eventCrfId, studyEventId, park,
-                disambiguated, candidateCount, null, source);
+        return DeviceScope.maskDuplicate(dataSource, source,
+                commitFile(file, patientId, scanDateRaw, laterality, scanIndex, eventCrfId, studyEventId, park,
+                        disambiguated, candidateCount, null, source));
     }
 
     /**
@@ -322,18 +333,21 @@ public class PublicOctUploadController {
         // the lookup may legitimately return zero rows; that's fine —
         // the audit row's entity_id still points at the new job row,
         // study_subject_id is just metadata.
+        // DR-040 phase 2 — a tokened request works for its location: a visit or CRF
+        // instance of another place answers exactly as one that does not exist.
+        Set<Integer> atLocation = DeviceScope.atLocation(dataSource, source);
         Integer auditStudySubjectId = null;
         if (eventCrfId != null) {
             // bound to an event_crf → derive study_subject from event_crf
             auditStudySubjectId = resolveStudySubjectFromEventCrf(eventCrfId);
-            if (auditStudySubjectId == null) {
+            if (auditStudySubjectId == null || !subjectAtLocation(atLocation, auditStudySubjectId)) {
                 return ResponseEntity.status(404).body(Map.of(
                         "message", "No event_crf with id " + eventCrfId));
             }
         } else if (studyEventId != null) {
             // bound to a study_event → derive study_subject from study_event
             auditStudySubjectId = resolveStudySubjectFromStudyEvent(studyEventId);
-            if (auditStudySubjectId == null) {
+            if (auditStudySubjectId == null || !subjectAtLocation(atLocation, auditStudySubjectId)) {
                 return ResponseEntity.status(404).body(Map.of(
                         "message", "No study_event with id " + studyEventId));
             }
@@ -344,7 +358,8 @@ public class PublicOctUploadController {
             // caller must not reach another study's subjects.
             auditStudySubjectId = resolution()
                     .resolve(pid, (java.time.LocalDate) null,
-                            StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY))
+                            DeviceScope.narrow(StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY),
+                                    atLocation))
                     .single()
                     .map(IngestResolutionService.ResolveCandidate::studySubjectId)
                     .orElse(null);
@@ -939,16 +954,33 @@ public class PublicOctUploadController {
     @GetMapping(path = "/patients/search", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> searchPatientsPublic(
             @RequestParam("q") String q,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+            @RequestParam(value = "limit", required = false) Integer limit,
+            HttpServletRequest servletRequest) {
+        return searchPatientsFor(UploaderSources.of(servletRequest), q, limit);
+    }
+
+    /** The label-prefix lookup for a request that may carry an uploader's source: its location's subjects only. */
+    ResponseEntity<?> searchPatientsFor(IngestSourceService.Source source, String q, Integer limit) {
         return PublicSubjectSearch.search(studySubjectFinder, q, limit,
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY));
+                DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, source));
     }
 
     @GetMapping(path = "/patients/{studySubjectId:[0-9]+}/events",
                 produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listPatientEventsPublic(
-            @PathVariable("studySubjectId") int studySubjectId) {
+            @PathVariable("studySubjectId") int studySubjectId,
+            HttpServletRequest servletRequest) {
+        return listPatientEventsFor(UploaderSources.of(servletRequest), studySubjectId);
+    }
+
+    /**
+     * A subject's visits for a request that may carry an uploader's source: a
+     * subject enrolled at another location has no visits to this caller, as one
+     * that does not exist has none.
+     */
+    ResponseEntity<?> listPatientEventsFor(IngestSourceService.Source source, int studySubjectId) {
         List<Map<String, Object>> out = new ArrayList<>();
+        String atLocation = StudyScopeConfig.inClauseOrNull(DeviceScope.atLocation(dataSource, source));
         String sql = "SELECT se.study_event_id, "
                 + "       sed.oc_oid AS event_def_oid, "
                 + "       sed.name AS event_label, "
@@ -972,6 +1004,7 @@ public class PublicOctUploadController {
                 + "    ON s.study_id = ss.study_id "
                 + " WHERE se.study_subject_id = ? "
                 + "   AND s.status_id = 1 "
+                + (atLocation == null ? "" : "   AND ss.study_id IN " + atLocation + " ")
                 + " ORDER BY se.date_start ASC, se.study_event_id ASC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -1029,7 +1062,16 @@ public class PublicOctUploadController {
 
     @DeleteMapping(path = "/{jobId:[0-9]+}",
                    produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> undo(@PathVariable("jobId") long jobId) {
+    public ResponseEntity<?> undo(@PathVariable("jobId") long jobId, HttpServletRequest servletRequest) {
+        return undoFor(UploaderSources.of(servletRequest), jobId);
+    }
+
+    /**
+     * Take a scan's job back for a request that may carry an uploader's source.
+     * With one, only a scan that arrived at that source's location can be taken
+     * back; any other job answers as one that does not exist.
+     */
+    ResponseEntity<?> undoFor(IngestSourceService.Source source, long jobId) {
         // Pull enqueued_at + e2e_path in one round trip; reject when the
         // window has elapsed before we touch the row.
         String e2ePath;
@@ -1037,11 +1079,13 @@ public class PublicOctUploadController {
         Long ingestItemId = null;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT enqueued_at, e2e_path, ingest_item_id "
-                             + "  FROM retinal_inference_job WHERE job_id = ?")) {
+                     "SELECT j.enqueued_at, j.e2e_path, j.ingest_item_id, ii.origin_location_id "
+                             + "  FROM retinal_inference_job j "
+                             + "  LEFT JOIN ingest_item ii ON ii.ingest_item_id = j.ingest_item_id "
+                             + " WHERE j.job_id = ?")) {
             ps.setLong(1, jobId);
             try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
+                if (!rs.next() || !arrivedAt(source, rs.getObject("origin_location_id"))) {
                     return ResponseEntity.status(404).body(Map.of(
                             "message", "No retinal_inference_job with id " + jobId));
                 }
@@ -1115,16 +1159,23 @@ public class PublicOctUploadController {
      */
     @DeleteMapping(path = "/items/{ingestItemId:[0-9]+}",
                    produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> undoItem(@PathVariable("ingestItemId") long ingestItemId) {
+    public ResponseEntity<?> undoItem(@PathVariable("ingestItemId") long ingestItemId,
+                                      HttpServletRequest servletRequest) {
+        return undoItemFor(UploaderSources.of(servletRequest), ingestItemId);
+    }
+
+    /** As {@link #undoFor}, for an upload that has no job: only one that arrived at the source's location. */
+    ResponseEntity<?> undoItemFor(IngestSourceService.Source source, long ingestItemId) {
         Instant receivedAt;
         String storedPath;
         String status;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT received_at, stored_path, status FROM ingest_item WHERE ingest_item_id = ?")) {
+                     "SELECT received_at, stored_path, status, origin_location_id "
+                             + "FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, ingestItemId);
             try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
+                if (!rs.next() || !arrivedAt(source, rs.getObject("origin_location_id"))) {
                     return ResponseEntity.status(404).body(Map.of(
                             "message", "No ingest_item with id " + ingestItemId));
                 }
@@ -1185,6 +1236,27 @@ public class PublicOctUploadController {
     /* ====================================================================== */
     /* helpers                                                                */
     /* ====================================================================== */
+
+    /**
+     * Whether a request may act on a scan that arrived at {@code originLocation}:
+     * always without a source; with one, only at its own location.
+     */
+    private static boolean arrivedAt(IngestSourceService.Source source, Object originLocation) {
+        return source == null
+                || (originLocation instanceof Number n && source.locationId() != null
+                        && n.intValue() == source.locationId());
+    }
+
+    /** True when there is no narrowing, or the subject is enrolled at a study in the set. */
+    private boolean subjectAtLocation(Set<Integer> atLocation, int studySubjectId) {
+        if (atLocation == null) return true;
+        try (Connection c = dataSource.getConnection()) {
+            return DeviceScope.subjectAllowed(c, atLocation, studySubjectId);
+        } catch (SQLException e) {
+            LOG.warn("could not check the location of study subject {}: {}", studySubjectId, e.getMessage());
+            return false;
+        }
+    }
 
     /** {@code null} → null on parse failure. */
     private static LocalDate parseLocalDate(String raw) {

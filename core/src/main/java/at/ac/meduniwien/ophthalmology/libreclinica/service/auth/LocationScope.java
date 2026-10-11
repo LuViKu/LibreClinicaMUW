@@ -232,6 +232,46 @@ public class LocationScope {
     }
 
     /**
+     * The studies and sites that are at a location: every {@code study} row that
+     * is not removed and sits at {@code locationId}. The device endpoints use it
+     * to answer a request that carries an uploader token only for the visits of
+     * that token's place (DR-040 phase 2); intersected with the scope the
+     * deployment configured, it is the whole of what such a request may reach.
+     *
+     * <p>A study with no location of its own reads as being at the default
+     * location, the same rule {@link #visibleLocations} applies, so a study
+     * created by a path that does not know about locations does not drop out of
+     * its only clinic's lookups. Once a second location exists there is no
+     * default and such a study is at none.
+     *
+     * <p>Both the ids of sites and of the studies without sites are returned;
+     * a parent study that has sites is in the set only when its coordinating
+     * location is {@code locationId}. A subject is enrolled at exactly one of
+     * these rows ({@code study_subject.study_id}), which is what the lookups
+     * compare against.
+     */
+    public static Set<Integer> studyIdsAtLocation(Connection c, int locationId) throws SQLException {
+        Integer defaultId = defaultLocationId(c);
+        String sql = "SELECT s.study_id FROM study s"
+                + " WHERE COALESCE(s.status_id, ?) NOT IN (?, ?)"
+                + "   AND COALESCE(s.location_id, CAST(? AS INTEGER)) = ?"
+                + " ORDER BY s.study_id";
+        Set<Integer> ids = new LinkedHashSet<>();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            int i = 1;
+            ps.setInt(i++, STATUS_AVAILABLE);
+            ps.setInt(i++, STATUS_REMOVED);
+            ps.setInt(i++, STATUS_AUTO_REMOVED);
+            if (defaultId == null) ps.setNull(i++, Types.INTEGER); else ps.setInt(i++, defaultId);
+            ps.setInt(i, locationId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) ids.add(rs.getInt(1));
+            }
+        }
+        return Collections.unmodifiableSet(ids);
+    }
+
+    /**
      * The origin location of a file a signed-in user uploads while working in
      * the study: that study's location, else the default one, else null (an
      * administrator places it).

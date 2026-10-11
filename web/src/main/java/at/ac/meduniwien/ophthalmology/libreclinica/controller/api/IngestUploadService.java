@@ -204,7 +204,8 @@ final class IngestUploadService {
      * With a source the file is stamped with the source's location and the source
      * itself; without one it keeps what it always had: the location of the staff
      * uploader's study, else the only active location. Which visits the upload may
-     * name is the caller's {@link Upload#studyScope()}.
+     * name is the caller's {@link Upload#studyScope()}, which a tokened request
+     * narrows to its location.
      */
     Outcome commit(Upload up, IngestSourceService.Source source) {
         IngestArtifactStore.Kind kind = up.sniffed().kind();
@@ -466,6 +467,16 @@ final class IngestUploadService {
      * instead (restorable from the inbox, deleted by the retention job).
      */
     Outcome undo(long ingestItemId, IngestBindService.Actor actor) {
+        return undo(ingestItemId, actor, null);
+    }
+
+    /**
+     * As {@link #undo(long, IngestBindService.Actor)} for a request that may
+     * carry an uploader's source: with one, only an upload that arrived at that
+     * source's location can be taken back, and any other answers as one that
+     * does not exist.
+     */
+    Outcome undo(long ingestItemId, IngestBindService.Actor actor, IngestSourceService.Source source) {
         Instant receivedAt;
         String storedPath;
         String previewPath;
@@ -474,13 +485,19 @@ final class IngestUploadService {
         int jobs;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT received_at, stored_path, preview_png_path, status, match_policy, "
+                     "SELECT received_at, stored_path, preview_png_path, status, match_policy, origin_location_id, "
                              + "  (SELECT count(*) FROM retinal_inference_job j "
                              + "    WHERE j.ingest_item_id = ii.ingest_item_id) AS jobs "
                              + "  FROM ingest_item ii WHERE ingest_item_id = ?")) {
             ps.setLong(1, ingestItemId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return new Rejected(404, "no upload " + ingestItemId);
+                if (source != null) {
+                    int origin = rs.getInt("origin_location_id");
+                    if (rs.wasNull() || source.locationId() == null || origin != source.locationId()) {
+                        return new Rejected(404, "no upload " + ingestItemId);
+                    }
+                }
                 Timestamp ts = rs.getTimestamp("received_at");
                 receivedAt = ts == null ? Instant.EPOCH : ts.toInstant();
                 storedPath = rs.getString("stored_path");
