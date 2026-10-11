@@ -67,10 +67,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceSe
  * not share or lose a budget; and the budget fits a clinic day: lookups
  * {@value #MAX_SOURCE_LOOKUPS_PER_HOUR} an hour, commits on the combined page
  * {@value #MAX_SOURCE_COMMITS_PER_HOUR}, heartbeats as before. A request with
- * no source keeps the per-address budgets above. Source buckets apply on every
- * deployment, including the internal one where the per-address limiter is off
- * ({@link #enabled}): that deployment is where the tokens are, and a leaked
- * token should not be a way to flood it.
+ * no source keeps the per-address budgets above. Like those, the source
+ * buckets apply only where the limiter is on (the internet-facing deployment,
+ * {@link #enabled}); the internal deployment throttles no device, tokened or
+ * not.
  *
  * <p>Wire via {@code SecurityConfig.addFilterBefore(filter, SecurityConfig.RATE_LIMIT_ANCHOR)}.
  */
@@ -239,10 +239,7 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain)
             throws ServletException, IOException {
-        // A request that carries an uploader token is a known device: it is
-        // throttled by its own budget wherever the per-address limiter is off.
-        IngestSourceService.Source source = UploaderSources.of(request);
-        if (!enabled && source == null) {
+        if (!enabled) {
             chain.doFilter(request, response);
             return;
         }
@@ -258,6 +255,8 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
+        // A request that carries an uploader token is a known device with a budget of its own.
+        IngestSourceService.Source source = UploaderSources.of(request);
         boolean commit = isUploadCommit(prefix, request.getMethod(), uri);
         String owner = source != null ? "source:" + source.id() : clientIp(request);
         String key = owner + "|" + prefix + (commit ? "|commit" : "");

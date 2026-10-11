@@ -351,15 +351,14 @@ class PublicOctUploadRateLimitFilterTest {
     }
 
     @Test
-    void aKnownUploaderIsThrottledEvenWhereTheAddressLimiterIsOff() throws Exception {
-        // The internal deployment switches the per-address limiter off; its uploaders hold the tokens, and a
-        // leaked one should not be a way to flood it. A request without a source is still never throttled.
+    void whereTheLimiterIsOffNoDeviceIsThrottledTokenedOrNot() throws Exception {
+        // The internal deployment switches the limiter off (#404): a known uploader is not throttled there either.
         PublicOctUploadRateLimitFilter off = new PublicOctUploadRateLimitFilter(false);
         Source pc = source(7);
-        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+        for (int i = 0; i < 3 * PublicOctUploadRateLimitFilter.MAX_SOURCE_COMMITS_PER_HOUR; i++) {
             assertEquals(200, invokeAs(off, pc, "10.1.0.7", RESOLVE).getStatus(), "lookup " + i);
+            assertEquals(200, invokeAs(off, pc, "10.1.0.7", COMMIT).getStatus(), "commit " + i);
         }
-        assertEquals(429, invokeAs(off, pc, "10.1.0.7", RESOLVE).getStatus());
         for (int i = 0; i < 3 * PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
             assertEquals(200, invokeAs(off, null, "10.1.0.7", RESOLVE).getStatus(), "stranger " + i);
         }
