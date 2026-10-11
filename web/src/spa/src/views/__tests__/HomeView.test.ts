@@ -86,6 +86,7 @@ function makeRouter() {
       { path: '/ingest-inbox', name: 'ingest-inbox', component: { template: '<div />' } },
       { path: '/due-visits', name: 'due-visits', component: { template: '<div />' } },
       { path: '/admin/studies', name: 'admin-studies', component: { template: '<div />' } },
+      { path: '/admin/locations', name: 'admin-locations', component: { template: '<div />' } },
     ],
   })
 }
