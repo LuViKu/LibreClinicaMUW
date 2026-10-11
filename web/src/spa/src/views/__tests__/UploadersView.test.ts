@@ -527,6 +527,101 @@ describe('UploadersView', () => {
     })
   })
 
+  describe('the link for the browser upload page', () => {
+    const LINK = () => `${window.location.origin}${import.meta.env.BASE_URL}upload#token=${TOKEN}`
+
+    async function createUploader() {
+      vi.mocked(apiPost).mockResolvedValue({ uploader: up({ id: 13, displayName: 'Optomed-PC' }), token: TOKEN })
+      await mountView()
+      await click('uploaders-create')
+      await type('uploader-name', 'Optomed-PC')
+      await click('uploader-form-submit')
+    }
+
+    it('is a second read-only field beside the token: origin, base path, /upload and the token in the fragment', async () => {
+      await createUploader()
+      const link = field('uploader-link-value')!
+      expect(link).not.toBeNull()
+      expect(link.readOnly).toBe(true)
+      expect(link.classList.contains('font-mono')).toBe(true)
+      expect(link.value).toBe(LINK())
+      expect(link.value).toMatch(/\/upload#token=mwu_/)
+      // In the fragment: it is not sent to a server, so it is in no access log. Never in the query.
+      expect(new URL(link.value).search).toBe('')
+      expect(new URL(link.value).hash).toBe(`#token=${TOKEN}`)
+      expect(document.body.querySelector('label[for="uploader-link-value"]')?.textContent?.trim()).toBe('Link for the upload page')
+      // The token field is still there, with the token alone.
+      expect(field('uploader-token-value')!.value).toBe(TOKEN)
+    })
+
+    it('has a copy button of its own that copies the link, not the token', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      stubClipboard(writeText)
+      await createUploader()
+
+      await click('uploader-link-copy')
+      expect(writeText).toHaveBeenCalledTimes(1)
+      expect(writeText).toHaveBeenCalledWith(LINK())
+      expect(toasts()).toContain('Link copied to the clipboard.')
+
+      await click('uploader-token-copy')
+      expect(writeText).toHaveBeenLastCalledWith(TOKEN)
+      expect(toasts()).toContain('Token copied to the clipboard.')
+    })
+
+    it('names its two copy buttons so that they can be told apart without their position', async () => {
+      await createUploader()
+      expect(byId('uploader-token-copy')!.getAttribute('aria-label')).toBe('Copy token')
+      expect(byId('uploader-link-copy')!.getAttribute('aria-label')).toBe('Copy the link for the upload page')
+    })
+
+    it('selects the link and says so when the clipboard is not available', async () => {
+      stubClipboard(vi.fn().mockRejectedValue(new Error('denied')))
+      await createUploader()
+      await click('uploader-link-copy')
+      expect(toasts()).toContain('Copying did not work. The link is selected; copy it with Ctrl+C (Mac: Cmd+C).')
+      expect(document.activeElement).toBe(field('uploader-link-value'))
+    })
+
+    it('says that the token in the link gives upload access for this location only', async () => {
+      await createUploader()
+      const note = text('uploader-link-note')!
+      expect(note).toContain('gives upload access for the location “MUW Augenklinik” only')
+      expect(note).toContain('Pass the link on only to people who upload acquisitions there')
+    })
+
+    it('is there for a replaced token as well, with the new one', async () => {
+      vi.mocked(apiPost).mockResolvedValue({ uploader: { ...CLARUS, tokenHint: 'NeWhInT1' }, token: TOKEN_2 })
+      await mountView()
+      await click('uploader-replace-11')
+      expect(field('uploader-link-value')!.value).toBe(`${window.location.origin}${import.meta.env.BASE_URL}upload#token=${TOKEN_2}`)
+      expect(field('uploader-link-value')!.value).not.toContain(TOKEN)
+    })
+
+    it('is gone from the page, with the token, when the dialog closes', async () => {
+      await createUploader()
+      await check('uploader-token-saved')
+      await click('uploader-token-close')
+      expect(field('uploader-link-value')).toBeNull()
+      expect(document.body.innerHTML).not.toContain(TOKEN)
+      expect(document.body.textContent).not.toContain('#token=')
+    })
+
+    it('speaks German', async () => {
+      const german = createI18n({ legacy: false, locale: 'de', fallbackLocale: 'de', messages: { de: deMessages } })
+      appI18n.global.locale.value = 'de-AT'
+      vi.mocked(apiPost).mockResolvedValue({ uploader: up({ id: 13, displayName: 'Optomed-PC' }), token: TOKEN })
+      await mountView(german)
+      await click('uploaders-create')
+      await type('uploader-name', 'Optomed-PC')
+      await click('uploader-form-submit')
+      expect(document.body.querySelector('label[for="uploader-link-value"]')?.textContent?.trim()).toBe('Link für die Upload-Seite')
+      expect(text('uploader-link-note')).toContain('gibt Zugriff zum Hochladen nur für den Standort „MUW Augenklinik“')
+      expect(byId('uploader-link-copy')!.textContent?.trim()).toBe('Link kopieren')
+      expect(document.body.textContent).not.toMatch(/\buploaders\.token\.[a-zA-Z]+/)
+    })
+  })
+
   describe('renaming an uploader', () => {
     it('opens with the current name, PUTs the new one, patches the row and confirms with a notice', async () => {
       vi.mocked(apiPut).mockResolvedValue({ ...CLARUS, displayName: 'Clarus-PC Raum 3' })
