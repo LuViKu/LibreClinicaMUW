@@ -105,13 +105,14 @@ final class IngestSourceQueries {
                     + "FROM ingest_source s LEFT JOIN location l ON l.location_id = s.location_id";
 
     /**
-     * Every source of every kind: those without a location first (they are the
-     * ones waiting for an administrator), then by location, kind and name.
+     * Every source of every kind, in the order the SPA shows them: those
+     * without a location first (they are the ones waiting for an
+     * administrator), then by kind and by name without regard to case.
      */
     static List<IngestSourceDto> sources(Connection c) throws SQLException {
         List<IngestSourceDto> out = new ArrayList<>();
         try (PreparedStatement ps = c.prepareStatement(SOURCE_SELECT
-                + " ORDER BY (s.location_id IS NOT NULL), lower(l.name), s.kind, lower(s.display_name), s.ingest_source_id");
+                + " ORDER BY (s.location_id IS NOT NULL), s.kind, lower(s.display_name), s.ingest_source_id");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) out.add(sourceOf(rs));
         }

@@ -46,7 +46,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>{@code GET /admin/ingest-sources} — every source of every kind
  *       (uploaders, DICOM AE titles, the Remidio account, and the reserved
- *       public page), those without a location first, with the number of
+ *       public page): those without a location first, then by kind and name
+ *       without regard to case (the SPA keeps this order), with the number of
  *       their files still waiting to be filed.</li>
  *   <li>{@code PUT /admin/ingest-sources/{id}/location} — assign a source to
  *       a location, or with an explicit {@code null} back to none. Assigning
