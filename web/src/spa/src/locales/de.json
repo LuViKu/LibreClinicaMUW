@@ -339,6 +339,8 @@
         "worklistNotImported": "der Optomed Client hat die letzte Worklist nicht übernommen",
         "worklistFailed": "die Worklist konnte nicht abgerufen werden",
         "worklistTokenRejected": "die Plattform hat den Worklist-Token abgelehnt",
+        "tokenRequired": "Token fehlt – in den Einstellungen des Uploaders eintragen",
+        "tokenRejected": "Token abgelehnt – in den Einstellungen des Uploaders prüfen oder auf der Seite „Uploader und Tokens“ ersetzen",
         "worklistOff": "die Worklist ist auf der Plattform ausgeschaltet, die Kamera bekommt keine Patientenliste",
         "noToken": "kein Worklist-Token eingerichtet",
         "dropFolderMissing": "der Worklist-Ordner des Optomed Client fehlt",
