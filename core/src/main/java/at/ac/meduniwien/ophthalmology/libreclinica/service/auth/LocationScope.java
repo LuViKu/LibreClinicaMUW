@@ -60,12 +60,13 @@ import org.springframework.stereotype.Component;
  *
  * <h2>The default location</h2>
  *
- * {@link #defaultLocationId()} is the only AVAILABLE location when exactly one
- * exists, else null. While there is one location, everything is at it and
- * nothing changes; the separation starts with the second. A study without a
- * location of its own reads as being at the default one for the same reason,
- * so a study created by a path that does not know about locations (a data fix,
- * an import) cannot take its users' files away on a single-location install.
+ * {@link #defaultLocationId()} depends on the deployment's {@link LocationMode},
+ * never on how many locations exist. In single mode it is the one AVAILABLE
+ * location: everything is at it, and a study without a location of its own
+ * reads as being there, so a study created by a path that does not know about
+ * locations (a data fix, an import) cannot take its users' files away. In
+ * multi mode it is always null: what has no place of its own belongs to none
+ * and waits for an administrator.
  */
 @Component
 public class LocationScope {
@@ -150,9 +151,10 @@ public class LocationScope {
     /* ------------------------------------------------------------------ */
 
     /**
-     * The only AVAILABLE location, or null when there are none or several.
-     * Null is the right answer for "which place does this device belong to"
-     * once a second location exists: a file nobody has assigned waits for an
+     * Where something without a place of its own belongs: in single mode the
+     * one AVAILABLE location; in multi mode, and when there is none, null. Null
+     * is the right answer for "which place does this device belong to" on a
+     * multi-location deployment: a file nobody has assigned waits for an
      * administrator.
      */
     public Integer defaultLocationId() {
@@ -165,6 +167,9 @@ public class LocationScope {
     }
 
     public static Integer defaultLocationId(Connection c) throws SQLException {
+        if (LocationMode.current() == LocationMode.MULTI) return null;
+        // Single mode has one active location (the startup refuses a database with
+        // more); several would still read as none rather than as an arbitrary one.
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT location_id FROM location WHERE status_id = ? ORDER BY location_id LIMIT 2")) {
             ps.setInt(1, STATUS_AVAILABLE);
@@ -241,8 +246,8 @@ public class LocationScope {
      * <p>A study with no location of its own reads as being at the default
      * location, the same rule {@link #visibleLocations} applies, so a study
      * created by a path that does not know about locations does not drop out of
-     * its only clinic's lookups. Once a second location exists there is no
-     * default and such a study is at none.
+     * its only clinic's lookups. In multi mode there is no default and such a
+     * study is at none.
      *
      * <p>Both the ids of sites and of the studies without sites are returned;
      * a parent study that has sites is in the set only when its coordinating

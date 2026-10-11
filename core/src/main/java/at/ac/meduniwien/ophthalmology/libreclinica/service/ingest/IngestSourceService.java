@@ -618,14 +618,17 @@ public class IngestSourceService {
                 if (countOfKind(c, kind) >= limit) return Optional.empty();
             }
             long id;
+            // Single mode: the one location, so nothing it sends is ever without a place. Multi: unassigned.
+            Integer home = LocationScope.defaultLocationId(c);
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO ingest_source (kind, source_key, display_name, created_at, last_used_at) "
-                            + "VALUES (?, ?, ?, now(), now()) "
+                    "INSERT INTO ingest_source (kind, source_key, display_name, location_id, created_at, last_used_at) "
+                            + "VALUES (?, ?, ?, ?, now(), now()) "
                             + "ON CONFLICT (kind, source_key) WHERE source_key IS NOT NULL DO NOTHING "
                             + "RETURNING ingest_source_id")) {
                 ps.setString(1, kind);
                 ps.setString(2, key);
                 ps.setString(3, name);
+                if (home == null) ps.setNull(4, Types.INTEGER); else ps.setInt(4, home);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         // Another caller made it between our look and our insert.
@@ -636,7 +639,7 @@ public class IngestSourceService {
                 }
             }
             audit(c, AUDIT_INGEST_SOURCE_CREATED, 0, id, name, null,
-                    "kind=" + kind + "; key=" + key + "; location=unassigned");
+                    "kind=" + kind + "; key=" + key + "; location=" + locationCode(c, home));
             LOG.info("ingest sources: {} source id {} seen for the first time", kind, id);
             return Optional.of(readSource(c, id));
         });
