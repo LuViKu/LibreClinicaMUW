@@ -55,6 +55,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     /** Controllers none of whose handlers reach a site's clinical records, with the reason. */
     static final Map<String, String> OUT_OF_SCOPE_CONTROLLERS = new TreeMap<>(Map.ofEntries(
             Map.entry("AdminApiController", "system administration (password policy, config, cluster); admin role, no site data"),
+            Map.entry("AdminLocationsApiController", "system administration (global locations and their user assignments); sysadmin only, holds no site-owned record"),
             Map.entry("AdminMailApiController", "system administration (test e-mail); admin role"),
             Map.entry("AuthApiController", "logout; no record id"),
             Map.entry("BugReportApiController", "free-text report to the maintainers; no record id"),
