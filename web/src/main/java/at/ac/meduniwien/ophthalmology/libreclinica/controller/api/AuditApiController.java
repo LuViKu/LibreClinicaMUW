@@ -849,7 +849,8 @@ public class AuditApiController {
      *   <li>Study, user and dataset rows: the entity name, which holds the
      *       changed column or the export label (Phase E.6); configuration
      *       rows: the key of the setting that changed (2026-09-30); location
-     *       rows: the location's code (DR-040).</li>
+     *       rows: the location's code and ingest-source rows the source's
+     *       display name, the uploader or AE title they are about (DR-040).</li>
      *   <li>Failures: the operation that failed.</li>
      *   <li>Ingest rows: the file's reference. Rows written before the
      *       reference was recorded hold a bare column marker; for those it is
@@ -864,7 +865,7 @@ public class AuditApiController {
             return r.entityId() > 0 ? context.file(r.entityId()) : null;
         }
         if ((r.on("study") || r.on("user_account") || r.on("dataset") || r.on("configuration")
-                || r.on("location"))
+                || r.on("location") || r.on("ingest_source"))
                 && entityName != null && !entityName.isBlank()) {
             return entityName;
         }
@@ -936,6 +937,12 @@ public class AuditApiController {
                  AuditTypeIds.LOCATION_CREATED, AuditTypeIds.LOCATION_UPDATED,
                  AuditTypeIds.LOCATION_DISABLED, AuditTypeIds.LOCATION_RESTORED,
                  AuditTypeIds.LOCATION_USER_ASSIGNED, AuditTypeIds.LOCATION_USER_UNASSIGNED,
+            // Ingest sources, uploader tokens and the Standort-Admin right
+            // (201-207, DR-040 phase 2).
+                 AuditTypeIds.INGEST_SOURCE_CREATED, AuditTypeIds.UPLOADER_TOKEN_REPLACED,
+                 AuditTypeIds.UPLOADER_TOKEN_REVOKED, AuditTypeIds.UPLOADER_RENAMED,
+                 AuditTypeIds.INGEST_SOURCE_LOCATION_ASSIGNED,
+                 AuditTypeIds.LOCATION_ADMIN_GRANTED, AuditTypeIds.LOCATION_ADMIN_REVOKED,
             // CRF name / description edit (142) and a batch move of event
             // CRFs to another CRF version (143, one row per run).
                  AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";

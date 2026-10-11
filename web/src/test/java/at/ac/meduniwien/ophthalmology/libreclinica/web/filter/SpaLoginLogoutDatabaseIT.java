@@ -86,6 +86,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AbstractApiControllerDatabaseIT;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuthApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.MeApiController;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploadersApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
@@ -162,6 +163,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int NO_ROLE = 30125;
     private static final int SYS_ADMIN = 30126;
     private static final int SYS_ADMIN_REMOVED_STUDY = 30127;
+    /** A site's IT contact: the Standort-Admin right at a location and no study role at all. */
+    private static final int SITE_IT = 30128;
 
     /** S_DEFAULTS1, the study every other account here is bound to. */
     private static final int DEFAULT_STUDY = 1;
@@ -218,6 +221,9 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         sql("UPDATE study_user_role SET status_id = " + Status.DELETED.getId()
                 + " WHERE user_name = 'spa-role-removed'");
         seedAccount(NO_ROLE, "spa-no-role", String.valueOf(DEFAULT_STUDY));
+        seedAccount(SITE_IT, "spa-site-it", "NULL");
+        sql("INSERT INTO user_location (user_account_id, location_id, can_manage_sources) "
+                + "SELECT " + SITE_IT + ", location_id, true FROM location WHERE code = 'MUW-AUGEN'");
         seedAccount(SYS_ADMIN, "spa-sys-admin", String.valueOf(DEFAULT_STUDY));
         sql("UPDATE user_account SET user_type_id = 1 WHERE user_id = " + SYS_ADMIN);
         seedAccount(SYS_ADMIN_REMOVED_STUDY, "spa-sys-admin-removed-study", String.valueOf(REMOVED_STUDY));
@@ -816,6 +822,29 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
             assertEquals(0, study(session).getId(), account + ": no study is bound");
             assertEquals(0, role(session).getId(), account + ": no role is bound");
         }
+    }
+
+    /**
+     * DR-040 phase 2: a site's IT contact holds the Standort-Admin right and
+     * no study role. Signing in, reading {@code /me} and using the uploader
+     * endpoints must work without a bound study or a role.
+     */
+    @Test
+    void aStandortAdminWithNoStudyRoleSignsInReadsMeAndReachesTheUploaders() throws Exception {
+        assertEquals(204, login("spa-site-it", PASSWORD, JSON).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals(0, study(session).getId(), "no study is bound");
+        assertEquals(0, role(session).getId(), "no role is bound");
+
+        me(session)
+                .andExpect(jsonPath("$.username").value("spa-site-it"))
+                .andExpect(jsonPath("$.activeStudy").doesNotExist())
+                .andExpect(jsonPath("$.role").value("Investigator"))
+                .andExpect(jsonPath("$.manageableLocations.length()").value(1))
+                .andExpect(jsonPath("$.manageableLocations[0].code").value("MUW-AUGEN"));
+        MockMvc uploaders = ProductionMvc.standalone(new UploadersApiController(DATA_SOURCE)).build();
+        uploaders.perform(get("/api/v1/uploaders").session(session)).andExpect(status().isOk());
     }
 
     @Test
