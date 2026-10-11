@@ -101,6 +101,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashSe
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -482,6 +485,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
             new AnnotatedBeanDefinitionReader(securityConfig).register(SecurityConfig.class);
             securityConfig.registerBean(UserAccountDAO.class, () -> new UserAccountDAO(DATA_SOURCE));
             securityConfig.registerBean(PublicOctUploadRateLimitFilter.class);
+            securityConfig.registerBean(UploaderTokenFilter.class,
+                    () -> new UploaderTokenFilter(new IngestSourceService(DATA_SOURCE), new LocationScope(DATA_SOURCE)));
             securityConfig.refresh();
         }
         return securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
