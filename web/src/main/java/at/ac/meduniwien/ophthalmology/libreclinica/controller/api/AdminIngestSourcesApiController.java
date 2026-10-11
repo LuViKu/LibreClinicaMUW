@@ -49,6 +49,11 @@ import org.springframework.web.bind.annotation.RestController;
  *       public page): those without a location first, then by kind and name
  *       without regard to case (the SPA keeps this order), with the number of
  *       their files still waiting to be filed.</li>
+ *   <li>{@code GET /admin/ingest-sources/anonymous-uploaders} — the uploader
+ *       programs seen in the last seven days that have never reported with a
+ *       token: what stops working when a second location is created, because
+ *       that closes the anonymous device front door. The count is of all of
+ *       them, the list is the newest 50.</li>
  *   <li>{@code PUT /admin/ingest-sources/{id}/location} — assign a source to
  *       a location, or with an explicit {@code null} back to none. Assigning
  *       also places the source's waiting files (unbound or dismissed, no
@@ -97,6 +102,20 @@ public class AdminIngestSourcesApiController {
             return ResponseEntity.ok(IngestSourceQueries.sources(c));
         } catch (SQLException e) {
             return unreadable("list the ingest sources", e);
+        }
+    }
+
+    @Operation(operationId = "listAnonymousUploaders",
+               summary = "Uploader programs seen in the last 7 days that have never reported with a token: what stops working when a second location is created")
+    @GetMapping(value = "/anonymous-uploaders", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = AnonymousUploadersDto.class)))
+    public ResponseEntity<?> listAnonymousUploaders(HttpSession session) {
+        ResponseEntity<?> guard = LocationAdminAuthorization.requireSysadmin(session);
+        if (guard != null) return guard;
+        try (Connection c = dataSource.getConnection()) {
+            return ResponseEntity.ok(IngestSourceQueries.anonymousUploaders(c));
+        } catch (SQLException e) {
+            return unreadable("list the uploaders without a token", e);
         }
     }
 
