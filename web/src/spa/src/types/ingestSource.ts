@@ -14,6 +14,7 @@
  *
  *   GET /pages/api/v1/admin/ingest-sources                    → IngestSource[]
  *   PUT /pages/api/v1/admin/ingest-sources/{id}/location      → IngestSource
+ *   GET /pages/api/v1/admin/ingest-sources/anonymous-uploaders → AnonymousUploaders
  *
  * System administrators only: 401 anonymous, 403 anyone else. Assigning a
  * location that is no longer available answers 409.
@@ -52,4 +53,28 @@ export interface IngestSource {
 /** Body of `PUT /admin/ingest-sources/{id}/location`; `null` takes the location away. */
 export interface AssignSourceLocationInput {
   locationId: number | null
+}
+
+/**
+ * An acquisition-PC program (an uploader) that reported in the last 7 days
+ * without ever using a token. While there is exactly one location the server
+ * still serves such programs; from the second location on it refuses them.
+ */
+export interface AnonymousUploaderInstance {
+  /** The name the program reports for its PC; null when it reports none. */
+  displayName: string | null
+  /** The program, e.g. `export-watcher` or `optomed-bridge`; a newer server may name others. */
+  kind: string
+  /** ISO-8601, UTC. */
+  lastSeenAt: string
+}
+
+/**
+ * `GET /admin/ingest-sources/anonymous-uploaders` (system administrators
+ * only): the warning before a second location is created. `instances` are
+ * the newest first, at most 50; `count` is the full number.
+ */
+export interface AnonymousUploaders {
+  count: number
+  instances: AnonymousUploaderInstance[]
 }

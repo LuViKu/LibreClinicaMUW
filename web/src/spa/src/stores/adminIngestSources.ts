@@ -2,12 +2,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPut } from '@/api/client'
 import { readMutationFailure, type MutationFailure } from '@/lib/mutationFailure'
-import type { AssignSourceLocationInput, IngestSource } from '@/types/ingestSource'
+import type { AnonymousUploaders, AssignSourceLocationInput, IngestSource } from '@/types/ingestSource'
 
 const BASE = '/pages/api/v1/admin/ingest-sources'
 
 export type { MutationFailure }
 export type IngestSourceMutation = { ok: true; source: IngestSource } | MutationFailure
+export type AnonymousUploadersResult = { ok: true; anonymous: AnonymousUploaders } | MutationFailure
 
 /**
  * Where device files come from, for a system administrator.
@@ -67,6 +68,26 @@ export const useAdminIngestSourcesStore = defineStore('adminIngestSources', () =
     }
   }
 
+  /**
+   * The uploaders that have never used a token, for the warning before a
+   * second location is created. A read of its own, kept out of the list's
+   * state: it is asked when that dialog opens and answers one question.
+   */
+  async function fetchAnonymousUploaders(): Promise<AnonymousUploadersResult> {
+    try {
+      const anonymous = await apiGet<AnonymousUploaders>(`${BASE}/anonymous-uploaders`)
+      return {
+        ok: true,
+        anonymous: {
+          count: typeof anonymous?.count === 'number' ? anonymous.count : 0,
+          instances: Array.isArray(anonymous?.instances) ? anonymous.instances : [],
+        },
+      }
+    } catch (e) {
+      return readFailure(e, 'adminLocations.sources.error.anonymousFailed')
+    }
+  }
+
   function reset(): void {
     sources.value = []
     isLoading.value = false
@@ -83,6 +104,7 @@ export const useAdminIngestSourcesStore = defineStore('adminIngestSources', () =
     waitingCount,
     load,
     assignLocation,
+    fetchAnonymousUploaders,
     reset,
   }
 })

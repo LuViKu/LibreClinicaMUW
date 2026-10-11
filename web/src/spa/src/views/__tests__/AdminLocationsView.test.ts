@@ -90,8 +90,10 @@ function answerGets(over: { locations?: Location[]; details?: Record<number, Loc
   const details = over.details ?? DETAILS
   vi.mocked(apiGet).mockImplementation(async (path: string) => {
     if (path === BASE) return clone(locations)
-    // The page also reads the ingest sources for its Quellen tab; none of the tests here is about them.
+    // The page also reads the ingest sources for its Quellen tab, and the create dialog asks which
+    // uploaders have no token before a second location; none of the tests here is about them.
     if (path === '/pages/api/v1/admin/ingest-sources') return []
+    if (path === '/pages/api/v1/admin/ingest-sources/anonymous-uploaders') return { count: 0, instances: [] }
     if (path === '/pages/api/v1/admin/studies') {
       if (over.studiesFail) throw new ApiError(500, 'Server Error', null)
       return clone(STUDIES)

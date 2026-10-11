@@ -4598,6 +4598,19 @@
       "sources": "Sources",
       "sourcesBadgeAria": "{n} sources without a location"
     },
+    "secondLocation": {
+      "title": "From the second location on, every uploader needs a token",
+      "intro": "Once there is a second location the anonymous front door closes: uploaders and upload pages without a token are turned away, and their files stay where they are until a token is entered. Everything then needs the token of its location.",
+      "checking": "Checking which uploaders have no token yet …",
+      "none": "Every uploader that reported in the last 7 days already uses a token.",
+      "count": "{n} uploader has no token yet but reported in the last 7 days: | {n} uploaders have no token yet but reported in the last 7 days:",
+      "unnamed": "unnamed",
+      "seen": "last seen {when}",
+      "more": "… and {n} more",
+      "toUploaders": "Issue tokens on the “Uploaders and tokens” page (opens in a new tab)",
+      "acknowledge": "I know that these uploaders can no longer upload without a token afterwards",
+      "unknown": "It could not be checked whether uploaders without a token are still running. Check before you create the location: from the second location on they are turned away."
+    },
     "sources": {
       "heading": "Sources",
       "intro": "A source is where device files come from: an uploader on an acquisition PC, a DICOM device (by its AE title) or the Remidio account. Only a system administrator sees the files of a source without a location. Assign the source a location and its waiting files appear in that location’s inbox at once.",
@@ -4629,7 +4642,8 @@
       "unassignedNow": "Source “{name}” is no longer assigned to a location.",
       "assignFailed": "Source “{name}” could not be assigned. {reason}",
       "error": {
-        "loadFailed": "The sources could not be loaded (HTTP {status})."
+        "loadFailed": "The sources could not be loaded (HTTP {status}).",
+        "anonymousFailed": "The uploaders without a token could not be determined (HTTP {status})."
       }
     },
     "error": {
