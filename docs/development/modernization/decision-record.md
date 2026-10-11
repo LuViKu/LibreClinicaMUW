@@ -1149,7 +1149,7 @@ every thickness of such a file would be about 1.5× too large, silently.
 
 - **A location is a global entity:** a physical place, managed by system administrators.
 - **Sites are linked, not replaced.** A study is enabled at a location by having a site there. Each site points to one location; a study without sites points to its location directly. Roles, ODM, randomisation and the cross-site isolation keep working on sites.
-- **Every source has a location,** and every arriving file gets the origin location of its source. The sources are: each uploader instance, each DICOM calling AE, the Remidio account and the public upload page.
+- **Every source has a location,** and every arriving file gets the origin location of its source. The sources are: each uploader (an acquisition-PC program, or a browser upload page opened with a link that carries an uploader token), each DICOM calling AE and the Remidio account.
 - **Uploaders authenticate with a per-uploader token issued for one location.** The token decides the location and limits the visit lookup and the worklist to it. It is shown once, stored as a hash, revocable and audited, and it can only upload, report heartbeats and fetch the worklist. The anonymous device front door closes once every uploader has its token.
 - **A Standort-Admin right,** granted by a system administrator per person and location, lets selected staff issue and revoke the tokens of their own location. A study role does not include it.
 - **A user's location scope** is derived from their site and study roles, plus optional explicit assignments for staff without a study role. System administrators have every location.
