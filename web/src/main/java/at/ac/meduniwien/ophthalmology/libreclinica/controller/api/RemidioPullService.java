@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffe
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient.Exam;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient.Image;
@@ -70,6 +71,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingSer
  * handled, so a failure mid-exam (an expired download link, a full disk) is
  * retried on the next poll rather than lost.
  *
+ * <p><b>The source (DR-040 phase 2).</b> The Remidio account is an ingest source
+ * of kind {@code remidio}, keyed by the screening site the pull lists
+ * ({@code core.remidio.siteCustomId}), made unassigned the first time an image
+ * is filed. Every image is stamped with it and with its location as the origin;
+ * while the source has none, the origin is the only active location, and with
+ * several locations nothing, so the image waits for an administrator and
+ * assigning the source places it. What is fetched and how it is de-duplicated
+ * does not depend on any of this.
+ *
  * <p><b>Why a count and not just the exam id.</b> An exam is listed before it
  * has images. The patient sync creates one per scheduled visit, days before
  * the photographer shoots into it, and the phone uploads a sitting image by
@@ -87,6 +97,12 @@ final class RemidioPullService {
 
     /** The device key the imaging catalogue and the checklist use for this camera. */
     static final String DEVICE = "remidio";
+
+    /** What the administrator sees for the account's source; its key says which site. */
+    static final String SOURCE_NAME = "Remidio";
+
+    /** The source key when the client says nothing better. */
+    static final String SOURCE_KEY_FALLBACK = "account";
 
     /**
      * {@code match_policy} of a pull auto-bind: the typed MRN matched exactly
@@ -136,6 +152,13 @@ final class RemidioPullService {
     private final IngestArtifactStore store;
     private final IngestResolutionService resolution;
     private final StudySettingService settings;
+    private final IngestSourceService sources;
+
+    /** The account's source, looked up when the first image is filed and kept for the pass. */
+    private IngestSourceService.Source accountSource;
+
+    /** The configured site is not usable as a key: said once per pass, not once per image. */
+    private boolean accountKeyRefused;
 
     RemidioPullService(DataSource dataSource, RemidioGatewayClient client) {
         this(dataSource, client, new IngestArtifactStore(),
@@ -150,6 +173,7 @@ final class RemidioPullService {
         this.store = store;
         this.resolution = resolution;
         this.settings = settings;
+        this.sources = new IngestSourceService(dataSource);
     }
 
     /* ------------------------------------------------------------------ */
@@ -354,8 +378,22 @@ final class RemidioPullService {
         boolean held = verdict == IngestTwins.Verdict.HELD;
         if (held) target = null;
 
+        IngestSourceService.Source account;
+        try {
+            account = accountSource();
+        } catch (IngestSourceService.Failure e) {
+            // Without its source the image would be filed with no way to place it later: retry on the next poll.
+            deleteQuietly(path);
+            LOG.warn("remidio: image {} of exam {} not filed, the source could not be looked up ({})",
+                    image.id(), exam.id(), e.sqlState());
+            return Outcome.FAILED;
+        }
+
         long id;
         try (Connection c = dataSource.getConnection()) {
+            // DR-040 — the account's location; while it has none, the only active location, else nothing.
+            Integer origin = account == null ? null : account.locationId();
+            if (origin == null) origin = LocationScope.defaultLocationId(c);
             var item = IngestItemRepository
                     .newItem(IngestArtifactStore.Kind.IMAGE, SOURCE_KIND, path.toString())
                     .device(DEVICE)
@@ -370,8 +408,8 @@ final class RemidioPullService {
                     .acquisitionDateSource(date == null ? null : IngestItemRepository.ACQ_SOURCE_DEVICE)
                     .remidioImageId(image.id())
                     .candidateStudySubjectId(target == null ? candidateSubject : null)
-                    // DR-040 — the only active location, or none until the Remidio account is assigned one.
-                    .originLocationId(LocationScope.defaultLocationId(c));
+                    .ingestSourceId(account == null ? null : account.id())
+                    .originLocationId(origin);
             if (target != null) {
                 item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), policy);
             }
@@ -398,6 +436,45 @@ final class RemidioPullService {
                 target == null ? "UNBOUND" : "BOUND", target == null ? "" : " by " + policy,
                 exam.id(), image.id(), laterality == null ? "-" : laterality);
         return target == null ? Outcome.UNBOUND : Outcome.BOUND;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* the source                                                          */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * The Remidio account as an ingest source, made unassigned the first time
+     * it is needed and then kept for the rest of the pass (a pass is one
+     * object, so an assignment made meanwhile applies from the next pass).
+     * Null when the account cannot be named, which leaves only the
+     * default-location rule.
+     *
+     * @throws IngestSourceService.Failure when the database could not say
+     */
+    private IngestSourceService.Source accountSource() {
+        if (accountSource == null && !accountKeyRefused) {
+            try {
+                accountSource = sources.resolveAutoSource(IngestSourceService.KIND_REMIDIO, accountKey(), SOURCE_NAME);
+            } catch (IngestSourceService.Refusal notAKey) {
+                accountKeyRefused = true;
+                LOG.warn("remidio: the configured site is not usable as a source key ({}); images are filed "
+                        + "without a source", notAKey.getMessage());
+            }
+        }
+        return accountSource;
+    }
+
+    /**
+     * What names the account: the screening site the pull lists, which is also
+     * what tells one place's Remidio account from another's. The client name
+     * ({@code PACS_GATEWAY}) is the vendor's name for every integration and
+     * names no place, so it is only the fallback.
+     */
+    String accountKey() {
+        RemidioGatewayClient.Settings configured = client == null ? null : client.settings();
+        if (configured == null) return SOURCE_KEY_FALLBACK;
+        if (!configured.siteCustomId().isEmpty()) return configured.siteCustomId();
+        return configured.clientName().isEmpty() ? SOURCE_KEY_FALLBACK : configured.clientName();
     }
 
     /* ------------------------------------------------------------------ */
