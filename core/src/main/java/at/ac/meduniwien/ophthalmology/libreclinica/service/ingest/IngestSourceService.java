@@ -464,6 +464,21 @@ public class IngestSourceService {
      * @return the active source, whose {@link Source#locationId()} is never null
      */
     public Optional<Source> findActiveByToken(String plainToken) {
+        try {
+            return lookupActiveByToken(plainToken);
+        } catch (RuntimeException e) {
+            LOG.warn("uploader token lookup failed ({})", e instanceof Failure f ? "SQLSTATE " + f.sqlState() : e.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * {@link #findActiveByToken}, but a database that cannot be reached throws
+     * {@link Failure} instead of answering "no such source". For the device
+     * front door, which must tell an outage apart from a bad token: an outage
+     * is not the uploader's fault and must not count against its address.
+     */
+    public Optional<Source> lookupActiveByToken(String plainToken) {
         if (!UploaderTokens.wellFormed(plainToken)) return Optional.empty();
         String hash = UploaderTokens.hash(plainToken);
         try (Connection c = dataSource.getConnection()) {
@@ -473,9 +488,8 @@ public class IngestSourceService {
             }
             touchIfDue(c, seen);
             return Optional.of(seen.row().toSource());
-        } catch (SQLException | RuntimeException e) {
-            LOG.warn("uploader token lookup failed ({})", e instanceof SQLException s ? s.getSQLState() : e.getClass().getSimpleName());
-            return Optional.empty();
+        } catch (SQLException e) {
+            throw new Failure("look up an uploader token", e);
         }
     }
 
