@@ -18,6 +18,8 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.Source;
+
 /**
  * Wave 1B unit coverage for the hand-rolled token-bucket on the public
  * OCT-upload portal.
@@ -238,6 +240,200 @@ class PublicOctUploadRateLimitFilterTest {
                 new at.ac.meduniwien.ophthalmology.libreclinica.config.ServletInfraConfig();
         assertTrue(config.publicOctUploadRateLimitFilter(true).isEnabled());
         assertFalse(config.publicOctUploadRateLimitFilter(false).isEnabled());
+    }
+
+    /* ---- DR-040 phase 2: a request that carries an uploader token ---------- */
+
+    private static final String RESOLVE = "/pages/api/v1/public/upload/resolve";
+    private static final String COMMIT = "/pages/api/v1/public/upload/commit";
+    private static final String HEARTBEAT = "/pages/api/v1/device/uploader/heartbeat";
+
+    private static Source source(long id) {
+        return new Source(id, "uploader", null, "PC " + id, 1, "abcd1234", "active");
+    }
+
+    /** A request as the token filter leaves it: with the source of the token it carried. */
+    private static MockHttpServletResponse invokeAs(PublicOctUploadRateLimitFilter filter, Source source,
+                                                    String remoteAddr, String uri) throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", uri);
+        req.setRequestURI(uri);
+        req.setRemoteAddr(remoteAddr);
+        if (source != null) req.setAttribute(UploaderSources.ATTRIBUTE, source);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(req, resp, new MockFilterChain());
+        return resp;
+    }
+
+    @Test
+    void aKnownUploaderGetsAClinicDaysLookupsAndSpendsNothingOfTheAddresssBudget() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        Source pc = source(7);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(filter, pc, "10.1.0.1", RESOLVE).getStatus(), "lookup " + i);
+        }
+        MockHttpServletResponse refused = invokeAs(filter, pc, "10.1.0.1", RESOLVE);
+        assertEquals(429, refused.getStatus());
+        assertTrue(Integer.parseInt(refused.getHeader("Retry-After")) >= 1);
+        assertEquals(600, PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR);
+        assertEquals(0, filter.currentSourceTokens(7, PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+        // The address's own budget is the strangers' one, and was never touched.
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR,
+                filter.currentTokens("10.1.0.1", PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+        assertEquals(200, invoke(filter, "10.1.0.1", RESOLVE).getStatus(), "a stranger at that address starts fresh");
+    }
+
+    @Test
+    void theCommitsOfAKnownUploaderHaveALargerBudgetOfTheirOwn() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        Source pc = source(7);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_COMMITS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(filter, pc, "10.1.0.2", COMMIT).getStatus(), "commit " + i);
+        }
+        assertEquals(1200, PublicOctUploadRateLimitFilter.MAX_SOURCE_COMMITS_PER_HOUR);
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.2", COMMIT).getStatus());
+        // Spent commits leave the lookups alone, and the other way round.
+        assertEquals(200, invokeAs(filter, pc, "10.1.0.2", RESOLVE).getStatus());
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR - 1,
+                filter.currentSourceTokens(7, PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+        assertEquals(0, filter.currentSourceCommitTokens(7));
+    }
+
+    @Test
+    void theHeartbeatsOfAKnownUploaderKeepTheirBudgetPerSource() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        Source pc = source(7);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_HEARTBEATS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(filter, pc, "10.1.0.3", HEARTBEAT).getStatus(), "heartbeat " + i);
+        }
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.3", HEARTBEAT).getStatus());
+        assertEquals(200, invokeAs(filter, source(8), "10.1.0.3", HEARTBEAT).getStatus(),
+                "the other program on that PC reports on its own budget");
+        assertEquals(200, invokeAs(filter, pc, "10.1.0.3", RESOLVE).getStatus(), "never the lookups' budget");
+    }
+
+    @Test
+    void twoUploadersBehindOneAddressDoNotShareABudget() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+            invokeAs(filter, source(1), "10.1.0.4", RESOLVE);
+        }
+        assertEquals(429, invokeAs(filter, source(1), "10.1.0.4", RESOLVE).getStatus());
+        assertEquals(200, invokeAs(filter, source(2), "10.1.0.4", RESOLVE).getStatus(),
+                "another uploader behind the same address is untouched");
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR - 1,
+                filter.currentSourceTokens(2, PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+    }
+
+    @Test
+    void oneUploaderKeepsItsBudgetWhateverAddressItComesFrom() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+            invokeAs(filter, source(1), "10.1.0." + (i % 200 + 1), RESOLVE);
+        }
+        assertEquals(429, invokeAs(filter, source(1), "192.0.2.77", RESOLVE).getStatus(),
+                "a new address (a new DHCP lease) is not a new budget");
+    }
+
+    @Test
+    void aRequestWithoutASourceStaysOnThePerAddressBudgetAndLeavesTheSourceBucketsAlone() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(filter, null, "10.1.0.5", RESOLVE).getStatus());
+        }
+        assertEquals(429, invokeAs(filter, null, "10.1.0.5", RESOLVE).getStatus());
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR,
+                filter.currentSourceTokens(1, PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+        // and a commit of a stranger still has the old 300
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_COMMITS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(filter, null, "10.1.0.6", COMMIT).getStatus());
+        }
+        assertEquals(429, invokeAs(filter, null, "10.1.0.6", COMMIT).getStatus());
+    }
+
+    @Test
+    void aKnownUploaderIsThrottledEvenWhereTheAddressLimiterIsOff() throws Exception {
+        // The internal deployment switches the per-address limiter off; its uploaders hold the tokens, and a
+        // leaked one should not be a way to flood it. A request without a source is still never throttled.
+        PublicOctUploadRateLimitFilter off = new PublicOctUploadRateLimitFilter(false);
+        Source pc = source(7);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(off, pc, "10.1.0.7", RESOLVE).getStatus(), "lookup " + i);
+        }
+        assertEquals(429, invokeAs(off, pc, "10.1.0.7", RESOLVE).getStatus());
+        for (int i = 0; i < 3 * PublicOctUploadRateLimitFilter.MAX_REQUESTS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(off, null, "10.1.0.7", RESOLVE).getStatus(), "stranger " + i);
+        }
+    }
+
+    @Test
+    void sourceBucketsRefillAtTheirOwnRates() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        Source pc = source(7);
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+            invokeAs(filter, pc, "10.1.0.8", RESOLVE);
+        }
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_COMMITS_PER_HOUR; i++) {
+            invokeAs(filter, pc, "10.1.0.8", COMMIT);
+        }
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.8", RESOLVE).getStatus());
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.8", COMMIT).getStatus());
+
+        filter.nowMs = PublicOctUploadRateLimitFilter.SOURCE_COMMIT_REFILL_INTERVAL_MS + 1L;
+        assertEquals(200, invokeAs(filter, pc, "10.1.0.8", COMMIT).getStatus(), "a commit token every 3 s");
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.8", RESOLVE).getStatus(), "the lookups are slower");
+        filter.nowMs = PublicOctUploadRateLimitFilter.SOURCE_LOOKUP_REFILL_INTERVAL_MS + 1L;
+        assertEquals(200, invokeAs(filter, pc, "10.1.0.8", RESOLVE).getStatus(), "a lookup token every 6 s");
+    }
+
+    @Test
+    void theOlderPortalsOfAKnownUploaderShareOneLookupBudget() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        Source pc = source(7);
+        String image = "/pages/api/v1/public/image-upload/commit";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR; i++) {
+            assertEquals(200, invokeAs(filter, pc, "10.1.0.9", image).getStatus());
+        }
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.9", image).getStatus());
+        assertEquals(200, invokeAs(filter, pc, "10.1.0.9", "/pages/api/v1/public/oct-upload/commit").getStatus(),
+                "a portal of its own, as for strangers");
+    }
+
+    @Test
+    void anEscapedLetterOrAPathParameterDoesNotTakeARequestOutOfItsBucket() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        Source pc = source(7);
+        String disguised = "/LibreClinica/pages/api/v1/public/%75pload/commit;jsessionid=ABC";
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_SOURCE_COMMITS_PER_HOUR; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest("POST", disguised);
+            req.setContextPath("/LibreClinica");
+            req.setRequestURI(disguised);
+            req.setAttribute(UploaderSources.ATTRIBUTE, pc);
+            filter.doFilter(req, new MockHttpServletResponse(), new MockFilterChain());
+        }
+        assertEquals(0, filter.currentSourceCommitTokens(7), "counted as the commits they are");
+        assertEquals(429, invokeAs(filter, pc, "10.1.0.10", COMMIT).getStatus());
+
+        // The same for a stranger, whose commits have the old 300.
+        for (int i = 0; i < PublicOctUploadRateLimitFilter.MAX_COMMITS_PER_HOUR; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest("POST", disguised);
+            req.setContextPath("/LibreClinica");
+            req.setRequestURI(disguised);
+            req.setRemoteAddr("10.1.0.11");
+            filter.doFilter(req, new MockHttpServletResponse(), new MockFilterChain());
+        }
+        assertEquals(429, invoke(filter, "10.1.0.11", COMMIT).getStatus());
+    }
+
+    @Test
+    void evictIdleDropsTheBucketsOfUploadersToo() throws Exception {
+        ClockableFilter filter = new ClockableFilter(0L);
+        invokeAs(filter, source(7), "10.1.0.12", RESOLVE);
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR - 1,
+                filter.currentSourceTokens(7, PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
+        filter.nowMs = PublicOctUploadRateLimitFilter.IDLE_BUCKET_TTL_MS + 1L;
+        filter.evictIdle();
+        assertEquals(PublicOctUploadRateLimitFilter.MAX_SOURCE_LOOKUPS_PER_HOUR,
+                filter.currentSourceTokens(7, PublicOctUploadRateLimitFilter.UPLOAD_PREFIX));
     }
 
     private static MockHttpServletResponse invokeInContext(PublicOctUploadRateLimitFilter filter,

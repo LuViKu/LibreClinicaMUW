@@ -25,6 +25,8 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploaderHeartbeat.Invalid;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploaderHeartbeat.Parsed;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderSources;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -81,6 +83,15 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *
  * <p>Nothing a program sends is logged: new registrations are logged by row
  * id and program kind (a validated lower-case token), never by name.
+ *
+ * <p><strong>DR-040 phase 2 — whose heartbeat it is.</strong> Behind
+ * {@code UploaderTokenFilter} a heartbeat may carry the ingest source of the
+ * uploader token it came with ({@link UploaderSources}). The instance id it
+ * reports is then noted on that source ({@link IngestSourceService#noteInstance}),
+ * which is how the Uploaders page shows the health of the program behind a
+ * token. A heartbeat with no token is accepted under the front door's rule
+ * (the filter has already refused it where the door is shut) and is
+ * attributed to nobody. Noting the instance never fails a heartbeat.
  */
 @RestController
 @RequestMapping("/api/v1/device/uploader")
@@ -99,12 +110,14 @@ public class UploaderHeartbeatApiController {
     private static final long CAP_WARN_EVERY_MS = 10 * 60_000L;
 
     private final DataSource dataSource;
+    private final IngestSourceService sources;
     private final ObjectMapper mapper = Json.mapper();
     private volatile long lastCapWarn;
 
     @Autowired
     public UploaderHeartbeatApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
+        this.sources = new IngestSourceService(dataSource);
     }
 
     @Operation(operationId = "recordUploaderHeartbeat", summary = "Record an uploader's heartbeat",
@@ -148,10 +161,22 @@ public class UploaderHeartbeatApiController {
             }
             int id = upsert(c, hb);
             if (!known) LOG.info("uploader heartbeat: new {} registered as #{}", hb.kind(), id);
+            noteInstanceOf(UploaderSources.of(request), hb.instanceUid());
             return ResponseEntity.ok(Map.of("recorded", true));
         } catch (SQLException e) {
             LOG.error("uploader heartbeat: could not be recorded ({})", e.getSQLState());
             return ResponseEntity.status(500).body(Map.of("message", "the heartbeat could not be recorded"));
+        }
+    }
+
+    /** Tells the token's source which program is behind it; whatever goes wrong, the heartbeat has been recorded. */
+    private void noteInstanceOf(IngestSourceService.Source source, String instanceUid) {
+        if (source == null) return;
+        try {
+            sources.noteInstance(source.id(), instanceUid);
+        } catch (RuntimeException e) {
+            LOG.warn("uploader heartbeat: could not note the instance on source {} ({})",
+                    source.id(), e.getClass().getSimpleName());
         }
     }
 

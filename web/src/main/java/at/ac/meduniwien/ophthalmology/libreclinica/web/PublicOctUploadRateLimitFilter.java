@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -24,6 +25,9 @@ import org.springframework.lang.NonNull;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UriUtils;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 
 /**
  * Wave 1B — hand-rolled token-bucket rate limit for the public
@@ -55,6 +59,19 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * budget and the commits get their own, larger one. The older portals are
  * left exactly as they were.
  *
+ * <p>DR-040 phase 2 — a request that carries an uploader token
+ * ({@link UploaderTokenFilter} runs first and leaves the source on the
+ * request) is a known device, not a stranger at an address, and gets a budget
+ * of its own: its bucket is keyed by the source, not by the address, so two
+ * uploaders behind one PC's address, or one uploader whose address changes, do
+ * not share or lose a budget; and the budget fits a clinic day: lookups
+ * {@value #MAX_SOURCE_LOOKUPS_PER_HOUR} an hour, commits on the combined page
+ * {@value #MAX_SOURCE_COMMITS_PER_HOUR}, heartbeats as before. A request with
+ * no source keeps the per-address budgets above. Source buckets apply on every
+ * deployment, including the internal one where the per-address limiter is off
+ * ({@link #enabled}): that deployment is where the tokens are, and a leaked
+ * token should not be a way to flood it.
+ *
  * <p>Wire via {@code SecurityConfig.addFilterBefore(filter, SecurityConfig.RATE_LIMIT_ANCHOR)}.
  */
 @Component
@@ -71,6 +88,16 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     /** DR-029 — commits on the combined page: 300 / hour, one token per 12 s. */
     static final int MAX_COMMITS_PER_HOUR = 300;
     static final long COMMIT_REFILL_INTERVAL_MS = 12_000L;
+
+    /**
+     * DR-040 — the budgets of a request that carries a validated uploader token.
+     * Lookups: 600 / hour, one token per 6 s. Commits on the combined page:
+     * 1200 / hour, one token per 3 s. Heartbeats keep {@link #MAX_HEARTBEATS_PER_HOUR}.
+     */
+    static final int MAX_SOURCE_LOOKUPS_PER_HOUR = 600;
+    static final long SOURCE_LOOKUP_REFILL_INTERVAL_MS = 6_000L;
+    static final int MAX_SOURCE_COMMITS_PER_HOUR = 1200;
+    static final long SOURCE_COMMIT_REFILL_INTERVAL_MS = 3_000L;
 
     /** Buckets older than 1 h with no activity get dropped. */
     static final long IDLE_BUCKET_TTL_MS = 3_600_000L;
@@ -212,18 +239,19 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain chain)
             throws ServletException, IOException {
-        if (!enabled) {
+        // A request that carries an uploader token is a known device: it is
+        // throttled by its own budget wherever the per-address limiter is off.
+        IngestSourceService.Source source = UploaderSources.of(request);
+        if (!enabled && source == null) {
             chain.doFilter(request, response);
             return;
         }
-        String uri = request.getRequestURI();
-        // The guarded prefixes are context-relative; the app runs under
-        // /LibreClinica, so getRequestURI() carries that prefix and would
-        // never match without stripping it.
-        String ctx = request.getContextPath();
-        if (uri != null && ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
-            uri = uri.substring(ctx.length());
-        }
+        // The guarded prefixes are context-relative and are matched on the path
+        // as the container routes it: the app runs under /LibreClinica, so
+        // getRequestURI() carries that prefix and would never match without
+        // stripping it, and an escaped letter or a path parameter in the raw
+        // URI must not take a request out of its bucket.
+        String uri = routedPath(request);
         String prefix = guardedPrefixFor(uri);
         if (prefix == null) {
             chain.doFilter(request, response);
@@ -231,13 +259,10 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         }
 
         boolean commit = isUploadCommit(prefix, request.getMethod(), uri);
-        String key = clientIp(request) + "|" + prefix + (commit ? "|commit" : "");
+        String owner = source != null ? "source:" + source.id() : clientIp(request);
+        String key = owner + "|" + prefix + (commit ? "|commit" : "");
         long now = nowMs();
-        Bucket bucket = buckets.computeIfAbsent(key, _ -> commit
-                ? new Bucket(MAX_COMMITS_PER_HOUR, MAX_COMMITS_PER_HOUR, COMMIT_REFILL_INTERVAL_MS, now)
-                : HEARTBEAT_PREFIX.equals(prefix)
-                        ? new Bucket(MAX_HEARTBEATS_PER_HOUR, MAX_HEARTBEATS_PER_HOUR, HEARTBEAT_REFILL_INTERVAL_MS, now)
-                        : new Bucket(MAX_REQUESTS_PER_HOUR, now));
+        Bucket bucket = buckets.computeIfAbsent(key, _ -> newBucket(source != null, prefix, commit, now));
         bucket.lastTouchedMs.set(now);
         refill(bucket, now);
 
@@ -250,6 +275,55 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         }
         bucket.tokens.decrementAndGet();
         chain.doFilter(request, response);
+    }
+
+    /** The budget for a new bucket: the per-address one, or, for a known uploader, the larger per-source one. */
+    private static Bucket newBucket(boolean perSource, String prefix, boolean commit, long now) {
+        if (HEARTBEAT_PREFIX.equals(prefix)) {
+            return new Bucket(MAX_HEARTBEATS_PER_HOUR, MAX_HEARTBEATS_PER_HOUR, HEARTBEAT_REFILL_INTERVAL_MS, now);
+        }
+        if (commit) {
+            return perSource
+                    ? new Bucket(MAX_SOURCE_COMMITS_PER_HOUR, MAX_SOURCE_COMMITS_PER_HOUR,
+                            SOURCE_COMMIT_REFILL_INTERVAL_MS, now)
+                    : new Bucket(MAX_COMMITS_PER_HOUR, MAX_COMMITS_PER_HOUR, COMMIT_REFILL_INTERVAL_MS, now);
+        }
+        return perSource
+                ? new Bucket(MAX_SOURCE_LOOKUPS_PER_HOUR, MAX_SOURCE_LOOKUPS_PER_HOUR,
+                        SOURCE_LOOKUP_REFILL_INTERVAL_MS, now)
+                : new Bucket(MAX_REQUESTS_PER_HOUR, now);
+    }
+
+    /**
+     * The path the way the container routes it: below the context path, path
+     * parameters ({@code ;jsessionid=…}) dropped and percent-escapes decoded.
+     * The dispatcher maps {@code /public/%75pload/commit} to the upload
+     * controller, so a raw-URI prefix test would hand that request a bucket of
+     * its own (or none).
+     */
+    static String routedPath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri == null) return null;
+        String ctx = request.getContextPath();
+        if (ctx != null && !ctx.isEmpty() && uri.startsWith(ctx)) {
+            uri = uri.substring(ctx.length());
+        }
+        StringBuilder bare = new StringBuilder(uri.length());
+        for (int i = 0; i < uri.length(); i++) {
+            char ch = uri.charAt(i);
+            if (ch == ';') {
+                int slash = uri.indexOf('/', i);
+                if (slash < 0) break;
+                i = slash - 1;
+                continue;
+            }
+            bare.append(ch);
+        }
+        try {
+            return UriUtils.decode(bare.toString(), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException malformedEscape) {
+            return bare.toString();
+        }
     }
 
     /**
@@ -325,5 +399,17 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
     int currentCommitTokens(String clientIp) {
         Bucket b = buckets.get(clientIp + "|" + UPLOAD_PREFIX + "|commit");
         return b == null ? MAX_COMMITS_PER_HOUR : b.tokens.get();
+    }
+
+    /** Test seam — the lookup bucket of an uploader source on a prefix; full when it has not been touched. */
+    int currentSourceTokens(long sourceId, String prefix) {
+        Bucket b = buckets.get("source:" + sourceId + "|" + prefix);
+        return b == null ? MAX_SOURCE_LOOKUPS_PER_HOUR : b.tokens.get();
+    }
+
+    /** Test seam — the combined page's commit bucket of an uploader source. */
+    int currentSourceCommitTokens(long sourceId) {
+        Bucket b = buckets.get("source:" + sourceId + "|" + UPLOAD_PREFIX + "|commit");
+        return b == null ? MAX_SOURCE_COMMITS_PER_HOUR : b.tokens.get();
     }
 }

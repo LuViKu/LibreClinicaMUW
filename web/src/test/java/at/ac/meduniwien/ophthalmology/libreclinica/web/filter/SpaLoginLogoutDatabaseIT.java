@@ -101,6 +101,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashSe
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -482,6 +485,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
             new AnnotatedBeanDefinitionReader(securityConfig).register(SecurityConfig.class);
             securityConfig.registerBean(UserAccountDAO.class, () -> new UserAccountDAO(DATA_SOURCE));
             securityConfig.registerBean(PublicOctUploadRateLimitFilter.class);
+            securityConfig.registerBean(UploaderTokenFilter.class,
+                    () -> new UploaderTokenFilter(new IngestSourceService(DATA_SOURCE), new LocationScope(DATA_SOURCE)));
             securityConfig.refresh();
         }
         return securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
@@ -855,6 +860,25 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).isSysAdmin());
         assertEquals(DEFAULT_STUDY, study(session).getId());
         assertEquals(0, role(session).getId());
+    }
+
+    // --- the chain --------------------------------------------------------------
+
+    /**
+     * DR-040 phase 2 — the chain {@link SecurityConfig} builds (not a copy of its wiring) fronts the device
+     * endpoints with the uploader-token filter, ahead of the rate limiter and of everything that reads the
+     * session; and mounts it once.
+     */
+    @Test
+    void theRealChainPutsTheUploaderTokenFilterAheadOfTheRateLimiterAndTheSession() {
+        logoutFilter(); // builds the context
+        List<Class<?>> chain = securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
+                .<Class<?>>map(Object::getClass).toList();
+        int token = chain.indexOf(UploaderTokenFilter.class);
+        int rateLimit = chain.indexOf(PublicOctUploadRateLimitFilter.class);
+        int session = chain.indexOf(org.springframework.security.web.context.SecurityContextHolderFilter.class);
+        assertTrue(token >= 0 && rateLimit > token && session > rateLimit, chain.toString());
+        assertEquals(1, chain.stream().filter(UploaderTokenFilter.class::equals).count(), "mounted once: " + chain);
     }
 
     // --- the legacy sign-outs ------------------------------------------------

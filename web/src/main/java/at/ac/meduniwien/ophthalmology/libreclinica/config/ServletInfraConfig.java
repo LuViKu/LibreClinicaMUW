@@ -2,6 +2,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.config;
 
 import java.nio.charset.StandardCharsets;
 
+import javax.sql.DataSource;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.ServletListenerRegistrationBean;
@@ -18,6 +20,9 @@ import org.springframework.web.filter.DelegatingFilterProxy;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.OCServletContextListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.OCServletFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListener;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.CrossSiteRequestFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.UnparseablePathFilter;
@@ -374,6 +379,39 @@ public class ServletInfraConfig {
         // async-supported avoids poisoning request.isAsyncSupported()
         // on any chain that happens to include the bean. See class
         // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * DR-040 phase 2 — the front door of the device endpoints: turns the
+     * {@code X-MUW-Uploader-Token} header into the ingest source it belongs to,
+     * or answers 401 / 429 (see {@link UploaderTokenFilter}).
+     *
+     * <p>Explicit factory for the same reason as the rate limiter's: the filter
+     * lives in the {@code .web} package, outside both narrow component scans.
+     * The two services are plain classes over the data source, built here the
+     * way the controllers build theirs.
+     */
+    @Bean
+    public UploaderTokenFilter uploaderTokenFilter(@Qualifier("dataSource") DataSource dataSource) {
+        return new UploaderTokenFilter(new IngestSourceService(dataSource), new LocationScope(dataSource));
+    }
+
+    /**
+     * The token filter is mounted inside the {@code SecurityFilterChain} by
+     * {@link SecurityConfig#securityFilterChain(...)}, ahead of the rate
+     * limiter. Boot would otherwise register it a second time as a standalone
+     * servlet filter at {@code /*}, and every guarded request would be looked
+     * up twice.
+     */
+    @Bean
+    public FilterRegistrationBean<UploaderTokenFilter> uploaderTokenFilterAutoRegOptOut(
+            UploaderTokenFilter filter) {
+        FilterRegistrationBean<UploaderTokenFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        // Same as the other opt-outs: even disabled, the registration metadata is surfaced to
+        // Tomcat's chain bookkeeping, so it must not poison request.isAsyncSupported().
         reg.setAsyncSupported(true);
         return reg;
     }

@@ -20,7 +20,10 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderSources;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +70,20 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *       one study is not shown another's schedule;</li>
  *   <li>an optional per-host allow-list at nginx, for the clinic PC's address.</li>
  * </ul>
+ *
+ * <p><strong>DR-040 phase 2 — an uploader's token replaces the shared one.</strong>
+ * Behind {@code UploaderTokenFilter} a request may carry the ingest source of
+ * the {@code X-MUW-Uploader-Token} it came with ({@link UploaderSources}). The
+ * token names one uploader and so one location: the worklist then lists only
+ * the visits of subjects enrolled at that location (intersected with
+ * {@code core.dicom.worklist.studyOids}, which stays an extra filter), and the
+ * shared {@value #TOKEN_KEY} is not asked for. The feature switch
+ * ({@value #ENABLED_KEY}) still decides whether the path exists at all. A
+ * request with no source is an untokened one the front door let in, and goes
+ * through the shared-token gate exactly as before; while the shared token is
+ * all a bridge sends, it cannot say which location is asking, so once a second
+ * location exists the filter has already answered 401 {@code uploader token
+ * required}.
  *
  * <p>Same query as the DICOM worklist and the upload page's visit picker
  * ({@link ScheduledVisitQuery}), so the three never disagree about which
@@ -148,26 +165,32 @@ public class OptomedWorklistApiController {
     @GetMapping(value = "/worklist.txt")
     public ResponseEntity<?> worklist(
             @RequestParam(value = "date", required = false) String date,
-            @RequestHeader(value = TOKEN_HEADER, required = false) String token) {
+            @RequestHeader(value = TOKEN_HEADER, required = false) String token,
+            HttpServletRequest servletRequest) {
+        IngestSourceService.Source source = UploaderSources.of(servletRequest);
 
         // Off means invisible: a 404 tells a prober nothing a 403 would not,
         // and tells them less than a 401 would.
         if (!"true".equalsIgnoreCase(cfg(ENABLED_KEY, "false"))) {
             return ResponseEntity.status(404).body(Map.of("message", "not found"));
         }
-        String expected = cfg(TOKEN_KEY, "");
-        if (expected.isBlank()) {
-            LOG.warn("Optomed worklist requested but {} is not configured", TOKEN_KEY);
-            return ResponseEntity.status(503).body(Map.of("message", "Optomed worklist token not configured"));
-        }
-        if (token == null || !constantTimeEquals(token, expected)) {
-            return ResponseEntity.status(401).body(Map.of("message", "Invalid or missing " + TOKEN_HEADER));
+        // An uploader's token has been checked by the filter already; the shared one is for
+        // a bridge that has none yet.
+        if (source == null) {
+            String expected = cfg(TOKEN_KEY, "");
+            if (expected.isBlank()) {
+                LOG.warn("Optomed worklist requested but {} is not configured", TOKEN_KEY);
+                return ResponseEntity.status(503).body(Map.of("message", "Optomed worklist token not configured"));
+            }
+            if (token == null || !constantTimeEquals(token, expected)) {
+                return ResponseEntity.status(401).body(Map.of("message", "Invalid or missing " + TOKEN_HEADER));
+            }
         }
 
         LocalDate day = parseIsoDateOrNull(date);
         if (day == null) day = ClinicZone.today();
 
-        Set<Integer> allowed = StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY);
+        Set<Integer> allowed = DeviceScope.studies(dataSource, StudyScopeConfig.WORKLIST_KEY, source);
         List<ScheduledVisitQuery.ScheduledVisit> visits;
         try {
             visits = ScheduledVisitQuery.query(dataSource, day, day, allowed, MAX_ENTRIES);
@@ -177,7 +200,8 @@ public class OptomedWorklistApiController {
         }
 
         byte[] body = OptomedWorklistFormat.render(visits);
-        LOG.info("Optomed worklist served: {} visit(s) for {}", visits.size(), day);
+        LOG.info("Optomed worklist served: {} visit(s) for {}{}", visits.size(), day,
+                source == null ? "" : " (uploader source " + source.id() + ")");
 
         HttpHeaders h = new HttpHeaders();
         h.setContentType(TEXT_ASCII);

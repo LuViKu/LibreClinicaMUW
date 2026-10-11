@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerpri
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
@@ -195,6 +196,18 @@ final class IngestUploadService {
     /* ------------------------------------------------------------------ */
 
     Outcome commit(Upload up) {
+        return commit(up, null);
+    }
+
+    /**
+     * File an upload that may have come from an uploader's source (DR-040 phase 2).
+     * With a source the file is stamped with the source's location and the source
+     * itself; without one it keeps what it always had: the location of the staff
+     * uploader's study, else the only active location. Which visits the upload may
+     * name is the caller's {@link Upload#studyScope()}, which a tokened request
+     * narrows to its location.
+     */
+    Outcome commit(Upload up, IngestSourceService.Source source) {
         IngestArtifactStore.Kind kind = up.sniffed().kind();
         if (kind != IngestArtifactStore.Kind.IMAGE && kind != IngestArtifactStore.Kind.DICOM) {
             return new Rejected(400, "only image and DICOM files take this route");
@@ -363,9 +376,11 @@ final class IngestUploadService {
                         .imagingModalityId(modalityId)
                         // Who may see the file while it is unbound: the uploader's study (staff only).
                         .originStudyId(up.originStudyId())
-                        // DR-040 — and where it came from: the uploader's study's location,
-                        // else the only active location (the portal).
-                        .originLocationId(LocationScope.originForStaffUpload(c, up.originStudyId()));
+                        // DR-040 — and where it came from: the uploader's source and its location,
+                        // else the uploader's study's location, else the only active location (the portal).
+                        .originLocationId(source != null ? source.locationId()
+                                : LocationScope.originForStaffUpload(c, up.originStudyId()))
+                        .ingestSourceId(source != null ? source.id() : null);
                 if (desc != null) {
                     item.sopInstanceUid(desc.sopInstanceUid())
                             .sopClassUid(desc.sopClassUid())
@@ -452,6 +467,16 @@ final class IngestUploadService {
      * instead (restorable from the inbox, deleted by the retention job).
      */
     Outcome undo(long ingestItemId, IngestBindService.Actor actor) {
+        return undo(ingestItemId, actor, null);
+    }
+
+    /**
+     * As {@link #undo(long, IngestBindService.Actor)} for a request that may
+     * carry an uploader's source: with one, only an upload that arrived at that
+     * source's location can be taken back, and any other answers as one that
+     * does not exist.
+     */
+    Outcome undo(long ingestItemId, IngestBindService.Actor actor, IngestSourceService.Source source) {
         Instant receivedAt;
         String storedPath;
         String previewPath;
@@ -460,13 +485,19 @@ final class IngestUploadService {
         int jobs;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT received_at, stored_path, preview_png_path, status, match_policy, "
+                     "SELECT received_at, stored_path, preview_png_path, status, match_policy, origin_location_id, "
                              + "  (SELECT count(*) FROM retinal_inference_job j "
                              + "    WHERE j.ingest_item_id = ii.ingest_item_id) AS jobs "
                              + "  FROM ingest_item ii WHERE ingest_item_id = ?")) {
             ps.setLong(1, ingestItemId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return new Rejected(404, "no upload " + ingestItemId);
+                if (source != null) {
+                    int origin = rs.getInt("origin_location_id");
+                    if (rs.wasNull() || source.locationId() == null || origin != source.locationId()) {
+                        return new Rejected(404, "no upload " + ingestItemId);
+                    }
+                }
                 Timestamp ts = rs.getTimestamp("received_at");
                 receivedAt = ts == null ? Instant.EPOCH : ts.toInstant();
                 storedPath = rs.getString("stored_path");
