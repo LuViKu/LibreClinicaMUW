@@ -1162,6 +1162,7 @@ every thickness of such a file would be about 1.5× too large, silently.
 - **The uploader scripts send their token with every request.** Uploaders without a token keep working at the default location until the anonymous front door is switched off.
 - **The site form selects a location instead of free facility fields.**
 - **Before a second location goes live,** its sources, sites and staff assignments have to be in place. An unassigned source's files wait for an administrator.
+- **Creating the second location closes the anonymous device front door:** untokened device requests are served only while exactly one location exists. The per-study site is called "Prüfzentrum" from phase 4 on, so that "Standort" means only the global place.
 
 ---
 

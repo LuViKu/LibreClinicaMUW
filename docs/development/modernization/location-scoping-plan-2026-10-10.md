@@ -107,7 +107,7 @@ A system administrator has every location. All of this is computed in one place,
    - the AE mapping in the C-STORE hand-off; Remidio and the public page as sources;
    - the uploaders and sources UI.
 3. **Location-scoped worklist and Remidio sync** (≈1 day): MWL and Optomed worklist by the device's location; the Remidio patient sync by location.
-4. **Site form and cleanup** (≈0.5 day): the site form's location select, facility fields taken from the location, the manual and the release notes.
+4. **Site form and cleanup** (≈0.5 day): the site form's location select, facility fields taken from the location, the manual and the release notes. **Wording (decided 2026-10-11):** "Standort" means only the global place; the per-study site is called **"Prüfzentrum"** in German ("site" in English) on the Sites page, its Home card, the rails and the manual.
 
 **Total:** ≈6–7 days, with each phase separately mergeable. Phase 1 alone already closes the gap for staff uploads and for every source on day one, because everything is at the single location. The real separation starts with the second location.
 
@@ -115,7 +115,7 @@ A system administrator has every location. All of this is computed in one place,
 
 - **Phases 1–2 together in one release.** After the deploy, an administrator checks System → Standorte: one location, all sources assigned.
 - **Every acquisition PC gets the new script version and its own token.** Issue the token on the uploaders page, enter it in the uploader's settings, and check that its heartbeat shows the location. Until a PC has its token, it keeps working at the default location.
-- **Then close the anonymous front door.** A setting (`core.ingest.anonymousDeviceUploads`, default `allowed` during the rollout) switches untokened device uploads off once every PC has its token. Do this before a second location exists.
+- **The anonymous front door closes by itself with the second location.** An untokened device request is served only while `core.ingest.anonymousDeviceUploads` is `allowed` (the default) **and exactly one active location exists**; with two or more it answers `401 uploader token required`. So creating the second location is the switch: every uploader needs its token by then, and the UI says so when the second location is created. The setting can also be set to `denied` earlier to close the door on a single-location installation.
 - **The shared Optomed worklist token is removed** at the same point.
 - **Before a second location is created:**
   - every source of the new place is assigned;
