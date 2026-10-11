@@ -32,8 +32,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderSources;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * DR-029 — one public front door for every file a device exports.
@@ -182,11 +186,13 @@ public class PublicUploadController {
             @RequestParam(value = "park", defaultValue = "false") boolean park,
             @RequestParam(value = "device", required = false) String device,
             @RequestParam(value = "disambiguated", defaultValue = "false") boolean disambiguated,
-            @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount) {
+            @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount,
+            HttpServletRequest servletRequest) {
 
         if (DeidentificationPolicy.required(deidPolicy)) {
             return DeidUploadGate.accountlessClosed();
         }
+        IngestSourceService.Source source = UploaderSources.of(servletRequest);
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }
@@ -205,7 +211,7 @@ public class PublicUploadController {
                 Integer se = UploadRoute.studyEventIdForEventCrf(dataSource, eventCrfId);
                 if (se != null) pid = UploadRoute.subjectLabelForStudyEvent(dataSource, se);
             }
-            return UploadRoute.asE2e(oct.commit(file, pid == null ? "" : pid, date == null ? "" : date,
+            return UploadRoute.asE2e(oct.commitFrom(source, file, pid == null ? "" : pid, date == null ? "" : date,
                     laterality == null ? "" : laterality, scanIndex, eventCrfId, studyEventId, park,
                     disambiguated, candidateCount));
         }
@@ -222,7 +228,7 @@ public class PublicUploadController {
         IngestUploadService.Outcome outcome = uploads.commit(new IngestUploadService.Upload(
                 sniffed, file, patientId, UploadRoute.parseIsoDateOrNull(date), laterality, visit, device,
                 IngestUploadService.Channel.PORTAL, IngestBindService.Actor.system(),
-                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY)));
+                StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.PORTAL_KEY)), source);
         if (outcome instanceof IngestUploadService.Created c) {
             LOG.info("public upload: ingest_item {} ({}) {}", c.ingestItemId(), c.format(), c.status());
         }

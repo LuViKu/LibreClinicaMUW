@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerpri
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
@@ -195,6 +196,17 @@ final class IngestUploadService {
     /* ------------------------------------------------------------------ */
 
     Outcome commit(Upload up) {
+        return commit(up, null);
+    }
+
+    /**
+     * File an upload that may have come from an uploader's source (DR-040 phase 2).
+     * With a source the file is stamped with the source's location and the source
+     * itself; without one it keeps what it always had: the location of the staff
+     * uploader's study, else the only active location. Which visits the upload may
+     * name is the caller's {@link Upload#studyScope()}.
+     */
+    Outcome commit(Upload up, IngestSourceService.Source source) {
         IngestArtifactStore.Kind kind = up.sniffed().kind();
         if (kind != IngestArtifactStore.Kind.IMAGE && kind != IngestArtifactStore.Kind.DICOM) {
             return new Rejected(400, "only image and DICOM files take this route");
@@ -363,9 +375,11 @@ final class IngestUploadService {
                         .imagingModalityId(modalityId)
                         // Who may see the file while it is unbound: the uploader's study (staff only).
                         .originStudyId(up.originStudyId())
-                        // DR-040 — and where it came from: the uploader's study's location,
-                        // else the only active location (the portal).
-                        .originLocationId(LocationScope.originForStaffUpload(c, up.originStudyId()));
+                        // DR-040 — and where it came from: the uploader's source and its location,
+                        // else the uploader's study's location, else the only active location (the portal).
+                        .originLocationId(source != null ? source.locationId()
+                                : LocationScope.originForStaffUpload(c, up.originStudyId()))
+                        .ingestSourceId(source != null ? source.id() : null);
                 if (desc != null) {
                     item.sopInstanceUid(desc.sopInstanceUid())
                             .sopClassUid(desc.sopClassUid())

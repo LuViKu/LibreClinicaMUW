@@ -34,16 +34,19 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eDeidentificationVerifier;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderSources;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -245,7 +248,19 @@ public class PublicOctUploadController {
                                     // audit timeline records WHICH candidate was chosen out of
                                     // how many. Both fields are optional + default to no-op.
                                     @RequestParam(value = "disambiguated", defaultValue = "false") boolean disambiguated,
-                                    @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount) {
+                                    @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount,
+                                    HttpServletRequest servletRequest) {
+        return commitFrom(UploaderSources.of(servletRequest), file, patientId, scanDateRaw, laterality, scanIndex,
+                eventCrfId, studyEventId, park, disambiguated, candidateCount);
+    }
+
+    /**
+     * The account-less commit for a request that may carry an uploader's source
+     * (DR-040 phase 2): with one, the scan is filed from that source and location.
+     */
+    ResponseEntity<?> commitFrom(IngestSourceService.Source source, MultipartFile file, String patientId,
+                                 String scanDateRaw, String laterality, int scanIndex, Integer eventCrfId,
+                                 Integer studyEventId, boolean park, boolean disambiguated, int candidateCount) {
         // The account-less route has no user, no site visibility and nobody
         // to attribute a de-identification confirmation to: closed when the
         // deployment requires de-identification (the staff upload page, behind
@@ -254,7 +269,7 @@ public class PublicOctUploadController {
             return DeidUploadGate.accountlessClosed();
         }
         return commitFile(file, patientId, scanDateRaw, laterality, scanIndex, eventCrfId, studyEventId, park,
-                disambiguated, candidateCount, null);
+                disambiguated, candidateCount, null, source);
     }
 
     /**
@@ -266,13 +281,14 @@ public class PublicOctUploadController {
                                   int scanIndex, Integer eventCrfId, Integer studyEventId, boolean park,
                                   boolean disambiguated, int candidateCount, DeidUploadGate.Context deid) {
         return commitFile(file, patientId, scanDateRaw, laterality, scanIndex, eventCrfId, studyEventId, park,
-                disambiguated, candidateCount, deid);
+                disambiguated, candidateCount, deid, null);
     }
 
     private ResponseEntity<?> commitFile(MultipartFile file, String patientId, String scanDateRaw,
                                          String laterality, int scanIndex, Integer eventCrfId,
                                          Integer studyEventId, boolean park, boolean disambiguated,
-                                         int candidateCount, DeidUploadGate.Context deid) {
+                                         int candidateCount, DeidUploadGate.Context deid,
+                                         IngestSourceService.Source source) {
 
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
@@ -534,7 +550,7 @@ public class PublicOctUploadController {
         try (Connection c = dataSource.getConnection()) {
             ingestItemId = insertIngestItem(c, absolutePath, originalFilename, e2eSha256, fileSize(savedPath),
                     pixelSha256, lat, scanIndex, pid, auditStudySubjectId, scanDate, eventCrfId, studyEventId,
-                    park, modalityId);
+                    park, modalityId, source);
             if (!park) {
                 for (String task : tasks) {
                     long jId = insertJob(c, eventCrfId, studyEventId, task, absolutePath, lat, status,
@@ -1235,7 +1251,13 @@ public class PublicOctUploadController {
                                   String patientId, Integer candidateStudySubjectId,
                                   LocalDate acquisitionDate, Integer eventCrfId,
                                   Integer studyEventId, boolean park,
-                                  Integer imagingModalityId) throws SQLException {
+                                  Integer imagingModalityId,
+                                  IngestSourceService.Source source) throws SQLException {
+        // DR-040 — where it came from: the uploader's source and location, or, for an untokened
+        // request, the only active location (none while several exist and the source is unassigned).
+        // A signed-in uploader's scan is moved to the location of their study afterwards
+        // (IngestUploadApiController#attributeOctUpload).
+        DeviceScope.Origin origin = DeviceScope.Origin.of(c, source);
         var item = IngestItemRepository
                 .newItem(IngestArtifactStore.Kind.E2E, "portal-oct", e2ePath)
                 .originalFilename(originalFilename)
@@ -1256,10 +1278,8 @@ public class PublicOctUploadController {
                 // exactly one; what the visit's imaging plan is checked against.
                 .imagingModalityId(imagingModalityId)
                 .candidateStudySubjectId(candidateStudySubjectId)
-                // DR-040 — the only active location, or none until the source is assigned. A signed-in
-                // uploader's scan is moved to the location of their study afterwards
-                // (IngestUploadApiController#attributeOctUpload).
-                .originLocationId(LocationScope.defaultLocationId(c));
+                .originLocationId(origin.locationId())
+                .ingestSourceId(origin.ingestSourceId());
         if (!park) {
             ImageIngestBinding.EventTarget target = resolveBindTarget(c, eventCrfId, studyEventId);
             if (target != null) {

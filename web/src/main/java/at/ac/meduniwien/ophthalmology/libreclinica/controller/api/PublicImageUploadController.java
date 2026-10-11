@@ -27,12 +27,15 @@ import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderSources;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,11 +223,13 @@ public class PublicImageUploadController {
             @RequestParam(value = "laterality", required = false) String laterality,
             @RequestParam(value = "studyDate", required = false) String studyDate,
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
-            @RequestParam(value = "device", required = false) String device) {
+            @RequestParam(value = "device", required = false) String device,
+            HttpServletRequest servletRequest) {
 
         if (DeidentificationPolicy.required(deidPolicy)) {
             return DeidUploadGate.accountlessClosed();
         }
+        IngestSourceService.Source source = UploaderSources.of(servletRequest);
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file is required"));
         }
@@ -287,7 +292,7 @@ public class PublicImageUploadController {
             if (held) target = null;
             String dev = normaliseDevice(device);
             long id = insert(c, saved.toString(), file.getOriginalFilename(), contentType,
-                    blankToNull(patientId), lat, sd, dev, pixelSha256, target);
+                    blankToNull(patientId), lat, sd, dev, pixelSha256, target, source);
             if (held) {
                 IngestTwins.writeHeldAudit(dataSource, id, twin, claimedLabel, null, "upload");
             }
@@ -318,7 +323,11 @@ public class PublicImageUploadController {
 
     private long insert(Connection c, String storedPath, String originalFilename, String contentType,
                         String patientId, String laterality, LocalDate studyDate, String device,
-                        String pixelSha256, ImageIngestBinding.EventTarget target) throws SQLException {
+                        String pixelSha256, ImageIngestBinding.EventTarget target,
+                        IngestSourceService.Source source) throws SQLException {
+        // DR-040 — where it came from: the uploader's source and location, or, for an untokened
+        // request, the only active location (none while several exist and the source is unassigned).
+        DeviceScope.Origin origin = DeviceScope.Origin.of(c, source);
         // P3.1 — the statement lives in IngestItemRepository, shared with the
         // DICOM ingress.
         //
@@ -340,9 +349,8 @@ public class PublicImageUploadController {
                 .acquisitionDate(studyDate)
                 .acquisitionDateSource(studyDate == null
                         ? null : IngestItemRepository.ACQ_SOURCE_OPERATOR)
-                // DR-040 — an anonymous upload comes from the only active location, or from none
-                // until an administrator has assigned the source.
-                .originLocationId(LocationScope.defaultLocationId(c));
+                .originLocationId(origin.locationId())
+                .ingestSourceId(origin.ingestSourceId());
         if (target != null) {
             item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "portal");
         }
