@@ -369,6 +369,34 @@ describe('HomeView dashboard', () => {
     expect(cardIds(studyAdmin)).not.toContain('admin-studies')
   })
 
+  it('gives a system administrator the locations card beside the studies, and nobody else', async () => {
+    const sysadmin = mountWith(['Administrator'], 'SYSADMIN')
+    await sysadmin.vm.$nextTick()
+    const ids = cardIds(sysadmin)
+    expect(ids).toContain('admin-locations')
+    expect(ids.indexOf('admin-locations')).toBe(ids.indexOf('admin-studies') + 1)
+    const card = sysadmin.get('[data-card-id="admin-locations"]')
+    expect(card.text()).toContain(enMessages.adminLocations.title)
+    expect(card.text()).toContain(enMessages.home.administrator.adminLocationsDesc)
+    expect(card.attributes('href')).toBe('/admin/locations')
+
+    // A technical administrator is a system administrator too.
+    const techadmin = mountWith(['Administrator'], 'TECHADMIN')
+    await techadmin.vm.$nextTick()
+    expect(cardIds(techadmin)).toContain('admin-locations')
+
+    // The Administrator role alone is also a study-level role: no card.
+    const studyAdmin = mountWith(['Administrator'], 'USER')
+    await studyAdmin.vm.$nextTick()
+    expect(cardIds(studyAdmin)).not.toContain('admin-locations')
+
+    for (const role of ['Data Manager', 'CRC', 'Investigator', 'Monitor'] as Role[]) {
+      const w = mountWith([role])
+      await w.vm.$nextTick()
+      expect(cardIds(w), role).not.toContain('admin-locations')
+    }
+  })
+
   it('shows the platform section only when there is something in it', async () => {
     const crc = mountWith(['CRC'])
     await crc.vm.$nextTick()

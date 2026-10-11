@@ -10,6 +10,8 @@ import deMessages from '@/locales/de.json'
  * The System rail lists the eight instance-level pages in a fixed order,
  * highlights the current one, and is a labelled landmark — the same contract
  * as the Studienaufbau rail, minus the study and role scoping it does not need.
+ * The locations (Standorte) follow the studies: both are about what the
+ * platform runs, and a study is active at a location.
  */
 const i18n = createI18n({ legacy: false, locale: 'de', messages: { de: deMessages } })
 
@@ -42,6 +44,18 @@ describe('SystemRail', () => {
     expect(w.get('[data-testid="rail-status"]').attributes('aria-current')).toBeUndefined()
     expect(w.get('[data-testid="rail-audit"]').attributes('href')).toBe('/system/audit-log')
     expect(w.get('nav').attributes('aria-label')).toBe(deMessages.a11y.sectionNavigation)
+  })
+
+  it('links the locations page and marks it current there, but not on the studies page', async () => {
+    const w = await mountAt('/admin/locations')
+    const link = w.get('[data-testid="rail-locations"]')
+    expect(link.attributes('href')).toBe('/admin/locations')
+    expect(link.attributes('aria-current')).toBe('page')
+    expect(link.text()).toBe(deMessages.adminLocations.title)
+    expect(w.get('[data-testid="rail-studies"]').attributes('aria-current')).toBeUndefined()
+
+    const onStudies = await mountAt('/admin/studies')
+    expect(onStudies.get('[data-testid="rail-locations"]').attributes('aria-current')).toBeUndefined()
   })
 
   it('marks the audit trail current on its page, though it lives outside /admin', async () => {
