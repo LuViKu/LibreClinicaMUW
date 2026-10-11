@@ -186,7 +186,7 @@ describe('useAdminIngestSourcesStore', () => {
   })
 
   describe('fetchAnonymousUploaders', () => {
-    it('GETs the uploaders that never used a token, for the warning before the second location', async () => {
+    it('GETs the uploaders that never used a token, for the pre-switch count', async () => {
       const answer = {
         count: 2,
         instances: [

@@ -1,7 +1,7 @@
 /**
  * The public upload client and the uploader token.
  *
- * Once a second location exists the server wants every request of the public
+ * In multi-location mode the server wants every request of the public
  * upload page to name its location with `X-MUW-Uploader-Token`. Pinned here:
  * the header is on EVERY request of the public mode and on none without a
  * token; the staff mode and every other API client never carry it, and the

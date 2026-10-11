@@ -1,7 +1,7 @@
 /**
  * The uploader token of the public upload page.
  *
- * Once a second location exists the server answers the account-less upload
+ * In multi-location mode the server answers the account-less upload
  * page's requests (`/pages/api/v1/public/upload/**`) with 401 unless they
  * carry an uploader token, which identifies the location the files belong to.
  * The Standort-Admin hands the person at the acquisition PC a link,
