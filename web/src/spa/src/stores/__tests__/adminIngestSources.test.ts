@@ -185,6 +185,66 @@ describe('useAdminIngestSourcesStore', () => {
     })
   })
 
+  describe('fetchAnonymousUploaders', () => {
+    it('GETs the uploaders that never used a token, for the warning before the second location', async () => {
+      const answer = {
+        count: 2,
+        instances: [
+          { displayName: 'CLARUS-PC', kind: 'export-watcher', lastSeenAt: '2026-10-11T09:30:00Z' },
+          { displayName: null, kind: 'optomed-bridge', lastSeenAt: '2026-10-10T08:00:00Z' },
+        ],
+      }
+      vi.mocked(apiGet).mockResolvedValueOnce(answer)
+      const s = useAdminIngestSourcesStore()
+      const result = await s.fetchAnonymousUploaders()
+      expect(apiGet).toHaveBeenCalledTimes(1)
+      expect(apiGet).toHaveBeenCalledWith(`${BASE}/anonymous-uploaders`)
+      expect(result).toEqual({ ok: true, anonymous: answer })
+    })
+
+    it('keeps the full count when the instances are cut off at 50', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ count: 71, instances: [{ displayName: 'A', kind: 'x', lastSeenAt: '2026-10-11T09:30:00Z' }] })
+      const result = await useAdminIngestSourcesStore().fetchAnonymousUploaders()
+      expect(result).toMatchObject({ ok: true, anonymous: { count: 71 } })
+    })
+
+    it('reads an answer that lacks a part as nothing in that part', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({})
+      const result = await useAdminIngestSourcesStore().fetchAnonymousUploaders()
+      expect(result).toEqual({ ok: true, anonymous: { count: 0, instances: [] } })
+    })
+
+    it('does not touch the list of sources, which is its own read', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce([CLARUS])
+      const s = useAdminIngestSourcesStore()
+      await s.load()
+      vi.mocked(apiGet).mockResolvedValueOnce({ count: 1, instances: [] })
+      await s.fetchAnonymousUploaders()
+      expect(s.sources.map((x) => x.id)).toEqual([1])
+      expect(s.error).toBeNull()
+    })
+
+    it('hands the server’s refusal to the caller in the server’s words, and leaves the store’s error alone', async () => {
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(403, 'Forbidden', { message: 'Only a system administrator' }))
+      const s = useAdminIngestSourcesStore()
+      const result = await s.fetchAnonymousUploaders()
+      expect(result).toMatchObject({ ok: false, status: 403, message: 'Only a system administrator' })
+      expect(s.error).toBeNull()
+    })
+
+    it('names the status when the refusal carries no text, and says so when nothing came back', async () => {
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(500, 'Server Error', null))
+      const s = useAdminIngestSourcesStore()
+      expect(await s.fetchAnonymousUploaders()).toMatchObject({
+        ok: false, status: 500, message: 'The uploaders without a token could not be determined (HTTP 500).',
+      })
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiNetworkError('offline', null))
+      expect(await s.fetchAnonymousUploaders()).toMatchObject({
+        ok: false, status: null, message: 'The server could not be reached.',
+      })
+    })
+  })
+
   it('reset forgets everything', async () => {
     vi.mocked(apiGet).mockResolvedValueOnce([CLARUS])
     const s = useAdminIngestSourcesStore()
