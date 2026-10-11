@@ -4518,6 +4518,7 @@
     "intro": "Ein Standort ist ein physischer Ort, etwa eine Klinik, eine Abteilung oder ein Partnerkrankenhaus. Eine Studie ist an einem Standort aktiv, wenn sie dort einen Studien-Standort hat; so heißen auf dieser Seite die Standorte, die je Studie angelegt werden. Dateien von Geräten gehören zum Standort ihrer Quelle.",
     "create": "Standort anlegen",
     "empty": "Es gibt noch keinen Standort.",
+    "singleMode": "Diese Installation ist für einen einzigen Standort eingerichtet. Ein zweiter Standort setzt die Umstellung beim Deployment voraus (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi, siehe Deploy-README, Abschnitt „Uploader tokens and locations“).",
     "column": {
       "code": "Kürzel",
       "name": "Name",
@@ -4638,7 +4639,8 @@
       "detailFailed": "Der Standort konnte nicht geladen werden (HTTP {status}).",
       "saveFailed": "Die Änderung konnte nicht gespeichert werden (HTTP {status}).",
       "network": "Der Server ist nicht erreichbar.",
-      "unknown": "Unbekannter Fehler."
+      "unknown": "Unbekannter Fehler.",
+      "singleLocation": "Diese Installation ist für einen einzigen Standort eingerichtet; ein zweiter aktiver Standort ist erst nach der Umstellung auf LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi möglich."
     }
   },
   "uploaders": {

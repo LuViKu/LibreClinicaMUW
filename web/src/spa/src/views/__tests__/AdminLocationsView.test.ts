@@ -12,7 +12,11 @@
  * and unassigning a person confirm too; each assigned person carries a
  * Standort-Admin checkbox that grants or withdraws the right to manage the
  * location's uploaders. (The Quellen section has its own file:
- * AdminLocationsSources.test.ts.)
+ * AdminLocationsSources.test.ts; single- versus multi-location mode has
+ * AdminLocationsView.locationMode.test.ts.)
+ *
+ * Two locations are active here, so the session is in multi mode
+ * throughout: that is the mode in which every action is offered.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -33,10 +37,12 @@ vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => confirmMock }))
 
 import { apiGet, apiPost, apiPut, apiDelete, ApiError } from '@/api/client'
 import { i18n as appI18n } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import AdminLocationsView from '@/views/AdminLocationsView.vue'
 import enMessages from '@/locales/en.json'
 import deMessages from '@/locales/de.json'
+import type { AuthenticatedUser } from '@/types/auth'
 import type { Location, LocationDetail } from '@/types/location'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en: enMessages } })
@@ -106,6 +112,17 @@ function answerGets(over: { locations?: Location[]; details?: Record<number, Loc
   })
 }
 
+/** A system administrator on a multi-location deployment: what `/me` says of the session. */
+function signInMulti() {
+  const auth = useAuthStore()
+  auth.user = {
+    username: 'root', displayName: 'Root', role: 'Administrator', userType: 'SYSADMIN',
+    profileComplete: true, mustChangePassword: false, manageableLocations: [], locationMode: 'multi',
+    activeStudy: null,
+  } as unknown as AuthenticatedUser
+  auth.state = 'authenticated'
+}
+
 /** Every wrapper mounted by a test, unmounted afterwards even when the test fails half-way. */
 const mounted: VueWrapper[] = []
 
@@ -162,6 +179,7 @@ describe('AdminLocationsView', () => {
     confirmMock.mockReset()
     confirmMock.mockResolvedValue(true)
     answerGets()
+    signInMulti()
   })
   afterEach(() => {
     for (const w of mounted.splice(0)) w.unmount()
