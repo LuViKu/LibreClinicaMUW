@@ -93,7 +93,16 @@ public record MeDto(
          * file in the browser and sends {@code deidConfirmed} + {@code deidSha256};
          * the server verifies regardless.
          */
-        boolean deidentificationRequired
+        boolean deidentificationRequired,
+        /**
+         * DR-040 phase 2: the available locations whose uploaders the caller
+         * may manage, by name. A system administrator: every available
+         * location. A Standort-Admin (a user holding
+         * {@code user_location.can_manage_sources}): the ones they hold the
+         * right at. Anybody else: empty. The SPA offers the uploaders page
+         * when this is not empty.
+         */
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ManageableLocationDto> manageableLocations
 ) {
 
     /** Allowed values of the {@code passwordChangeReason} field. */
