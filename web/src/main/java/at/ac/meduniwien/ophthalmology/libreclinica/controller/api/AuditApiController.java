@@ -936,6 +936,12 @@ public class AuditApiController {
                  AuditTypeIds.LOCATION_CREATED, AuditTypeIds.LOCATION_UPDATED,
                  AuditTypeIds.LOCATION_DISABLED, AuditTypeIds.LOCATION_RESTORED,
                  AuditTypeIds.LOCATION_USER_ASSIGNED, AuditTypeIds.LOCATION_USER_UNASSIGNED,
+            // Ingest sources, uploader tokens and the Standort-Admin right
+            // (201-207, DR-040 phase 2).
+                 AuditTypeIds.INGEST_SOURCE_CREATED, AuditTypeIds.UPLOADER_TOKEN_REPLACED,
+                 AuditTypeIds.UPLOADER_TOKEN_REVOKED, AuditTypeIds.UPLOADER_RENAMED,
+                 AuditTypeIds.INGEST_SOURCE_LOCATION_ASSIGNED,
+                 AuditTypeIds.LOCATION_ADMIN_GRANTED, AuditTypeIds.LOCATION_ADMIN_REVOKED,
             // CRF name / description edit (142) and a batch move of event
             // CRFs to another CRF version (143, one row per run).
                  AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";
