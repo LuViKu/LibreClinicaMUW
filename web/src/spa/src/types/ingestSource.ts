@@ -57,8 +57,8 @@ export interface AssignSourceLocationInput {
 
 /**
  * An acquisition-PC program (an uploader) that reported in the last 7 days
- * without ever using a token. While there is exactly one location the server
- * still serves such programs; from the second location on it refuses them.
+ * without ever using a token. In single-location mode the server still serves
+ * such programs; in multi-location mode it refuses them.
  */
 export interface AnonymousUploaderInstance {
   /** The name the program reports for its PC; null when it reports none. */
@@ -71,8 +71,9 @@ export interface AnonymousUploaderInstance {
 
 /**
  * `GET /admin/ingest-sources/anonymous-uploaders` (system administrators
- * only): the warning before a second location is created. `instances` are
- * the newest first, at most 50; `count` is the full number.
+ * only): the pre-switch check before a deployment goes from single to multi
+ * location mode. `instances` are the newest first, at most 50; `count` is the
+ * full number.
  */
 export interface AnonymousUploaders {
   count: number

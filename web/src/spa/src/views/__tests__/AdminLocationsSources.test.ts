@@ -88,8 +88,6 @@ function answerGets(over: { locations?: Location[]; sources?: IngestSource[]; so
       return clone(over.sources ?? SOURCES)
     }
     if (path === '/pages/api/v1/admin/studies') return []
-    // The create dialog's question before a second location; not what these tests are about.
-    if (path === `${SOURCES_URL}/anonymous-uploaders`) return { count: 0, instances: [] }
     throw new Error(`unexpected GET ${path}`)
   })
 }

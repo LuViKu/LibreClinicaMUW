@@ -9,10 +9,6 @@ import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useAdminLocationsStore, type MutationFailure } from '@/stores/adminLocations'
-import { useAdminIngestSourcesStore } from '@/stores/adminIngestSources'
-import { formatAgo, secondsSince } from '@/lib/byteFormat'
-import { programName } from '@/lib/uploaderPrograms'
-import type { AnonymousUploaders } from '@/types/ingestSource'
 import type { CreateLocationInput, Location } from '@/types/location'
 
 /**
@@ -34,16 +30,10 @@ import type { CreateLocationInput, Location } from '@/types/location'
  * so clearing a field works whether the server reads an absent field as
  * "unchanged" or as "cleared". On create the blank ones are left out.
  *
- * Creating the second location is a step with a consequence. While there is
- * exactly one location the server still serves uploaders that have no
- * token; with the second, every uploader needs one and those without are
- * refused. So when the new location would be the second (or later) available
- * one, the dialog asks the server which uploaders have never used a token
- * (the last 7 days), says how many and which, points to the page where tokens
- * are issued, and, if there are any, makes the person tick that they know
- * those uploaders will stop uploading before "Anlegen" works. If the question
- * cannot be answered the dialog says so and does not block: a failed lookup
- * is a reason for care, not for refusing to work.
+ * Whether a second location may exist is the deployment's choice
+ * (`LIBRECLINICA_DEPLOYMENT_LOCATIONS`), not this dialog's: in single mode
+ * the page does not offer to create one, and a refusal that still comes
+ * back is shown as a message of the form.
  */
 interface Props {
   open: boolean
@@ -56,9 +46,8 @@ const emit = defineEmits<{
   saved: [location: Location, mode: 'create' | 'edit']
 }>()
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const store = useAdminLocationsStore()
-const sources = useAdminIngestSourcesStore()
 
 const FIELDS = ['code', 'name', 'street', 'zip', 'city', 'country'] as const
 type FieldName = (typeof FIELDS)[number]
@@ -86,60 +75,12 @@ const submitting = ref(false)
 
 const isEdit = computed(() => props.existing != null)
 
-/* ------------------ the warning before a second location ------------------ */
-
-/**
- * The location being created would be the second (or a later) one that is
- * available, so the anonymous front door closes with it. A disabled location
- * does not count: with only disabled ones left, the new one is the only one.
- */
-const nextIsSecond = computed(() => !isEdit.value && store.locations.some((l) => l.status === 'available'))
-
-type CheckState = 'idle' | 'loading' | 'ready' | 'failed'
-const check = ref<CheckState>('idle')
-const anonymous = ref<AnonymousUploaders | null>(null)
-const acknowledged = ref(false)
-/** Counts the lookups, so that an answer for a former opening of the dialog is dropped. */
-let checkSeq = 0
-
-async function checkAnonymousUploaders(): Promise<void> {
-  const seq = ++checkSeq
-  check.value = 'loading'
-  anonymous.value = null
-  const result = await sources.fetchAnonymousUploaders()
-  if (seq !== checkSeq) return
-  if (result.ok) {
-    anonymous.value = result.anonymous
-    check.value = 'ready'
-  } else {
-    check.value = 'failed'
-  }
-}
-
-/** Uploaders without a token exist: the person has to say they know what follows. */
-const needsAcknowledgement = computed(() => nextIsSecond.value && check.value === 'ready' && (anonymous.value?.count ?? 0) > 0)
-
-function instanceLabel(i: AnonymousUploaders['instances'][number]): string {
-  return [
-    i.displayName?.trim() || t('adminLocations.secondLocation.unnamed'),
-    programName(i.kind),
-    t('adminLocations.secondLocation.seen', { when: formatAgo(secondsSince(i.lastSeenAt), locale.value) }),
-  ].join(' · ')
-}
-
-/**
- * Code and name are required; the code only on create, where it is typed. For
- * the second location, "Anlegen" also waits for the lookup of the uploaders
- * without a token (it is short, and the answer decides whether a tick is
- * needed) and for the tick when there are any.
- */
+/** Code and name are required; the code only on create, where it is typed. */
 const canSubmit = computed(
   () =>
     !submitting.value &&
     form.value.name.trim() !== '' &&
-    (isEdit.value || form.value.code.trim() !== '') &&
-    !(nextIsSecond.value && check.value === 'loading') &&
-    (!needsAcknowledgement.value || acknowledged.value),
+    (isEdit.value || form.value.code.trim() !== ''),
 )
 
 // Seed the form each time the dialog opens, and put the cursor on the first
@@ -153,11 +94,6 @@ watch(
     fieldErrors.value = {}
     formError.value = null
     submitting.value = false
-    acknowledged.value = false
-    checkSeq++
-    check.value = 'idle'
-    anonymous.value = null
-    if (nextIsSecond.value) void checkAnonymousUploaders()
     await nextTick()
     document.getElementById(isEdit.value ? 'location-name' : 'location-code')?.focus()
   },
@@ -245,54 +181,6 @@ function close() {
       </h2>
     </template>
 
-    <!-- Creating the second location closes the anonymous front door: say so before it is done. -->
-    <section
-      v-if="nextIsSecond"
-      class="mb-4 rounded-md border px-3 py-2.5 text-xs leading-relaxed"
-      :class="check === 'failed' ? 'border-slate-300 bg-slate-50 text-slate-700' : 'border-amber-300 bg-amber-50 text-amber-900'"
-      aria-labelledby="location-second-title"
-      data-testid="location-second-warning"
-      :data-state="check"
-    >
-      <h3 id="location-second-title" class="text-[13px] font-semibold">{{ t('adminLocations.secondLocation.title') }}</h3>
-      <p class="mt-1">{{ t('adminLocations.secondLocation.intro') }}</p>
-
-      <p v-if="check === 'idle' || check === 'loading'" class="mt-2 italic" data-testid="location-second-checking">
-        {{ t('adminLocations.secondLocation.checking') }}
-      </p>
-
-      <template v-else-if="check === 'ready' && anonymous">
-        <p v-if="anonymous.count === 0" class="mt-2" data-testid="location-second-none">
-          {{ t('adminLocations.secondLocation.none') }}
-        </p>
-        <template v-else>
-          <p class="mt-2 font-medium" data-testid="location-second-count">
-            {{ t('adminLocations.secondLocation.count', anonymous.count) }}
-          </p>
-          <ul class="mt-1 max-h-40 list-disc space-y-0.5 overflow-y-auto pl-5" data-testid="location-second-list">
-            <li v-for="(u, i) in anonymous.instances" :key="i" data-testid="location-second-item">{{ instanceLabel(u) }}</li>
-          </ul>
-          <p v-if="anonymous.count > anonymous.instances.length" class="mt-1" data-testid="location-second-more">
-            {{ t('adminLocations.secondLocation.more', { n: anonymous.count - anonymous.instances.length }) }}
-          </p>
-        </template>
-      </template>
-
-      <p v-else-if="check === 'failed'" class="mt-2" data-testid="location-second-unknown">
-        {{ t('adminLocations.secondLocation.unknown') }}
-      </p>
-
-      <p v-if="check !== 'idle' && check !== 'loading'" class="mt-2">
-        <RouterLink
-          to="/uploaders"
-          target="_blank"
-          rel="noopener"
-          class="font-medium underline muw-focus rounded-sm"
-          data-testid="location-second-link"
-        >{{ t('adminLocations.secondLocation.toUploaders') }}</RouterLink>
-      </p>
-    </section>
-
     <form id="location-form" novalidate class="space-y-3" @submit.prevent="submit">
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -360,22 +248,6 @@ function close() {
           <ErrorText v-if="fieldErrors.country" data-testid="field-error-country">{{ fieldErrors.country }}</ErrorText>
         </div>
       </div>
-
-      <label
-        v-if="needsAcknowledgement"
-        class="req flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950"
-        for="location-ack-anonymous"
-      >
-        <input
-          id="location-ack-anonymous"
-          v-model="acknowledged"
-          type="checkbox"
-          required
-          class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 muw-focus"
-          data-testid="location-ack-anonymous"
-        />
-        <span>{{ t('adminLocations.secondLocation.acknowledge') }}</span>
-      </label>
 
       <ErrorText v-if="formError" data-testid="location-form-error">{{ formError }}</ErrorText>
     </form>
