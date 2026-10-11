@@ -5,6 +5,10 @@
  * no `role` meta; it carries `manageUploaders`, and the guard asks /me's
  * `manageableLocations` the way the retinal metrics routes ask the study's
  * blinding setting.
+ *
+ * It is also the one route a session may open without a bound study: a
+ * Standort-Admin is typically a site's IT contact who holds no study role at
+ * all and so has no study to pick. Nobody else gets that exception.
  */
 import { describe, expect, it } from 'vitest'
 import type { RouteLocationNormalized } from 'vue-router'
@@ -20,7 +24,13 @@ const GRAZ = { id: 2, code: 'GRAZ', name: 'Klinik Graz' }
 function authFor(
   role: string,
   manageableLocations: unknown,
-  extra: { userType?: string; activeStudy?: unknown; needsPasswordChange?: boolean; needsStudyPick?: boolean } = {},
+  extra: {
+    userType?: string
+    activeStudy?: unknown
+    needsPasswordChange?: boolean
+    needsStudyPick?: boolean
+    needsProfile?: boolean
+  } = {},
 ): Auth {
   const activeStudy = 'activeStudy' in extra
     ? extra.activeStudy
@@ -28,7 +38,7 @@ function authFor(
   return {
     isAnonymous: false,
     isAuthenticated: true,
-    needsProfile: false,
+    needsProfile: extra.needsProfile ?? false,
     needsStudyPick: extra.needsStudyPick ?? false,
     needsPasswordChange: extra.needsPasswordChange ?? false,
     user: { role, userType: extra.userType, manageableLocations, activeStudy },
@@ -92,9 +102,9 @@ describe('the uploaders route', () => {
     expect(guard(anonymous, to)).toEqual({ name: 'login', query: { returnTo: '/uploaders' } })
   })
 
-  it('still sends a Standort-Admin without a bound study through the study picker first', () => {
+  it('lets a Standort-Admin without a bound study in: the picker has nothing for them', () => {
     const noStudy = authFor('Data Manager', [MUW], { activeStudy: null, needsStudyPick: true })
-    expect(guard(noStudy, routeNamed('uploaders'))).toEqual({ name: 'pick-study' })
+    expect(guard(noStudy, routeNamed('uploaders'))).toBe(true)
   })
 
   it('still makes a stale password change first', () => {

@@ -233,14 +233,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function loadStudies(): Promise<void> {
+  /**
+   * Reads the studies the session may pick. Answers whether it did: an empty
+   * list is a list (the account holds no study role), a failed read is not,
+   * and the study picker acts on the first and never on the second.
+   */
+  async function loadStudies(): Promise<boolean> {
     try {
       availableStudies.value = await apiGet<StudyOption[]>('/pages/api/v1/studies')
+      return true
     } catch (e) {
       error.value = e instanceof ApiError ? e.message
         : e instanceof ApiNetworkError ? 'Backend unreachable.'
         : 'Failed to load studies.'
       availableStudies.value = []
+      return false
     }
   }
 

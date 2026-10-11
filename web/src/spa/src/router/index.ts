@@ -15,6 +15,10 @@ import { userMayManageUploaders } from '@/lib/locationAccess'
  *  - `meta.role` mismatched → redirect to home (the role chip on the
  *    target page would have lied, and routes that demand a specific
  *    role often surface PHI-sensitive data — fail closed).
+ *  - no bound study → the study picker, for every protected route but
+ *    `meta.manageUploaders` when the session may manage a location's
+ *    uploaders (a Standort-Admin who holds no study role has nothing to
+ *    pick); that right, not a role, is what the route is gated by.
  *
  * Routes are added per-sub-phase as workflows ship.
  */
@@ -620,7 +624,16 @@ export function guard(
   if (auth.needsProfile) return { name: 'first-login' }
   // Phase E.4 M1: a bound study is required for every protected route.
   // If the user lacks one, send them through the picker first.
-  if (auth.needsStudyPick) return { name: 'pick-study' }
+  //
+  // One exception (2026-10-12): the Uploaders page, for a session that may
+  // manage a location's uploaders. A Standort-Admin is typically a site's IT
+  // contact who holds no study role at all, so there is no study for them to
+  // bind and the picker would be a dead end. The exception is exactly this one
+  // route and exactly this one right: every other route, and everyone without
+  // a non-empty manageableLocations, still goes through the picker. (The
+  // refusal of a session without the right comes further down.)
+  const studyFree = to.meta.manageUploaders === true && userMayManageUploaders(auth.user)
+  if (auth.needsStudyPick && !studyFree) return { name: 'pick-study' }
   // Phase E.6: forced password change wins over role checks — the
   // legacy SecureController bounces every request (except the
   // ResetPassword target itself) to the change-password page until
