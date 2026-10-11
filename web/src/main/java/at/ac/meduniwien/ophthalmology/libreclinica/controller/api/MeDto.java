@@ -198,4 +198,14 @@ public record MeDto(
             boolean enterData,
             boolean editSubject,
             boolean signSubject) {}
+
+    /**
+     * A location whose uploaders the caller may manage (DR-040 phase 2): an
+     * available location, by its id, stable code and name.
+     */
+    @Schema(name = "ManageableLocationDto")
+    public record ManageableLocationDto(
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int id,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String code,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name) {}
 }

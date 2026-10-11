@@ -192,13 +192,20 @@ public class IngestSourceService {
     public static final class Failure extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
+        private final String what;
         private final String sqlState;
 
         Failure(String what, SQLException cause) {
             // The cause of an integrity violation quotes the offending values; only that class is withheld.
             super("could not " + what + " (SQLSTATE " + cause.getSQLState() + ")",
                     isIntegrityViolation(cause) ? null : cause);
+            this.what = what;
             this.sqlState = cause.getSQLState();
+        }
+
+        /** What was being done, e.g. {@code issue the uploader}; fit for a message to the client. */
+        public String what() {
+            return what;
         }
 
         public String sqlState() {
@@ -366,13 +373,22 @@ public class IngestSourceService {
      * location a source already has still places its stragglers, and writes
      * an audit row only if something changed.
      *
+     * <p>An uploader always has a location (it was issued for one): taking it
+     * back to none is refused, and so is moving it to a location where another
+     * uploader already has its name.
+     *
      * @throws Refusal {@link Reason#NOT_FOUND}, {@link Reason#LOCATION_UNAVAILABLE} (the
-     *                 location does not exist or is disabled) or {@link Reason#NAME_TAKEN}
-     *                 (an uploader of that name is already at the new location)
+     *                 location does not exist or is disabled), {@link Reason#NAME_TAKEN}
+     *                 (field {@code locationId}) or {@link Reason#INVALID} (field
+     *                 {@code locationId}: {@code null} for an uploader)
      */
     public void assignLocation(long sourceId, Integer locationId, int actorUserId) {
         inTransaction("assign the location", c -> {
             Row row = lock(c, sourceId);
+            if (locationId == null && KIND_UPLOADER.equals(row.kind())) {
+                throw new Refusal(Reason.INVALID, "locationId",
+                        "An uploader always belongs to a location; revoke it to stop it.");
+            }
             Loc target = null;
             if (locationId != null) {
                 target = lockLocation(c, locationId);
