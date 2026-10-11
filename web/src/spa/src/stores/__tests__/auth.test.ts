@@ -233,6 +233,27 @@ describe('useAuthStore', () => {
       expect(store.availableStudies).toEqual([])
       expect(store.error).toBe('Backend unreachable.')
     })
+
+    // The study picker acts on an empty list (a Standort-Admin who holds no
+    // study role is sent on), so it has to tell an empty list from a list
+    // that could not be read.
+    it('says it read the list, an empty one included', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_STUDIES)
+      const store = useAuthStore()
+      expect(await store.loadStudies()).toBe(true)
+      vi.mocked(apiGet).mockResolvedValueOnce([])
+      expect(await store.loadStudies()).toBe(true)
+      expect(store.availableStudies).toEqual([])
+    })
+
+    it('says it could not read the list when the request failed', async () => {
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(500, 'Server Error', null))
+      const store = useAuthStore()
+      expect(await store.loadStudies()).toBe(false)
+      expect(store.availableStudies).toEqual([])
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiNetworkError('boom', new Error()))
+      expect(await store.loadStudies()).toBe(false)
+    })
   })
 
   describe('pickStudy()', () => {
