@@ -862,6 +862,25 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertEquals(0, role(session).getId());
     }
 
+    // --- the chain --------------------------------------------------------------
+
+    /**
+     * DR-040 phase 2 — the chain {@link SecurityConfig} builds (not a copy of its wiring) fronts the device
+     * endpoints with the uploader-token filter, ahead of the rate limiter and of everything that reads the
+     * session; and mounts it once.
+     */
+    @Test
+    void theRealChainPutsTheUploaderTokenFilterAheadOfTheRateLimiterAndTheSession() {
+        logoutFilter(); // builds the context
+        List<Class<?>> chain = securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
+                .<Class<?>>map(Object::getClass).toList();
+        int token = chain.indexOf(UploaderTokenFilter.class);
+        int rateLimit = chain.indexOf(PublicOctUploadRateLimitFilter.class);
+        int session = chain.indexOf(org.springframework.security.web.context.SecurityContextHolderFilter.class);
+        assertTrue(token >= 0 && rateLimit > token && session > rateLimit, chain.toString());
+        assertEquals(1, chain.stream().filter(UploaderTokenFilter.class::equals).count(), "mounted once: " + chain);
+    }
+
     // --- the legacy sign-outs ------------------------------------------------
 
     @Test
