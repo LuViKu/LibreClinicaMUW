@@ -7,11 +7,12 @@ import SystemRail from '@/components/SystemRail.vue'
 import deMessages from '@/locales/de.json'
 
 /**
- * The System rail lists the eight instance-level pages in a fixed order,
+ * The System rail lists the nine instance-level pages in a fixed order,
  * highlights the current one, and is a labelled landmark — the same contract
  * as the Studienaufbau rail, minus the study and role scoping it does not need.
  * The locations (Standorte) follow the studies: both are about what the
- * platform runs, and a study is active at a location.
+ * platform runs, and a study is active at a location. The uploaders and their
+ * tokens follow the locations: an uploader brings files to one of them.
  */
 const i18n = createI18n({ legacy: false, locale: 'de', messages: { de: deMessages } })
 
@@ -26,13 +27,14 @@ async function mountAt(path: string) {
 }
 
 describe('SystemRail', () => {
-  it('lists the eight system pages, overview first, and marks the current one', async () => {
+  it('lists the nine system pages, overview first, and marks the current one', async () => {
     const w = await mountAt('/admin/config')
     const ids = w.findAll('a[data-testid^="rail-"]').map((a) => a.attributes('data-testid'))
     expect(ids).toEqual([
       'rail-status',
       'rail-studies',
       'rail-locations',
+      'rail-uploaders',
       'rail-audit',
       'rail-login-history',
       'rail-password-policy',

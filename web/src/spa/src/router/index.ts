@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vu
 import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import { canViewRetinalMetrics } from '@/lib/retinalAccess'
+import { userMayManageUploaders } from '@/lib/locationAccess'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
@@ -146,6 +147,20 @@ const router = createRouter({
       name: 'admin-locations',
       component: () => import('@/views/AdminLocationsView.vue'),
       meta: { title: 'Standorte', role: 'Administrator' as const },
+    },
+    /* Uploaders and tokens (phase 2 of the locations): the programs on the
+       acquisition PCs and the token each one uses to bring files into one
+       location's inbox. For a system administrator (every location) and for
+       a Standort-Admin (their own), which is no study role: the route carries
+       no `role` but `manageUploaders`, which guard() answers from /me's
+       manageableLocations the way `blinded` is answered from the study's
+       setting. Registered outside /admin because a Standort-Admin is no
+       administrator and has no System section. */
+    {
+      path: '/uploaders',
+      name: 'uploaders',
+      component: () => import('@/views/UploadersView.vue'),
+      meta: { title: 'Uploader und Tokens', manageUploaders: true },
     },
     {
       path: '/admin/password-policy',
@@ -612,6 +627,13 @@ export function guard(
   // the user updates their credential. Mirror that here so role-gated
   // views can't render PHI to a stale credential.
   if (auth.needsPasswordChange) return { name: 'change-password' }
+
+  // Uploaders and their tokens (2026-10-12): a right, not a role. /me names the
+  // locations this session may manage (every available location for a system
+  // administrator, a Standort-Admin's own otherwise); none means there is
+  // nothing here for them, and they get the refusal the role-gated admin
+  // routes give: home. See lib/locationAccess.
+  if (to.meta.manageUploaders === true && !userMayManageUploaders(auth.user)) return { name: 'home' }
 
   // Phase E.6 (2026-06-03): meta.role accepts a single role OR an
   // array of roles. Audit Trail, for example, opens to Monitor +
