@@ -142,6 +142,7 @@
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
     "switchStudyDesc": "In eine andere Ihrer Studien wechseln.",
+    "uploadersDesc": "Uploader an den Erfassungs-PCs ansehen und ihre Tokens ausstellen, ersetzen oder sperren.",
     "greeting": "Willkommen, {name}",
     "greetingPlain": "Willkommen",
     "sections": {
@@ -4565,6 +4566,8 @@
       "remove": "Entfernen",
       "removeAria": "{user} von diesem Standort entfernen",
       "siteAdmin": "Standort-Admin",
+      "siteAdminAria": "Standort-Admin-Recht für {user}",
+      "siteAdminHelp": "Standort-Admins sehen die Uploader dieses Standorts und dürfen deren Tokens ausstellen, ersetzen und sperren. Das Recht vergibt nur ein Systemadministrator.",
       "removedNote": "Der Standort ist deaktiviert. Stellen Sie ihn wieder her, um Personen zuzuweisen."
     },
     "created": "Standort „{name}“ angelegt.",
@@ -4573,15 +4576,133 @@
     "restored": "Standort „{name}“ wiederhergestellt.",
     "assigned": "{user} ist dem Standort „{name}“ zugewiesen.",
     "unassigned": "{user} ist dem Standort „{name}“ nicht mehr zugewiesen.",
+    "siteAdminGranted": "{user} ist jetzt Standort-Admin für „{name}“.",
+    "siteAdminWithdrawn": "{user} ist nicht mehr Standort-Admin für „{name}“.",
     "disableTitle": "Standort deaktivieren",
     "disableConfirm": "Standort „{name}“ deaktivieren? Das geht nur, wenn an ihm keine Studie und kein Studien-Standort mehr aktiv ist. Die Aktion wird im Audit Trail dokumentiert; der Standort lässt sich wiederherstellen.",
     "restoreTitle": "Standort wiederherstellen",
     "restoreConfirm": "Standort „{name}“ wiederherstellen? Er ist danach wieder aktiv. Die Aktion wird im Audit Trail dokumentiert.",
     "disableFailed": "Standort „{name}“ konnte nicht deaktiviert werden. {reason}",
     "restoreFailed": "Standort „{name}“ konnte nicht wiederhergestellt werden. {reason}",
+    "tab": {
+      "label": "Bereiche der Standort-Verwaltung",
+      "locations": "Standorte",
+      "sources": "Quellen",
+      "sourcesBadgeAria": "{n} Quellen ohne Standort"
+    },
+    "sources": {
+      "heading": "Quellen",
+      "intro": "Eine Quelle ist die Herkunft von Gerätedateien: ein Uploader auf einem Erfassungs-PC, ein DICOM-Gerät (über seinen AE-Titel) oder das Remidio-Konto. Dateien einer Quelle ohne Standort sieht nur ein Systemadministrator. Ordnen Sie der Quelle einen Standort zu, erscheinen ihre wartenden Dateien sofort im Eingang dieses Standorts.",
+      "unassignedSummary": "Quellen ohne Standort: {sources}. Ihre wartenden Dateien sieht nur ein Systemadministrator: {files}.",
+      "allAssigned": "Alle Quellen haben einen Standort.",
+      "empty": "Noch keine Quelle bekannt. Uploader, DICOM-Geräte und das Remidio-Konto erscheinen hier, sobald sie angelegt wurden oder sich zum ersten Mal melden.",
+      "column": {
+        "kind": "Art",
+        "name": "Name",
+        "location": "Standort",
+        "waiting": "Wartende Dateien",
+        "lastSeen": "Zuletzt gesehen",
+        "status": "Status"
+      },
+      "kind": {
+        "uploader": "Uploader (Erfassungs-PC)",
+        "dicom_ae": "DICOM-Gerät (AE-Titel)",
+        "remidio": "Remidio-Konto",
+        "portal": "Upload-Seite"
+      },
+      "unassigned": "nicht zugeordnet",
+      "locationAria": "Standort von {name}",
+      "removedOption": "{name} (deaktiviert)",
+      "waiting": "{n} Datei wartet | {n} Dateien warten",
+      "waitingHint": "Nur für Systemadministratoren sichtbar, bis ein Standort zugeordnet ist.",
+      "neverSeen": "noch nie",
+      "assigned": "Quelle „{name}“ gehört jetzt zum Standort „{location}“.",
+      "assignedFiles": "Quelle „{name}“ gehört jetzt zum Standort „{location}“. Wartende Dateien, die in dessen Eingang erscheinen: {n}.",
+      "unassignedNow": "Quelle „{name}“ ist keinem Standort mehr zugeordnet.",
+      "assignFailed": "Quelle „{name}“ konnte nicht zugeordnet werden. {reason}",
+      "error": {
+        "loadFailed": "Die Quellen konnten nicht geladen werden (HTTP {status})."
+      }
+    },
     "error": {
       "loadFailed": "Die Standorte konnten nicht geladen werden (HTTP {status}).",
       "detailFailed": "Der Standort konnte nicht geladen werden (HTTP {status}).",
+      "saveFailed": "Die Änderung konnte nicht gespeichert werden (HTTP {status}).",
+      "network": "Der Server ist nicht erreichbar.",
+      "unknown": "Unbekannter Fehler."
+    }
+  },
+  "uploaders": {
+    "title": "Uploader und Tokens",
+    "subtitle": "Uploader: {count} ({active} aktiv)",
+    "intro": "Ein Uploader ist das Programm auf einem Erfassungs-PC, etwa der Export Watcher oder die Optomed Bridge, das Gerätedateien in den Eingang eines Standorts bringt. Er weist sich mit einem Token aus, der für genau einen Standort gilt; so steht fest, woher eine Datei kommt. „Zuletzt verwendet“ zeigt die letzte Anfrage mit dem Token, „Letzte Meldung“ den letzten Heartbeat des Programms.",
+    "create": "Uploader anlegen",
+    "refresh": "Aktualisieren",
+    "location": {
+      "label": "Standort",
+      "single": "Standort: {name}"
+    },
+    "empty": "An diesem Standort gibt es noch keinen Uploader. Mit „Uploader anlegen“ erhalten Sie den Token für einen Erfassungs-PC.",
+    "noLocation": "Für Ihr Konto ist kein Standort freigegeben, an dem Sie Uploader verwalten dürfen.",
+    "column": {
+      "name": "Name",
+      "token": "Token (Anfang)",
+      "status": "Status",
+      "created": "Angelegt",
+      "lastUsed": "Zuletzt verwendet",
+      "lastReport": "Letzte Meldung"
+    },
+    "status": {
+      "active": "Aktiv",
+      "revoked": "Gesperrt"
+    },
+    "createdBy": "von {user}",
+    "never": "noch nie",
+    "action": {
+      "rename": "Umbenennen",
+      "renameAria": "Uploader {name} umbenennen",
+      "replace": "Token ersetzen",
+      "replaceAria": "Token von Uploader {name} ersetzen",
+      "revoke": "Sperren",
+      "revokeAria": "Uploader {name} sperren"
+    },
+    "dialog": {
+      "createTitle": "Uploader anlegen",
+      "renameTitle": "Uploader umbenennen",
+      "createSubmit": "Anlegen",
+      "renameSubmit": "Speichern",
+      "field": {
+        "name": "Name"
+      },
+      "nameHelp": "Wofür der Uploader steht, zum Beispiel „Clarus-PC Raum 3“. Höchstens 64 Zeichen; der Name ist am Standort einmalig.",
+      "tooLong": "Höchstens 64 Zeichen."
+    },
+    "token": {
+      "createdTitle": "Token für „{name}“",
+      "replacedTitle": "Neuer Token für „{name}“",
+      "warning": "Dieser Token wird nur jetzt angezeigt. Er lässt sich später nicht mehr abrufen; geht er verloren, ersetzen Sie ihn durch einen neuen.",
+      "whereTo": "Tragen Sie ihn im Einstellungsdialog des Uploaders auf dem Erfassungs-PC ein, nicht in der Befehlszeile.",
+      "label": "Token (einmalig sichtbar)",
+      "copy": "Kopieren",
+      "copied": "Token in die Zwischenablage kopiert.",
+      "copyFailed": "Das Kopieren hat nicht geklappt. Der Token ist markiert; kopieren Sie ihn mit Strg+C (Mac: Cmd+C).",
+      "saved": "Ich habe den Token gesichert",
+      "close": "Schließen",
+      "closeHint": "Schließen ist möglich, sobald Sie den Token gesichert haben."
+    },
+    "created": "Uploader „{name}“ angelegt.",
+    "renamed": "Uploader „{name}“ umbenannt.",
+    "replaced": "Token von „{name}“ ersetzt. Der bisherige Token ist ungültig.",
+    "revoked": "Uploader „{name}“ gesperrt.",
+    "replaceTitle": "Token ersetzen",
+    "replaceConfirm": "Token von „{name}“ ersetzen? Der bisherige Token funktioniert danach sofort nicht mehr: Der Uploader meldet „Token abgelehnt“ und lässt seine Dateien im Beobachtungsordner liegen, bis der neue Token in seinen Einstellungen steht. Der neue Token wird einmal angezeigt. Die Aktion wird im Audit Trail dokumentiert.",
+    "replaceConfirmRevoked": "Uploader „{name}“ ist gesperrt. Ein neuer Token hebt die Sperre auf; der bisherige Token bleibt ungültig. Der neue Token wird einmal angezeigt. Die Aktion wird im Audit Trail dokumentiert.",
+    "revokeTitle": "Uploader sperren",
+    "revokeConfirm": "Uploader „{name}“ sperren? Sein Token wird sofort abgelehnt; der Uploader lässt seine Dateien im Beobachtungsordner liegen und zeigt das im Tray-Symbol. „Token ersetzen“ hebt die Sperre wieder auf. Die Aktion wird im Audit Trail dokumentiert.",
+    "replaceFailed": "Der Token von „{name}“ konnte nicht ersetzt werden. {reason}",
+    "revokeFailed": "Uploader „{name}“ konnte nicht gesperrt werden. {reason}",
+    "error": {
+      "loadFailed": "Die Uploader konnten nicht geladen werden (HTTP {status}).",
       "saveFailed": "Die Änderung konnte nicht gespeichert werden (HTTP {status}).",
       "network": "Der Server ist nicht erreichbar.",
       "unknown": "Unbekannter Fehler."

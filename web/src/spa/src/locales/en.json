@@ -142,6 +142,7 @@
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
     "switchStudyDesc": "Switch to another of your studies.",
+    "uploadersDesc": "See the uploaders on the acquisition PCs and issue, replace or revoke their tokens.",
     "greeting": "Welcome, {name}",
     "greetingPlain": "Welcome",
     "sections": {
@@ -4565,6 +4566,8 @@
       "remove": "Remove",
       "removeAria": "Remove {user} from this location",
       "siteAdmin": "Location admin",
+      "siteAdminAria": "Location admin right for {user}",
+      "siteAdminHelp": "Location admins see the uploaders of this location and may issue, replace and revoke their tokens. Only a system administrator grants the right.",
       "removedNote": "The location is disabled. Restore it to assign people."
     },
     "created": "Location “{name}” created.",
@@ -4573,15 +4576,133 @@
     "restored": "Location “{name}” restored.",
     "assigned": "{user} is assigned to location “{name}”.",
     "unassigned": "{user} is no longer assigned to location “{name}”.",
+    "siteAdminGranted": "{user} is now a location admin of “{name}”.",
+    "siteAdminWithdrawn": "{user} is no longer a location admin of “{name}”.",
     "disableTitle": "Disable location",
     "disableConfirm": "Disable location “{name}”? This only works when no study and no study site at it is active any more. The action is recorded in the audit trail, and the location can be restored.",
     "restoreTitle": "Restore location",
     "restoreConfirm": "Restore location “{name}”? It will be active again. The action is recorded in the audit trail.",
     "disableFailed": "Location “{name}” could not be disabled. {reason}",
     "restoreFailed": "Location “{name}” could not be restored. {reason}",
+    "tab": {
+      "label": "Sections of the location administration",
+      "locations": "Locations",
+      "sources": "Sources",
+      "sourcesBadgeAria": "{n} sources without a location"
+    },
+    "sources": {
+      "heading": "Sources",
+      "intro": "A source is where device files come from: an uploader on an acquisition PC, a DICOM device (by its AE title) or the Remidio account. Only a system administrator sees the files of a source without a location. Assign the source a location and its waiting files appear in that location’s inbox at once.",
+      "unassignedSummary": "Sources without a location: {sources}. Only a system administrator sees their waiting files: {files}.",
+      "allAssigned": "Every source has a location.",
+      "empty": "No source is known yet. Uploaders, DICOM devices and the Remidio account appear here once they are created or report for the first time.",
+      "column": {
+        "kind": "Kind",
+        "name": "Name",
+        "location": "Location",
+        "waiting": "Waiting files",
+        "lastSeen": "Last seen",
+        "status": "Status"
+      },
+      "kind": {
+        "uploader": "Uploader (acquisition PC)",
+        "dicom_ae": "DICOM device (AE title)",
+        "remidio": "Remidio account",
+        "portal": "Upload page"
+      },
+      "unassigned": "not assigned",
+      "locationAria": "Location of {name}",
+      "removedOption": "{name} (disabled)",
+      "waiting": "{n} file waiting | {n} files waiting",
+      "waitingHint": "Visible to system administrators only until a location is assigned.",
+      "neverSeen": "never",
+      "assigned": "Source “{name}” now belongs to location “{location}”.",
+      "assignedFiles": "Source “{name}” now belongs to location “{location}”. Waiting files that appear in its inbox: {n}.",
+      "unassignedNow": "Source “{name}” is no longer assigned to a location.",
+      "assignFailed": "Source “{name}” could not be assigned. {reason}",
+      "error": {
+        "loadFailed": "The sources could not be loaded (HTTP {status})."
+      }
+    },
     "error": {
       "loadFailed": "The locations could not be loaded (HTTP {status}).",
       "detailFailed": "The location could not be loaded (HTTP {status}).",
+      "saveFailed": "The change could not be saved (HTTP {status}).",
+      "network": "The server could not be reached.",
+      "unknown": "Unknown error."
+    }
+  },
+  "uploaders": {
+    "title": "Uploaders and tokens",
+    "subtitle": "Uploaders: {count} ({active} active)",
+    "intro": "An uploader is the program on an acquisition PC, such as the Export Watcher or the Optomed Bridge, that brings device files into a location’s inbox. It identifies itself with a token that is valid for exactly one location, so where a file came from is settled. “Last used” shows the last request made with the token, “Last report” the program’s last heartbeat.",
+    "create": "Create uploader",
+    "refresh": "Refresh",
+    "location": {
+      "label": "Location",
+      "single": "Location: {name}"
+    },
+    "empty": "This location has no uploader yet. “Create uploader” gives you the token for an acquisition PC.",
+    "noLocation": "No location is enabled for your account to manage uploaders at.",
+    "column": {
+      "name": "Name",
+      "token": "Token (start)",
+      "status": "Status",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "lastReport": "Last report"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "createdBy": "by {user}",
+    "never": "never",
+    "action": {
+      "rename": "Rename",
+      "renameAria": "Rename uploader {name}",
+      "replace": "Replace token",
+      "replaceAria": "Replace the token of uploader {name}",
+      "revoke": "Revoke",
+      "revokeAria": "Revoke uploader {name}"
+    },
+    "dialog": {
+      "createTitle": "Create uploader",
+      "renameTitle": "Rename uploader",
+      "createSubmit": "Create",
+      "renameSubmit": "Save",
+      "field": {
+        "name": "Name"
+      },
+      "nameHelp": "What the uploader stands for, for example “Clarus PC room 3”. At most 64 characters; the name is unique within the location.",
+      "tooLong": "At most 64 characters."
+    },
+    "token": {
+      "createdTitle": "Token for “{name}”",
+      "replacedTitle": "New token for “{name}”",
+      "warning": "This token is shown only now. It cannot be retrieved later; if it is lost, replace it with a new one.",
+      "whereTo": "Enter it in the settings dialog of the uploader on the acquisition PC, not on the command line.",
+      "label": "Token (shown once)",
+      "copy": "Copy",
+      "copied": "Token copied to the clipboard.",
+      "copyFailed": "Copying did not work. The token is selected; copy it with Ctrl+C (Mac: Cmd+C).",
+      "saved": "I have saved the token",
+      "close": "Close",
+      "closeHint": "You can close this once you have saved the token."
+    },
+    "created": "Uploader “{name}” created.",
+    "renamed": "Uploader “{name}” renamed.",
+    "replaced": "Token of “{name}” replaced. The previous token is no longer valid.",
+    "revoked": "Uploader “{name}” revoked.",
+    "replaceTitle": "Replace token",
+    "replaceConfirm": "Replace the token of “{name}”? The previous token stops working at once: the uploader reports “token rejected” and leaves its files in the watch folder until the new token is in its settings. The new token is shown once. The action is recorded in the audit trail.",
+    "replaceConfirmRevoked": "Uploader “{name}” is revoked. A new token lifts the revocation; the previous token stays invalid. The new token is shown once. The action is recorded in the audit trail.",
+    "revokeTitle": "Revoke uploader",
+    "revokeConfirm": "Revoke uploader “{name}”? Its token is refused at once; the uploader leaves its files in the watch folder and shows that in its tray icon. “Replace token” lifts the revocation again. The action is recorded in the audit trail.",
+    "replaceFailed": "The token of “{name}” could not be replaced. {reason}",
+    "revokeFailed": "Uploader “{name}” could not be revoked. {reason}",
+    "error": {
+      "loadFailed": "The uploaders could not be loaded (HTTP {status}).",
       "saveFailed": "The change could not be saved (HTTP {status}).",
       "network": "The server could not be reached.",
       "unknown": "Unknown error."
