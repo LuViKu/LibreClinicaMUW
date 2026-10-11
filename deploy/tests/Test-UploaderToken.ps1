@@ -25,6 +25,9 @@
     - the bridge's worklist call keeps the last good worklist on a 401 and
       writes no empty one;
     - a 429, a 500 and the give-up after 5 attempts behave as they did;
+    - (watcher, regression) a file with several scans - a two-volume .e2e - reaches the
+      lookup and one commit per scan, each with its own scanIndex, and is filed as
+      uploaded instead of being set aside as a non-image; a Raw Data object still is;
     - a refusal that persists is logged once, and the token never appears in
       the log or the heartbeat body.
 
@@ -167,14 +170,17 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 public class FakePlatform : HttpMessageHandler
 {
     // Replies are queued per endpoint (the last segment of the path). Seen records
-    // "endpoint up=<X-MUW-Uploader-Token or -> old=<X-MUW-Optomed-Token or ->".
+    // "endpoint up=<X-MUW-Uploader-Token or -> old=<X-MUW-Optomed-Token or ->"; Fields is parallel to
+    // it: the form fields of an upload ("name=value;" each, the file itself as <file>) or the JSON of a lookup.
     public Dictionary<string, Queue<HttpResponseMessage>> Replies = new Dictionary<string, Queue<HttpResponseMessage>>();
     public List<string> Seen = new List<string>();
+    public List<string> Fields = new List<string>();
     public int Unexpected = 0;
     public void Enqueue(string endpoint, HttpResponseMessage reply)
     {
@@ -189,6 +195,21 @@ public class FakePlatform : HttpMessageHandler
         string path = request.RequestUri.AbsolutePath;
         string endpoint = path.Substring(path.LastIndexOf('/') + 1);
         Seen.Add(endpoint + " up=" + up + " old=" + old);
+        string fields = "";
+        MultipartFormDataContent mp = request.Content as MultipartFormDataContent;
+        if (mp != null)
+        {
+            foreach (HttpContent part in mp)
+            {
+                ContentDispositionHeaderValue cd = part.Headers.ContentDisposition;
+                if (cd == null || cd.Name == null) continue;
+                string name = cd.Name.Trim('"');
+                if (cd.FileName != null) { fields += name + "=<file>;"; continue; }
+                fields += name + "=" + part.ReadAsStringAsync().Result + ";";
+            }
+        }
+        else if (request.Content != null) fields = request.Content.ReadAsStringAsync().Result;
+        Fields.Add(fields);
         HttpResponseMessage reply;
         if (Replies.ContainsKey(endpoint) && Replies[endpoint].Count > 0) reply = Replies[endpoint].Dequeue();
         else
@@ -247,15 +268,16 @@ if ($Target -eq 'watcher') {
         [pscustomobject]@{ PatientId = $label; ScanDate = '2026-10-12'; Laterality = 'OD'; ScanIndex = $index
                            Device = $(if ($kind -eq 'e2e') { 'spectralis' } else { 'clarus' }); Kind = $kind; NonImage = $nonImage }
     }
-    # Stands in for the DICOM and .e2e readers. A single scan is returned wrapped as ,@(...) like the real
-    # function does. The two volumes of one .e2e are returned FLAT, on purpose: the real function wraps them
-    # the same way, and the sweep's @(Get-FileScans ...) then keeps two or more scans nested, so the sweep
-    # drops such a file as a non-image. That is old and has nothing to do with DR-040; what is tested below
-    # is how the commit loop copes with several scans of one file once they do reach it.
+    # Stands in for the DICOM and .e2e readers and returns the REAL SHAPE: the scans of every file wrapped as
+    # ,@(...), whether there is one or several - which is what the real Get-FileScans does, and what the sweep
+    # must cope with (it once called it as @(Get-FileScans ...), which keeps two or more scans nested in one
+    # element; see the regression scenarios below). c*.e2e has two volumes (ScanIndex 0 and 1), one*.e2e one
+    # volume, raw* is a Raw Data object (NonImage), bad* cannot be read.
     function Get-FileScans([pscustomobject]$cfg, [IO.FileInfo]$f) {
         if ($f.Name -like 'bad*') { throw 'unreadable test file' }
         if ($f.Name -like 'raw*') { return ,@(New-Scan 'PRAW' 0 'dicom' $true) }
-        if ($f.Extension -eq '.e2e') { return @((New-Scan ('P' + $f.BaseName) 0 'e2e' $false), (New-Scan ('P' + $f.BaseName) 1 'e2e' $false)) }
+        if ($f.Name -like 'one*.e2e') { return ,@(New-Scan ('P' + $f.BaseName) 0 'e2e' $false) }
+        if ($f.Extension -eq '.e2e') { return ,@((New-Scan ('P' + $f.BaseName) 0 'e2e' $false), (New-Scan ('P' + $f.BaseName) 1 'e2e' $false)) }
         return ,@(New-Scan ('P' + $f.BaseName) 0 'dicom' $false)
     }
     function Reset-Watcher {
@@ -276,6 +298,66 @@ if ($Target -eq 'watcher') {
     }
     function Invoke-TwoSweeps($cfg) { Invoke-Sweep $cfg | Out-Null; Invoke-Sweep $cfg }     # the first only marks the sizes
     function Add-Commits($fake, [int[]]$statuses) { foreach ($s in $statuses) { $fake.Enqueue('commit', (New-Reply $s)) } }
+    function Get-CommitScans($fake) {         # "<label>:<scanIndex>" of every commit the fake saw, in order
+        for ($i = 0; $i -lt $fake.Seen.Count; $i++) {
+            if ($fake.Seen[$i] -like 'commit *') {
+                $label = [regex]::Match($fake.Fields[$i], 'patientId=([^;]*);').Groups[1].Value
+                $index = [regex]::Match($fake.Fields[$i], 'scanIndex=([^;]*);').Groups[1].Value
+                "${label}:${index}"
+            }
+        }
+    }
+
+    Section 'watcher: a file with several scans is uploaded once per scan (regression: it was set aside as a non-image)'
+    Reset-Watcher
+    $dir = New-Folder @('c.e2e'); $cfg = New-Cfg $dir $TOK
+    $volumes = @(foreach ($v in (Get-FileScans $cfg (Get-Item (Join-Path $dir 'c.e2e')))) { $v.ScanIndex })
+    Check (($volumes -join ',') -eq '0,1') 'the -SelfTest loop, foreach over (Get-FileScans ...), sees both volumes'
+    $script:Fake.Enqueue('resolve', (New-ResolveReply 2)); Add-Commits $script:Fake 201, 201
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 2 (2 bound), 0 already there, 0 failed, 0 non-image set aside') 'both volumes are uploaded, none is set aside'
+    Check ((Get-Names $dir '_uploaded') -eq 'c.e2e' -and (Get-Names $dir '_skipped') -eq '(none)' -and (Get-Names $dir) -eq '') 'the file is filed as uploaded, not in _skipped'
+    Check ($script:Fake.Seen.Count -eq 3 -and $script:Fake.Seen[0] -like 'resolve *' -and $script:Fake.Unexpected -eq 0) 'one lookup and two commits'
+    Check (([regex]::Matches($script:Fake.Fields[0], 'patientId')).Count -eq 2) 'the lookup asked about both volumes'
+    Check ((@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pc:0,Pc:1') 'each commit carries its own scanIndex (0 and 1)'
+    Assert-NoSecret 'several scans'
+
+    Section 'watcher: a single-volume .e2e, a single DICOM and a Raw Data object in one sweep'
+    Reset-Watcher
+    $dir = New-Folder @('one.e2e'); $cfg = New-Cfg $dir $TOK
+    $script:Fake.Enqueue('resolve', (New-ResolveReply 1)); Add-Commits $script:Fake 201
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 1 (1 bound), 0 already there, 0 failed, 0 non-image set aside' -and (Get-Names $dir '_uploaded') -eq 'one.e2e' -and (@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pone:0') 'a single-volume .e2e alone: one commit, scanIndex 0, filed as uploaded'
+    Reset-Watcher
+    $dir = New-Folder @('a.dcm', 'c.e2e', 'one.e2e', 'raw.dcm'); $cfg = New-Cfg $dir $TOK
+    $script:Fake.Enqueue('resolve', (New-ResolveReply 4)); Add-Commits $script:Fake 201, 201, 201, 201
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 4 (4 bound), 0 already there, 0 failed, 1 non-image set aside') 'four scans uploaded, one non-image set aside'
+    Check ((Get-Names $dir '_uploaded') -eq 'a.dcm,c.e2e,one.e2e') 'the DICOM, the single-volume and the two-volume .e2e are filed as uploaded'
+    Check ((Get-Names $dir '_skipped') -eq 'raw.dcm' -and (Get-Names $dir) -eq '') 'only the Raw Data object is set aside'
+    Check ((@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pa:0,Pc:0,Pc:1,Pone:0') 'one commit per scan, each with its own scanIndex'
+    Check (([regex]::Matches($script:Fake.Fields[0], 'patientId')).Count -eq 4) 'one lookup for the whole sweep, with all four scans in it'
+
+    Section 'watcher: a two-volume .e2e put back from _skipped, where the old sweep left it'
+    foreach ($case in @(
+        @{ Name = 'neither volume is on the platform'; Commits = (201, 201); Result = 'uploaded 2 (2 bound), 0 already there, 0 failed, 0 non-image set aside' },
+        @{ Name = 'volume 0 is there already (409)';   Commits = (409, 201); Result = 'uploaded 1 (1 bound), 1 already there, 0 failed, 0 non-image set aside' },
+        @{ Name = 'both volumes are there already';    Commits = (409, 409); Result = 'uploaded 0 (0 bound), 2 already there, 0 failed, 0 non-image set aside' }
+    )) {
+        $n = $case.Name
+        Reset-Watcher
+        $dir = New-Folder @('c.e2e'); $cfg = New-Cfg $dir $TOK
+        New-Item -ItemType Directory -Force (Join-Path $dir '_skipped') | Out-Null
+        Move-Item (Join-Path $dir 'c.e2e') (Join-Path $dir '_skipped/c.e2e')
+        Invoke-TwoSweeps $cfg | Out-Null
+        Check ((Get-Names $dir '_skipped') -eq 'c.e2e' -and $script:Fake.Seen.Count -eq 0) "$n : a file in _skipped is left alone, nothing is sent"
+        Move-Item (Join-Path $dir '_skipped/c.e2e') (Join-Path $dir 'c.e2e')
+        $script:Fake.Enqueue('resolve', (New-ResolveReply 2)); Add-Commits $script:Fake @($case.Commits)
+        $result = Invoke-TwoSweeps $cfg
+        Check ($result -ceq $case.Result) "$n : put back, it is processed like a new file ($($case.Result))"
+        Check ((Get-Names $dir '_uploaded') -eq 'c.e2e' -and (Get-Names $dir) -eq '' -and (Get-Names $dir '_skipped') -eq '') "$n : and filed as uploaded - a 409 (already there) is harmless"
+        Check ((@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pc:0,Pc:1') "$n : both volumes were sent, each with its own scanIndex"
+    }
 
     Section 'watcher: a 401 on the lookup leaves every file where it is'
     foreach ($case in @(

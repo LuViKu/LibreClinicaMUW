@@ -138,7 +138,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 $script:AppName     = 'Export Watcher'
 # Shown on the System Status page beside this PC's name. Bump with every
 # change to this script, so a PC still running an old copy stands out.
-$script:Version     = '2026-10-12.1'
+$script:Version     = '2026-10-12.2'
 $script:Kind        = 'export-watcher'
 $script:StateDir    = Split-Path -Parent $ConfigPath
 $script:LogPath     = Join-Path $script:StateDir 'export-watcher.log'
@@ -926,7 +926,11 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
     $failLater = New-Object Collections.ArrayList
     foreach ($f in $ready) {
         try {
-            $scans = @(Get-FileScans $cfg $f)
+            # No @( ) around this call. Get-FileScans returns its list as ,@(...), which is what keeps a
+            # single scan an array; @( ) would keep that wrapper too and nest two or more scans inside ONE
+            # element, and the filter below would then drop the file as a non-image (a two-volume .e2e
+            # was set aside to _skipped\ and never uploaded). Assigned plainly, $scans is the list itself.
+            $scans = Get-FileScans $cfg $f
             if (-not $cfg.UploadNonImage -and @($scans | Where-Object { -not $_.NonImage }).Count -eq 0) {
                 # a Raw Data object or a report, not a picture: not for the visit
                 $setAside++; [void]$skipLater.Add($f); continue
