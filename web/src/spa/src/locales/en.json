@@ -1396,6 +1396,7 @@
     "submitCreate": "Create site",
     "empty": "No sites configured under this study yet.",
     "pi": "Principal investigator",
+    "location": "Location",
     "statusRemoved": "Removed",
     "statusPending": "Pending",
     "disable": "Remove",
@@ -1406,11 +1407,18 @@
       "uniqueProtocolId": "Unique protocol ID",
       "principalInvestigator": "Principal investigator",
       "briefSummary": "Brief summary",
-      "facilityName": "Facility name",
-      "facilityCity": "City",
+      "location": "Location",
+      "locationHint": "The facility name and address are taken from the location.",
       "facilityContactEmail": "Contact email"
     },
-    "created": "Site “{name}” created."
+    "created": "Site “{name}” created.",
+    "move": {
+      "action": "Change location",
+      "title": "Change location",
+      "intro": "Move site “{name}” to another location. The facility name and address are taken from the new location; the change is recorded in the audit trail.",
+      "submit": "Move site",
+      "done": "Site “{name}” is now at location “{location}”."
+    }
   },
   "locationSelect": {
     "label": "Location",

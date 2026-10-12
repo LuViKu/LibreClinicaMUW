@@ -1396,6 +1396,7 @@
     "submitCreate": "Standort anlegen",
     "empty": "Noch keine Standorte unter dieser Studie.",
     "pi": "Studienleitung",
+    "location": "Standort",
     "statusRemoved": "Entfernt",
     "statusPending": "In Vorbereitung",
     "disable": "Entfernen",
@@ -1406,11 +1407,18 @@
       "uniqueProtocolId": "Eindeutige Protokoll-ID",
       "principalInvestigator": "Studienleitung",
       "briefSummary": "Kurzbeschreibung",
-      "facilityName": "Einrichtungsname",
-      "facilityCity": "Stadt",
+      "location": "Standort",
+      "locationHint": "Name und Anschrift der Einrichtung werden vom Standort übernommen.",
       "facilityContactEmail": "Kontakt-E-Mail"
     },
-    "created": "Standort „{name}“ angelegt."
+    "created": "Standort „{name}“ angelegt.",
+    "move": {
+      "action": "Standort ändern",
+      "title": "Standort ändern",
+      "intro": "Das Prüfzentrum „{name}“ an einen anderen Standort verlegen. Name und Anschrift der Einrichtung werden vom neuen Standort übernommen; die Änderung wird im Audit Trail dokumentiert.",
+      "submit": "Prüfzentrum verlegen",
+      "done": "Das Prüfzentrum „{name}“ ist jetzt am Standort „{location}“."
+    }
   },
   "locationSelect": {
     "label": "Standort",

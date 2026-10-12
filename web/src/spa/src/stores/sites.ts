@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
-import type { CreateSiteInput, StudyIdentity } from '@/types/study'
+import type { CreateSiteInput, StudyIdentity, UpdateSiteInput } from '@/types/study'
 
 /**
  * Phase E A8.4 — sites store.
@@ -49,7 +49,7 @@ export const useSitesStore = defineStore('sites', () => {
   async function update(
     parentOid: string,
     siteOid: string,
-    patch: Partial<CreateSiteInput>,
+    patch: UpdateSiteInput,
   ): Promise<MutationResult> {
     return mutate(
       () => apiPut<StudyIdentity>(
