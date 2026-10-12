@@ -746,7 +746,7 @@ public class PublicOctUploadController {
      * pipeline, and the SPA's existing fallback chain still surfaces
      * a date (visit_date / completed_at) when the column is null.
      */
-    private void persistAcquisitionDate(long primaryJobId, String e2eUuid, String iso) {
+    private void persistAcquisitionDate(long primaryJobId, String iso) {
         if (iso == null || iso.isBlank()) return;
         java.sql.Date date;
         try {
@@ -841,7 +841,7 @@ public class PublicOctUploadController {
                         // the SPA's date chain falls back to
                         // visit_date / completed_at as before.
                         if (prep.acquisitionDate() != null && !prep.acquisitionDate().isBlank()) {
-                            persistAcquisitionDate(primaryJobId, e2eUuid, prep.acquisitionDate());
+                            persistAcquisitionDate(primaryJobId, prep.acquisitionDate());
                         }
                     }
                 } catch (Exception prepEx) {

@@ -243,7 +243,7 @@ public class SubjectExportApiController {
         // gigabytes, and buffering them would mean holding the whole export in
         // heap to hand it to the same response.
         if (fmt.equals("bundle")) {
-            return exportBundle(ss, subj, pathStudy, snapshot, currentUser,
+            return exportBundle(ss, pathStudy, snapshot, currentUser,
                     Boolean.TRUE.equals(body.dryRun()), session, response);
         }
 
@@ -313,7 +313,7 @@ public class SubjectExportApiController {
      * to the study, not to whoever happens to be signed in, and defaulting it
      * on would ship a new data-egress path to every deployment silently.
      */
-    private ResponseEntity<?> exportBundle(StudySubjectBean ss, SubjectBean subj,
+    private ResponseEntity<?> exportBundle(StudySubjectBean ss,
                                            StudyBean pathStudy, CasebookSnapshot snapshot,
                                            UserAccountBean currentUser, boolean dryRun,
                                            HttpSession session, HttpServletResponse response) {

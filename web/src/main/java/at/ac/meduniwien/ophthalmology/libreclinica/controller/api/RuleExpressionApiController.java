@@ -510,7 +510,7 @@ public class RuleExpressionApiController {
                     "Failed to persist rule"));
         }
 
-        writeRuleCreateAudit(me, study, persisted);
+        writeRuleCreateAudit(me, persisted);
         LOG.info("Create rule: id={} oid='{}' study={} by={}",
                 persisted.getId(), oid, study.getOid(), me.getName());
 
@@ -787,13 +787,13 @@ public class RuleExpressionApiController {
         // failure (e.g. row insert throws) doesn't roll back the
         // others — matches the RX.7 try/catch-per-row pattern.
         if (nameChanged) {
-            writeRuleFieldAudit(me, study, fresh, "name", oldName, newName);
+            writeRuleFieldAudit(me, fresh, "name", oldName, newName);
         }
         if (descriptionChanged) {
-            writeRuleFieldAudit(me, study, fresh, "description", oldDescription, newDescription);
+            writeRuleFieldAudit(me, fresh, "description", oldDescription, newDescription);
         }
         if (expressionChanged) {
-            writeRuleFieldAudit(me, study, fresh, "expression", oldExpression, newExpression);
+            writeRuleFieldAudit(me, fresh, "expression", oldExpression, newExpression);
         }
 
         LOG.info("Update rule: id={} oid='{}' study={} name={} description={} expression={} by={}",
@@ -819,7 +819,6 @@ public class RuleExpressionApiController {
      * downstream audit-trail rendering treats both tables uniformly.
      */
     private void writeRuleFieldAudit(UserAccountBean me,
-                                     StudyBean study,
                                      RuleBean rule,
                                      String columnName,
                                      String oldValue,
@@ -833,7 +832,7 @@ public class RuleExpressionApiController {
     /* Audit helper                                                      */
     /* ----------------------------------------------------------------- */
 
-    private void writeRuleCreateAudit(UserAccountBean me, StudyBean study, RuleBean rule) {
+    private void writeRuleCreateAudit(UserAccountBean me, RuleBean rule) {
         writeRuleAudit(AuditTypeIds.RULE_CREATED, me.getId(),
                 "rule", rule.getId(),
                 "create", "", rule.getOid() == null ? "" : rule.getOid());

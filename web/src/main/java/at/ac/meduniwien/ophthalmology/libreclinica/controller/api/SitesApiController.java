@@ -364,7 +364,7 @@ public class SitesApiController {
             LOG.info("Move site: site id {} to location id {} by user id {}", site.getId(), moveTo.id(), me.getId());
         }
 
-        LOG.info("Update site: parentOid={} siteOid={} by user={}", parentOid, siteOid, me.getName());
+        LOG.info("Update site: site id {} by user id {}", site.getId(), me.getId());
 
         return ResponseEntity.ok(toIdentityDto(site, parent));
     }
@@ -456,7 +456,7 @@ public class SitesApiController {
                     "Site '" + siteOid + "' is not " + (removal ? "live" : "removed")
                             + " any more; nothing was changed. Reload and check its status."));
         } catch (Exception e) {
-            LOG.error("Site {} failed for siteOid={} by user={}", operation, siteOid, me.getName(), e);
+            LOG.error("Site {} failed for site id {} by user id {}", removal ? "remove" : "restore", siteId, me.getId(), e);
             return ResponseEntity.internalServerError().body(Map.of("message",
                     "Failed to " + (removal ? "remove" : "restore") + " the site; nothing was changed. "
                             + "See server log."));
@@ -469,9 +469,9 @@ public class SitesApiController {
             sessionStudy.setStatus(refreshed.getStatus());
         }
 
-        LOG.info("Site {}: parentOid={} siteOid={} by user={} roles={} subjects={} groupMaps={} events={} "
+        LOG.info("Site {}: site id {} by user id {} roles={} subjects={} groupMaps={} events={} "
                         + "eventCrfs={} items={} datasets={}",
-                operation, parentOid, siteOid, me.getName(), impact.roleBindings(), impact.subjects(),
+                removal ? "remove" : "restore", siteId, me.getId(), impact.roleBindings(), impact.subjects(),
                 impact.groupMaps(), impact.events(), impact.eventCrfs(), impact.itemData(), impact.datasets());
 
         return ResponseEntity.ok(toIdentityDto(refreshed, parent));

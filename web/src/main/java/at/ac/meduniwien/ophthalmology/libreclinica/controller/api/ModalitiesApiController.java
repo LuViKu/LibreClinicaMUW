@@ -189,7 +189,7 @@ public class ModalitiesApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "code must be ≤ 64 characters."));
         }
-        ResponseEntity<?> shapeError = validateShape(body, /* requireCode */ false);
+        ResponseEntity<?> shapeError = validateShape(body);
         if (shapeError != null) return shapeError;
 
         // Uniqueness — collide on active OR deleted rows. The unique
@@ -240,7 +240,7 @@ public class ModalitiesApiController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Request body is required."));
         }
-        ResponseEntity<?> shapeError = validateShape(body, /* requireCode */ false);
+        ResponseEntity<?> shapeError = validateShape(body);
         if (shapeError != null) return shapeError;
 
         try (Connection c = dataSource.getConnection()) {
@@ -322,7 +322,7 @@ public class ModalitiesApiController {
         return null;
     }
 
-    private ResponseEntity<?> validateShape(ModalityWriteRequest body, boolean requireCode) {
+    private ResponseEntity<?> validateShape(ModalityWriteRequest body) {
         String labelEn = trim(body.labelEn());
         if (labelEn.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(

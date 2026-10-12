@@ -189,7 +189,7 @@ public class MeApiController {
                 // that projected a single sentinel role.
                 String fallback = currentRole != null && currentRole.getRole() != null
                         ? RoleMapper.toSpaRole(currentRole.getRole().getName())
-                        : highestSpaRoleAnywhere(ub.getName());
+                        : highestSpaRoleAnywhere();
                 spaRoles = List.of(fallback);
             }
         }
@@ -872,7 +872,7 @@ public class MeApiController {
         }
     }
 
-    private static String highestSpaRoleAnywhere(String userName) {
+    private static String highestSpaRoleAnywhere() {
         return "Investigator";
     }
 

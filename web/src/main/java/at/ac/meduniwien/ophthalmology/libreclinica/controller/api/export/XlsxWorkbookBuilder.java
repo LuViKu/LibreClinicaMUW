@@ -180,7 +180,6 @@ public final class XlsxWorkbookBuilder implements AutoCloseable {
     /** Releases the workbook and deletes SXSSF's temporary file. */
     @Override
     public void close() throws IOException {
-        workbook.dispose();
         workbook.close();
     }
 

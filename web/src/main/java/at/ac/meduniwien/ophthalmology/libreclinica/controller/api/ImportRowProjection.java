@@ -184,13 +184,13 @@ final class ImportRowProjection {
                              SubjectDataBean subject, StudyEventDataBean event, FormDataBean form,
                              StudySubjectBean studySubject, StudyEventBean visit, String refusal) {
         if (refusal != null) {
-            forEachValue(subject, event, form, (g, i) -> rows.add(row(ERROR, ACTION_SKIP,
+            forEachValue(form, (g, i) -> rows.add(row(ERROR, ACTION_SKIP,
                     subject, event, form, g, i, null, refusal)));
             return;
         }
         List<CRFVersionBean> versions = crfVersionDao.findAllByOid(form.getFormOID());
         if (versions == null || versions.isEmpty()) {
-            forEachValue(subject, event, form, (g, i) -> rows.add(row(ERROR, ACTION_SKIP,
+            forEachValue(form, (g, i) -> rows.add(row(ERROR, ACTION_SKIP,
                     subject, event, form, g, i, null, "Unknown CRF version " + form.getFormOID())));
             return;
         }
@@ -206,12 +206,12 @@ final class ImportRowProjection {
                         ? "The CRF has not been started and its visit is " + s.getName()
                             + "; the import only starts CRFs of scheduled, started or completed visits."
                         : "The CRF has not been started and the file's UpsertOn excludes NotStarted.";
-                forEachValue(subject, event, form, (g, i) -> rows.add(row(WARNING, ACTION_SKIP,
+                forEachValue(form, (g, i) -> rows.add(row(WARNING, ACTION_SKIP,
                         subject, event, form, g, i, null, skip)));
                 return;
             }
-            forEachValue(subject, event, form, (g, i) -> {
-                String unknown = unknownOid(g, i);
+            forEachValue(form, (g, i) -> {
+                String unknown = unknownOid(i);
                 if (unknown != null) {
                     rows.add(row(ERROR, ACTION_SKIP, subject, event, form, g, i, null, unknown));
                     issues.add(new ImportIssue("row", subject.getSubjectOID() + " · " + eventLabel(event)
@@ -232,13 +232,13 @@ final class ImportRowProjection {
                 || (upsert.isDataEntryComplete() && DataEntryStage.DOUBLE_DATA_ENTRY_COMPLETE.equals(stage));
         if (!fills) {
             String skip = "The CRF is " + describe(ecb) + "; the import does not write into it.";
-            forEachValue(subject, event, form, (g, i) -> rows.add(row(WARNING, ACTION_SKIP,
+            forEachValue(form, (g, i) -> rows.add(row(WARNING, ACTION_SKIP,
                     subject, event, form, g, i, null, skip)));
             return;
         }
         int eventCrfId = ecb.getId();
-        forEachValue(subject, event, form, (g, i) -> {
-            String unknown = unknownOid(g, i);
+        forEachValue(form, (g, i) -> {
+            String unknown = unknownOid(i);
             if (unknown != null) {
                 rows.add(row(ERROR, ACTION_SKIP, subject, event, form, g, i, null, unknown));
                 issues.add(new ImportIssue("row", subject.getSubjectOID() + " · " + eventLabel(event)
@@ -276,7 +276,7 @@ final class ImportRowProjection {
      * looks for. (Its item-group check compares the DAO's result with null,
      * which that DAO never returns, so an unknown group stops nothing.)
      */
-    private String unknownOid(ImportItemGroupDataBean group, ImportItemDataBean value) {
+    private String unknownOid(ImportItemDataBean value) {
         ItemBean item = item(value.getItemOID());
         if (item == null) return "Unknown item " + value.getItemOID();
         boolean hasMetadata = itemsWithMetadata.computeIfAbsent(item.getId(),
@@ -332,13 +332,13 @@ final class ImportRowProjection {
                 if (event == null || event.getFormData() == null) continue;
                 for (FormDataBean form : event.getFormData()) {
                     if (form == null || form.getItemGroupData() == null) continue;
-                    forEachValue(subject, event, form, (g, i) -> visitor.visit(subject, event, form, g, i));
+                    forEachValue(form, (g, i) -> visitor.visit(subject, event, form, g, i));
                 }
             }
         }
     }
 
-    private static void forEachValue(SubjectDataBean subject, StudyEventDataBean event, FormDataBean form,
+    private static void forEachValue(FormDataBean form,
                                      FormLeafVisitor visitor) {
         for (ImportItemGroupDataBean group : form.getItemGroupData()) {
             if (group == null || group.getItemData() == null) continue;

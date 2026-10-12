@@ -944,7 +944,7 @@ public class UsersApiController {
                 heldLegacy = legacyRolesIn(activeRawRoles(username, study.getId()));
             } catch (SQLException e) {
                 LOG.warn("Failed to read current grants for (study={}, user={}): {}",
-                        study.getId(), username, e.getMessage());
+                        study.getId(), target.getName(), e.getMessage());
                 return ResponseEntity.status(500).body(Map.of("message",
                         "Failed to load current role grants"));
             }
@@ -1880,14 +1880,12 @@ public class UsersApiController {
             }
         }
 
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-
         if (body.firstName() != null) {
             String oldVal = target.getFirstName();
             String newVal = body.firstName().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setFirstName(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "first_name", oldVal, newVal);
+                writeUserFieldAudit(me, target, "first_name", oldVal, newVal);
             }
         }
         if (body.lastName() != null) {
@@ -1895,7 +1893,7 @@ public class UsersApiController {
             String newVal = body.lastName().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setLastName(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "last_name", oldVal, newVal);
+                writeUserFieldAudit(me, target, "last_name", oldVal, newVal);
             }
         }
         if (body.email() != null) {
@@ -1903,7 +1901,7 @@ public class UsersApiController {
             String newVal = body.email().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setEmail(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "email", oldVal, newVal);
+                writeUserFieldAudit(me, target, "email", oldVal, newVal);
             }
         }
         if (body.phone() != null) {
@@ -1911,7 +1909,7 @@ public class UsersApiController {
             String newVal = body.phone().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setPhone(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "phone", oldVal, newVal);
+                writeUserFieldAudit(me, target, "phone", oldVal, newVal);
             }
         }
         if (body.institutionalAffiliation() != null) {
@@ -1919,7 +1917,7 @@ public class UsersApiController {
             String newVal = body.institutionalAffiliation().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setInstitutionalAffiliation(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "institutional_affiliation", oldVal, newVal);
+                writeUserFieldAudit(me, target, "institutional_affiliation", oldVal, newVal);
             }
         }
         if (body.authtype() != null) {
@@ -1927,7 +1925,7 @@ public class UsersApiController {
             String newVal = body.authtype().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setAuthtype(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "authtype", oldVal, newVal);
+                writeUserFieldAudit(me, target, "authtype", oldVal, newVal);
             }
         }
         if (requestedType != null) {
@@ -1937,7 +1935,7 @@ public class UsersApiController {
                 // (EditUserAccountServlet replaces the user_type via
                 // the same path).
                 target.addUserType(requestedType);
-                writeUserFieldAudit(auditDAO, me, target, "user_type",
+                writeUserFieldAudit(me, target, "user_type",
                         oldType.getName(), requestedType.getName());
             }
         }
@@ -1946,7 +1944,7 @@ public class UsersApiController {
             boolean newVal = body.runWebservices();
             if (oldVal != newVal) {
                 target.setRunWebservices(newVal);
-                writeUserFieldAudit(auditDAO, me, target, "run_webservices",
+                writeUserFieldAudit(me, target, "run_webservices",
                         Boolean.toString(oldVal), Boolean.toString(newVal));
                 if (newVal) {
                     // Flipping run_webservices on regenerates the API key
@@ -2048,8 +2046,7 @@ public class UsersApiController {
      * {@link #emitUnlockAudit} / {@code MeApiController#emitProfileAudit}
      * — {@code audit_log_event} has no {@code column_name} column).
      */
-    private void writeUserFieldAudit(@SuppressWarnings("unused") AuditEventDAO auditDAO,
-                                     UserAccountBean editor,
+    private void writeUserFieldAudit(UserAccountBean editor,
                                      UserAccountBean target,
                                      String columnName,
                                      String oldValue,
