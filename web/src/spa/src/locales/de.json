@@ -1405,7 +1405,8 @@
       "facilityName": "Einrichtungsname",
       "facilityCity": "Stadt",
       "facilityContactEmail": "Kontakt-E-Mail"
-    }
+    },
+    "created": "Standort „{name}“ angelegt."
   },
   "crfLibrary": {
     "title": "CRF-Bibliothek",

@@ -257,7 +257,14 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         variables.put(21, sb.getUpdaterId());// owner
         // id
         variables.put(22, sb.getUpdatedDate());// date updated
-        variables.put(23, sb.getOldStatus().getId());// study id
+        // old_status_id: the status a removal recorded. A bean that has never
+        // been through one (a study or site created in this request) has none.
+        if (sb.getOldStatus() == null) {
+            nullVars.put(23, Types.INTEGER);
+            variables.put(23, null);
+        } else {
+            variables.put(23, sb.getOldStatus().getId());
+        }
         // variables.put(Integer.valueOf(22), Integer.valueOf(1));
         // stop gap measure for owner and updater id
         variables.put(24, sb.getMailNotification());
