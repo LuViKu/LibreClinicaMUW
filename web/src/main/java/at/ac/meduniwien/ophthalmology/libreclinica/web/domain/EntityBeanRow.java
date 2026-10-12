@@ -185,7 +185,6 @@ public abstract class EntityBeanRow<T, R> implements Comparable<EntityBeanRow<T,
      *
      * <p>
      * Code that's more specific to the subclass is obviously recommended.
-     * @param <R>
      *
      * @param beans
      *            A set of EntityBeans which are to be displayed.

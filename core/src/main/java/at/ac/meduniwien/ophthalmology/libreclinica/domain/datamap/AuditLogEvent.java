@@ -70,25 +70,6 @@ public class AuditLogEvent extends DataMapDomainObject implements Serializable{
 		this.auditTable = auditTable;
 	}
 
-	public AuditLogEvent(int auditId, Date auditDate, String auditTable,
-			Integer userId, Integer entityId, String entityName,
-			String reasonForChange, /*Integer auditLogEventTypeId,*/
-			String oldValue, String newValue, Integer eventCrfId,
-			Integer studyEventId, Integer eventCrfVersionId) {
-		this.auditId = auditId;
-		this.auditDate = auditDate;
-		this.auditTable = auditTable;
-		this.entityId = entityId;
-		this.entityName = entityName;
-		this.reasonForChange = reasonForChange;
-	//	this.auditLogEventTypeId = auditLogEventTypeId;
-		this.oldValue = oldValue;
-		this.newValue = newValue;
-		this.eventCrfId = eventCrfId;
-		this.studyEventId = studyEventId;
-		this.eventCrfVersionId = eventCrfVersionId;
-	}
-
 	@Id
 	@Column(name = "audit_id", unique = true, nullable = false)
 	public int getAuditId() {

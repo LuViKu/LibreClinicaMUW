@@ -368,7 +368,7 @@ public class ScoreValidator {
             boolean isNextSign = isValidSign(next, nextnext, func);
             if (!isNextSign) {
                 // System.out.println("got this far: func: " + func);
-                if (!isValidOrder(c, next, func)) { //&& !isValidUrl(contents, token, func)) {
+                if (!isValidOrder(c, next, func)) {
                     // errors.append("One character"+" " + c + " "+"has been
                     // followed by a wrong character"+" " + next + "; ");
                     errors.append(resexception.getString("the_character") + " " + c + " " + resexception.getString("should_not_followed_by_character") + " "
@@ -405,16 +405,6 @@ public class ScoreValidator {
         return true;
     }
     
-    /*
-     * checks to make sure we have a valid URL for the external-value function. tbh, 05/2009
-     */
-    public boolean isValidUrl(char[] contents, String token, String func) {
-        // System.out.println("found contents: " + contents.toString() + " for token: " + token + " and for func: " + func);
-        if (func.equalsIgnoreCase("getexternalvalue"))//(contents.toString().startsWith("http://"))
-            return true;
-        return false;
-    }
-
     public boolean isValidArgument(String term, StringBuffer errors, ArrayList<String> allVariables) {
         if (isNumber(term)) {
             return true;

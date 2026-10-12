@@ -678,7 +678,7 @@ public class StudyBean extends AuditableEntityBean {
         StringBuffer sb = new StringBuffer();
         String intervention, name;
         while (st.hasMoreElements()) {
-            StringTokenizer inter = new StringTokenizer(st.nextToken().toString(), "/");
+            StringTokenizer inter = new StringTokenizer(st.nextToken(), "/");
             intervention = inter.nextToken();
             sb.append(ResourceBundleProvider.getResAdmin(intervention));
             sb.append("/");
@@ -1214,7 +1214,7 @@ public class StudyBean extends AuditableEntityBean {
     }
 
     public boolean contactEmailAbsent() {
-        return null == this.contactEmail || "".equals(this.contactEmail);
+        return null == this.contactEmail || this.contactEmail.isEmpty();
     }
 
     public boolean contactEmailAbsentButNotification() {

@@ -434,7 +434,7 @@ public class EventCrfsApiController {
         // event_definition_crf has double_entry=true. {@code dde} stays
         // null for single-pass studies so legacy single-entry flows
         // pay zero cost.
-        CrfEntryDto.DdeBlockDto ddeBlock = resolveDdeBlock(ecb, currentUser);
+        CrfEntryDto.DdeBlockDto ddeBlock = resolveDdeBlock(ecb);
 
         CrfEntryDto dto = new CrfEntryDto(
                 String.valueOf(ecb.getId()),
@@ -3058,7 +3058,7 @@ public class EventCrfsApiController {
         try {
             content = Files.readAllBytes(target);
         } catch (IOException e) {
-            LOG.warn("Attached file {} for item {} could not be read: {}", target, itemOid, e.toString());
+            LOG.warn("Attached file {} for item {} could not be read: {}", logSafe(target), logSafe(itemOid), e.toString());
             return ResponseEntity.status(404).body(Map.of("message",
                     "Attached file no longer accessible"));
         }
@@ -3191,7 +3191,7 @@ public class EventCrfsApiController {
                     "message", "event_crf " + eventCrfId + " is not DDE-enabled"));
         }
 
-        CrfEntryDto.DdeBlockDto block = resolveDdeBlock(ecb, currentUser);
+        CrfEntryDto.DdeBlockDto block = resolveDdeBlock(ecb);
         if (block == null) {
             // double_entry=true on the EDC but the workflow is already
             // settled (clean DDE complete, no mismatches). Tell the SPA.
@@ -3430,7 +3430,7 @@ public class EventCrfsApiController {
      *   <li>{@code both set, no open FAILEDVAL} ⇒ null (DDE done)</li>
      * </ul>
      */
-    CrfEntryDto.DdeBlockDto resolveDdeBlock(EventCRFBean ecb, UserAccountBean caller) {
+    CrfEntryDto.DdeBlockDto resolveDdeBlock(EventCRFBean ecb) {
         try {
             if (!isDoubleEntryEnabled(ecb)) return null;
             int idePass1ClerkId = ecb.getOwnerId();
@@ -3610,4 +3610,9 @@ public class EventCrfsApiController {
             int jobsProcessed,
             int rowsWritten,
             java.util.List<String> warnings) {}
+
+    /** Request values reach the log with line breaks and other control characters replaced. */
+    private static String logSafe(Object value) {
+        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
+    }
 }

@@ -33,7 +33,7 @@ public class ExtractBeanItemRowTest {
     private static ExtractBean.extractDataset_ITEMGROUPSIDE row(Integer dataTypeId, String value) {
         ExtractBean.extractDataset_ITEMGROUPSIDE row = new ExtractBean(null).new extractDataset_ITEMGROUPSIDE();
         row.setSQLDatasetBASE_ITEMGROUPSIDE(1, 1, 1, "IG_VITALS", dataTypeId, "Weight", "I_WEIGHT", value, "kg", "v1", 1,
-                null, null, null, null, 1, 1, 1, 1, 1, 1, 1, 1);
+                null, null, null, null, 1, 1, 1, 1, 1, 1, 1);
         return row;
     }
 

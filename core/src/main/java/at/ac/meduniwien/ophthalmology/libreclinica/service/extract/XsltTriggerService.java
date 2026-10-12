@@ -55,7 +55,7 @@ public class XsltTriggerService {
     public static final String POST_PROC_EXPORT_NAME="postProcExportName";
     public static final String COUNT="count";
 
-    public SimpleTrigger generateXsltTrigger(String xslFile, String xmlFile, String endFilePath,
+    public SimpleTrigger generateXsltTrigger(String xslFile, String endFilePath,
             String endFile, int datasetId, ExtractPropertyBean epBean, UserAccountBean userAccountBean, String locale,int cnt, String xsltPath, String triggerGroupName) {
         Date startDateTime = new Date(System.currentTimeMillis());
         String jobName =  datasetId+ "_"+epBean.getExportFileName()[0];

@@ -70,6 +70,7 @@ public class OdmFileCreation {
             boolean saveToDB, boolean deleteOld, String odmType, UserAccountBean userBean) {
 
         Integer ssNumber = getStudySubjectNumber(studySubjectNumber);
+        boolean hasCopyDir = generalFileDirCopy != null && !generalFileDirCopy.isEmpty();
         MetaDataCollector mdc = new MetaDataCollector(dataSource, datasetBean, currentStudy,ruleSetRuleDao);
         AdminDataCollector adc = new AdminDataCollector(dataSource, datasetBean, currentStudy);
         ClinicalDataCollector cdc = new ClinicalDataCollector(dataSource, datasetBean, currentStudy);
@@ -165,16 +166,16 @@ public class OdmFileCreation {
         // complete, and registered, only once "</ODM>" is written. A job
         // cancelled in between must not leave the part it wrote.
         File partial = new File(generalFileDir, ODMXMLFileName.replaceAll(" ", "_"));
-        File partialCopy = "".equals(generalFileDirCopy) ? null
+        File partialCopy = !hasCopyDir ? null
                 : new File(generalFileDirCopy, ODMXMLFileName.replaceAll(" ", "_"));
         boolean partialExisted = partial.exists();
         boolean partialCopyExisted = partialCopy != null && partialCopy.exists();
         try {
             int fId =
-                createFileK(ODMXMLFileName, generalFileDir, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
-            if (!"".equals(generalFileDirCopy)) {
+                createFileK(ODMXMLFileName, generalFileDir, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, userBean);
+            if (hasCopyDir) {
                 createFileK(ODMXMLFileName, generalFileDirCopy, metaReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
-                            false, zipped, deleteOld, userBean);
+                            false, zipped, userBean);
             }
             //////////////////////////////////////////
             ////////// AdminData Extraction //////////
@@ -189,10 +190,10 @@ public class OdmFileCreation {
 
             sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
             fId =
-                createFileK(ODMXMLFileName, generalFileDir, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
-            if (!"".equals(generalFileDirCopy)) {
+                createFileK(ODMXMLFileName, generalFileDir, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, userBean);
+            if (hasCopyDir) {
                 createFileK(ODMXMLFileName, generalFileDirCopy, adminReport.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
-                            false, zipped, deleteOld, userBean);
+                            false, zipped, userBean);
             }
 
             //////////////////////////////////////////
@@ -243,29 +244,29 @@ public class OdmFileCreation {
                     //report.setOdmStudy(mdc.getOdmStudy());
                     report.setOdmBean(mdc.getODMBean());
                     if (firstIteration && fromIndex >= newRows.size()) {
-                        report.createChunkedOdmXml(Boolean.TRUE, true, true);
+                        report.createChunkedOdmXml(true, true);
                         firstIteration = false;
                     } else if (firstIteration) {
-                        report.createChunkedOdmXml(Boolean.TRUE, true, false);
+                        report.createChunkedOdmXml(true, false);
                         firstIteration = false;
                     } else if (fromIndex >= newRows.size()) {
-                        report.createChunkedOdmXml(Boolean.TRUE, false, true);
+                        report.createChunkedOdmXml(false, true);
                     } else {
-                        report.createChunkedOdmXml(Boolean.TRUE, false, false);
+                        report.createChunkedOdmXml(false, false);
                     }
                     fId = createFileK(ODMXMLFileName, generalFileDir, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE,
-                                        false, zipped, deleteOld, userBean);
-                    if (!"".equals(generalFileDirCopy)) {
+                                        false, zipped, userBean);
+                    if (hasCopyDir) {
                         createFileK(ODMXMLFileName, generalFileDirCopy, report.getXmlOutput().toString(), datasetBean, sysTimeEnd,
-                                    ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+                                    ExportFormatBean.XMLFILE, false, zipped, userBean);
                     }
                 }
             }
 
             sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
-            fId = createFileK(ODMXMLFileName, generalFileDir, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, saveToDB, zipped, deleteOld, userBean);
-            if (!"".equals(generalFileDirCopy)) {
-                createFileK(ODMXMLFileName, generalFileDirCopy, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, deleteOld, userBean);
+            fId = createFileK(ODMXMLFileName, generalFileDir, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, saveToDB, zipped, userBean);
+            if (hasCopyDir) {
+                createFileK(ODMXMLFileName, generalFileDirCopy, "</ODM>", datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false, zipped, userBean);
             }
 
             //////////////////////////////////////////
@@ -284,7 +285,7 @@ public class OdmFileCreation {
             long sysTimeEnd = System.currentTimeMillis() - sysTimeBegin;
             String ODMXMLFileName = mdc.getODMBean().getFileOID() + ".xml";
             int fId = this.createFile(ODMXMLFileName, generalFileDir, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, true);
-            if (!"".equals(generalFileDirCopy)) {
+            if (hasCopyDir) {
                 int fId2 = this.createFile(ODMXMLFileName, generalFileDirCopy, report.getXmlOutput().toString(), datasetBean, sysTimeEnd, ExportFormatBean.XMLFILE, false);
             } */
             HashMap<String, Integer> answerMap = new HashMap<>();
@@ -313,7 +314,7 @@ public class OdmFileCreation {
 
     public int createFileK(String name, String dir, String content,
             DatasetBean datasetBean, long time, ExportFormatBean efb,
-            boolean saveToDB, boolean zipped, boolean deleteOld, UserAccountBean userBean) {
+            boolean saveToDB, boolean zipped, UserAccountBean userBean) {
         ArchivedDatasetFileBean fbFinal = new ArchivedDatasetFileBean();
         // >> tbh 04/2010 #4915 replace all names' spaces with underscores
         name = name.replaceAll(" ", "_");
@@ -347,7 +348,6 @@ public class OdmFileCreation {
             }
 
             //File
-            newFile.setLastModified(System.currentTimeMillis());
 
             w = new BufferedWriter(new FileWriter(newFile, true));
             w.write(content);

@@ -26,10 +26,6 @@ public enum Operator {
     private int code;
 
     Operator(int code) {
-        this(code, null);
-    }
-
-    Operator(int code, String longName) {
         this.code = code;
     }
 

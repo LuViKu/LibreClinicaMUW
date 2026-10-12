@@ -260,7 +260,10 @@ public class UpdateEventDefinitionServlet extends SecureController {
         ArrayList<EventDefinitionCRFBean> edcs = asArrayList(session.getAttribute("eventDefinitionCRFs"), EventDefinitionCRFBean.class);
         StudyEventDefinitionBean sed = getAsType(session.getAttribute("definition"), StudyEventDefinitionBean.class);
         StudyEventDefinitionDAO edao = new StudyEventDefinitionDAO(sm.getDataSource());
-        if (sed !=null)
+        if (sed == null) {
+            logger.warn("No event definition in the session; nothing to update");
+            return;
+        }
         logger.info("Definition bean to be updated:" + sed.getName() + sed.getCategory());
 
         sed.setUpdater(ub);
@@ -389,8 +392,10 @@ public class UpdateEventDefinitionServlet extends SecureController {
                             dnb.setDescription("The item has been removed, this Discrepancy Note has been Closed.");
                             dnDao.create(dnb);
                             dnDao.createMapping(dnb);
-                            itemParentNote.setResolutionStatusId(ResolutionStatus.CLOSED.getId());
-                            dnDao.update(itemParentNote);
+                            if (itemParentNote != null) {
+                                itemParentNote.setResolutionStatusId(ResolutionStatus.CLOSED.getId());
+                                dnDao.update(itemParentNote);
+                            }
                         }
                     }
                 }

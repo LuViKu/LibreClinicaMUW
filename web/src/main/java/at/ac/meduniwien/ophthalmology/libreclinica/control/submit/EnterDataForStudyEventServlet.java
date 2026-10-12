@@ -204,7 +204,6 @@ public class EnterDataForStudyEventServlet extends SecureController {
         ArrayList<DisplayEventCRFBean> displayEventCRFs = ViewStudySubjectServlet.getDisplayEventCRFs(
                 sm.getDataSource(),
                 eventCRFs,
-                eventDefinitionCRFs,
                 ub, currentRole,
                 seb.getSubjectEventStatus(),
                 study

@@ -208,7 +208,7 @@ public class CrfVersionMigrationService {
                 edc.setUpdater(actor);
                 edc.setUpdatedDate(new Date());
                 edcDao.update(edc);
-                writeMigrationAudit(actor, edc, sed, fromVersion, toVersion);
+                writeMigrationAudit(actor, edc, fromVersion, toVersion);
             }
             rows.add(new SedMigrationRow(studyOid, sed.getOid(), sed.getName(),
                     true, null));
@@ -254,7 +254,6 @@ public class CrfVersionMigrationService {
      */
     private void writeMigrationAudit(UserAccountBean actor,
                                      EventDefinitionCRFBean edc,
-                                     StudyEventDefinitionBean sed,
                                      CRFVersionBean fromVersion,
                                      CRFVersionBean toVersion) {
         writeAudit(AuditTypeIds.CRF_VERSION_MIGRATED, actor.getId(),

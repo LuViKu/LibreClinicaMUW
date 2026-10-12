@@ -363,7 +363,7 @@ public class FormProcessor {
         } else if (minute.length() == 1) {
             minute = "0" + minute;
         }
-        if ("".equals(half)) {
+        if (half != null && half.isEmpty()) {
             half = "am";
         }
 
@@ -481,7 +481,7 @@ public class FormProcessor {
         EntityBeanTable answer = new EntityBeanTable();
 
         String sortingColumn = request.getParameter(EBL_SORT_COLUMN);
-        if (sortingColumn != null && !"".equals(sortingColumn)) {
+        if (sortingColumn != null && !sortingColumn.isEmpty()) {
             answer.setSortingColumnExplicitlySet(true);
         }
 
@@ -498,7 +498,7 @@ public class FormProcessor {
         for (int i = 0; i < blnFields.length; i++) {
             String value = getString(blnFields[i]);
             boolean b = getBoolean(blnFields[i]);
-            if (!"".equals(value)) {
+            if (value == null || !value.isEmpty()) {
                 if (i == 0) {
                     answer.setAscendingSort(b);
                 } else if (i == 1) {
@@ -516,7 +516,7 @@ public class FormProcessor {
         at.ac.meduniwien.ophthalmology.libreclinica.web.domain.EntityBeanTable answer = new at.ac.meduniwien.ophthalmology.libreclinica.web.domain.EntityBeanTable();
 
         String sortingColumn = request.getParameter(EBL_SORT_COLUMN);
-        if (sortingColumn != null && !"".equals(sortingColumn)) {
+        if (sortingColumn != null && !sortingColumn.isEmpty()) {
             answer.setSortingColumnExplicitlySet(true);
         }
 
@@ -533,7 +533,7 @@ public class FormProcessor {
         for (int i = 0; i < blnFields.length; i++) {
             String value = getString(blnFields[i]);
             boolean b = getBoolean(blnFields[i]);
-            if (!"".equals(value)) {
+            if (value == null || !value.isEmpty()) {
                 if (i == 0) {
                     answer.setAscendingSort(b);
                 } else if (i == 1) {
@@ -580,7 +580,8 @@ public class FormProcessor {
             if (resformat.getString("date_time_format_string").contains("HH")) {
                 return true;
             } else {
-                if (!"".equals(getString(prefix + "Half"))) {
+                String half = getString(prefix + "Half");
+                if (half == null || !half.isEmpty()) {
                     return true;
                 }
             }

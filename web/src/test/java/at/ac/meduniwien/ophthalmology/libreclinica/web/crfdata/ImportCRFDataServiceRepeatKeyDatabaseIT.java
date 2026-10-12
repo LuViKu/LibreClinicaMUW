@@ -134,7 +134,7 @@ class ImportCRFDataServiceRepeatKeyDatabaseIT extends AbstractApiControllerDatab
 
     @Test
     void theStatusCheckRefusesTheFile() {
-        assertFalse(service().eventCRFStatusesValid(importFile(" StudyEventRepeatKey=\"abc\""), root()));
+        assertFalse(service().eventCRFStatusesValid(importFile(" StudyEventRepeatKey=\"abc\"")));
     }
 
     @Test

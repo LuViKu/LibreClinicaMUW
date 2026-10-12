@@ -267,7 +267,7 @@ public class StudyController {
 		String format = "yyyy-MM-dd";
 		SimpleDateFormat formatter = null;
 		Date formattedDate = null;
-		if (startDate != "" && startDate != null) {
+		if (startDate != null && !startDate.isEmpty()) {
 			try {
 				formatter = new SimpleDateFormat(format);
 				formattedDate = formatter.parse(startDate);
@@ -358,14 +358,14 @@ public class StudyController {
 
 		studyDTO.setErrors(errorObjects);
 
-		if (errorObjects != null && errorObjects.size() != 0) {
+		if (!errorObjects.isEmpty()) {
 			studyDTO.setMessage(validation_failed_message);
 			response = new ResponseEntity<>(studyDTO, org.springframework.http.HttpStatus.BAD_REQUEST);
 		} else {
 			studyBean = buildStudyBean(uniqueProtocolID, name, briefSummary, principalInvestigator, sponsor, Integer.valueOf(expectedTotalEnrollment), protocolType, status, formattedDate,
 					ownerUserAccount);
 
-			StudyBean sBean = createStudy(studyBean, ownerUserAccount);
+			StudyBean sBean = createStudy(studyBean);
 			studyDTO.setStudyOid(sBean.getOid());
 			studyDTO.setMessage(validation_passed_message);
 
@@ -566,7 +566,7 @@ public class StudyController {
 		Date formattedStartDate = null;
 		Date formattedProtocolDate = null;
 
-		if (startDate != "" && startDate != null) {
+		if (startDate != null && !startDate.isEmpty()) {
 			try {
 				formatter = new SimpleDateFormat(format);
 				formattedStartDate = formatter.parse(startDate);
@@ -582,7 +582,7 @@ public class StudyController {
 			}
 		}
 
-		if (protocolDateVerification != "" && protocolDateVerification != null) {
+		if (protocolDateVerification != null && !protocolDateVerification.isEmpty()) {
 			try {
 				formatter = new SimpleDateFormat(format);
 				formattedProtocolDate = formatter.parse(protocolDateVerification);
@@ -675,14 +675,14 @@ public class StudyController {
 
 		siteDTO.setErrors(errorObjects);
 
-		if (errorObjects != null && errorObjects.size() != 0) {
+		if (!errorObjects.isEmpty() || parentStudy == null) {
 			siteDTO.setMessage(validation_failed_message);
 			response = new ResponseEntity<>(siteDTO, org.springframework.http.HttpStatus.BAD_REQUEST);
 		} else {
 			siteBean = buildSiteBean(uniqueSiteProtocolID, name, principalInvestigator, Integer.valueOf(expectedTotalEnrollment), formattedStartDate, formattedProtocolDate, secondaryProId,
 					ownerUserAccount, parentStudy.getId());
 
-			StudyBean sBean = createStudy(siteBean, ownerUserAccount);
+			StudyBean sBean = createStudy(siteBean);
 			siteDTO.setSiteOid(sBean.getOid());
 			siteDTO.setMessage(validation_passed_message);
 			ResourceBundle resterm = at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider.getTermsBundle();
@@ -891,13 +891,13 @@ public class StudyController {
 
 		eventDefinitionDTO.setErrors(errorObjects);
 
-		if (errorObjects != null && errorObjects.size() != 0) {
+		if (!errorObjects.isEmpty()) {
 			eventDefinitionDTO.setMessage(validation_failed_message);
 			response = new ResponseEntity<>(eventDefinitionDTO, org.springframework.http.HttpStatus.BAD_REQUEST);
 		} else {
 			eventBean = buildEventDefBean(name, description, category, type, repeating, ownerUserAccount, parentStudy);
 
-			StudyEventDefinitionBean sedBean = createEventDefn(eventBean, ownerUserAccount);
+			StudyEventDefinitionBean sedBean = createEventDefn(eventBean);
 			eventDefinitionDTO.setEventDefOid(sedBean.getOid());
 			eventDefinitionDTO.setMessage(validation_passed_message);
 		}
@@ -963,14 +963,14 @@ public class StudyController {
 		return study;
 	}
 
-	public StudyBean createStudy(StudyBean studyBean, UserAccountBean owner) {
+	public StudyBean createStudy(StudyBean studyBean) {
 		sdao = new StudyDAO(dataSource);
 		StudyBean sBean = (StudyBean) sdao.create(studyBean);
 		sBean = (StudyBean) sdao.findByPK(sBean.getId());
 		return sBean;
 	}
 
-	public StudyEventDefinitionBean createEventDefn(StudyEventDefinitionBean sedBean, UserAccountBean owner) {
+	public StudyEventDefinitionBean createEventDefn(StudyEventDefinitionBean sedBean) {
 		seddao = new StudyEventDefinitionDAO(dataSource);
 		StudyEventDefinitionBean sdBean = (StudyEventDefinitionBean) seddao.create(sedBean);
 		sdBean = (StudyEventDefinitionBean) seddao.findByPK(sdBean.getId());
@@ -987,12 +987,6 @@ public class StudyController {
 		udao = new UserAccountDAO(dataSource);
 		StudyUserRoleBean surBean = udao.findRoleByUserNameAndStudyId(ownerUserAccount.getName(), study.getId());
 		return surBean;
-	}
-
-	public StudyBean updateStudy(StudyBean studyBean, UserAccountBean owner) {
-		sdao = new StudyDAO(dataSource);
-		StudyBean sBean = (StudyBean) sdao.update(studyBean);
-		return sBean;
 	}
 
 	public void addValidationToDefinitionFields(Validator v) {

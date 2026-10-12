@@ -63,7 +63,7 @@ public class EventActionValidator implements Validator {
     public void validate(Object obj, Errors e) {
         EventActionBean eventActionBean = (EventActionBean) obj;
 
-        validateOidInAction(eventActionBean.getOc_oid_reference(), e);
+        validateOidInAction(eventActionBean.getOc_oid_reference());
         
         boolean foundStartDate=false;
         for (int i = 0; i < eventActionBean.getProperties().size(); i++) {
@@ -81,7 +81,7 @@ public class EventActionValidator implements Validator {
         }
     }
 
-    public void validateOidInAction(String oid, Errors e) {
+    public void validateOidInAction(String oid) {
             try {
             	if (oid.contains(".") ||oid.contains("[ALL]") || oid.contains("[END]")) {
             		getRuleSetBeanWrapper().error(createError("OCRERR_0041", new String[]{oid}));

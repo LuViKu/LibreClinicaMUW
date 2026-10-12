@@ -80,4 +80,19 @@ class ExtractControllerMethodTest {
 
         verifyNoInteractions(scheduler);
     }
+
+    @Test
+    void nonNumericIdsAreRefusedNotAnError() throws Exception {
+        MockHttpSession session = sessionWithoutExportRole();
+        StudyUserRoleBean role = new StudyUserRoleBean();
+        role.setRole(Role.INVESTIGATOR);
+        session.setAttribute("userRole", role);
+
+        mvc.perform(post("/extract").session(session).param("id", "x").param("datasetId", "1 forged"))
+                .andExpect(redirectedUrl("/MainMenu?message=authentication_failed"));
+        mvc.perform(post("/extract").session(session).param("id", "1").param("datasetId", "abc"))
+                .andExpect(redirectedUrl("/MainMenu?message=authentication_failed"));
+
+        verifyNoInteractions(scheduler);
+    }
 }

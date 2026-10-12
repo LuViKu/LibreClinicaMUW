@@ -596,7 +596,7 @@ public class SpreadSheetItemUtil {
 		
 		int row_number = row_items.size();
 		
-		 if ("date".equalsIgnoreCase(this.getDataType()) && !"".equals(this.getDefaultValue())) {
+		 if ("date".equalsIgnoreCase(this.getDataType()) && (this.getDefaultValue() == null || !this.getDefaultValue().isEmpty())) {
              // BWP>> try block needs to be added, because
              // cell.getDateCellValue()
              // can throw an exception.

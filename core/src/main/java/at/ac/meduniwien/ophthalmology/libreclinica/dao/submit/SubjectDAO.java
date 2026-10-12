@@ -176,7 +176,7 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return executeFindAllQuery(queryName, variables);
     }
 
-    public ArrayList<SubjectBean> getWithFilterAndSort(StudyBean currentStudy, ListSubjectFilter filter, ListSubjectSort sort, int rowStart, int rowEnd) {
+    public ArrayList<SubjectBean> getWithFilterAndSort(ListSubjectFilter filter, ListSubjectSort sort, int rowStart, int rowEnd) {
         setTypesExpected();
 
         String sql = digester.getQuery("getWithFilterAndSort");
@@ -194,7 +194,7 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         return subjects;
     }
 
-    public Integer getCountWithFilter(ListSubjectFilter filter, StudyBean currentStudy) {
+    public Integer getCountWithFilter(ListSubjectFilter filter) {
         String query = digester.getQuery("getCountWithFilter");
         query += filter.execute("");
         return getCountByQuery(query, new HashMap<>());

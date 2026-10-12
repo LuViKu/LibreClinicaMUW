@@ -372,6 +372,11 @@ public class ChangeCRFVersionController {
         return gridMap;
     }
 
+    /** An item without an item_group_metadata row is treated as not repeating. */
+    private static boolean isRepeating(ItemGroupMetadataBean mdata) {
+        return mdata != null && mdata.isRepeatingGroup();
+    }
+
     private void buildRecord(ItemBean cur_element, ItemBean new_element, ItemGroupMetadataBean cur_bean_mdata, 
     		ItemGroupMetadataBean new_bean_mdata,ArrayList<String[]> rows){
     	
@@ -381,7 +386,7 @@ public class ChangeCRFVersionController {
     	if (cur_element == null && new_element != null){
     		if (new_element.getItemDataElements() == null || new_element.getItemDataElements().size() <1){
 	    		row[0]=row[1]=row[2]=row[3]=row[7]="";
-	    		row[4]=(new_bean_mdata.isRepeatingGroup())? new_element.getName()+"(1)":new_element.getName();
+	    		row[4]=(isRepeating(new_bean_mdata))? new_element.getName()+"(1)":new_element.getName();
 	    		row[5]=new_element.getOid();
 	    		row[6]=String.valueOf(new_element.getId());
 	    		rows.add(row);
@@ -391,7 +396,7 @@ public class ChangeCRFVersionController {
     			for (ItemDataBean data_item : new_element.getItemDataElements()){
         			row = new String[8];
         			row[0]=row[1]=row[2]=row[3]=row[7]="";
-    	    		row[4]=(new_bean_mdata.isRepeatingGroup())? new_element.getName()+"("+data_item.getOrdinal()+")":new_element.getName();
+    	    		row[4]=(isRepeating(new_bean_mdata))? new_element.getName()+"("+data_item.getOrdinal()+")":new_element.getName();
     	    		row[5]=new_element.getOid();
     	    		row[6]=String.valueOf(new_element.getId());
     	    		row[7]=data_item.getValue();
@@ -402,7 +407,7 @@ public class ChangeCRFVersionController {
     	}
     	else if (cur_element != null && new_element == null) {
     		if(cur_element.getItemDataElements() == null || cur_element.getItemDataElements().size() < 1){
-    			row[0] = (cur_bean_mdata.isRepeatingGroup())? cur_element.getName()+"(1)": cur_element.getName();
+    			row[0] = (isRepeating(cur_bean_mdata))? cur_element.getName()+"(1)": cur_element.getName();
     			row[1]=		cur_element.getOid();
     			row[2]=		String.valueOf(cur_element.getId());
     			row[4]=row[6]=row[7]=row[5]=row[3]="";
@@ -411,14 +416,13 @@ public class ChangeCRFVersionController {
     		else{
 	    		for (ItemDataBean data_item : cur_element.getItemDataElements()){
 	    			row = new String[8];
-	    			row[0] = (cur_bean_mdata.isRepeatingGroup())? cur_element.getName()+" ("+data_item.getOrdinal()+")": cur_element.getName();
+	    			row[0] = (isRepeating(cur_bean_mdata))? cur_element.getName()+" ("+data_item.getOrdinal()+")": cur_element.getName();
 	    			row[1]=		cur_element.getOid();
 	    			row[2]=		String.valueOf(cur_element.getId());
 	    			row[3]=		data_item.getValue()	;
 	    			row[4]=row[6]=row[7]=row[5]="";
 	    			rows.add(row);
-	    			cycle_count++;
-	    			if ( cycle_count >0 && !cur_bean_mdata.isRepeatingGroup()){
+	    			if (!isRepeating(cur_bean_mdata)){
 	    				break;
 	    			}
 	    		}
@@ -430,10 +434,10 @@ public class ChangeCRFVersionController {
     		//one cycle: repeating group item -> none-repeating group item
     		//second cycle -> back none-repeating to prev repeating
     		if(cur_element.getItemDataElements() == null ){
-    			row[4]=(new_bean_mdata.isRepeatingGroup())? new_element.getName()+"(1)":new_element.getName();
+    			row[4]=(isRepeating(new_bean_mdata))? new_element.getName()+"(1)":new_element.getName();
 	    		row[5]=new_element.getOid();
 	    		row[6]=String.valueOf(new_element.getId());
-	    		row[0] = (cur_bean_mdata.isRepeatingGroup())? cur_element.getName()+"(1)": cur_element.getName();
+	    		row[0] = (isRepeating(cur_bean_mdata))? cur_element.getName()+"(1)": cur_element.getName();
     			row[1]=		cur_element.getOid();
     			row[2]=		String.valueOf(cur_element.getId());
     			row[3]=row[7]="";
@@ -444,22 +448,22 @@ public class ChangeCRFVersionController {
     		
     		for (ItemDataBean data_item : cur_element.getItemDataElements()){
     			row = new String[8];
-    			if (!cur_bean_mdata.isRepeatingGroup() && cycle_count>0 ){
+    			if (!isRepeating(cur_bean_mdata) && cycle_count>0 ){
     				row[0]=row[1]=row[2]=row[3]="";
     			}else{
-    				row[0] = (cur_bean_mdata.isRepeatingGroup())? cur_element.getName()+" ("+data_item.getOrdinal()+")": cur_element.getName();
+    				row[0] = (isRepeating(cur_bean_mdata))? cur_element.getName()+" ("+data_item.getOrdinal()+")": cur_element.getName();
         			row[1]=		cur_element.getOid();
 	    			row[2]=		String.valueOf(cur_element.getId());
 	    			row[3]=	data_item.getValue()	;
     			}
-    			if (new_bean_mdata.isRepeatingGroup()){
+    			if (isRepeating(new_bean_mdata)){
     				//case when new one is a repeating group and has data from some previous entry while current does not have a repeating group
-    				if (!cur_bean_mdata.isRepeatingGroup()){
+    				if (!isRepeating(cur_bean_mdata)){
 		    			row[4] =  cur_element.getName()+" ("+data_item.getOrdinal()+")";
 	 				}
     				
     				//new one is repeating & cur is repeating
-    				if (cur_bean_mdata.isRepeatingGroup()){
+    				if (isRepeating(cur_bean_mdata)){
 		    			row[4]=row[0];
     				}
     				row[5]=new_element.getOid();

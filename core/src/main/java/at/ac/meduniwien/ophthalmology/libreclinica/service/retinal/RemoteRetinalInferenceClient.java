@@ -542,8 +542,10 @@ public class RemoteRetinalInferenceClient {
                 LOG.warn("Preprocess refused the scan of job {}: {}", jobId, refused.code());
                 throw refused;
             }
-            LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",
-                    jobId, endpoint, httpErr.getMessage());
+            // Status code only: the message embeds a slice of the sidecar response
+            // body, which is remote content and must not reach the log.
+            LOG.warn("Preprocess /preprocess failed for job {} with HTTP status {}",
+                    jobId, httpErr.getStatusCode().value());
             return null;
         } catch (Exception e) {
             LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",

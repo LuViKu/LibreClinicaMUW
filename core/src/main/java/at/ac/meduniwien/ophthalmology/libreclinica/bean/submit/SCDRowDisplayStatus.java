@@ -33,7 +33,7 @@ public enum SCDRowDisplayStatus {
     
     @Override
     public String toString() {
-        return name().toString();
+        return name();
     }
     
     public static SCDRowDisplayStatus getByCode(Integer code) {

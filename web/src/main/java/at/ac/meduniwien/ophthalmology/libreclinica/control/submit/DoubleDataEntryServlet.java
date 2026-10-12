@@ -12,7 +12,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -55,7 +54,6 @@ public class DoubleDataEntryServlet extends DataEntryServlet {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(DoubleDataEntryServlet.class);
 
-    Locale locale;
     // < ResourceBundlerespage,restext,resexception,resword;
 
     public static final String COUNT_VALIDATE = "countValidate";

@@ -73,7 +73,7 @@ public class TextIO {
             }
         }
         else
-        	logger.debug("%" + minChars + "s", x);
+        	logger.debug(String.format("%" + minChars + "s", x));
     }
 
     /**
@@ -548,7 +548,7 @@ public class TextIO {
             if (s == null) {
                 errorMessage("Integer value not found in input.", "Integer in the range " + min + " to " + max);
             } else {
-                String str = s.toString();
+                String str = s;
                 try {
                     x = Long.parseLong(str);
                 } catch (NumberFormatException e) {
@@ -567,7 +567,9 @@ public class TextIO {
     }
 
     private void errorMessage(String message, String expecting) { // Report
-        logger.info("ERROR");
+        String m = message == null ? "" : message.replace('\n', '_').replace('\r', '_');
+        String e = expecting == null ? "" : expecting.replace('\n', '_').replace('\r', '_');
+        logger.info("ERROR: {} (expected: {})", m, e);
     }
 
     private char lookChar() { // return next character from input

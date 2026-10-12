@@ -31,8 +31,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataB
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author jxu
@@ -44,8 +42,6 @@ import org.slf4j.LoggerFactory;
 @Deprecated
 public class SPSSReportBean extends ReportBean<DisplayItemHeaderBean> {
 
-    @Deprecated
-    protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     private final static int FIRSTCASE = 2;
 
     private final static int FIRSTCASE_IND = 2;

@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Privilege;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
 
 /**
@@ -48,28 +47,28 @@ public class DataType extends Term {
 	 */
 	private static final long serialVersionUID = 6282835406766655030L;
 	@Deprecated
-	public static final DataType INVALID = new DataType(0, "INVALID", null);
+	public static final DataType INVALID = new DataType(0, "INVALID");
     @Deprecated
-    public static final DataType BN = new DataType(1, "BN", null);
+    public static final DataType BN = new DataType(1, "BN");
     @Deprecated
-    public static final DataType ED = new DataType(2, "ED", null);
+    public static final DataType ED = new DataType(2, "ED");
     @Deprecated
-    public static final DataType TEL = new DataType(3, "TEL", null);
+    public static final DataType TEL = new DataType(3, "TEL");
     @Deprecated
-    public static final DataType ST = new DataType(4, "ST", null);
+    public static final DataType ST = new DataType(4, "ST");
     @Deprecated
-    public static final DataType INT = new DataType(5, "INT", null);
+    public static final DataType INT = new DataType(5, "INT");
     @Deprecated
-    public static final DataType REAL = new DataType(6, "REAL", null);
+    public static final DataType REAL = new DataType(6, "REAL");
     @Deprecated
-    public static final DataType SET = new DataType(7, "SET", null);
+    public static final DataType SET = new DataType(7, "SET");
 
     private static final DataType[] members = { BN, ED, TEL, ST, INT, REAL, SET };
 
     @Deprecated
     public static final List<DataType> list = Arrays.asList(members);
 
-    private DataType(int id, String name, Privilege[] myPrivs) {
+    private DataType(int id, String name) {
         super(id, name);
     }
 

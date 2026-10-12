@@ -66,12 +66,11 @@ public class OdmStudyBase {
 
     /**
      * 
-     * @param ds
      * @param study
      * @param seds
      */
     
-    public OdmStudyBase(DataSource ds, StudyBean study,List<StudyEventDefinitionBean> seds) {
+    public OdmStudyBase(StudyBean study,List<StudyEventDefinitionBean> seds) {
         if (study == null) {
             logger.info("Study is null!");
             return;

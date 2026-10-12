@@ -171,7 +171,7 @@ public class InsertActionValidator implements Validator {
     }
 
     private void checkValidity(ItemBean itemBean, String value, String index, Errors e) {
-        Boolean result = false;
+        boolean result = false;
         List<ItemFormMetadataBean> itemFormMetadataBeans = getItemFormMetadataDAO().findAllByItemId(itemBean.getId());
         for (ItemFormMetadataBean itemFormMetadataBean : itemFormMetadataBeans) {
         	
@@ -206,7 +206,7 @@ public class InsertActionValidator implements Validator {
                         result = true;
                         break;
                     }
-                } else if (checkValidityBasedonNullValues(value, index, e)) {
+                } else if (checkValidityBasedonNullValues(value)) {
                     result = true;
                     break;
                 } else {
@@ -278,9 +278,9 @@ public class InsertActionValidator implements Validator {
         return value;
     }
 
-    private Boolean checkValidityBasedonNullValues(String value, String index, Errors e) {
+    private boolean checkValidityBasedonNullValues(String value) {
 
-        return getEventDefinitionCRFBean().getNullValuesList().contains(NullValue.getByName(value)) ? true : false;
+        return getEventDefinitionCRFBean().getNullValuesList().contains(NullValue.getByName(value));
     }
 
     private void checkValidityBasedOnDataType(ItemBean itemBean, String value, String index, Errors e) {

@@ -26,10 +26,6 @@ public enum ActionType {
     private int code;
 
     ActionType(int code) {
-        this(code, null);
-    }
-
-    ActionType(int code, String longName) {
         this.code = code;
     }
 

@@ -102,7 +102,7 @@ public class GenerateExtractFileService {
         String TXTFileName = datasetBean.getName() + "_tab.xls";
 
         int fId = this.createFile(TXTFileName, generalFileDir, answer.toString(), datasetBean, sysTimeEnd, ExportFormatBean.TXTFILE, true, userBean);
-        if (!"".equals(generalFileDirCopy)) {
+        if (generalFileDirCopy != null && !generalFileDirCopy.isEmpty()) {
             this.createFile(TXTFileName, generalFileDirCopy, answer.toString(), datasetBean, sysTimeEnd, ExportFormatBean.TXTFILE, false, userBean);
         }
         logger.info("created txt file");
@@ -182,7 +182,7 @@ public class GenerateExtractFileService {
      * @param db
      * @return
      */
-	public HashMap<String, Integer> createSPSSFile(DatasetBean db, ExtractBean eb2, StudyBean currentStudy, StudyBean parentStudy, long sysTimeBegin,
+	public HashMap<String, Integer> createSPSSFile(DatasetBean db, ExtractBean eb2, long sysTimeBegin,
             String generalFileDir, SPSSReportBean answer, String generalFileDirCopy, UserAccountBean userBean) {
         setUpResourceBundles();
 
@@ -260,7 +260,7 @@ public class GenerateExtractFileService {
         // create new createFile method that accepts array lists to
         // put into zip files
         int fId = this.createFile(ZIPFileName, titles, generalFileDir, generatedReports, db, sysTimeEnd, ExportFormatBean.TXTFILE, true, userBean);
-        if (!"".equals(generalFileDirCopy)) {
+        if (generalFileDirCopy != null && !generalFileDirCopy.isEmpty()) {
             this.createFile(ZIPFileName, titles, generalFileDirCopy, generatedReports, db, sysTimeEnd, ExportFormatBean.TXTFILE, false, userBean);
         }
         // return DDLFileName;
@@ -381,7 +381,6 @@ public class GenerateExtractFileService {
                 String content = (String) contents.get(i);
                 File newFile = new File(complete, name);
                 // totalSize = totalSize + (int)newFile.length();
-                newFile.setLastModified(System.currentTimeMillis());
 
                  w = new BufferedWriter(new FileWriter(newFile));
                 w.write(content);
@@ -508,7 +507,6 @@ public class GenerateExtractFileService {
             }
 
             //File
-            newFile.setLastModified(System.currentTimeMillis());
 
             w = new BufferedWriter(new FileWriter(newFile, true));
             w.write(content);
@@ -584,7 +582,6 @@ public class GenerateExtractFileService {
                 complete.mkdirs();
             }
             File newFile = new File(complete, name);
-            newFile.setLastModified(System.currentTimeMillis());
 
             try (BufferedWriter w = new BufferedWriter(new FileWriter(newFile))) {
             	w.write(content);

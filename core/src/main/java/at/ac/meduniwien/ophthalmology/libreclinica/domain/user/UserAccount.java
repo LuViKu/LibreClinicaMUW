@@ -649,7 +649,10 @@ public class UserAccount extends DataMapDomainObject {
 
     @Override
     public String toString() {
-        return "UserAccount [userId=" + userId + ", userAccount=" + userAccount + ", userType=" + userType + ", userName=" + userName + ", firstName="
-                + firstName + ", lastName=" + lastName + ", email=" + email + ", authType=" + authtype + ", authSecret=" + authsecret + "]";
+        // The credential-bearing authsecret is deliberately left out, and the
+        // parent account is printed by id: toString ends up in log lines.
+        return "UserAccount [userId=" + userId + ", parentUserId=" + (userAccount == null ? null : userAccount.getUserId()) + ", userType="
+                + (userType == null ? null : userType.getUserType()) + ", userName=" + userName + ", firstName=" + firstName + ", lastName=" + lastName
+                + ", email=" + email + ", authType=" + authtype + "]";
     }
 }

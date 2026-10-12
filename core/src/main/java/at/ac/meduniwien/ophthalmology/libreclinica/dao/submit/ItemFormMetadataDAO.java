@@ -732,7 +732,7 @@ public class ItemFormMetadataDAO extends EntityDAO<ItemFormMetadataBean> {
             instantItemPair.setDestItemFormMetadataId((Integer) row.get("d_ifm_id"));
             instantItemPair.setOptionValue((String) row.get("option_name"));
             if(pairs.containsKey(sectionId)) {
-                ((ArrayList<InstantOnChangePairContainer>)pairs.get(sectionId)).add(instantItemPair);
+                pairs.get(sectionId).add(instantItemPair);
             } else {
                 List<InstantOnChangePairContainer> ins = new ArrayList<InstantOnChangePairContainer>();
                 ins.add(instantItemPair);

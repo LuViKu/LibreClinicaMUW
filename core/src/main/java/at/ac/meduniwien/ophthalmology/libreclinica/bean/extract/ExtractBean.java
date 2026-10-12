@@ -1278,7 +1278,7 @@ public class ExtractBean {
             if (itemdataid_objgrp.intValue() == itemdataid.intValue() && itemdataid_objev.intValue() == itemdataid.intValue()) {
                 // OK - add entries to the dataEvent
 
-                if (!"".equals(/* itemGroupName */objgrp.itemGroupName)) {
+                if (objgrp.itemGroupName == null || !objgrp.itemGroupName.isEmpty()) {
                     // logger.info("got inside the loop!");
                     // "i do not think that word means what you think it
                     // means..."
@@ -2325,7 +2325,7 @@ public class ExtractBean {
 
         obj.setSQLDatasetBASE_ITEMGROUPSIDE(pitemDataId, pitemdataordinal, pitemGroupId, pitemGroupName, pitemDatatypeId, pitemDescription, pitemName, pitemValue, pitemUnits,
                 pcrfVersionName, pcrfVersionStatusId, pdateInterviewed, pinterviewerName, peventCrfDateCompleted, peventCrfDateValidateCompleted,
-                peventCrfCompletionStatusId, pitemGroupRepeatNumber, pcrfId, pstudySubjectId, peventCrfId, pitemId, pcrfVersionId, eventcrfStatusId);
+                peventCrfCompletionStatusId, pcrfId, pstudySubjectId, peventCrfId, pitemId, pcrfVersionId, eventcrfStatusId);
 
         hBASE_ITEMGROUPSIDE.add(obj);
 
@@ -2383,7 +2383,7 @@ public class ExtractBean {
      * ExtractBean.java
      *
      */
-    public class extractDataset_EVENTSIDE {
+    public static class extractDataset_EVENTSIDE {
 
         // "primary key"
         public Integer itemDataId;
@@ -2439,7 +2439,7 @@ public class ExtractBean {
          */
         @Override
         public String toString() {
-            String ret = new String("");
+            String ret = "";
 
             // "primary key"
             if (itemDataId == null) {
@@ -2475,14 +2475,14 @@ public class ExtractBean {
             if (studyEventDefinitionName == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + studyEventDefinitionName.toString();
+                ret = ret + studyEventDefinitionName;
             }
             ret = ret + "_";
 
             if (studyEventLoacation == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + studyEventLoacation.toString();
+                ret = ret + studyEventLoacation;
             }
             ret = ret + "_";
 
@@ -2610,7 +2610,7 @@ public class ExtractBean {
         public void setSQLDatasetBASE_ITEMGROUPSIDE(Integer pitemDataId, Integer pitemdataordinal, Integer pitemGroupId, String pitemGroupName,
                 Integer pitemDatatypeId, String pitemDescription, String pitemName, String pitemValue, String pitemUnits, String pcrfVersionName, Integer pcrfVersionStatusId,
                 Date pdateInterviewed, String pinterviewerName, Timestamp peventCrfDateCompleted, Timestamp peventCrfDateValidateCompleted,
-                Integer peventCrfCompletionStatusId, Integer pitemGroupMetatdatrepeatNumber, Integer pcrfId, Integer pstudySubjectId, Integer peventCrfId,
+                Integer peventCrfCompletionStatusId, Integer pcrfId, Integer pstudySubjectId, Integer peventCrfId,
                 Integer pitemId, Integer pcrfVersionId, Integer eventcrfStatusId) {
             // assign
             itemDataId = pitemDataId;
@@ -2651,7 +2651,6 @@ public class ExtractBean {
              * @vbc - Sept 2 , 2008 - changed the group ordinal from
              *      repeat_number to ordinal in item_data
              */
-            // itemGroupRepeatNumber = pitemGroupMetatdatrepeatNumber;
             itemGroupRepeatNumber = pitemdataordinal;
 
             crfid = pcrfId;
@@ -2667,7 +2666,7 @@ public class ExtractBean {
          */
         @Override
         public String toString() {
-            String ret = new String("");
+            String ret = "";
 
             if (itemDataId == null) {
                 ret = ret + "null";
@@ -2688,42 +2687,42 @@ public class ExtractBean {
             if (itemGroupName == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + itemGroupName.toString();
+                ret = ret + itemGroupName;
             }
             ret = ret + "_";
 
             if (itemDescription == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + itemDescription.toString();
+                ret = ret + itemDescription;
             }
             ret = ret + "_";
 
             if (itemName == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + itemName.toString();
+                ret = ret + itemName;
             }
             ret = ret + "_";
 
             if (itemValue == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + itemValue.toString();
+                ret = ret + itemValue;
             }
             ret = ret + "_";
 
             if (itemUnits == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + itemUnits.toString();
+                ret = ret + itemUnits;
             }
             ret = ret + "_";
 
             if (crfVersionName == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + crfVersionName.toString();
+                ret = ret + crfVersionName;
             }
             ret = ret + "_";
 
@@ -2744,7 +2743,7 @@ public class ExtractBean {
             if (interviewerName == null) {
                 ret = ret + "null";
             } else {
-                ret = ret + interviewerName.toString();
+                ret = ret + interviewerName;
             }
             ret = ret + "_";
 

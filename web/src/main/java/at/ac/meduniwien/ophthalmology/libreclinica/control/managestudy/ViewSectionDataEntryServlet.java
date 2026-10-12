@@ -89,7 +89,6 @@ public class ViewSectionDataEntryServlet extends DataEntryServlet {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ViewSectionDataEntryServlet.class);
 
-    Locale locale;
     public static String EVENT_CRF_ID = "ecId";
     public static String ENCLOSING_PAGE = "enclosingPage";
 

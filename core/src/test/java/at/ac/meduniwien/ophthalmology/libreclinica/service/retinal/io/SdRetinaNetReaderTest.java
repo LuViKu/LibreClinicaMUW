@@ -93,4 +93,26 @@ public class SdRetinaNetReaderTest {
             assertTrue(expected.getMessage(), expected.getMessage().contains("incomplete"));
         }
     }
+
+    @Test
+    public void an_oversized_index_is_ignored_not_a_number_format_error() throws IOException {
+        Path dir = Files.createTempDirectory("sdrn");
+        try (InputStream in = Files.newInputStream(FIXTURE.resolve(SdRetinaNetReader.ARCHIVE));
+             ZipInputStream zin = new ZipInputStream(in);
+             ZipOutputStream zout = new ZipOutputStream(Files.newOutputStream(dir.resolve(SdRetinaNetReader.ARCHIVE)))) {
+            ZipEntry e;
+            while ((e = zin.getNextEntry()) != null) {
+                zout.putNextEntry(new ZipEntry(e.getName()));
+                zout.write(zin.readAllBytes());
+                zout.closeEntry();
+            }
+            for (String extra : new String[]{"layers/99999999999999.yml", "lesions/99999999999999.png"}) {
+                zout.putNextEntry(new ZipEntry(extra));
+                zout.write(new byte[]{1, 2, 3});
+                zout.closeEntry();
+            }
+        }
+        SdRetinaNetVolume v = SdRetinaNetReader.read(dir);
+        assertEquals(33, v.nBscans());
+    }
 }

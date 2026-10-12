@@ -51,6 +51,10 @@
 		     CVE-2026-22732 and CVE-2026-22746 are fixed only in 6.5.9 /
 		     6.5.10, not in any 6.4.x. -->
 		<spring-boot.version>4.1.1</spring-boot.version>
+		<!-- Jackson 3 floor: Boot 4.1.1's BOM manages 3.1.5, which carries the
+		     databind/core CVEs fixed in 3.1.7. An imported BOM ignores a property
+		     override, so the jackson-bom import below (ahead of Boot's) pins it. -->
+		<jackson3.version>3.1.7</jackson3.version>
 		<spring.version>7.0.9</spring.version>
 		<spring.security.version>7.1.1</spring.security.version>
 		<db.test>localhost</db.test>
@@ -260,6 +264,13 @@
 				<groupId>org.glassfish.jaxb</groupId>
 				<artifactId>jaxb-bom</artifactId>
 				<version>${jaxb.runtime.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>tools.jackson</groupId>
+				<artifactId>jackson-bom</artifactId>
+				<version>${jackson3.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>

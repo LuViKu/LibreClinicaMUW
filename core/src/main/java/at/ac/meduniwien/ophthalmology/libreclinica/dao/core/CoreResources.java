@@ -707,7 +707,7 @@ public class CoreResources implements ResourceLoaderAware {
                     // set the bean within, so that we can access the file locations etc
                     SqlProcessingFunction function = new SqlProcessingFunction(epbean);
                     String whichSettings = getExtractField("xsl.post." + i + ".sql");
-                    if (!"".equals(whichSettings)) {
+                    if (!whichSettings.isEmpty()) {
                         function.setDatabaseType(getExtractFieldNoRep(whichSettings + ".dataBase").toLowerCase());
                         function.setDatabaseUrl(getExtractFieldNoRep(whichSettings + ".url"));
                         function.setDatabaseUsername(getExtractFieldNoRep(whichSettings + ".username"));

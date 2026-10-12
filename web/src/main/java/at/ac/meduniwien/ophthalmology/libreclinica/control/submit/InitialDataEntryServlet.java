@@ -12,7 +12,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -50,7 +49,6 @@ public class InitialDataEntryServlet extends DataEntryServlet {
 	 */
 	private static final long serialVersionUID = 1732375993795642636L;
 	protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
-    Locale locale;
 
     // < ResourceBundleresexception,respage;
 

@@ -221,7 +221,6 @@ public class UpdateJobExportServlet extends SecureController {
                 SimpleTrigger trigger = null;
 
                 trigger = xsltService.generateXsltTrigger(xsltPath,
-                        generalFileDir, // xml_file_path
                         endFilePath + File.separator,
                         exportFileName,
                         dsBean.getId(),

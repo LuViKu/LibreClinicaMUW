@@ -1081,8 +1081,7 @@ public class SubjectsApiController {
         // legacy semantics where each insert is its own connection.
         if (body.groupAssignments() != null && !body.groupAssignments().isEmpty()) {
             try {
-                groupService.reconcile(ssb.getId(), currentUser, body.groupAssignments(),
-                        new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+                groupService.reconcile(ssb.getId(), currentUser, body.groupAssignments());
                 emitRandomizationAudits(groupService.lastOutcomes,
                         currentUser, currentStudy, ssb, new AuditEventDAO(dataSource));
             } catch (RuntimeException e) {
@@ -2287,8 +2286,7 @@ public class SubjectsApiController {
 
         int touched;
         try {
-            touched = service.reconcile(ss.getId(), currentUser, desired,
-                    new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+            touched = service.reconcile(ss.getId(), currentUser, desired);
             emitRandomizationAudits(service.lastOutcomes,
                     currentUser, currentStudy, ss, new AuditEventDAO(dataSource));
         } catch (RuntimeException e) {

@@ -107,7 +107,7 @@ public class ExampleSpringJob extends QuartzJobBean {
             String alertEmail = dataMap.getString(EMAIL);
             String localeStr = dataMap.getString(LOCALE);
             if (localeStr != null) {
-                locale = new Locale(localeStr);
+                locale = Locale.of(localeStr);
                 ResourceBundleProvider.updateLocale(locale);
                 pageMessages = ResourceBundleProvider.getPageMessagesBundle();
 
@@ -163,7 +163,7 @@ public class ExampleSpringJob extends QuartzJobBean {
                 String pattern = "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator + "HHmmssSSS" + File.separator;
                 SimpleDateFormat sdfDir = new SimpleDateFormat(pattern);
                 generalFileDir = DATASET_DIR + datasetBean.getId() + File.separator + sdfDir.format(new java.util.Date());
-                if (!"".equals(exportFilePath)) {
+                if (exportFilePath == null || !exportFilePath.isEmpty()) {
                     generalFileDirCopy = SQLInitServlet.getField("filePath") + exportFilePath + File.separator;
                 }
                 // logger.debug("-- created the following dir: " +
@@ -319,7 +319,7 @@ public class ExampleSpringJob extends QuartzJobBean {
                 if ("1".equals(spss)) {
                     SPSSReportBean answer = new SPSSReportBean();
                     fileName =
-                        generateFileService.createSPSSFile(datasetBean, eb, activeStudy, parentStudy, sysTimeBegin, generalFileDir, answer, generalFileDirCopy, userBean);
+                        generateFileService.createSPSSFile(datasetBean, eb, sysTimeBegin, generalFileDir, answer, generalFileDirCopy, userBean);
                     logger.debug("-- gen spss file");
                     message.append("<p>" + pageMessages.getString("html_email_body_4") + " " + getFileNameStr(fileName)
                         + pageMessages.getString("html_email_body_4_5") + SQLInitServlet.getField("sysURL.base") + "AccessFile?fileId="

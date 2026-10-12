@@ -151,10 +151,6 @@ public class StudyParameterValueDAO extends AuditableEntityDAO<StudyParameterVal
         return executeFindByPKQuery(queryName, variables);
     }
 
-    public boolean setParameterValue(int studyId, String parameterHandle, String value) {
-        return false;
-    }
-
     public ArrayList<StudyParameter> findAllParameters() {
         this.setTypesExpectedForParameter();
         ArrayList<HashMap<String, Object>> alist = this.select(digester.getQuery("findAllParameters"));

@@ -12,9 +12,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.core;
 import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asArrayList;
 import static org.springframework.web.context.support.WebApplicationContextUtils.getWebApplicationContext;
 
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
@@ -1070,13 +1070,13 @@ public abstract class SecureController extends HttpServlet {
         int sizeTo = recipientsArray.size();
         InternetAddress[] addressTo = new InternetAddress[sizeTo];
         for (int i = 0; i < sizeTo; i++) {
-            addressTo[i] = new InternetAddress(recipientsArray.get(i).toString());
+            addressTo[i] = new InternetAddress(recipientsArray.get(i));
         }
         return addressTo;
 
     }
 
-    public void dowloadFile(File f, String contentType) throws Exception {
+    public void dowloadFile(File f) throws Exception {
 
         response.setHeader("Content-disposition", "attachment; filename=\"" + f.getName() + "\";");
         response.setContentType("text/xml");
@@ -1084,31 +1084,15 @@ public abstract class SecureController extends HttpServlet {
 
         ServletOutputStream op = response.getOutputStream();
 
-        DataInputStream in = null;
-        try {
+        try (InputStream in = new FileInputStream(f); ServletOutputStream out = op) {
             response.setContentType("text/xml");
             response.setHeader("Pragma", "public");
             response.setContentLength((int) f.length());
 
-            byte[] bbuf = new byte[(int) f.length()];
-            in = new DataInputStream(new FileInputStream(f));
-            int length;
-            while (in != null && (length = in.read(bbuf)) != -1) {
-                op.write(bbuf, 0, length);
-            }
-
-            in.close();
-            op.flush();
-            op.close();
+            in.transferTo(out);
+            out.flush();
         } catch (Exception ee) {
             logger.error("Error while downloading the file: ", ee);
-        } finally {
-            if (in != null) {
-                in.close();
-            }
-            if (op != null) {
-                op.close();
-            }
         }
     }
 

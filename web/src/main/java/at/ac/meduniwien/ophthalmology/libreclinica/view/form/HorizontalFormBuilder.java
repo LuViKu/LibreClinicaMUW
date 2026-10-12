@@ -88,6 +88,11 @@ public class HorizontalFormBuilder extends DefaultFormBuilder {
         // data associated with it, pass on the responsibility to another object
         ViewPersistanceHandler persistanceHandler = new ViewPersistanceHandler();
         if (isDataEntry) {
+            if (sectionBean == null || eventCRFbean == null) {
+                // Rendering data entry without its section or event CRF would show empty
+                // fields that look like missing data; fail instead.
+                throw new IllegalStateException("Data entry form built without its section or event CRF");
+            }
             List<ItemDataBean> itemDataBeans;
             persistanceHandler = new ViewPersistanceHandler();
             itemDataBeans = persistanceHandler.fetchPersistedData(sectionBean.getId(), eventCRFbean.getId());
@@ -151,7 +156,7 @@ public class HorizontalFormBuilder extends DefaultFormBuilder {
             boolean unGroupedTable = displayItemGroup.getItemGroupBean().getName().equalsIgnoreCase(BeanFactory.UNGROUPED) || !displayItemGroup.getGroupMetaBean().isRepeatingGroup();
             // Load any database values into the DisplayItemBeans
             if (hasDbFormValues) {
-                currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems, (!unGroupedTable));
+                currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems);
                 /*
                  * The highest number ordinal represents how many repeated rows
                  * there are. If the ordinal in ItemDataBeans > 1, then we know

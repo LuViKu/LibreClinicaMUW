@@ -67,7 +67,7 @@ public class ViewRuleSetServlet extends SecureController {
             forwardPage(Page.CRF_LIST);
         } else {
             RuleSetBean ruleSetBean = getRuleSetService().getRuleSetById(currentStudy, ruleSetId);
-            Boolean firstTime = true;
+            boolean firstTime = true;
             String validRuleSetRuleIds = "";
             for (int j = 0; j < ruleSetBean.getRuleSetRules().size(); j++) {
                 RuleSetRuleBean rsr = ruleSetBean.getRuleSetRules().get(j);

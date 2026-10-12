@@ -105,7 +105,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
     // the default; all crf ids should be > 0, tbh 8-29 :-)
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
-    public SpreadSheetTableClassic(FileInputStream parseStream, UserAccountBean ub, String versionName, Locale locale, int studyId) throws IOException {
+    public SpreadSheetTableClassic(FileInputStream parseStream, UserAccountBean ub, Locale locale, int studyId) throws IOException {
         // super();
         this.fs = new POIFSFileSystem(parseStream);
         this.ub = ub;
@@ -564,10 +564,9 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                         }
 
                         cell = sheet.getRow(k).getCell((short) 16);
-                        String dataType = getValue(cell);
-                        dataType = dataType.replaceAll("<[^>]*>", "");
+                        String dataType = java.util.Objects.toString(getValue(cell), "").replaceAll("<[^>]*>", "");
                         String dataTypeIdString = "1";
-                        if ((dataType == null || dataType.trim().isEmpty())) {
+                        if (dataType.trim().isEmpty()) {
                             errors.add(resPageMsg.getString("the") + " " + resPageMsg.getString("DATA_TYPE_column") + " "
                                 + resPageMsg.getString("was_blank_at_row") + " " + k + ", " + resPageMsg.getString("items_worksheet"));
                             htmlErrors.put(j + ", " + k + ", 16", resPageMsg.getString("required_field"));
@@ -594,7 +593,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                             // make sure same responseLabels have same datatype
                             if (labelWithType.containsKey(responseLabel)) {
                                 logger.debug("in label=" + responseLabel);
-                                if (!dataType.equalsIgnoreCase(labelWithType.get(responseLabel).toString())) {
+                                if (!dataType.equalsIgnoreCase(labelWithType.get(responseLabel))) {
                                     errors.add(resPageMsg.getString("the") + " " + resPageMsg.getString("DATA_TYPE_column") + " "
                                         + resPageMsg.getString("does_not_match_the_item_data_type_with_the_same_response_label") + " " + k + ", "
                                         + resPageMsg.getString("items_worksheet"));
@@ -610,10 +609,10 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                                             String st = s != null && s.length() > 0 ? s.trim() : "";
                                             if (st.length() > 0) {
                                                 try {
-                                                    Integer I = Integer.parseInt(s.trim());
-                                                    // eg, s=2.3 => I=2,
+                                                    int parsed = Integer.parseInt(st);
+                                                    // eg, s=2.3 => parsed=2,
                                                     // but 2.3 is not integer
-                                                    if (!I.toString().equals(s.trim())) {
+                                                    if (!Integer.toString(parsed).equals(st)) {
                                                         wrongType = true;
                                                     }
                                                 } catch (Exception e) {
@@ -633,7 +632,7 @@ public class SpreadSheetTableClassic implements SpreadSheetTable {// extends
                                             String st = s != null && s.length() > 0 ? s.trim() : "";
                                             if (st.length() > 0) {
                                                 try {
-                                                    Double.parseDouble(s.trim());
+                                                    Double.parseDouble(st);
                                                 } catch (Exception e) {
                                                     wrongType = true;
                                                 }

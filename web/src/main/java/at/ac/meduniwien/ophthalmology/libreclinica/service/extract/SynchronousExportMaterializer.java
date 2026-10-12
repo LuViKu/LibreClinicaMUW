@@ -195,7 +195,7 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
                 eb2.getMetadata();
                 eb2.computeReport(answer);
                 HashMap<String, Integer> answerMap = extractService.createSPSSFile(
-                        dataset, eb2, study, parentStudy, sysTimeBegin, runDir, answer, "", submittedBy);
+                        dataset, eb2, sysTimeBegin, runDir, answer, "", submittedBy);
                 fileId = firstValueOrZero(answerMap);
             }
             case BUNDLE -> {
@@ -315,13 +315,14 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
             // no export and can be gigabytes of imaging; nothing is
             // registered yet, so the zip is the only trace to remove.
             if (zip.exists() && !zip.delete()) {
-                LOG.warn("Could not remove the partial bundle of a cancelled export: {}", zip.getName());
+                LOG.warn("Could not remove the partial bundle of a cancelled export: dataset_id={} file={}", dataset.getId(),
+                        zip.getName().replaceAll("\\p{Cntrl}", "_"));
             }
             throw cancelled;
         }
-        LOG.info("Dataset bundle: dataset_id={} subjects={} files={} bytes={} omitted={} by user={}",
+        LOG.info("Dataset bundle: dataset_id={} subjects={} files={} bytes={} omitted={} by user_id={}",
                 dataset.getId(), subjects.size(), written.filesWritten(), written.bytesWritten(),
-                written.omitted().size(), submittedBy.getName());
+                written.omitted().size(), submittedBy.getId());
 
         // Registered the way the text formats are, so the SPA's file table,
         // the download endpoint and the retention sweep all see one more

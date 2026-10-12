@@ -59,10 +59,10 @@ public class CRFVersionMetadataUtil {
                 ArrayList<ItemBean> items = asArrayList(section.getItems(), ItemBean.class);
 				versionMap.put(Integer.valueOf(section.getId()), items);
                 // YW 08-21-2007, add group metadata
-                ArrayList<ItemGroupBean> igs = (ArrayList<ItemGroupBean>) igdao.findGroupBySectionId(section.getId());
+                ArrayList<ItemGroupBean> igs = new ArrayList<ItemGroupBean>(igdao.findGroupBySectionId(section.getId()));
                 for (int j = 0; j < igs.size(); ++j) {
                     ArrayList<ItemGroupMetadataBean> igms =
-                        (ArrayList<ItemGroupMetadataBean>) igmdao.findMetaByGroupAndSection(igs.get(j).getId(), section.getCRFVersionId(), section.getId());
+                        igmdao.findMetaByGroupAndSection(igs.get(j).getId(), section.getCRFVersionId(), section.getId());
                     if (!igms.isEmpty()) {
                         // Note, the following logic has been adapted here -
                         // "for a given crf version,

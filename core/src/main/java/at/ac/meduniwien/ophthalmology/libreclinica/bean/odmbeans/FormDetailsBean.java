@@ -30,8 +30,8 @@ public class FormDetailsBean extends ElementDefBean {
     private List<SectionDetails> SectionDetails;
     
     
-    public ArrayList<SectionDetails> getSectionDetails() {
-		return (ArrayList<at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.SectionDetails>) SectionDetails;
+    public List<SectionDetails> getSectionDetails() {
+		return SectionDetails;
 	}
 	public void setSectionDetails(List<SectionDetails> sectionDetails) {
 		SectionDetails = sectionDetails;

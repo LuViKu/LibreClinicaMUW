@@ -56,16 +56,16 @@ public class InsertActionProcessor implements ActionProcessor {
                 // through to case SAVE: which called itemMetadataService.insert(...)
                 // even on operator preview runs. This is the most consequential of the
                 // three — Insert actually writes new item_data values.
-                return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                return dryRun(ruleAction);
             }
         }
         case SAVE: {
             if (ruleRunnerMode == RuleRunnerMode.DATA_ENTRY) {
-                save(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                save(ruleAction, itemDataBean, ub);
             } else if(ruleRunnerMode == RuleRunnerMode.IMPORT_DATA) {
-                saveWithStatusUpdated(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                saveWithStatusUpdated(ruleAction, itemDataBean, ub);
             } else {
-                save(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                save(ruleAction, itemDataBean, ub);
             }
         }
         default:
@@ -73,20 +73,20 @@ public class InsertActionProcessor implements ActionProcessor {
         }
     }
 
-    private RuleActionBean saveWithStatusUpdated(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+    private RuleActionBean saveWithStatusUpdated(RuleActionBean ruleAction, ItemDataBean itemDataBean, UserAccountBean ub) {
         itemDataBean.setStatus(Status.UNAVAILABLE);
-        getItemMetadataService().insert(itemDataBean, ((InsertActionBean) ruleAction).getProperties(), ub, ruleSet,null);
-        ruleActionRunLogSaveOrUpdate(ruleAction, itemDataBean, itemData, currentStudy, ub);
+        getItemMetadataService().insert(itemDataBean, ((InsertActionBean) ruleAction).getProperties(), ub, ruleSet);
+        ruleActionRunLogSaveOrUpdate(ruleAction, itemDataBean);
         return null;
     }
 
-    private RuleActionBean save(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
-        getItemMetadataService().insert(itemDataBean.getId(), ((InsertActionBean) ruleAction).getProperties(), ub, ruleSet,null);
-        ruleActionRunLogSaveOrUpdate(ruleAction, itemDataBean, itemData, currentStudy, ub);
+    private RuleActionBean save(RuleActionBean ruleAction, ItemDataBean itemDataBean, UserAccountBean ub) {
+        getItemMetadataService().insert(itemDataBean.getId(), ((InsertActionBean) ruleAction).getProperties(), ub, ruleSet);
+        ruleActionRunLogSaveOrUpdate(ruleAction, itemDataBean);
         return null;
     }
 
-    private void ruleActionRunLogSaveOrUpdate(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+    private void ruleActionRunLogSaveOrUpdate(RuleActionBean ruleAction, ItemDataBean itemDataBean) {
         RuleActionRunLogBean ruleActionRunLog =
                 new RuleActionRunLogBean(ruleAction.getActionType(), itemDataBean, itemDataBean.getValue(), ruleSetRule.getRuleBean().getOid());
         if (ruleActionRunLogDao.findCountByRuleActionRunLogBean(ruleActionRunLog) > 0) {
@@ -95,7 +95,7 @@ public class InsertActionProcessor implements ActionProcessor {
         }
     }
 
-    private RuleActionBean dryRun(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+    private RuleActionBean dryRun(RuleActionBean ruleAction) {
         return ruleAction;
     }
 

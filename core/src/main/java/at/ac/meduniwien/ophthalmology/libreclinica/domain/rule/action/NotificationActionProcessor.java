@@ -108,7 +108,7 @@ public class NotificationActionProcessor implements ActionProcessor, Runnable {
 		return null;
 	}
 
-	public void runNotificationAction(RuleActionBean ruleActionBean, RuleSetBean ruleSet, int studySubjectBeanId, int eventOrdinal) {
+	public void runNotificationAction(RuleActionBean ruleActionBean, RuleSetBean ruleSet, int eventOrdinal) {
 		String emailList = ((NotificationActionBean) ruleActionBean).getTo();
 		String message = ((NotificationActionBean) ruleActionBean).getMessage();
 		String emailSubject = ((NotificationActionBean) ruleActionBean).getSubject();

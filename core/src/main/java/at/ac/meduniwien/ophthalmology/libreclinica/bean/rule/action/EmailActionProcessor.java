@@ -39,10 +39,10 @@ public class EmailActionProcessor implements ActionProcessor {
     @Override
     public void execute(RuleActionBean ruleAction, int itemDataBeanId, String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
         HashMap<String, String> arg0 = asHashMap(arguments[0], String.class, String.class);
-        sendEmail(ruleAction, ub, arg0.get("body"), arg0.get("subject"));
+        sendEmail(ruleAction, arg0.get("body"), arg0.get("subject"));
     }
 
-    private void sendEmail(RuleActionBean ruleAction, UserAccountBean ub, String body, String subject) throws OpenClinicaSystemException {
+    private void sendEmail(RuleActionBean ruleAction, String body, String subject) throws OpenClinicaSystemException {
 
         logger.info("Sending email...");
         try {

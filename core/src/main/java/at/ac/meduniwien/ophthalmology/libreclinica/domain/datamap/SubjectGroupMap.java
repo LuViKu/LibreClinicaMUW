@@ -65,21 +65,6 @@ public class SubjectGroupMap extends DataMapDomainObject {
 		this.subjectGroupMapId = subjectGroupMapId;
 	}
 
-	public SubjectGroupMap(int subjectGroupMapId, UserAccount userAccount,
-			StudySubject studySubject, StudyGroupClass studyGroupClass,
-			Status status, StudyGroup studyGroup, Date dateCreated,
-			Date dateUpdated, Integer updateId, String notes) {
-		this.subjectGroupMapId = subjectGroupMapId;
-		this.userAccount = userAccount;
-		this.studySubject = studySubject;
-		this.studyGroupClass = studyGroupClass;
-		this.studyGroup = studyGroup;
-		this.dateCreated = dateCreated;
-		this.dateUpdated = dateUpdated;
-		this.updateId = updateId;
-		this.notes = notes;
-	}
-
 	@Id
 	@Column(name = "subject_group_map_id", unique = true, nullable = false)
 	public int getSubjectGroupMapId() {
