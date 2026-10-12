@@ -16,7 +16,7 @@ Read the chapter(s) for your role; Administrators may want all of them.
 
 | Role | Chapter | In one line |
 |------|---------|-------------|
-| Administrator | [role-administrator.md](role-administrator.md) | System + study setup: users, sites, studies, CRFs, rules, config, audit. Superset of every other role. |
+| Administrator | [role-administrator.md](role-administrator.md) | System + study setup: users, locations and uploader tokens, studies and sites, CRFs, rules, config, audit. Superset of every other role. |
 | Data Manager | [role-data-manager.md](role-data-manager.md) | Builds and runs the study: CRFs, events, rules, groups, discrepancy oversight, data export. |
 | Monitor | [role-monitor.md](role-monitor.md) | Source data verification, discrepancy notes/queries, read-only review, audit log. |
 | Investigator | [role-investigator.md](role-investigator.md) | Enrolls subjects, enters CRF data, signs casebooks, reviews retinal results. |
