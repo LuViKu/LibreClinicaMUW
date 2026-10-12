@@ -571,12 +571,12 @@ public class CreateDatasetServlet extends SecureController {
 
                 if (!(checked == null || checked.trim().isEmpty()) && "yes".equalsIgnoreCase(checked.trim())) {
                     selectedItem.setSelected(true);
-                    if (!"".equals(crf.getName())) {
+                    if (crf.getName() == null || !crf.getName().isEmpty()) {
                         selectedItem.setCrfName(crf.getName());
                     } else {
                         selectedItem.setCrfName(itemCrfName);
                     }
-                    if (!"".equals(defName)) {
+                    if (!defName.isEmpty()) {
                         selectedItem.setDefName(defName);
                     } else {
                         selectedItem.setDefName(itemDefName);
@@ -1007,8 +1007,11 @@ public class CreateDatasetServlet extends SecureController {
     }
 
     private void extractEventIds(DatasetBean db) {
+        if (db == null) {
+            return;
+        }
         ArrayList<Integer> selectedSedIds = new ArrayList<Integer>();
-        HashMap<String, ItemBean> dbItemMap = db != null ? db.getItemMap() : new HashMap<>();
+        HashMap<String, ItemBean> dbItemMap = db.getItemMap();
         if (dbItemMap.size() > 0) {
             Iterator<String> it = dbItemMap.keySet().iterator();
             while (it.hasNext()) {
@@ -1032,8 +1035,8 @@ public class CreateDatasetServlet extends SecureController {
                 CRFBean crf = (CRFBean) crfs.get(i);
                 ArrayList<ItemBean> items = idao.findAllActiveByCRF(crf);
                 for (ItemBean item : items) {
-                    Integer itemId = item.getId();
-                    if (!sedItemIds.contains(itemId.toString())) {
+                    int itemId = item.getId();
+                    if (!sedItemIds.contains(Integer.toString(itemId))) {
                         sedItemIds.add(sed.getId() + "-" + item.getId());
                     }
                 }

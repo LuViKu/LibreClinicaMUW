@@ -657,11 +657,9 @@ public class Validator {
      */
     public void addValidation(String fieldName, int type, ItemDataBean idb, boolean isMultiple) {
         Validation v = new Validation(type);
-        // we have to make this a a new String
-        // to ensure that if someone calls idb.setValue()
-        // before we get around to validating, we will still use the original
-        // value
-        v.addArgument(new String(idb.getValue()));
+        // Strings are immutable, so a later idb.setValue() does not change the
+        // value captured here
+        v.addArgument(idb.getValue());
         v.addArgument(isMultiple);
         lastField = fieldName;
         // added tbh, 112007
@@ -1380,7 +1378,7 @@ break;
         // time is not specified.
         // In this case, 12:00 am has been set as default according to original
         // setting
-        if ("-1".equals(hour) && "-1".equals(minute) && "".equals(half)) {
+        if ("-1".equals(hour) && "-1".equals(minute) && half != null && half.isEmpty()) {
             hour = "12";
             minute = "00";
             half = "am";
@@ -1847,7 +1845,7 @@ break;
             // we have "" as the default value for item data
             // when the value from page is null, we save "" in DB,so should
             // consider they match
-            if ("".equals(oldValue)) {
+            if (oldValue != null && oldValue.isEmpty()) {
                 return true;
             }
             return false;
@@ -2114,7 +2112,15 @@ break;
             w = widthDecimal;
         }
         if (w.length() > 0) {
-            return "w".equalsIgnoreCase(w) ? 0 : Integer.parseInt(w);
+            if ("w".equalsIgnoreCase(w)) {
+                return 0;
+            }
+            try {
+                return Integer.parseInt(w);
+            } catch (NumberFormatException e) {
+                // a malformed width puts no constraint on the field
+                return 0;
+            }
         }
         return 0;
     }
@@ -2130,7 +2136,15 @@ break;
 
         }
         if (d.length() > 0) {
-            return "d".equalsIgnoreCase(d) ? 0 : Integer.parseInt(d);
+            if ("d".equalsIgnoreCase(d)) {
+                return 0;
+            }
+            try {
+                return Integer.parseInt(d);
+            } catch (NumberFormatException e) {
+                // a malformed decimal count puts no constraint on the field
+                return 0;
+            }
         }
         return 0;
     }
@@ -2168,7 +2182,7 @@ break;
 
                 	}
                 	temp = "10"+fieldValue;
-                    Double d = NumberFormat.getInstance().parse(temp).doubleValue();
+                    double d = NumberFormat.getInstance().parse(temp).doubleValue();
                     if (d > 0 && BigDecimal.valueOf(d).scale() > decimal) {
                         message.append(resexception.getString("exceeds_decimal") + "=" + decimal + ".");
                     }

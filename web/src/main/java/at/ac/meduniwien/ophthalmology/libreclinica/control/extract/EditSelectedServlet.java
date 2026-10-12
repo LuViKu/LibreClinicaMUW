@@ -174,7 +174,7 @@ public class EditSelectedServlet extends SecureController {
         if (events == null) {
             events = new HashMap<>();
         }
-        ArrayList<ItemBean> allSelectItems = selectAll ? selectAll(events, crfdao, idao) : ViewSelectedServlet.getAllSelected(db, idao, imfdao);
+        ArrayList<ItemBean> allSelectItems = selectAll ? selectAll(events, crfdao, idao) : ViewSelectedServlet.getAllSelected(db, imfdao);
         // >> tbh
         session.setAttribute("numberOfStudyItems", Integer.valueOf(ids.size()).toString());
         // << tbh 11/2009
