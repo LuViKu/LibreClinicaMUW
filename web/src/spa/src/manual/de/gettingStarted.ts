@@ -3,9 +3,9 @@ import type { ManualChapter } from '../manualTypes'
 export const gettingStartedDe: ManualChapter = {
   id: 'getting-started', role: 'common', kicker: 'Kapitel 00',
   title: 'Erste Schritte', deutsch: 'Getting started',
-  oneLiner: 'Anmeldung, Profil bei der Erstanmeldung, Studien-/Standortkontext und der Navigationsrahmen — gemeinsam für jede Rolle.',
+  oneLiner: 'Anmeldung, Profil bei der Erstanmeldung, Kontext aus Studie und Prüfzentrum und der Navigationsrahmen — gemeinsam für jede Rolle.',
   intro: [
-    'Dieses Kapitel behandelt, was alle Rollen gemeinsam haben: die Anmeldung, das Profil bei der Erstanmeldung, die Auswahl Ihrer Studie/Ihres Standorts und den Navigationsrahmen. Die rollenspezifische Arbeit beginnt in den jeweiligen rollenbezogenen Kapiteln.',
+    'Dieses Kapitel behandelt, was alle Rollen gemeinsam haben: die Anmeldung, das Profil bei der Erstanmeldung, die Auswahl Ihrer Studie bzw. Ihres Prüfzentrums und den Navigationsrahmen. Die rollenspezifische Arbeit beginnt in den jeweiligen rollenbezogenen Kapiteln.',
   ],
   sections: [
     {
@@ -35,9 +35,9 @@ export const gettingStartedDe: ManualChapter = {
     {
       id: 'gs-study', num: '3', title: 'Studie auswählen', deutsch: 'Choosing a study (and site)',
       shot: 'common/02-pick-study.png',
-      goal: 'Begrenzen Sie Ihre Sitzung auf eine Studie und einen Standort.',
+      goal: 'Begrenzen Sie Ihre Sitzung auf eine Studie und ein Prüfzentrum.',
       body: [
-        'Ist Ihr Konto mehr als einer Studie zugeordnet, gelangen Sie nach der Anmeldung zur **Studienauswahl** (study picker). Wählen Sie die Studie (und, sofern zutreffend, den Standort) aus, in der bzw. an dem Sie arbeiten möchten. Alles, was Sie danach tun, ist auf diese Auswahl beschränkt. Sie können später über die obere Leiste wechseln.',
+        'Ist Ihr Konto mehr als einer Studie zugeordnet, gelangen Sie nach der Anmeldung zur **Studienauswahl** (study picker). Wählen Sie die Studie (und, sofern zutreffend, das Prüfzentrum) aus, in der bzw. in dem Sie arbeiten möchten. Alles, was Sie danach tun, ist auf diese Auswahl beschränkt. Sie können später über die obere Leiste wechseln.',
       ],
     },
     {
@@ -46,7 +46,7 @@ export const gettingStartedDe: ManualChapter = {
       goal: 'Lernen Sie den auf jeder Seite gemeinsamen Rahmen kennen.',
       bullets: [
         '**Obere Leiste** (top bar) — die Marke (Klick führt zu **Start**), die **Hauptnavigation** mit den Hauptzielen Ihrer Rolle (z. B. *Studienteilnehmer*, *Rückfragen*, *Fällige Visiten*; das aktuelle Ziel ist hervorgehoben), rechts die **aktive Studie** als Chip (Klick öffnet die Studienauswahl) und Ihr Name mit einem **Rollen-Chip**, der das Profilmenü mit Handbuch, Version und **Abmelden** öffnet. Auf schmalen Bildschirmen wandert die Navigation in dieses Menü.',
-        '**Seitenleiste** (side rail) — nur dort, wo ein Bereich mehrere Seiten hat: im **Studienaufbau** listet sie alle Aufbau-Schritte (CRFs, Visiten, Gruppen, Regeln, Standorte, Modalitäten, Nutzer), für Administrator/-innen unter **System** die fünf Instanz-Seiten (Systemstatus, System-Audit, Passwort-Richtlinie, Konfiguration, geplante Jobs), bei der CRF-Eingabe die Abschnitte des Formulars mit ihrem Ausfüllstand. Alle anderen Seiten sind einspaltig.',
+        '**Seitenleiste** (side rail) — nur dort, wo ein Bereich mehrere Seiten hat: im **Studienaufbau** listet sie alle Aufbau-Schritte (CRFs, Visiten, Gruppen, Regeln, Prüfzentren, Modalitäten, Nutzer), für Administrator/-innen unter **System** die Seiten der Instanz (Systemstatus, Studien, Standorte, Uploader und Tokens, System-Audit, Anmeldeverlauf, Passwort-Richtlinie, Konfiguration, geplante Jobs), bei der CRF-Eingabe die Abschnitte des Formulars mit ihrem Ausfüllstand. Alle anderen Seiten sind einspaltig.',
         '**Pfad** (breadcrumbs) — steht im Seitenkopf, nur auf Seiten unterhalb eines Bereichs, und nennt die übergeordneten Stufen als Links (z. B. *Studienteilnehmer › M-007 › V1 Inclusion* über einem CRF). Die Seite selbst ist die Überschrift; flache Seiten wie *Rückfragen* haben keinen Pfad — hervorgehobenes Navigationsziel und Überschrift sagen, wo Sie sind.',
       ],
       notes: [

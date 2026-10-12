@@ -96,6 +96,11 @@ public class LegacyAliasServlet extends HttpServlet {
         }
         UserAccountBean user = LegacyAccessLog.sessionUser(req);
         boolean admin = LegacyAccessLog.isSysAdmin(user);
+        if (entry != null && LegacyServletTelemetryFilter.closedByLocationMode(entry)) {
+            LegacyAccessLog.hit(entry, req, user, true, Action.GONE);
+            LegacyServletTelemetryFilter.gone(req, resp, entry);
+            return;
+        }
         if (entry != null) {
             LegacyAccessLog.hit(entry, req, user, true, admin ? Action.FORWARD : Action.REFUSE);
         }

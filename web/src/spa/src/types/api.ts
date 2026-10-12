@@ -3480,6 +3480,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The available locations the caller may place a study or site at, by name */
+        get: operations["listLocationOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/internal/dicom-worklist": {
         parameters: {
             query?: never;
@@ -4608,6 +4625,8 @@ export interface components {
             contactEmail?: string;
             protocolType?: string;
             phase?: string;
+            /** Format: int32 */
+            locationId?: number;
         };
         StudyIdentityDto: {
             oid?: string;
@@ -4627,6 +4646,10 @@ export interface components {
             parentStudyOid?: string;
             parentStudyName?: string;
             datePlannedStart?: string;
+            /** Format: int32 */
+            locationId?: number;
+            locationCode?: string;
+            locationName?: string;
         };
         WriteRequest: {
             settings?: {
@@ -4782,6 +4805,8 @@ export interface components {
             facilityContactDegree?: string;
             facilityContactPhone?: string;
             facilityContactEmail?: string;
+            /** Format: int32 */
+            locationId?: number;
         };
         UpdateRuleRequest: {
             name?: string;
@@ -6493,6 +6518,16 @@ export interface components {
         OphthFieldCatalogResponseOption: {
             value?: string;
             label?: string;
+        };
+        LocationOptionDto: {
+            /** Format: int32 */
+            id: number;
+            code: string;
+            name: string;
+            street?: string;
+            city?: string;
+            zip?: string;
+            country?: string;
         };
         PreviewRowsPageDto: {
             /**
@@ -13057,6 +13092,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MeDto"];
+                };
+            };
+        };
+    };
+    listLocationOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationOptionDto"][];
                 };
             };
         };

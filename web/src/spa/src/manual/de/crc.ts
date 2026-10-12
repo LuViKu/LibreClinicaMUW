@@ -47,8 +47,8 @@ export const crcDe: ManualChapter = {
         'Speichern Sie mit **Save & add next** (Speichern & nächsten hinzufügen), **Save & finish** (Speichern & abschließen) oder **Save & schedule** (Speichern & planen — primär; öffnet den neuen Teilnehmer, um die erste Visite zu planen).',
       ],
       notes: [
-        'Der Standort wird aus Ihrer aktiven Studien-/Standortauswahl übernommen — Sie wählen ihn nicht in diesem Formular.',
-        'Wenn der Server die Übermittlung ablehnt (zum Beispiel bei einer doppelten ID an diesem Standort), wird der genaue Feldfehler inline angezeigt; korrigieren Sie ihn und speichern Sie erneut.',
+        'Das Prüfzentrum wird aus Ihrer aktiven Auswahl von Studie und Prüfzentrum übernommen — Sie wählen es nicht in diesem Formular.',
+        'Wenn der Server die Übermittlung ablehnt (zum Beispiel bei einer doppelten ID in diesem Prüfzentrum), wird der genaue Feldfehler inline angezeigt; korrigieren Sie ihn und speichern Sie erneut.',
       ],
     },
     {

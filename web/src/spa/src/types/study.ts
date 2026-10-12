@@ -80,6 +80,15 @@ export interface StudyIdentity {
    * Phase-E.4 mock literal "01-Jul-2020".
    */
   datePlannedStart?: string | null
+  /**
+   * DR-040 phase 4 — the location (Standort) this study or site is at: a
+   * site's location; a study without sites, its own; a parent study with
+   * sites, its coordinating location (may be null). Optional to bridge the
+   * api.ts regeneration window.
+   */
+  locationId?: number | null
+  locationCode?: string | null
+  locationName?: string | null
 }
 
 /**
@@ -155,6 +164,12 @@ export interface CreateStudyInput {
   contactEmail?: string
   protocolType?: string
   phase?: string
+  /**
+   * DR-040 phase 4 — the study's own location (without sites) or its
+   * coordinating location. Required by the server in multi-location mode;
+   * in single mode it takes the one location.
+   */
+  locationId?: number
 }
 
 /**
@@ -179,6 +194,30 @@ export interface CreateSiteInput {
   facilityContactPhone?: string
   facilityContactEmail?: string
   initialPrincipalInvestigatorUserId?: number
+  /**
+   * DR-040 phase 4 — the location (Standort) the site is at. The server
+   * copies the facility name, city, zip and country from it (request values
+   * for those four are ignored). Required in multi-location mode; in single
+   * mode the server takes the one location.
+   */
+  locationId?: number
+}
+
+/**
+ * `PUT /api/v1/studies/{parentOid}/sites/{siteOid}` request body: every
+ * field optional, omitted means "leave unchanged". A different `locationId`
+ * moves the site (the server re-copies the facility address and audits it).
+ */
+export interface UpdateSiteInput {
+  name?: string
+  briefSummary?: string
+  principalInvestigator?: string
+  facilityState?: string
+  facilityContactName?: string
+  facilityContactDegree?: string
+  facilityContactPhone?: string
+  facilityContactEmail?: string
+  locationId?: number
 }
 
 /**
@@ -197,4 +236,6 @@ export interface UpdateStudyInput {
   contactEmail?: string
   protocolType?: string
   phase?: string
+  /** DR-040 phase 4 — absent means unchanged; a different id moves the study. */
+  locationId?: number
 }

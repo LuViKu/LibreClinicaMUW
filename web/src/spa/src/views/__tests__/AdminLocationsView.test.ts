@@ -852,7 +852,9 @@ describe('AdminLocationsView', () => {
       const page = document.body.textContent!
       expect(page).toContain('Standorte')
       expect(page).toContain('Standort anlegen')
-      expect(page).toContain('Studien-Standort')
+      // The per-study site is a Prüfzentrum; "Standort" is only the global place.
+      expect(page).toContain('Prüfzentr')
+      expect(page).not.toContain('Studien-Standort')
       expect(page).toContain('Zugewiesene Personen')
       expect(text('status-1')).toContain('Aktiv')
       expect(text('status-3')).toContain('Deaktiviert')

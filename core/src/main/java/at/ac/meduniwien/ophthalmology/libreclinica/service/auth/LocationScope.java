@@ -181,6 +181,46 @@ public class LocationScope {
         }
     }
 
+    /** A location's row, as the forms and the facility address of a site need it. */
+    public record Place(int id, String code, String name, String street, String city, String zip, String country,
+                        int statusId) {
+        public boolean available() {
+            return statusId == STATUS_AVAILABLE;
+        }
+    }
+
+    private static final String PLACE_COLUMNS =
+            "location_id, code, name, street, city, zip, country, status_id";
+
+    private static Place placeOf(ResultSet rs) throws SQLException {
+        return new Place(rs.getInt(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5),
+                rs.getString(6), rs.getString(7), rs.getInt(8));
+    }
+
+    /** The location with this id, removed or not; null when there is none. */
+    public static Place place(Connection c, int locationId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT " + PLACE_COLUMNS + " FROM location WHERE location_id = ?")) {
+            ps.setInt(1, locationId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? placeOf(rs) : null;
+            }
+        }
+    }
+
+    /** Every location, removed ones included, by id: for labelling many rows with one read. */
+    public static java.util.Map<Integer, Place> places(Connection c) throws SQLException {
+        java.util.Map<Integer, Place> out = new java.util.HashMap<>();
+        try (PreparedStatement ps = c.prepareStatement("SELECT " + PLACE_COLUMNS + " FROM location");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Place p = placeOf(rs);
+                out.put(p.id(), p);
+            }
+        }
+        return out;
+    }
+
     /** True when the location exists and is AVAILABLE. */
     public boolean isAvailable(int locationId) {
         try (Connection c = dataSource.getConnection();
