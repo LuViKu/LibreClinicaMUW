@@ -4608,6 +4608,8 @@ export interface components {
             contactEmail?: string;
             protocolType?: string;
             phase?: string;
+            /** Format: int32 */
+            locationId?: number;
         };
         StudyIdentityDto: {
             oid?: string;
@@ -4627,6 +4629,10 @@ export interface components {
             parentStudyOid?: string;
             parentStudyName?: string;
             datePlannedStart?: string;
+            /** Format: int32 */
+            locationId?: number | null;
+            locationCode?: string | null;
+            locationName?: string | null;
         };
         WriteRequest: {
             settings?: {
@@ -4782,6 +4788,8 @@ export interface components {
             facilityContactDegree?: string;
             facilityContactPhone?: string;
             facilityContactEmail?: string;
+            /** Format: int32 */
+            locationId?: number;
         };
         UpdateRuleRequest: {
             name?: string;
@@ -6143,6 +6151,16 @@ export interface components {
         BugReportResponse: {
             delivered?: boolean;
             ticketId?: string;
+        };
+        LocationOptionDto: {
+            /** Format: int32 */
+            id: number;
+            code: string;
+            name: string;
+            street?: string | null;
+            city?: string | null;
+            zip?: string | null;
+            country?: string | null;
         };
         LocationDto: {
             /** Format: int32 */

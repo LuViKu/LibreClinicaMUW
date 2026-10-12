@@ -21,7 +21,10 @@ vi.mock('@/api/download', () => ({ apiDownload: vi.fn() }))
 import { apiGet, apiPut } from '@/api/client'
 import { apiDownload } from '@/api/download'
 import StudyIdentityEditView from '@/views/StudyIdentityEditView.vue'
+import { useAuthStore } from '@/stores/auth'
 import enMessages from '@/locales/en.json'
+import type { AuthenticatedUser, LocationMode } from '@/types/auth'
+import type { LocationOption } from '@/types/location'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en: enMessages } })
 
@@ -33,8 +36,15 @@ const IDENTITY = {
   datePlannedStart: null,
 }
 
-async function mountView() {
+async function mountView(mode?: LocationMode) {
   setActivePinia(createPinia())
+  if (mode) {
+    useAuthStore().user = {
+      username: 'root', displayName: 'Root', role: 'Administrator', userType: 'SYSADMIN',
+      profileComplete: true, mustChangePassword: false, manageableLocations: [], activeStudy: null,
+      locationMode: mode,
+    } as unknown as AuthenticatedUser
+  }
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -85,5 +95,73 @@ describe('StudyIdentityEditView', () => {
     await w.get('[data-testid="study-edit-download-metadata"]').trigger('click')
     await flushPromises()
     expect(apiDownload).toHaveBeenCalledWith('/pages/api/v1/studies/S_EDIT/metadata', 'S_EDIT_metadata.xml')
+  })
+})
+
+function option(id: number, name: string): LocationOption {
+  return { id, code: `L${id}`, name, street: null, city: null, zip: null, country: null }
+}
+
+describe('StudyIdentityEditView — Standort (DR-040 phase 4)', () => {
+  const LOCATED = { ...IDENTITY, locationId: 1, locationCode: 'L1', locationName: 'MUW Augenklinik' }
+
+  function answer(identity: typeof LOCATED | typeof IDENTITY, locations: LocationOption[]) {
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path === '/pages/api/v1/locations') return structuredClone(locations)
+      if (path === '/pages/api/v1/studies/S_EDIT') return structuredClone(identity)
+      throw new Error(`unexpected GET ${path}`)
+    })
+  }
+
+  async function save(w: Awaited<ReturnType<typeof mountView>>) {
+    await w.findAll('button').find((b) => b.text() === 'Save changes')!.trigger('click')
+    await flushPromises()
+    return vi.mocked(apiPut).mock.calls[0][1] as Record<string, unknown>
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPut).mockReset()
+    vi.mocked(apiPut).mockResolvedValue(LOCATED)
+  })
+
+  it('has no Standort select in single mode, and sends no locationId', async () => {
+    answer(LOCATED, [option(1, 'MUW Augenklinik'), option(2, 'Klinik Graz')])
+    const w = await mountView('single')
+    expect(w.find('#study-location').exists()).toBe(false)
+    expect(apiGet).not.toHaveBeenCalledWith('/pages/api/v1/locations')
+    expect(await save(w)).not.toHaveProperty('locationId')
+  })
+
+  it('prefills the select from the study’s location in multi mode and sends it', async () => {
+    answer(LOCATED, [option(2, 'Klinik Graz'), option(1, 'MUW Augenklinik')])
+    const w = await mountView('multi')
+    expect((w.get('#study-location').element as HTMLSelectElement).value).toBe('1')
+    expect(w.get('[data-testid="study-location-field"]').text()).toContain(enMessages.studyForm.locationHint)
+    expect((await save(w)).locationId).toBe(1)
+  })
+
+  it('sends the newly chosen location', async () => {
+    answer(LOCATED, [option(2, 'Klinik Graz'), option(1, 'MUW Augenklinik')])
+    const w = await mountView('multi')
+    await w.get('#study-location').setValue('2')
+    expect((await save(w)).locationId).toBe(2)
+  })
+
+  it('shows a stored location outside the options instead of an empty select', async () => {
+    answer(LOCATED, [option(2, 'Klinik Graz')])
+    const w = await mountView('multi')
+    const select = w.get('#study-location').element as HTMLSelectElement
+    expect(select.value).toBe('1')
+    expect(Array.from(select.options).map((o) => o.text)).toEqual(['MUW Augenklinik', 'Klinik Graz'])
+  })
+
+  it('sends no locationId for a study without one until one is chosen', async () => {
+    answer(IDENTITY, [option(2, 'Klinik Graz'), option(1, 'MUW Augenklinik')])
+    const w = await mountView('multi')
+    const select = w.get('#study-location').element as HTMLSelectElement
+    expect(select.value).toBe('')
+    expect(select.options[0].text).toBe(enMessages.studyForm.locationNone)
+    expect(await save(w)).not.toHaveProperty('locationId')
   })
 })

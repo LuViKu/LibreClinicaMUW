@@ -1390,12 +1390,13 @@
   "sites": {
     "title": "Sites",
     "subTrail": "Build study · multi-center setup",
-    "intro": "Create child sites under this study. Each site is a study row with its own facility metadata + role bindings; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
+    "intro": "Create child sites under this study. Each site is a study row with its own role bindings and sits at a location, from which it takes its facility name and address; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
     "createAction": "New site",
     "createHeading": "Create a site under this study",
     "submitCreate": "Create site",
     "empty": "No sites configured under this study yet.",
     "pi": "Principal investigator",
+    "location": "Location",
     "statusRemoved": "Removed",
     "statusPending": "Pending",
     "disable": "Remove",
@@ -1406,11 +1407,27 @@
       "uniqueProtocolId": "Unique protocol ID",
       "principalInvestigator": "Principal investigator",
       "briefSummary": "Brief summary",
-      "facilityName": "Facility name",
-      "facilityCity": "City",
+      "location": "Location",
+      "locationHint": "The facility name and address are taken from the location.",
       "facilityContactEmail": "Contact email"
     },
-    "created": "Site “{name}” created."
+    "created": "Site “{name}” created.",
+    "move": {
+      "action": "Change location",
+      "title": "Change location",
+      "intro": "Move site “{name}” to another location. The facility name and address are taken from the new location; the change is recorded in the audit trail.",
+      "submit": "Move site",
+      "done": "Site “{name}” is now at location “{location}”."
+    }
+  },
+  "locationSelect": {
+    "label": "Location",
+    "placeholder": "— Choose a location —",
+    "none": "No location is available to you.",
+    "loadFailed": "The locations could not be loaded (HTTP {status}).",
+    "network": "Server not reachable — the locations could not be loaded.",
+    "unknown": "The locations could not be loaded.",
+    "required": "Choose a location."
   },
   "crfLibrary": {
     "title": "CRF Library",
@@ -2384,7 +2401,10 @@
     "protocolDescription": "Detailed description",
     "collaborators": "Collaborators",
     "contactEmail": "Contact e-mail",
-    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on."
+    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on.",
+    "location": "Location",
+    "locationHint": "The study's location or, with several sites, the coordinating location.",
+    "locationNone": "— No location —"
   },
   "manageUsers": {
     "title": "Manage Users",

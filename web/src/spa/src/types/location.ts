@@ -122,3 +122,20 @@ export interface LocationFieldError {
   field: string
   message: string
 }
+
+/**
+ * One location the caller may place a study or a site at, from
+ * `GET /pages/api/v1/locations` (DR-040 phase 4), ordered by name. A system
+ * administrator gets every available location, anybody else the available
+ * ones in their own scope; never 403 (an empty list instead). Mirrors the
+ * backend's `LocationOptionDto`.
+ */
+export interface LocationOption {
+  id: number
+  code: string
+  name: string
+  street: string | null
+  city: string | null
+  zip: string | null
+  country: string | null
+}
