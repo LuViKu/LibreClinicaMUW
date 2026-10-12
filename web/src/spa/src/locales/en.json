@@ -1121,7 +1121,7 @@
       "sites": {
         "title": "Sites",
         "summary": "{count} sites",
-        "description": "Per-site PI, address, recruitment cap."
+        "description": "Per-site PI, location, recruitment cap."
       },
       "users": {
         "title": "Users",

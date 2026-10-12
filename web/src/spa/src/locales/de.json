@@ -1121,7 +1121,7 @@
       "sites": {
         "title": "Prüfzentren",
         "summary": "{count} Prüfzentren",
-        "description": "Pro Prüfzentrum PI, Anschrift, Rekrutierungs-Obergrenze."
+        "description": "Pro Prüfzentrum PI, Standort, Rekrutierungs-Obergrenze."
       },
       "users": {
         "title": "Nutzer/-innen",
