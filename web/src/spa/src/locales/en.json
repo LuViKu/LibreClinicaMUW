@@ -2401,7 +2401,10 @@
     "protocolDescription": "Detailed description",
     "collaborators": "Collaborators",
     "contactEmail": "Contact e-mail",
-    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on."
+    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on.",
+    "location": "Location",
+    "locationHint": "The study's location or, with several sites, the coordinating location.",
+    "locationNone": "— No location —"
   },
   "manageUsers": {
     "title": "Manage Users",

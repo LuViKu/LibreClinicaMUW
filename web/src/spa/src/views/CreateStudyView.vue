@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -8,9 +8,12 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import HelperText from '@/components/HelperText.vue'
+import LocationSelect from '@/components/LocationSelect.vue'
 
 import { useStudyStore } from '@/stores/study'
 import { useAuthStore } from '@/stores/auth'
+import { useLocationOptionsStore } from '@/stores/locationOptions'
 
 /**
  * Phase E A8.1 — Create Study view (sysadmin only).
@@ -23,11 +26,21 @@ import { useAuthStore } from '@/stores/auth'
  * On 201 the new study's OID is the SPA's confirmation — we navigate
  * directly to its build dashboard so the next task tiles (event
  * definitions, CRFs, sites) become the natural follow-up.
+ *
+ * DR-040 phase 4: in multi-location mode the study needs a location
+ * (Standort): its own, or with several sites (Prüfzentren) the
+ * coordinating one. A required select over GET /locations, preselected when
+ * there is exactly one. In single-location mode there is no select; the
+ * server takes the one location.
  */
 const { t } = useI18n()
 const router = useRouter()
 const studies = useStudyStore()
 const auth = useAuthStore()
+const locationOptions = useLocationOptionsStore()
+
+const multiLocation = computed(() => auth.locationMode === 'multi')
+const locationId = ref<number | null>(null)
 
 interface Form {
   name: string
@@ -66,6 +79,21 @@ const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const isSubmitting = ref(false)
 
+onMounted(() => { if (multiLocation.value) void locationOptions.load() })
+
+// Preselect the one location there is, once the options have arrived.
+watch(() => locationOptions.options, (options) => {
+  if (locationId.value == null && options.length === 1) locationId.value = options[0].id
+}, { immediate: true })
+
+// A message belongs to the choice it was given for.
+watch(locationId, () => {
+  if (fieldErrors.value.locationId) {
+    const { locationId: _dropped, ...rest } = fieldErrors.value
+    fieldErrors.value = rest
+  }
+})
+
 // #7/#12 — required fields for a new study. Validated client-side on
 // submit so the operator sees exactly which fields are missing (the old
 // silently-disabled button gave no hint about WHY it wouldn't submit).
@@ -76,11 +104,18 @@ function validate(): boolean {
   for (const key of REQUIRED) {
     if (form.value[key].trim() === '') errors[key] = t('studyForm.requiredField')
   }
+  const locationMissing = multiLocation.value && locationId.value == null
+  if (locationMissing) errors.locationId = t('studyForm.requiredField')
   fieldErrors.value = errors
   const firstMissing = REQUIRED.find((k) => errors[k])
   if (firstMissing) {
     formError.value = t('studyForm.validationSummary')
     document.getElementById(`study-${firstMissing === 'uniqueProtocolId' ? 'uid' : firstMissing === 'principalInvestigator' ? 'pi' : firstMissing === 'briefSummary' ? 'summary' : firstMissing}`)?.focus()
+    return false
+  }
+  if (locationMissing) {
+    formError.value = t('studyForm.validationSummary')
+    document.getElementById('study-location')?.focus()
     return false
   }
   return true
@@ -105,6 +140,7 @@ async function submit() {
       protocolDescription: form.value.protocolDescription.trim() || undefined,
       collaborators: form.value.collaborators.trim() || undefined,
       contactEmail: form.value.contactEmail.trim() || undefined,
+      locationId: multiLocation.value && locationId.value != null ? locationId.value : undefined,
     })
     if (result.ok) {
       // 2026-06-21 user-feedback round 4 — auto-bind the new study
@@ -190,6 +226,19 @@ function cancel() {
             <FieldLabel for="study-sponsor" required>{{ t('studyForm.sponsor') }}</FieldLabel>
             <TextInput id="study-sponsor" v-model="form.sponsor" />
             <ErrorText v-if="fieldErrors.sponsor">{{ fieldErrors.sponsor }}</ErrorText>
+          </div>
+          <div v-if="multiLocation" class="col-span-2" data-testid="study-location-field">
+            <FieldLabel for="study-location" required>{{ t('studyForm.location') }}</FieldLabel>
+            <LocationSelect
+              id="study-location"
+              v-model="locationId"
+              :options="locationOptions.options"
+              :error="!!fieldErrors.locationId"
+            />
+            <ErrorText v-if="fieldErrors.locationId" data-testid="study-location-error">{{ fieldErrors.locationId }}</ErrorText>
+            <ErrorText v-else-if="locationOptions.error">{{ locationOptions.error }}</ErrorText>
+            <HelperText v-if="locationOptions.loaded && locationOptions.options.length === 0">{{ t('locationSelect.none') }}</HelperText>
+            <HelperText v-else>{{ t('studyForm.locationHint') }}</HelperText>
           </div>
           <div>
             <FieldLabel for="study-collaborators">{{ t('studyForm.collaborators') }}</FieldLabel>

@@ -8,9 +8,12 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import HelperText from '@/components/HelperText.vue'
+import LocationSelect from '@/components/LocationSelect.vue'
 
 import { apiGet } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { useLocationOptionsStore } from '@/stores/locationOptions'
 import { useStudyStore } from '@/stores/study'
 import { useAdminStudiesStore } from '@/stores/adminStudies'
 import type { StudyIdentity, UpdateStudyInput } from '@/types/study'
@@ -35,6 +38,12 @@ import type { StudyIdentity, UpdateStudyInput } from '@/types/study'
  *
  * The page also offers the study's ODM metadata as a download, for the
  * archive at study close.
+ *
+ * DR-040 phase 4: in multi-location mode the form has a Standort select,
+ * prefilled from the study's `locationId` (its own location, or with
+ * several sites the coordinating one) and sent with the PUT; a study with
+ * none shows the placeholder and sends nothing (absent = unchanged). In
+ * single-location mode there is no select.
  */
 const { t } = useI18n()
 const route = useRoute()
@@ -42,6 +51,7 @@ const router = useRouter()
 const studies = useStudyStore()
 const auth = useAuthStore()
 const adminStudies = useAdminStudiesStore()
+const locationOptions = useLocationOptionsStore()
 
 const oid = computed(() => String(route.params.oid))
 
@@ -79,7 +89,14 @@ const isSubmitting = ref(false)
 const loadError = ref<string | null>(null)
 const savedAt = ref<number | null>(null)
 
+const multiLocation = computed(() => auth.locationMode === 'multi')
+/** The study's location as loaded or chosen; null while it has none. */
+const locationId = ref<number | null>(null)
+/** The stored location, offered even when it is not among the caller's options. */
+const currentLocation = ref<{ id: number; name: string } | null>(null)
+
 onMounted(async () => {
+  if (multiLocation.value) void locationOptions.load()
   isLoading.value = true
   try {
     // Phase E.6 (2026-06-03): load the full StudyIdentityDto so every
@@ -104,6 +121,10 @@ onMounted(async () => {
       collaborators: identity.collaborators ?? '',
       contactEmail: identity.contactEmail ?? '',
     }
+    locationId.value = identity.locationId ?? null
+    currentLocation.value = identity.locationId != null
+      ? { id: identity.locationId, name: identity.locationName ?? identity.locationCode ?? String(identity.locationId) }
+      : null
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Unknown error'
   } finally {
@@ -165,7 +186,9 @@ async function submit() {
       if (key === 'protocolType' && (form.value.protocolType as string).trim() === '') continue
       patch[key] = (form.value[key] as string).trim()
     }
-    const result = await studies.update(oid.value, patch as UpdateStudyInput)
+    const body: UpdateStudyInput = { ...patch }
+    if (multiLocation.value && locationId.value != null) body.locationId = locationId.value
+    const result = await studies.update(oid.value, body)
     if (result.ok) {
       savedAt.value = Date.now()
       // Phase E.6: header breadcrumb derives from auth.user.activeStudy.
@@ -263,6 +286,20 @@ function cancel() {
             <FieldLabel for="study-sponsor" required>{{ t('studyForm.sponsor') }}</FieldLabel>
             <TextInput id="study-sponsor" v-model="form.sponsor" />
             <ErrorText v-if="fieldErrors.sponsor">{{ fieldErrors.sponsor }}</ErrorText>
+          </div>
+          <div v-if="multiLocation" class="col-span-2" data-testid="study-location-field">
+            <FieldLabel for="study-location">{{ t('studyForm.location') }}</FieldLabel>
+            <LocationSelect
+              id="study-location"
+              v-model="locationId"
+              :options="locationOptions.options"
+              :current="currentLocation"
+              :placeholder="t('studyForm.locationNone')"
+              :error="!!fieldErrors.locationId"
+            />
+            <ErrorText v-if="fieldErrors.locationId" data-testid="study-location-error">{{ fieldErrors.locationId }}</ErrorText>
+            <ErrorText v-else-if="locationOptions.error">{{ locationOptions.error }}</ErrorText>
+            <HelperText>{{ t('studyForm.locationHint') }}</HelperText>
           </div>
           <div>
             <FieldLabel for="study-collaborators">{{ t('studyForm.collaborators') }}</FieldLabel>

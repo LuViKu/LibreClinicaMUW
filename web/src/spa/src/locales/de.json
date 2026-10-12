@@ -2401,7 +2401,10 @@
     "protocolDescription": "Ausführliche Beschreibung",
     "collaborators": "Kooperationspartner",
     "contactEmail": "Kontakt-E-Mail",
-    "contactEmailHint": "Adresse der Projektleitung. Pflicht, solange die Anmelde-Benachrichtigung per E-Mail aktiv ist."
+    "contactEmailHint": "Adresse der Projektleitung. Pflicht, solange die Anmelde-Benachrichtigung per E-Mail aktiv ist.",
+    "location": "Standort",
+    "locationHint": "Der Standort der Studie, oder bei mehreren Prüfzentren der koordinierende Standort.",
+    "locationNone": "— Kein Standort —"
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
