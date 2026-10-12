@@ -1412,6 +1412,15 @@
     },
     "created": "Site “{name}” created."
   },
+  "locationSelect": {
+    "label": "Location",
+    "placeholder": "— Choose a location —",
+    "none": "No location is available to you.",
+    "loadFailed": "The locations could not be loaded (HTTP {status}).",
+    "network": "Server not reachable — the locations could not be loaded.",
+    "unknown": "The locations could not be loaded.",
+    "required": "Choose a location."
+  },
   "crfLibrary": {
     "title": "CRF Library",
     "subTrail": "Build study · form library + versions",

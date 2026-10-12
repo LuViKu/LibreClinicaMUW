@@ -13,7 +13,7 @@ import { apiGet } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyStore } from '@/stores/study'
 import { useAdminStudiesStore } from '@/stores/adminStudies'
-import type { StudyIdentity } from '@/types/study'
+import type { StudyIdentity, UpdateStudyInput } from '@/types/study'
 
 /**
  * Phase E A8.1 — Study identity edit view.
@@ -165,7 +165,7 @@ async function submit() {
       if (key === 'protocolType' && (form.value.protocolType as string).trim() === '') continue
       patch[key] = (form.value[key] as string).trim()
     }
-    const result = await studies.update(oid.value, patch as Partial<StudyIdentity>)
+    const result = await studies.update(oid.value, patch as UpdateStudyInput)
     if (result.ok) {
       savedAt.value = Date.now()
       // Phase E.6: header breadcrumb derives from auth.user.activeStudy.

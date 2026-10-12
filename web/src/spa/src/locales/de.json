@@ -1412,6 +1412,15 @@
     },
     "created": "Standort „{name}“ angelegt."
   },
+  "locationSelect": {
+    "label": "Standort",
+    "placeholder": "— Standort wählen —",
+    "none": "Für Ihr Konto ist kein Standort verfügbar.",
+    "loadFailed": "Die Standorte konnten nicht geladen werden (HTTP {status}).",
+    "network": "Server nicht erreichbar — die Standorte konnten nicht geladen werden.",
+    "unknown": "Die Standorte konnten nicht geladen werden.",
+    "required": "Bitte einen Standort wählen."
+  },
   "crfLibrary": {
     "title": "CRF-Bibliothek",
     "subTrail": "Studienaufbau · Formularbibliothek + Versionen",
