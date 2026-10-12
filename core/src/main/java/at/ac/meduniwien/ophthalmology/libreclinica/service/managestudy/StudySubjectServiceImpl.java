@@ -110,7 +110,7 @@ public class StudySubjectServiceImpl implements StudySubjectService {
                     nonEmptyEventCrf, crfVersionById, crfById, eventDefinitionCRFs));
             ArrayList<DisplayEventDefinitionCRFBean> al =
                 getUncompletedCRFs(eventDefinitionCRFs, eventCRFs, event.getSubjectEventStatus(), nonEmptyEventCrf, crfVersionById);
-            populateUncompletedCRFsWithCRFAndVersions(al, crfVersionById, crfById);
+            populateUncompletedCRFsWithCRFAndVersions(al, crfById);
             de.setUncompletedCRFs(al);
 
             // de.setMaximumSampleOrdinal(studyEventDao.getMaxSampleOrdinal(sed,
@@ -257,7 +257,7 @@ public class StudySubjectServiceImpl implements StudySubjectService {
     }
 
     public void populateUncompletedCRFsWithCRFAndVersions(ArrayList<DisplayEventDefinitionCRFBean> uncompletedEventDefinitionCRFs,
-            Map<Integer, CRFVersionBean> crfVersionById, Map<Integer, CRFBean> crfById) {
+            Map<Integer, CRFBean> crfById) {
 
         CRFVersionDAO crfVersionDao = new CRFVersionDAO(dataSource);
 

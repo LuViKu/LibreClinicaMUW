@@ -319,7 +319,7 @@ public class ExampleSpringJob extends QuartzJobBean {
                 if ("1".equals(spss)) {
                     SPSSReportBean answer = new SPSSReportBean();
                     fileName =
-                        generateFileService.createSPSSFile(datasetBean, eb, activeStudy, parentStudy, sysTimeBegin, generalFileDir, answer, generalFileDirCopy, userBean);
+                        generateFileService.createSPSSFile(datasetBean, eb, sysTimeBegin, generalFileDir, answer, generalFileDirCopy, userBean);
                     logger.debug("-- gen spss file");
                     message.append("<p>" + pageMessages.getString("html_email_body_4") + " " + getFileNameStr(fileName)
                         + pageMessages.getString("html_email_body_4_5") + SQLInitServlet.getField("sysURL.base") + "AccessFile?fileId="

@@ -130,9 +130,10 @@ public class BeanPropertyService{
     /**
      * The Event action runs based on the values set in the rules.
      * @param result
-     * @param propertyBean
      * @param eow
      * @param eventAction
+     * @param userId
+     * @param isTransaction
      */
     
     private void executeAction(Object result,ExpressionBeanObjectWrapper eow,EventActionBean eventAction,Integer userId,boolean isTransaction){

@@ -76,17 +76,6 @@ public class ParticipantEventService {
         return null;
     }
     
-    public EventCRFBean getExistingEventCRF(StudySubjectBean studySubject, StudyEventBean nextEvent,
-            EventDefinitionCRFBean eventDefCrf) {
-
-        List<CRFVersionBean> crfVersions = getAllCrfVersions(eventDefCrf);
-        for (CRFVersionBean crfVersion:crfVersions) {
-            EventCRFBean eventCRF = (EventCRFBean) getEventCRFDAO().findByEventCrfVersion(nextEvent, crfVersion);
-            if (eventCRF != null) return eventCRF;
-        }
-        return null;
-    }
-
     public List<CRFVersionBean> getAllCrfVersions(EventDefinitionCRFBean eventDefCrf) {
 
         List<CRFVersionBean> versions = new ArrayList<CRFVersionBean>();

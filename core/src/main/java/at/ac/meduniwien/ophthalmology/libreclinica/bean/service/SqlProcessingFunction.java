@@ -74,7 +74,9 @@ public class SqlProcessingFunction extends ProcessingFunction implements Seriali
             // String[] statements = getFileContents(sqlFile);
 
             ScriptRunner runner = new ScriptRunner(conn, true, false);
-            runner.runScript(new BufferedReader(new FileReader(sqlFile)));
+            try (BufferedReader reader = new BufferedReader(new FileReader(sqlFile))) {
+                runner.runScript(reader);
+            }
 
             /*
              * stmt = conn.createStatement(); for (String statement :

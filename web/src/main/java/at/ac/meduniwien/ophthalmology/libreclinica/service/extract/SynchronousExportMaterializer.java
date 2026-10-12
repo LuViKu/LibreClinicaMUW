@@ -195,7 +195,7 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
                 eb2.getMetadata();
                 eb2.computeReport(answer);
                 HashMap<String, Integer> answerMap = extractService.createSPSSFile(
-                        dataset, eb2, study, parentStudy, sysTimeBegin, runDir, answer, "", submittedBy);
+                        dataset, eb2, sysTimeBegin, runDir, answer, "", submittedBy);
                 fileId = firstValueOrZero(answerMap);
             }
             case BUNDLE -> {
