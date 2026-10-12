@@ -145,7 +145,7 @@ public class OpenClinicaMailSender {
         int sizeTo = recipientsArray.size();
         InternetAddress[] addressTo = new InternetAddress[sizeTo];
         for (int i = 0; i < sizeTo; i++) {
-            addressTo[i] = new InternetAddress(recipientsArray.get(i).toString());
+            addressTo[i] = new InternetAddress(recipientsArray.get(i));
         }
         return addressTo;
     }

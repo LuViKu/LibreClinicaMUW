@@ -160,7 +160,7 @@ public class MetadataUnit extends OdmUnit {
         odmBean.setODMVersion("oc1.3");
        setOdmBean( odmBean);
         
-         ArrayList<StudyEventDefinitionBean> sedBeansInStudy = (ArrayList<StudyEventDefinitionBean>) studyBase.getSedBeansInStudy();
+         List<StudyEventDefinitionBean> sedBeansInStudy = studyBase.getSedBeansInStudy();
          if (sedBeansInStudy == null || sedBeansInStudy.size() < 1) {
              logger.info("null, because there is no study event definition in this study.");
              return;
@@ -179,7 +179,7 @@ public class MetadataUnit extends OdmUnit {
     }
 
     private void collectMetaDataVersion() {
-        ArrayList<StudyEventDefinitionBean> sedBeansInStudy = (ArrayList<StudyEventDefinitionBean>) studyBase.getSedBeansInStudy();
+        List<StudyEventDefinitionBean> sedBeansInStudy = studyBase.getSedBeansInStudy();
         if (sedBeansInStudy == null || sedBeansInStudy.size() < 1) {
             logger.info("null, because there is no study event definition in this study.");
             return;

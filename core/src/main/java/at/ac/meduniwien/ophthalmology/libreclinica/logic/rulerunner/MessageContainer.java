@@ -76,7 +76,7 @@ public class MessageContainer {
         ERROR, WARNING
     }
 
-    private class TheContainer {
+    private static class TheContainer {
         String message;
         MessageType type;
 

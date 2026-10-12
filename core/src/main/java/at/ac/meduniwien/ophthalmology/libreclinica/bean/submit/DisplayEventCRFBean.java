@@ -141,8 +141,8 @@ public class DisplayEventCRFBean implements Comparable<DisplayEventCRFBean> {
         this.eventCRF = eventCRF;
         stage = eventCRF.getStage();
         Role r = surb.getRole();
-        boolean isSuper = isSuper(user, r);
-        boolean isEditor = isEditor(user, r);
+        boolean isSuper = isSuper(r);
+        boolean isEditor = isEditor(r);
 
         if (stage.equals(DataEntryStage.LOCKED)) {
             locked = true;
@@ -186,20 +186,18 @@ public class DisplayEventCRFBean implements Comparable<DisplayEventCRFBean> {
 
 
     /**
-     * @param user
-     *            The current user.
      * @param studyRole
      *            The current user's role in the current study.
      * @return <code>true</code> if the user is a System Administrator or
      *         Study Director for the current study; <code>false</code>
      *         otherwise.
      */
-    public static boolean isSuper(UserAccountBean user, Role studyRole) {
+    public static boolean isSuper(Role studyRole) {
         return studyRole.equals(Role.STUDYDIRECTOR) || studyRole.equals(Role.COORDINATOR);
     }
     
-    public static boolean isEditor(UserAccountBean user, Role studyRole) {
-        return  isSuper(user, studyRole) || studyRole.equals(Role.INVESTIGATOR) || studyRole.equals(Role.RESEARCHASSISTANT)|| studyRole.equals(Role.RESEARCHASSISTANT2);
+    public static boolean isEditor(Role studyRole) {
+        return  isSuper(studyRole) || studyRole.equals(Role.INVESTIGATOR) || studyRole.equals(Role.RESEARCHASSISTANT)|| studyRole.equals(Role.RESEARCHASSISTANT2);
     }
 
     public static boolean initialDataEntryCompletedMoreThanTwelveHoursAgo(EventCRFBean eventCRF) {

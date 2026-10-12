@@ -63,7 +63,7 @@ public class EventActionValidatorOrdinalTest {
 
     @Test
     public void endOrdinal_isRejected() {
-        validator.validateOidInAction("SE_VISIT[END]", null);
+        validator.validateOidInAction("SE_VISIT[END]");
 
         assertEquals(1, wrapper.getImportErrors().size());
         String error = wrapper.getImportErrors().get(0);
@@ -72,7 +72,7 @@ public class EventActionValidatorOrdinalTest {
 
     @Test
     public void aNineDigitOrdinalOfAnEventThatDoesNotRepeat_isRejected() {
-        validator.validateOidInAction("SE_ONCE[999999999]", null);
+        validator.validateOidInAction("SE_ONCE[999999999]");
 
         assertEquals(1, wrapper.getImportErrors().size());
         String error = wrapper.getImportErrors().get(0);
@@ -81,7 +81,7 @@ public class EventActionValidatorOrdinalTest {
 
     @Test
     public void numericOrdinalOfARepeatingEvent_isAccepted() {
-        validator.validateOidInAction("SE_VISIT[2]", null);
+        validator.validateOidInAction("SE_VISIT[2]");
 
         assertEquals(0, wrapper.getImportErrors().size());
     }

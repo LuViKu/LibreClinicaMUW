@@ -85,32 +85,6 @@ public class StudyEvent extends DataMapDomainObject  {
 		this.studyEventId = studyEventId;
 	}
 
-	public StudyEvent(int studyEventId, UserAccount userAccount,
-			StudyEventDefinition studyEventDefinition,
-			StudySubject studySubject, Status status, String location,
-			Integer sampleOrdinal, Date dateStart, Date dateEnd,
-			Date dateCreated, Date dateUpdated, Integer updateId,
-			Integer subjectEventStatusId, Boolean startTimeFlag,
-			Boolean endTimeFlag, List<DnStudyEventMap> dnStudyEventMaps, List<EventCrf> eventCrfs) {
-		this.studyEventId = studyEventId;
-		this.userAccount = userAccount;
-		this.studyEventDefinition = studyEventDefinition;
-		this.studySubject = studySubject;
-		
-		this.location = location;
-		this.sampleOrdinal = sampleOrdinal;
-		this.dateStart = dateStart;
-		this.dateEnd = dateEnd;
-		this.dateCreated = dateCreated;
-		this.dateUpdated = dateUpdated;
-		this.updateId = updateId;
-		this.subjectEventStatusId = subjectEventStatusId;
-		this.startTimeFlag = startTimeFlag;
-		this.endTimeFlag = endTimeFlag;
-		this.dnStudyEventMaps = dnStudyEventMaps;
-		this.eventCrfs = eventCrfs;
-	}
-
 	@Id
 	@Column(name = "study_event_id", unique = true, nullable = false)
 	@GeneratedValue(generator = "id-generator")

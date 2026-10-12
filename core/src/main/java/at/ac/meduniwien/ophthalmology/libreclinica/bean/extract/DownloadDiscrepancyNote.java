@@ -96,14 +96,12 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
             LOG.error("downLoad: IO failure writing discrepancy note (format={})", format, e);
             throw new RuntimeException("Discrepancy-note download failed: " + e.getMessage(), e);
         } finally{
-            if(servletStream != null){
-                try {
-                    servletStream.close();
-                } catch (IOException e) {
-                    // 2026-06-28 — heritage-debt audit (PR #262): log on close failure;
-                    // do not throw from finally so the primary exception is preserved.
-                    LOG.error("downLoad: IO failure closing servlet stream", e);
-                }
+            try {
+                servletStream.close();
+            } catch (IOException e) {
+                // 2026-06-28 — heritage-debt audit (PR #262): log on close failure;
+                // do not throw from finally so the primary exception is preserved.
+                LOG.error("downLoad: IO failure closing servlet stream", e);
             }
         }
 
@@ -161,19 +159,6 @@ public class DownloadDiscrepancyNote implements DownLoadBean{
     @Override
     public int getContentLength(EntityBean bean, String format) {
         return serializeToString(bean, false, 0).getBytes().length;
-    }
-
-    public int getListContentLength(List<DiscrepancyNoteBean> beans, String format) {
-        int totalLength = 0;
-        int count = 0;
-        for(DiscrepancyNoteBean bean : beans) {
-            ++count;
-            //Only count the byte length of a CSV header row for the first DNote
-            totalLength += serializeToString(bean, (count == 1), 0).getBytes().length;
-            totalLength += "\n".getBytes().length;
-
-        }
-        return totalLength;
     }
 
     public int getThreadListContentLength(List<DiscrepancyNoteThread> threadBeans) {

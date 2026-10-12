@@ -96,7 +96,7 @@ public class FullReportBean extends OdmXmlReportBean {
         this.addRootEndLine();
     }
 
-    public void createChunkedOdmXml(boolean isDataset, boolean header, boolean footer) {
+    public void createChunkedOdmXml(boolean header, boolean footer) {
         ClinicalDataReportBean data = new ClinicalDataReportBean(this.clinicaldata);
         data.setXmlOutput(this.getXmlOutput());
         data.setODMVersion(this.getODMVersion());

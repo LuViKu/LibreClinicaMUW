@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.AuditLogBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.AuditLogsBean;
@@ -67,7 +68,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
                 + StringEscapeUtils.escapeXml(this.clinicalData.getMetaDataVersionOID()) + "\">");
             xml.append(nls);
         }
-        ArrayList<ExportSubjectDataBean> subs = (ArrayList<ExportSubjectDataBean>) this.clinicalData.getExportSubjectData();
+        List<ExportSubjectDataBean> subs = this.clinicalData.getExportSubjectData();
         for (ExportSubjectDataBean sub : subs) {
             xml.append(indent + indent + "<SubjectData SubjectKey=\"" + StringEscapeUtils.escapeXml(sub.getSubjectOID()));
             if ("oc1.2".equalsIgnoreCase(ODMVersion) || "oc1.3".equalsIgnoreCase(ODMVersion)) {
@@ -105,7 +106,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
             xml.append("\">");
             xml.append(nls);
             //
-            ArrayList<ExportStudyEventDataBean> ses = (ArrayList<ExportStudyEventDataBean>) sub.getExportStudyEventData();
+            List<ExportStudyEventDataBean> ses = sub.getExportStudyEventData();
             for (ExportStudyEventDataBean se : ses) {
                 xml.append(indent + indent + indent + "<StudyEventData StudyEventOID=\"" + StringEscapeUtils.escapeXml(se.getStudyEventOID()));
                 if ("oc1.2".equalsIgnoreCase(ODMVersion) || "oc1.3".equalsIgnoreCase(ODMVersion)) {
@@ -189,7 +190,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
                                 }
                             } 
                             if(printValue) {
-                                Boolean hasElm = false;
+                                boolean hasElm = false;
                                 xml.append("Value=\"" + StringEscapeUtils.escapeXml(item.getValue()) + "\"");
 
                                 String muRefOid = item.getMeasurementUnitRef().getElementDefOID();
@@ -267,7 +268,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
                 xml.append(nls);
             }
             if ("oc1.2".equalsIgnoreCase(ODMVersion) || "oc1.3".equalsIgnoreCase(ODMVersion)) {
-                ArrayList<SubjectGroupDataBean> sgddata = (ArrayList<SubjectGroupDataBean>) sub.getSubjectGroupData();
+                List<SubjectGroupDataBean> sgddata = sub.getSubjectGroupData();
                 if (sgddata.size() > 0) {
                     for (SubjectGroupDataBean sgd : sgddata) {
                         String cid =
@@ -349,7 +350,7 @@ public class ClinicalDataReportBean extends OdmXmlReportBean {
             String n = audit.getNewValue();
             String vt = audit.getValueType();
             
-            Boolean p = i.length() > 0 || u.length() > 0 || d != null || t.length() > 0 || r.length() > 0 || o.length() > 0 || n.length() > 0 ? true : false;
+            boolean p = i.length() > 0 || u.length() > 0 || d != null || t.length() > 0 || r.length() > 0 || o.length() > 0 || n.length() > 0;
               if (p) {
                 xml.append(currentIndent + "<OpenClinica:AuditLog ");
                 if (i.length() > 0) {

@@ -64,7 +64,7 @@ public class EmailActionProcessor implements ActionProcessor {
 
         case SAVE: {
             HashMap<String, String> arg0 = asHashMap(arguments[0], String.class, String.class);
-            sendEmail(ruleAction, ub, arg0.get("body"), arg0.get("subject"));
+            sendEmail(ruleAction, arg0.get("body"), arg0.get("subject"));
             RuleActionRunLogBean ruleActionRunLog =
                 new RuleActionRunLogBean(ruleAction.getActionType(), itemDataBean, itemDataBean.getValue(), ruleSetRule.getRuleBean().getOid());
             ruleActionRunLogDao.saveOrUpdate(ruleActionRunLog);
@@ -75,7 +75,7 @@ public class EmailActionProcessor implements ActionProcessor {
         }
     }
 
-    private void sendEmail(RuleActionBean ruleAction, UserAccountBean ub, String body, String subject) throws OpenClinicaSystemException {
+    private void sendEmail(RuleActionBean ruleAction, String body, String subject) throws OpenClinicaSystemException {
 
         logger.info("Sending email...");
         try {
@@ -109,7 +109,7 @@ public class EmailActionProcessor implements ActionProcessor {
         int sizeTo = recipientsArray.size();
         InternetAddress[] addressTo = new InternetAddress[sizeTo];
         for (int i = 0; i < sizeTo; i++) {
-            addressTo[i] = new InternetAddress(recipientsArray.get(i).toString());
+            addressTo[i] = new InternetAddress(recipientsArray.get(i));
         }
         return addressTo;
 

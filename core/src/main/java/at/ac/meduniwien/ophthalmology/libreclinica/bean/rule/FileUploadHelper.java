@@ -51,7 +51,7 @@ public class FileUploadHelper {
 
         // Check that we have a file upload request
         boolean isMultipart = JakartaServletDiskFileUpload.isMultipartContent(request);
-        return isMultipart ? getFiles(request, context, null) : new ArrayList<File>();
+        return isMultipart ? getFiles(request, null) : new ArrayList<File>();
     }
 
     public List<File> returnFiles(HttpServletRequest request, ServletContext context, FileRenamePolicy fileRenamePolicy) {
@@ -59,7 +59,7 @@ public class FileUploadHelper {
         // Check that we have a file upload request
         this.fileRenamePolicy = fileRenamePolicy;
         boolean isMultipart = JakartaServletDiskFileUpload.isMultipartContent(request);
-        return isMultipart ? getFiles(request, context, null) : new ArrayList<File>();
+        return isMultipart ? getFiles(request, null) : new ArrayList<File>();
     }
 
     public List<File> returnFiles(HttpServletRequest request, ServletContext context, String dirToSaveUploadedFileIn, FileRenamePolicy fileRenamePolicy) {
@@ -67,17 +67,17 @@ public class FileUploadHelper {
         // Check that we have a file upload request
         this.fileRenamePolicy = fileRenamePolicy;
         boolean isMultipart = JakartaServletDiskFileUpload.isMultipartContent(request);
-        return isMultipart ? getFiles(request, context, createDirectoryIfDoesntExist(dirToSaveUploadedFileIn)) : new ArrayList<File>();
+        return isMultipart ? getFiles(request, createDirectoryIfDoesntExist(dirToSaveUploadedFileIn)) : new ArrayList<File>();
     }
 
     public List<File> returnFiles(HttpServletRequest request, ServletContext context, String dirToSaveUploadedFileIn) {
 
         // Check that we have a file upload request
         boolean isMultipart = JakartaServletDiskFileUpload.isMultipartContent(request);
-        return isMultipart ? getFiles(request, context, createDirectoryIfDoesntExist(dirToSaveUploadedFileIn)) : new ArrayList<File>();
+        return isMultipart ? getFiles(request, createDirectoryIfDoesntExist(dirToSaveUploadedFileIn)) : new ArrayList<File>();
     }
 
-    private List<File> getFiles(HttpServletRequest request, ServletContext context, String dirToSaveUploadedFileIn) {
+    private List<File> getFiles(HttpServletRequest request, String dirToSaveUploadedFileIn) {
         List<File> files = new ArrayList<File>();
 
         DiskFileItemFactory factory = DiskFileItemFactory.builder().get();

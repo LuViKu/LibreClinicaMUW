@@ -174,7 +174,7 @@ public abstract class AbstractAuditableMutableDomainObject extends AbstractMutab
     }
 
     /**
-     * @param updaterId the updaterId to set
+     * @param updateId the updateId to set
      */
     public void setUpdateId(Integer updateId) {
         this.updateId = updateId;

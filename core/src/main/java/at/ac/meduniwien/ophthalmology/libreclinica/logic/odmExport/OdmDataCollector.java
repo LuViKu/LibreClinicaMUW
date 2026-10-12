@@ -248,7 +248,7 @@ public abstract class OdmDataCollector {
         seds.add(sedFake);
 
         LinkedHashMap<String, OdmStudyBase> bases = new LinkedHashMap<>();
-        bases.put(studyBean.getOid(), new OdmStudyBase(ds, studyBean, seds));
+        bases.put(studyBean.getOid(), new OdmStudyBase(studyBean, seds));
         this.studyBaseMap = bases;
     }
 

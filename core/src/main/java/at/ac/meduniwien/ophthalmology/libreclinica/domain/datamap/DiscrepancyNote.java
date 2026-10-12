@@ -74,31 +74,6 @@ public class DiscrepancyNote  extends DataMapDomainObject {
 		this.discrepancyNoteId = discrepancyNoteId;
 	}
 
-	public DiscrepancyNote(int discrepancyNoteId,
-			UserAccount userAccountByOwnerId,
-			DiscrepancyNoteType discrepancyNoteType,
-			UserAccount userAccount, Study study,
-			ResolutionStatus resolutionStatus, String description,
-			String detailedNotes, Date dateCreated, Integer parentDnId,
-			String entityType, List<DnStudyEventMap> dnStudyEventMaps, List<DnEventCrfMap> dnEventCrfMaps,
-			List<DnItemDataMap> dnItemDataMaps, List<DnStudySubjectMap> dnStudySubjectMaps, List<DnSubjectMap> dnSubjectMaps) {
-		this.discrepancyNoteId = discrepancyNoteId;
-		this.userAccountByOwnerId = userAccountByOwnerId;
-		this.discrepancyNoteType = discrepancyNoteType;
-		this.userAccount = userAccount;
-		this.study = study;
-		this.resolutionStatus = resolutionStatus;
-		this.description = description;
-		this.detailedNotes = detailedNotes;
-		this.dateCreated = dateCreated;
-		this.entityType = entityType;
-		this.dnStudyEventMaps = dnStudyEventMaps;
-		this.dnEventCrfMaps = dnEventCrfMaps;
-		this.dnItemDataMaps = dnItemDataMaps;
-		this.dnStudySubjectMaps = dnStudySubjectMaps;
-		this.dnSubjectMaps = dnSubjectMaps;
-	}
-
 	@Id
 	@Column(name = "discrepancy_note_id", unique = true, nullable = false)
 	@GeneratedValue(generator = "id-generator")

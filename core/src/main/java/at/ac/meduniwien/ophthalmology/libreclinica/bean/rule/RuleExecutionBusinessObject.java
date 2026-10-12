@@ -66,7 +66,7 @@ public class RuleExecutionBusinessObject {
     public void runRule(int eventCrfId) {
         // int eventCrfId = 11;
         EventCRFBean eventCrfBean = getEventCRFBean(eventCrfId);
-        RuleSetBean ruleSetBean = getRuleSetBean(eventCrfBean);
+        RuleSetBean ruleSetBean = getRuleSetBean();
         ArrayList<RuleBean> rules = getRuleBeans(ruleSetBean);
         for (RuleBean rule : rules) {
             initializeRule(rule);
@@ -82,9 +82,6 @@ public class RuleExecutionBusinessObject {
     @Deprecated
     public void initializeRule(RuleBean rule) {
         // source data
-        // ItemDataBean sourceItemDataBean = rule.getSourceItemDataBean();
-        ItemDataBean sourceItemDataBean = null;
-
         // target data
         // ItemDataBean targetItemDataBean = rule.getTargetItemDataBean();
         ItemDataBean targetItemDataBean = null;
@@ -102,12 +99,12 @@ public class RuleExecutionBusinessObject {
         }
         if (sourceResult == true && targetResult == false) {
             // file a descrepancy Note
-            createDiscrepancyNote(rule.toString(), targetItemDataBean, sourceItemDataBean);
+            createDiscrepancyNote(rule.getOid(), targetItemDataBean);
         }
 
     }
 
-    private void createDiscrepancyNote(String description, ItemDataBean targetItemDataBean, ItemDataBean sourceItemDataBean) {
+    private void createDiscrepancyNote(String description, ItemDataBean targetItemDataBean) {
 
         DiscrepancyNoteBean note = new DiscrepancyNoteBean();
         note.setDescription(description);
@@ -135,7 +132,7 @@ public class RuleExecutionBusinessObject {
         return eventCrfBeanId > 0 ? (EventCRFBean) eventCrfDao.findByPK(eventCrfBeanId) : null;
     }
 
-    private RuleSetBean getRuleSetBean(EventCRFBean eventCrfBean) {
+    private RuleSetBean getRuleSetBean() {
         // RuleSetDAO ruleSetDao = new RuleSetDAO(sm.getDataSource());
         return null;
     }
