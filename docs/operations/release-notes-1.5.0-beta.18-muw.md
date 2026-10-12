@@ -206,7 +206,7 @@ Stop the service and start the previous image tag (set `--image-tag` back to the
 
 ## Still open at this release
 
-- **CI results and test counts:** to be filled in.
+- **CI results.** CI run [38260435301](https://github.com/LuViKu/LibreClinicaMUW/actions/runs/38260435301) on `6fbc9081d` (lc-develop after #421) passed all seven jobs: Maven build and unit tests (core 570, web 1,520), integration tests on PostgreSQL 14 and 17 (web integration profile 4,527, core 650), the compose smoke test (`api.ts` against the live spec, no drift), the SPA (2,504 vitest tests, 4 skipped) and the three Python sidecar suites (muw-e2e-converter 14, dicom-scp 107, retinal-inference 287). CodeQL and the security scan passed on the same commit.
 - **One Remidio account is one source:** a second clinic on Remidio would need a second account (not supported yet).
 - **Not yet sources:** the public upload page without a token (the `portal` kind exists in the schema, but nothing creates one).
 - **Duplicate pictures across locations.** A tokened upload of a picture already filed at another location still gets that location's duplicate or held verdict, without its ids.

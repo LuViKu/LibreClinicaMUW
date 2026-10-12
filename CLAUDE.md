@@ -20,7 +20,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.5.0-beta.17-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.18-muw` | continues with `-muw` suffix |
 
 ## Build & run
 
@@ -55,7 +55,7 @@ cd /build && mvn "$@"
 
 mounting the worktree read-only at `/src` and `.m2-cache` at `/root/.m2`.
 
-Unit tests run by default (`mvn test`). As of 1.5.0-beta.17-muw (2026-10-10): **core 544, web 1453**. To skip: `mvn -DskipTests=true …` for fast iteration.
+Unit tests run by default (`mvn test`). As of 1.5.0-beta.18-muw (2026-10-12): **core 570, web 1520**. To skip: `mvn -DskipTests=true …` for fast iteration.
 
 Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
@@ -119,11 +119,12 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 
 ## Things to know
 
-- **Test coverage is uneven, not thin** — 1997 unit tests run by default (core 544, web 1453; measured 2026-10-10), plus a Testcontainers database suite of ~1400 in `web/src/test/**/*DatabaseIT.java`. The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
+- **Test coverage is uneven, not thin** — 2090 unit tests run by default (core 570, web 1520; measured 2026-10-12), plus a Testcontainers database suite in `web/src/test/**/*DatabaseIT.java` (the web integration profile runs 4527 tests). The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
 - **`@SuppressWarnings("all")` sits on ~1,244 main-source Java files, and javac ignores it; VS Code's compiler (Eclipse JDT) honours it.** "all" is not a javac lint key, so the annotation hides warnings only in the IDE, never from `javac -Xlint`. Removing it therefore cannot change javac's output, and doing so proves nothing (an earlier note here drew the opposite conclusion from exactly that test). Do not add more; remove it from a file when you work on it.
 - **A default build hides deprecations.** It prints only "Some input files use or override a deprecated API". To measure, compile with `-Xlint:deprecation` and raise `-Xmaxwarns` (javac prints at most 100 by default). Measured on Hibernate 6.4.10, 2026-09-30: core has 128 deprecation warnings. They include exactly the 49 Hibernate calls CodeQL flags (`createNativeQuery(String)` 30, `Session.createQuery(String)` 15, `save` 2, `saveOrUpdate` 2) and 61 uses of `@GenericGenerator`'s `strategy()`. So the 49 are present-day deprecations, not forward-looking; the Hibernate 6.6 move (`chore/muw-libs-openpdf-boot-bom`) retires 47 of them.
 - **The `pages` dispatcher has no `String` and no `Resource` message converter** (its list is `[ByteArray, Marshalling (JAXB), Jackson]`, `WebMvcConfig.apiMessageConverters`). A controller there must not take a text `@RequestPart`, nor return a `String` with a non-JSON content type or a `Resource`: those answer 500/415. Read multipart text fields with `@RequestParam`, write `byte[]`. Tests build MockMvc on the production list (`ProductionMvc` / `PagesDispatcherMvc`), not on MockMvc's defaults, which hide this. Do not add a global `StringHttpMessageConverter`: it changes how every `@ResponseBody String` is written.
 - **JSON is Jackson 3 (`tools.jackson`) on one mapper** (`core.util.Json.mapper()`, `Json.strict()`), configured to read and write what Jackson 2 did; `JsonWireContractTest` and the golden tests pin the wire and the stored JSON. Do not `new ObjectMapper()`/`JsonMapper` elsewhere.
+- **Locations (DR-040) are deploy-time single or multi** — `LIBRECLINICA_DEPLOYMENT_LOCATIONS` (default `single`, read by `LocationModeConfig` into `LocationMode`), never the number of locations. Single: exactly one location, devices may upload without an uploader token. Multi: a token from the first location on, and what has no location is sysadmin-only. Code that needs "the" location calls `LocationScope.defaultLocationId`, which follows the mode. Plans: `docs/development/modernization/location-scoping-plan-2026-10-10.md`, `location-mode-plan-2026-10-11.md`.
 - **Database migrations are versioned** — every change adds a new Liquibase changeset under `core/src/main/resources/migration/`, never edit existing changesets. Institutional changes go in `migration/lc-muw-<yyyy-mm-dd>-<topic>.xml`.
 - **Liquibase is pinned at 4.31.1 and must never go back to 3.x, nor to 4.33.0+ or 5.x without a re-check.** The first start on 4.x rewrites every stored checksum from `8:` to `9:`. Liquibase 3.6.3 does not recognise `9:` checksums: started on an upgraded database, it re-runs 25 `runOnChange` changesets and inserts duplicate data, so an upgraded database is rolled back only by restoring the pre-upgrade dump ([deploy runbook §5](docs/operations/deploy-runbook.md#5-rollback)). 4.33.0 changes the checksum of every `valueDate` changeset and fails startup on every existing database; `Liquibase363UpgradeDatabaseIT` fails on it. 5.x is FSL-licensed. Boot 4.1's BOM manages Liquibase 5.x, so on the Boot 4 branch the 4.31.1 pin is an explicit override that must stay. There is no Liquibase Maven plugin; only the app runs the changelog. Details: [liquibase-4-spike-2026-09-30.md](docs/development/modernization/liquibase-4-spike-2026-09-30.md).
 - **Released, independent fork** — since 2026-06-26 the project no longer syncs from upstream LibreClinica (no cherry-picks; don't suggest pulling upstream changes). See [DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica) for the original fork rationale; the cherry-pick workflow it describes is now historical.
