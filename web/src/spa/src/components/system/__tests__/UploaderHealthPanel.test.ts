@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 
 import en from '@/locales/en.json'
+import de from '@/locales/de.json'
 import type { Uploader, UploadersResponse } from '@/types/systemHealth'
 
 /**
@@ -13,7 +14,10 @@ import type { Uploader, UploadersResponse } from '@/types/systemHealth'
  * own problems and the server's are spelt out, and a code this page does not
  * know yet is shown as it came rather than hidden; the queue and the disk are
  * there to act on; removing asks first; the arrivals per device sit beside
- * it; and a failed request says so instead of an empty table.
+ * it; and a failed request says so instead of an empty table. Since uploaders
+ * carry a token of their own, the two problems a missing or refused token
+ * reports (token-required, token-rejected) are spelt out in both languages
+ * and say what to do, while the old shared-token code keeps its text.
  */
 
 vi.mock('@/api/client', async () => {
@@ -67,6 +71,11 @@ function mountPanel(refreshKey = 0) {
   return mount(UploaderHealthPanel, { props: { refreshKey }, global: { plugins: [i18n] } })
 }
 
+function mountPanelIn(locale: 'de' | 'en') {
+  const i18n = createI18n({ legacy: false, locale, messages: { de, en } })
+  return mount(UploaderHealthPanel, { props: { refreshKey: 0 }, global: { plugins: [i18n] } })
+}
+
 function row(w: ReturnType<typeof mountPanel>, i: number) {
   return w.findAll('[data-testid="uploader-row"]')[i]
 }
@@ -107,6 +116,53 @@ describe('UploaderHealthPanel', () => {
     expect(issues).toContain('files have been waiting 30 minutes or longer')
     expect(issues).toContain("the PC's disk is almost full")
     expect(issues).toContain('brand-new-code')
+  })
+
+  describe('the token problems', () => {
+    const TOKEN_ROWS: UploadersResponse = {
+      heartbeatEnabled: true,
+      uploaders: [
+        uploader({ id: 11, name: 'NO-TOKEN-PC', status: 'warning', issues: ['token-required'] }),
+        uploader({ id: 12, name: 'BAD-TOKEN-PC', status: 'warning', issues: ['token-rejected'] }),
+        uploader({ id: 13, kind: 'optomed-bridge', name: 'OLD-BRIDGE', status: 'warning', issues: ['worklist-token-rejected'] }),
+      ],
+      ingestByDevice: [],
+    }
+    const issues = (w: ReturnType<typeof mountPanel>, i: number) =>
+      row(w, i).find('[data-testid="uploader-issues"]').text()
+
+    it('says in English what is wrong and what to do, and keeps the old worklist text', async () => {
+      apiGetMock.mockResolvedValue(TOKEN_ROWS)
+      const w = mountPanelIn('en')
+      await flushPromises()
+      expect(issues(w, 0)).toBe("token missing – enter it in the uploader's settings")
+      expect(issues(w, 1)).toBe(
+        "token rejected – check it in the uploader's settings or replace it on the “Uploaders and tokens” page",
+      )
+      expect(issues(w, 2)).toBe('the platform rejected the worklist token')
+    })
+
+    it('says it in German, with real umlauts, and never shows the raw codes', async () => {
+      apiGetMock.mockResolvedValue(TOKEN_ROWS)
+      const w = mountPanelIn('de')
+      await flushPromises()
+      expect(issues(w, 0)).toBe('Token fehlt – in den Einstellungen des Uploaders eintragen')
+      expect(issues(w, 1)).toBe(
+        'Token abgelehnt – in den Einstellungen des Uploaders prüfen oder auf der Seite „Uploader und Tokens“ ersetzen',
+      )
+      expect(issues(w, 2)).toBe('die Plattform hat den Worklist-Token abgelehnt')
+      for (const code of ['token-required', 'token-rejected', 'worklist-token-rejected']) {
+        expect(w.text()).not.toContain(code)
+      }
+      // vue-i18n prints the key itself for a message it cannot find.
+      expect(w.text()).not.toMatch(/adminSystemStatus\.uploaders\.issue/)
+    })
+
+    it('names the page where a rejected token is replaced as that page names itself', async () => {
+      // The text sends the person to a page; the page must be called what the text calls it.
+      expect(de.adminSystemStatus.uploaders.issue.tokenRejected).toContain(`„${de.uploaders.title}“`)
+      expect(en.adminSystemStatus.uploaders.issue.tokenRejected).toContain(`“${en.uploaders.title}”`)
+    })
   })
 
   it('shows the queue, what failed, the disk, and when it last reported', async () => {

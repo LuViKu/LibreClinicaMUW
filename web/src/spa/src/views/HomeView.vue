@@ -342,6 +342,32 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     group: 'platform',
   },
   {
+    // The global locations (Standorte) that studies are active at; the API
+    // admits system administrators only, like the study list above.
+    id: 'admin-locations',
+    to: { name: 'admin-locations' },
+    titleKey: 'adminLocations.title',
+    descKey: 'home.administrator.adminLocationsDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => auth.isSysAdmin,
+    group: 'platform',
+  },
+  {
+    // The uploaders on the acquisition PCs and their tokens (phase 2 of the
+    // locations). Open to a system administrator and to a location's
+    // Standort-Admin, whatever their study role: the right is the list of
+    // locations /me names, not a role, so every role may hold it and the card
+    // shows exactly when the list is not empty. The Standort-Admin has no
+    // System rail, so this card is their way in.
+    id: 'uploaders',
+    to: { name: 'uploaders' },
+    titleKey: 'uploaders.title',
+    descKey: 'home.uploadersDesc',
+    allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
+    visibleWhen: () => auth.canManageUploaders,
+    group: 'platform',
+  },
+  {
     id: 'modalities',
     to: { name: 'modalities' },
     titleKey: 'modalities.title',

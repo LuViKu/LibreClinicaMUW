@@ -32,6 +32,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 public class StudyBean extends AuditableEntityBean {
     private static final long serialVersionUID = -5132550603753118474L;
     private int parentStudyId = 0;
+    /**
+     * DR-040 — {@code study.location_id}: a site's location, a single-site
+     * study's location, or for a parent study with sites its coordinating
+     * location. 0 when the study has none. On create, 0 asks
+     * {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO#createStepOne}
+     * for the default location (the one location in single-location mode, none
+     * in multi mode); an update
+     * never writes it.
+     */
+    private int locationId = 0;
     // YW << The original reason to add this is being able to list on
     // userbox.jsp the study name to which a site belong.
     // This property doesn't exist in the database table <Study>, so it might
@@ -767,6 +777,17 @@ public class StudyBean extends AuditableEntityBean {
      */
     public void setParentStudyId(int parentStudyId) {
         this.parentStudyId = parentStudyId;
+    }
+
+    /**
+     * @return the study's location id (DR-040), or 0 when it has none
+     */
+    public int getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(int locationId) {
+        this.locationId = locationId;
     }
 
     /**

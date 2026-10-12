@@ -140,6 +140,13 @@ libreclinica:
   # unchanged.
   deployment:
     internet-facing: ${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:false}
+    # DR-040: single (default) = exactly one location, no second can be made,
+    # device uploads work without an uploader token; multi = any number of
+    # locations, every device needs its token from the first location on.
+    # Chosen at deploy time, never by how many locations exist; any other
+    # value, or single on a database with several active locations, stops the
+    # start (LocationModeConfig). Switching: deploy/README.md.
+    locations: ${LIBRECLINICA_DEPLOYMENT_LOCATIONS:single}
   # Every uploaded file must be verified as de-identified before it is kept
   # (DeidUploadGate, E2eDeidentificationVerifier, the dicom-scp /verify route,
   # and the nightly DeidentificationScanner). Defaults to the internet-facing

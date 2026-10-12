@@ -86,11 +86,16 @@ function isCurrent(item: NavItem): boolean {
 
 /**
  * The System entry is current on any page of its section. The section spans
- * two path prefixes — the four /admin/ pages and the audit trail under
- * /system/ — which is why this is not a NavItem with one `to`.
+ * three path prefixes — the /admin/ pages, the audit trail under /system/ and
+ * the uploaders page, which sits at /uploaders because a Standort-Admin
+ * reaches it without being an administrator — which is why this is not a
+ * NavItem with one `to`. (The entry itself shows to administrators only.)
  */
 const systemCurrent = computed(
-  () => route.path.startsWith('/admin/') || route.path.startsWith('/system/'),
+  () =>
+    route.path.startsWith('/admin/') ||
+    route.path.startsWith('/system/') ||
+    route.path === '/uploaders',
 )
 
 /* 2026-06-21 — the module nav consumer was removed from TopBar. P3.0

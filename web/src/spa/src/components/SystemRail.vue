@@ -2,10 +2,12 @@
 /**
  * System section rail — the instance-level pages, navigable as a section.
  *
- * Seven pages are about the running instance rather than any one study: the
- * system status, the list of every study, the system-wide audit trail, the
- * login history (since 2026-09-30), the password policy, the application
- * configuration and the scheduled jobs. Until 2026-09-22 none of the five
+ * Nine pages are about the running instance rather than any one study: the
+ * system status, the list of every study, the locations (Standorte, since
+ * 2026-10-11) and the uploaders with their tokens (since 2026-10-12), the
+ * system-wide audit trail, the login history (since 2026-09-30), the
+ * password policy, the application configuration and the scheduled jobs.
+ * Until 2026-09-22 none of the five
  * that existed then was linked from anywhere — the top bar carried one
  * Administrator-only entry, to the audit trail, and the other four were reachable by typing
  * their address. A status page nobody can reach by clicking does not report
@@ -15,6 +17,10 @@
  * rule: a section with several pages gets one entry in the top bar and its
  * own rail on every page of the section. No role filtering, because every
  * route here admits only the Administrator; the rail mounts on nothing else.
+ *
+ * One page is shared: the uploaders page is also open to a location's
+ * Standort-Admin, who is no administrator and has no System section. The
+ * page mounts this rail only for a system administrator.
  */
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -27,10 +33,16 @@ interface RailItem {
   labelKey: string
 }
 
-/** Overview first, then the studies, the two trails, the two settings pages, then the jobs. */
+/**
+ * Overview first, then the studies, the locations they are active at and the
+ * uploaders that bring device files to a location, the two trails, the two
+ * settings pages, then the jobs.
+ */
 const ITEMS: readonly RailItem[] = [
   { id: 'status', to: '/admin/system-status', labelKey: 'adminSystemStatus.title' },
   { id: 'studies', to: '/admin/studies', labelKey: 'adminStudies.title' },
+  { id: 'locations', to: '/admin/locations', labelKey: 'adminLocations.title' },
+  { id: 'uploaders', to: '/uploaders', labelKey: 'uploaders.title' },
   { id: 'audit', to: '/system/audit-log', labelKey: 'system.rail.audit' },
   { id: 'login-history', to: '/admin/login-history', labelKey: 'adminLoginHistory.title' },
   { id: 'password-policy', to: '/admin/password-policy', labelKey: 'adminPasswordPolicy.title' },

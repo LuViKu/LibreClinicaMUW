@@ -274,6 +274,34 @@ public final class IngestItemRepository {
          */
         public Builder originStudyId(Integer v) { return set("origin_study_id", v, Types.INTEGER); }
 
+        /**
+         * DR-040 — the location the file came from. Staff uploads carry the
+         * location of the study they were working in; device and anonymous
+         * ingress carry their source's location, else the default location: in
+         * single-location mode the one location, in multi mode nothing until
+         * the source is assigned.
+         *
+         * <p>Null is not a default, it is a statement: the origin is unknown,
+         * and the inbox shows the file to system administrators only. Every
+         * ingress sets this, with a null where it has nothing to say.
+         */
+        public Builder originLocationId(Integer v) { return set("origin_location_id", v, Types.INTEGER); }
+
+        /**
+         * DR-040 phase 2 — the ingest source that delivered the file: the
+         * uploader whose token the request carried, the DICOM calling AE title,
+         * the Remidio account ({@link IngestSourceService}). Its location is the
+         * origin location the file gets ({@link #originLocationId}); assigning an
+         * unassigned source to a location later places the files that carry it
+         * and have no origin yet.
+         *
+         * <p>Null for a file that arrives with no source (a staff upload, an
+         * untokened request during the rollout).
+         */
+        public Builder ingestSourceId(Long v) {
+            return set("ingest_source_id", v == null ? null : Math.toIntExact(v), Types.INTEGER);
+        }
+
         /* ---------------- the binding ---------------- */
 
         /**

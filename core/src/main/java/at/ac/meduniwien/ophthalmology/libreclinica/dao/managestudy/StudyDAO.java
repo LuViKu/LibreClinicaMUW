@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.AuditableEntityDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.DAODigester;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.SQLFactory;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.TypeNames;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 
 // 2026-06-28 — heritage null-analysis suppress; per-site
 
@@ -119,6 +120,8 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         // 52 timing varchar(30),
         // 53 official_title varchar(50)
         // 54 results_reference boolean
+        // 55 oc_oid, 56 old_status_id, 57 mail_notification, 58 contact_email
+        // 59 location_id int (DR-040)
 
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);// sid
@@ -181,6 +184,7 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         this.setTypeExpected(56, TypeNames.INT);
         this.setTypeExpected(57, TypeNames.STRING); // e-mail notification
         this.setTypeExpected(58, TypeNames.STRING); // contact e-mail
+        this.setTypeExpected(59, TypeNames.INT); // location id (DR-040); NULL reads as 0
     }
 
     /**
@@ -257,7 +261,14 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         variables.put(21, sb.getUpdaterId());// owner
         // id
         variables.put(22, sb.getUpdatedDate());// date updated
-        variables.put(23, sb.getOldStatus().getId());// study id
+        // old_status_id: the status a removal recorded. A bean that has never
+        // been through one (a study or site created in this request) has none.
+        if (sb.getOldStatus() == null) {
+            nullVars.put(23, Types.INTEGER);
+            variables.put(23, null);
+        } else {
+            variables.put(23, sb.getOldStatus().getId());
+        }
         // variables.put(Integer.valueOf(22), Integer.valueOf(1));
         // stop gap measure for owner and updater id
         variables.put(24, sb.getMailNotification());
@@ -379,9 +390,31 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
             variables.put(26, sb.getContactEmail());
         }
 
+        // DR-040: a study or site is created at a location. The bean's own when it
+        // names one, else the default location (single mode: the one location),
+        // which is what every creation path (the SPA, the sites API, the legacy
+        // create servlets) gets without having to know about locations. In multi
+        // mode the callers that can ask (the APIs) do; one that cannot leaves it
+        // unassigned for an administrator.
+        int locationId = sb.getLocationId() > 0 ? sb.getLocationId() : defaultLocationIdOrZero();
+        if (locationId > 0) {
+            variables.put(27, locationId);
+        } else {
+            variables.put(27, null);
+            nullVars.put(27, Types.INTEGER);
+        }
+
         // replace this with the owner id
         this.executeUpdate(digester.getQuery("createStepOne"), variables, nullVars);
+        sb.setLocationId(locationId);
         return sb;
+    }
+
+    /** The default location (DR-040: the one location in single mode), or 0 when there is none. */
+    private int defaultLocationIdOrZero() {
+        if (ds == null) return 0;
+        Integer id = new LocationScope(ds).defaultLocationId();
+        return id == null ? 0 : id;
     }
 
     // we are generating and creating the valid oid at step one, tbh
@@ -603,6 +636,8 @@ public class StudyDAO extends AuditableEntityDAO<StudyBean> {
         eb.setOldStatus(Status.get(oldStatusId));
         eb.setMailNotification(((String) hm.get("mail_notification")));
         eb.setContactEmail(((String) hm.get("contact_email")));
+        Integer locationId = (Integer) hm.get("location_id");
+        eb.setLocationId(locationId == null ? 0 : locationId);
         return eb;
     }
 

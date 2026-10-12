@@ -43,5 +43,12 @@ public record UpdateStudyRequest(
         String protocolDescription,
         String contactEmail,
         String protocolType,
-        String phase
+        String phase,
+        /*
+         * DR-040 phase 4 — the study's own location (no sites) or its
+         * coordinating location (with sites). Must be available and the
+         * caller's, else 400 on locationId; null keeps it. Not for a site:
+         * a site moves through PUT /studies/{parent}/sites/{site}.
+         */
+        Integer locationId
 ) {}

@@ -74,3 +74,31 @@ def test_filter_entries_honours_modality_and_patient_id():
     q = _query()
     q.PatientID = "HAE-002"
     assert [e["subjectLabel"] for e in worklist.filter_entries(entries, q)] == ["HAE-002"]
+
+
+class _Resp:
+    def __init__(self, body):
+        self._body = body
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._body
+
+
+def test_fetch_entries_sends_the_calling_ae_title_and_omits_a_blank_one(monkeypatch):
+    calls = []
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        calls.append(dict(params))
+        return _Resp({"entries": [{"studyEventId": 1}]})
+
+    monkeypatch.setattr(worklist.requests, "get", fake_get)
+    assert worklist.fetch_entries("http://app/wl", "t", "2026-10-01", "2026-10-01", 5, " CAM-1 ") == [
+        {"studyEventId": 1}]
+    worklist.fetch_entries("http://app/wl", "t", "2026-10-01", "2026-10-01", 5, "  ")
+    worklist.fetch_entries("http://app/wl", "t", "2026-10-01", "2026-10-01", 5)
+    assert calls[0] == {"from": "2026-10-01", "to": "2026-10-01", "callingAe": "CAM-1"}
+    assert "callingAe" not in calls[1]
+    assert "callingAe" not in calls[2]

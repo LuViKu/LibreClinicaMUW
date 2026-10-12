@@ -30,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,9 +133,10 @@ public class SitesApiController {
         }
 
         List<StudyIdentityDto> out = new ArrayList<>(sites.size());
+        java.util.Map<Integer, LocationScope.Place> places = LocationLabels.load(dataSource);
         for (StudyBean site : sites) {
             if (!allSites && !mine.contains(site.getId())) continue;
-            out.add(toIdentityDto(site, parent));
+            out.add(toIdentityDto(site, parent, places));
         }
         return ResponseEntity.ok(out);
     }
@@ -159,6 +161,11 @@ public class SitesApiController {
 
         List<ValidationErrorBody.FieldError> errors =
                 validateCreateShape(body);
+        // DR-040: the site's location: the one named, or the only active one;
+        // required once there are several.
+        UserAccountBean caller = (UserAccountBean) session.getAttribute("userBean");
+        LocationChoice.Result where = LocationChoice.resolve(dataSource, caller, body.locationId());
+        if (where.error() != null) errors.add(where.error());
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
@@ -195,11 +202,19 @@ public class SitesApiController {
         toCreate.setSponsor(parent.getSponsor() == null ? "" : parent.getSponsor());
         toCreate.setProtocolType(parent.getProtocolType() == null ? "" : parent.getProtocolType());
         toCreate.setPhase(parent.getPhase() == null ? "" : parent.getPhase());
-        if (body.facilityName() != null) toCreate.setFacilityName(body.facilityName().trim());
-        if (body.facilityCity() != null) toCreate.setFacilityCity(body.facilityCity().trim());
+        // DR-040 phase 4: the facility address is the location's, copied when the
+        // site is made (and again when it moves); the request's address fields are
+        // not used. Only when the location cannot be read do they stand in.
+        LocationScope.Place place = placeOf(where.locationId());
+        if (place != null) {
+            copyFacilityAddress(place, toCreate);
+        } else {
+            if (body.facilityName() != null) toCreate.setFacilityName(body.facilityName().trim());
+            if (body.facilityCity() != null) toCreate.setFacilityCity(body.facilityCity().trim());
+            if (body.facilityZip() != null) toCreate.setFacilityZip(body.facilityZip().trim());
+            if (body.facilityCountry() != null) toCreate.setFacilityCountry(body.facilityCountry().trim());
+        }
         if (body.facilityState() != null) toCreate.setFacilityState(body.facilityState().trim());
-        if (body.facilityZip() != null) toCreate.setFacilityZip(body.facilityZip().trim());
-        if (body.facilityCountry() != null) toCreate.setFacilityCountry(body.facilityCountry().trim());
         if (body.facilityContactName() != null) toCreate.setFacilityContactName(body.facilityContactName().trim());
         if (body.facilityContactDegree() != null) toCreate.setFacilityContactDegree(body.facilityContactDegree().trim());
         if (body.facilityContactPhone() != null) toCreate.setFacilityContactPhone(body.facilityContactPhone().trim());
@@ -207,18 +222,25 @@ public class SitesApiController {
         toCreate.setStatus(Status.PENDING);
         toCreate.setOwner(me);
         toCreate.setParentStudyId(parent.getId());
+        toCreate.setLocationId(where.locationId());
+        // The OID goes in with the insert: StudyDAO.create keeps a preset OID
+        // when it is free (and varies it when it is not). Setting it afterwards
+        // took a second StudyDAO.update, which dereferences the old status a
+        // brand-new site does not have — the site was saved, and the request
+        // still ended in a 500.
+        toCreate.setOid("S_" + body.uniqueProtocolId().trim().toUpperCase());
 
-        StudyBean persisted = studyDao.create(toCreate);
-        if (persisted == null || persisted.getId() == 0) {
+        StudyBean created = studyDao.create(toCreate);
+        if (created == null || created.getId() == 0) {
             LOG.warn("StudyDAO.create returned no row for site name={} parentOid={}",
                     body.name(), parentOid);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist new site"));
         }
-
-        String generatedOid = "S_" + body.uniqueProtocolId().trim().toUpperCase();
-        persisted.setOid(generatedOid);
-        studyDao.update(persisted);
+        // Read it back: the insert may have varied the OID, and create() does
+        // not write the stored one onto the bean.
+        StudyBean persisted = studyDao.findByPK(created.getId());
+        String generatedOid = persisted.getOid();
 
         // Optional auto-bind of the initial Principal Investigator on
         // the new site. INVESTIGATOR is legal on sites (per A7's
@@ -294,6 +316,22 @@ public class SitesApiController {
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
 
+        // DR-040 phase 4: moving the site to another location. Checked before
+        // anything is written: the new place must be available and the caller's.
+        LocationScope.Place moveTo = null;
+        if (body.locationId() != null && body.locationId() != site.getLocationId()) {
+            LocationChoice.Result where = LocationChoice.resolve(dataSource, me, body.locationId());
+            if (where.error() != null) {
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                        "Validation failed", List.of(where.error())));
+            }
+            moveTo = placeOf(where.locationId());
+            if (moveTo == null) {
+                return ResponseEntity.badRequest().body(new ValidationErrorBody("Validation failed",
+                        List.of(new ValidationErrorBody.FieldError("locationId", "Unknown or unavailable location"))));
+            }
+        }
+
         if (body.name() != null) diffString(site::getName, site::setName, body.name(), "name", me, site);
         if (body.briefSummary() != null) diffString(site::getSummary, site::setSummary, body.briefSummary(), "summary", me, site);
         if (body.principalInvestigator() != null) diffString(site::getPrincipalInvestigator, site::setPrincipalInvestigator, body.principalInvestigator(), "principal_investigator", me, site);
@@ -306,10 +344,25 @@ public class SitesApiController {
         if (body.facilityContactDegree() != null) diffString(site::getFacilityContactDegree, site::setFacilityContactDegree, body.facilityContactDegree(), "facility_contact_degree", me, site);
         if (body.facilityContactPhone() != null) diffString(site::getFacilityContactPhone, site::setFacilityContactPhone, body.facilityContactPhone(), "facility_contact_phone", me, site);
         if (body.facilityContactEmail() != null) diffString(site::getFacilityContactEmail, site::setFacilityContactEmail, body.facilityContactEmail(), "facility_contact_email", me, site);
+        if (moveTo != null) {
+            LocationScope.Place from = placeOf(site.getLocationId());
+            LocationScope.Place to = moveTo;
+            diffString(() -> from == null ? "" : from.code(), ignored -> { }, to.code(), "location", me, site);
+            diffString(site::getFacilityName, site::setFacilityName, nullToEmpty(to.name()), "facility_name", me, site);
+            diffString(site::getFacilityCity, site::setFacilityCity, nullToEmpty(to.city()), "facility_city", me, site);
+            diffString(site::getFacilityZip, site::setFacilityZip, nullToEmpty(to.zip()), "facility_zip", me, site);
+            diffString(site::getFacilityCountry, site::setFacilityCountry, nullToEmpty(to.country()), "facility_country", me, site);
+        }
 
         site.setUpdater(me);
         site.setUpdatedDate(new java.util.Date());
         studyDao.update(site);
+        if (moveTo != null) {
+            // StudyDAO.update never writes the location; the move is its own statement.
+            setLocation(site.getId(), moveTo.id());
+            site.setLocationId(moveTo.id());
+            LOG.info("Move site: siteOid={} to location id {} by user={}", siteOid, moveTo.id(), me.getName());
+        }
 
         LOG.info("Update site: parentOid={} siteOid={} by user={}", parentOid, siteOid, me.getName());
 
@@ -598,7 +651,13 @@ public class SitesApiController {
         }
     }
 
-    private static StudyIdentityDto toIdentityDto(StudyBean site, StudyBean parent) {
+    private StudyIdentityDto toIdentityDto(StudyBean site, StudyBean parent) {
+        return toIdentityDto(site, parent, LocationLabels.load(dataSource));
+    }
+
+    private static StudyIdentityDto toIdentityDto(StudyBean site, StudyBean parent,
+                                                  java.util.Map<Integer, LocationScope.Place> places) {
+        LocationScope.Place place = LocationLabels.of(places, site.getLocationId());
         return new StudyIdentityDto(
                 site.getOid(),
                 nullToEmpty(site.getName()),
@@ -619,10 +678,48 @@ public class SitesApiController {
                 site.getDatePlannedStart() == null ? null
                         : java.time.Instant.ofEpochMilli(site.getDatePlannedStart().getTime())
                                 .atZone(java.time.ZoneId.systemDefault())
-                                .toLocalDate().toString());
+                                .toLocalDate().toString(),
+                site.getLocationId() > 0 ? site.getLocationId() : null,
+                place == null ? null : place.code(),
+                place == null ? null : place.name());
     }
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* DR-040 phase 4 — the location and the facility address            */
+    /* ----------------------------------------------------------------- */
+
+    /** The location, or null for none (0 / null) or one that cannot be read. */
+    private LocationScope.Place placeOf(Integer locationId) {
+        if (locationId == null || locationId <= 0) return null;
+        try (Connection c = dataSource.getConnection()) {
+            return LocationScope.place(c, locationId);
+        } catch (SQLException | RuntimeException e) {
+            LOG.warn("could not read location id {}: {}", locationId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** The site's facility address is its location's: name, city, zip and country. */
+    private static void copyFacilityAddress(LocationScope.Place place, StudyBean site) {
+        site.setFacilityName(nullToEmpty(place.name()));
+        site.setFacilityCity(nullToEmpty(place.city()));
+        site.setFacilityZip(nullToEmpty(place.zip()));
+        site.setFacilityCountry(nullToEmpty(place.country()));
+    }
+
+    private void setLocation(int studyId, int locationId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement("UPDATE study SET location_id = ? WHERE study_id = ?")) {
+            ps.setInt(1, locationId);
+            ps.setInt(2, studyId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("could not move study id " + studyId + " (SQLSTATE "
+                    + e.getSQLState() + ")", e);
+        }
     }
 }

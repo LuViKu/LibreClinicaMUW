@@ -1,6 +1,6 @@
 # Administrator
 
-The **Administrator** (German role label *Administrator/-in*) is the superset role in LibreClinicaMUW. It combines the two responsibilities other chapters split between dedicated roles: **system setup** (user accounts, sites, modality catalog, password policy, scheduled jobs, system status) and **study setup** (creating studies, building event definitions and CRFs, rules, datasets, importing data). Wherever the application gates a screen on *Administrator*, you reach it; several of those screens are visible to no other role.
+The **Administrator** (German role label *Administrator/-in*) is the superset role in LibreClinicaMUW. It combines the two responsibilities other chapters split between dedicated roles: **system setup** (user accounts, locations, uploader tokens, modality catalog, password policy, scheduled jobs, system status) and **study setup** (creating studies and their sites, building event definitions and CRFs, rules, datasets, importing data). Wherever the application gates a screen on *Administrator*, you reach it; several of those screens are visible to no other role.
 
 This chapter is the operational reference for the Administrator's day-to-day surfaces in the Vue web application. For role-specific data-entry and review workflows, see the companion chapters:
 
@@ -15,19 +15,20 @@ This chapter is the operational reference for the Administrator's day-to-day sur
 ## Navigation
 
 The Administrator's home page (**Start**) opens with **Ihre Aufgaben** — open
-queries, with their count — then two groups of destinations: **In &lt;study&gt;**
-(Audit Trail, Datenexport, Studienidentität, Standorte) and **Plattform**
-(Nutzerverwaltung with the count of open invitations, Neue Studie anlegen,
-Modalitäten, Patientenübersicht, and *Aktive Studie wechseln* when you hold
-more than one study). The top bar's primary navigation reaches Nutzerverwaltung,
-Standorte, Datenexport and the Audit Trail from any screen. The **System** entry
-beside the study chip is Administrator-only and opens the instance-level
-section — Systemstatus, System-Audit-Protokoll, Passwort-Richtlinie,
-Anwendungskonfiguration and Geplante Jobs (§12–§16). It sits to the right of
-the study chip on purpose: everything left of the chip is scoped to the active
-study, these five pages are not. On each of them a side rail lists the section
-with the current page highlighted, so you move between them without going
-back to the top.
+queries, with their count — then two groups of destinations: **In
+&lt;study&gt;** (Audit Trail, Datenexport, Studienidentität, Prüfzentren) and
+**Plattform** (Nutzerverwaltung with the count of open invitations, Neue Studie
+anlegen, Modalitäten, Patientenübersicht, Studien, Standorte, Uploader und
+Tokens, and *Aktive Studie wechseln* when you hold more than one study). The
+top bar's primary navigation reaches Nutzerverwaltung, Prüfzentren, Datenexport
+and the Audit Trail from any screen. The **System** entry beside the study chip
+is Administrator-only and opens the instance-level section — Systemstatus,
+Studien, Standorte, Uploader und Tokens, System-Audit-Protokoll,
+Anmeldeverlauf, Passwort-Richtlinie, Anwendungskonfiguration and Geplante Jobs
+(§12–§16, §19). It sits to the right of the study chip on purpose: everything
+left of the chip is scoped to the active study, these pages are not. On each of
+them a side rail lists the section with the current page highlighted, so you
+move between them without going back to the top.
 
 ![Administrator home (Start)](screenshots/administrator/00-home.png)
 
@@ -61,19 +62,22 @@ back to the top.
 
 **Notes:** This screen is **Administrator-only** — the *Nutzer/-in einladen* button and every per-row action are hidden for other roles. Roles are shown with their German labels: *Prüfarzt/-ärztin* (Investigator), *Monitor*, *Studienleitung* (Data Manager), *Administrator/-in*, *Koordinator/-in* (CRC). The **Auth** column distinguishes *Lokal*, *SSO*, *LDAP (Legacy)* and *Einladung offen* (pending invite); password reset and unlock are unavailable for SSO/LDAP accounts because the identity provider or directory owns the credential. A locked local account also shows a warning badge in the **Aktiv** column. Every disable, restore, reset and unlock is documented in the audit trail (the confirmation dialogs say so), and via the multi-role dialog one user can hold several roles per study.
 
-## 3. Sites
+## 3. Sites (Prüfzentren)
 
-**Goal:** Create and manage the sites (centres) under the active study.
+**Goal:** Create and manage the sites of the active study.
+
+A **site** (German *Prüfzentrum*) is a study's presence at one place: it belongs to exactly one study and is at exactly one **location** (German *Standort*, see [§19](#19-standorte-und-uploader-tokens-locations-and-uploader-tokens)). Roles, subjects and visits are kept apart per site.
 
 **Steps:**
-1. Open **Standorte** (Sites) from the home page (`/sites`).
-2. Click **Neuer Standort** (New Site) to open the inline create form.
-3. Fill the required fields — *Name*, *Unique Protocol ID*, *Principal Investigator* — and any optional details (brief summary, facility name/city, facility contact e-mail), then click the create button.
+1. Open **Prüfzentren** (Sites) from the home page or the **Studienaufbau** rail (`/sites`). The list shows each site's location.
+2. Click **Neues Prüfzentrum** (New Site) to open the inline create form.
+3. Fill the required fields — *Name*, *Unique Protocol ID*, *Principal Investigator* — and choose the **Standort** (location) the site is at. The facility name and address (city, postcode, country) are taken from the location; the brief summary and the facility contact e-mail you enter yourself. Then click the create button.
 4. For an existing site, use **Entfernen** (Disable) to soft-remove it or **Wiederherstellen** (Restore) to bring it back.
+5. Only on an installation with several locations: **Standort ändern** (Change location) on a row moves a site to another location. The facility address is taken from the new location again, and the move is recorded in the audit trail.
 
 ![Sites](screenshots/administrator/03-sites.png)
 
-**Notes:** The active study must be the top-level parent — the screen is hidden when the active study is itself a site. Managing sites is open to Administrator and Data Manager. Disabling a site keeps its already-enrolled subjects and visits in the audit trail but makes them unreachable until the site is restored; the confirmation dialog states this.
+**Notes:** The active study must be the top-level parent — the screen is hidden when the active study is itself a site. Managing sites is open to Administrator and Data Manager. On a single-location installation (the default) the form has its one location already chosen and there is no *Standort ändern*. Disabling a site keeps its already-enrolled subjects and visits in the audit trail but makes them unreachable until the site is restored; the confirmation dialog states this.
 
 ## 4. Build Study
 
@@ -289,3 +293,28 @@ back to the top.
 ![Ingest inbox — every inbound file waiting for a visit](screenshots/administrator/22-ingest-inbox.png)
 
 **Notes:** Data Manager, Investigator and Administrator may reconcile. Binding a file ticks the visit's "performed" checklist item; unbinding takes the tick back. Dismissed files are deleted by the retention sweep after 30 days.
+
+## 19. Standorte und Uploader-Tokens (locations and uploader tokens)
+
+**Goal:** Keep the platform's locations, decide who sees each location's device files, and give every acquisition PC its own token.
+
+A **Standort** (location) is a physical place: a clinic, a department or a partner hospital. Locations are platform-wide; a study is active at a location by having a **Prüfzentrum** (site) there. Files from devices belong to the location of their source and appear in the **Eingang** (§18) only for people who belong to that location — through a role at one of its sites, or through an explicit assignment.
+
+**Steps — locations:**
+1. Open **System** → **Standorte** (Locations, `/admin/locations`). The list shows each location's code, name, place, its counts of sites, studies, files and people, and its status. **Bearbeiten** (Edit) changes the name and address (the code is fixed); **Deaktivieren** (Disable) works only when no study and no site at the location is still active.
+2. Click a location's name to open its details. Under **Zugewiesene Personen** (assigned people), **Person hinzufügen** (Add a person) → username → **Zuweisen** (Assign) gives staff without a study role, such as a photographer, sight of the location's device files.
+3. Tick **Standort-Admin** for an assigned person to let them issue, replace and revoke this location's uploader tokens. A study role does not include this right; grant it deliberately (typically to the local IT contact or study coordinator).
+4. The **Quellen** (Sources) tab lists where device files come from: uploaders, DICOM devices (by AE title) and the Remidio account. Choose a location for a source that has none; its waiting files move into that location's inbox at once.
+
+**Steps — uploader tokens:**
+1. Open **Uploader und Tokens** (Uploaders and tokens, `/uploaders`) from **System** or the home-page card. Click **Uploader anlegen** (Create uploader) and give the PC a recognisable name, unique per location (e.g. "Clarus-PC Raum 3").
+2. The token (`mwu_…`) is shown **once**. Copy it, tick **Ich habe den Token gesichert** (I have saved the token), and close the dialog. The platform keeps only a hash and the first characters (*Token (Anfang)*), so a lost token is replaced, never looked up.
+3. On the acquisition PC: the Export Watcher's or Optomed Bridge's tray icon → *Settings...* → **Uploader-Token** → paste → save. Never on a command line.
+4. After a few minutes, **Aktualisieren** (Refresh) shows **Zuletzt verwendet** (last used) and **Letzte Meldung** (last report) for the row.
+5. The dialog also offers a **Link für die Upload-Seite** (`…/upload#token=…`) for the browser upload page: whoever opens the page through it uploads for that location. The link is the token in another form; hand it only to people who upload at that location.
+6. **Token ersetzen** (Replace token) issues a new token and stops the old one at once — do it when a PC is replaced or a token may have been seen by the wrong person. **Sperren** (Revoke) refuses the token for good, for example when a PC is retired; replacing the token lifts a revocation.
+
+**Notes:**
+- **One location or several is a deployment setting**, not something this page changes. By default an installation runs with **one** location: *Standort anlegen* (Create location) is not offered, everything belongs to the one location, and uploaders keep working without a token. A second location needs IT to set `LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi` and restart, after every acquisition PC has its token; until then *Uploader und Tokens* shows administrators how many programs still send without one, which must read 0 before the switch. See [deploy/README.md, "Uploader tokens and locations"](../../../deploy/README.md#uploader-tokens-and-locations-dr-040).
+- **When an uploader answers 401.** *Token fehlt* (401 `uploader token required`) means a multi-location installation and a PC without a token; *Token abgelehnt* (401 `uploader token rejected`) means the token is unknown, replaced or revoked, or its location is disabled. Either way every file stays on the PC and goes through by itself once the token is right. Because its heartbeat is refused too, such a PC may look silent on **Systemstatus**; its tray icon says why.
+- *Standorte* is Administrator-only. *Uploader und Tokens* is open to Administrators (every location) and to Standort-Admins (their own location only), whatever their study role. Every change on both pages is recorded in the system audit log; a token never is.

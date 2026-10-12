@@ -42,6 +42,7 @@ const FIXTURE_USER: AuthenticatedUser = {
   profileComplete: true,
   locale: 'en',
   timezone: 'Europe/Vienna',
+  manageableLocations: [],
   activeStudy: { id: 1, oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
 }
 
@@ -232,6 +233,27 @@ describe('useAuthStore', () => {
       expect(store.availableStudies).toEqual([])
       expect(store.error).toBe('Backend unreachable.')
     })
+
+    // The study picker acts on an empty list (a Standort-Admin who holds no
+    // study role is sent on), so it has to tell an empty list from a list
+    // that could not be read.
+    it('says it read the list, an empty one included', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_STUDIES)
+      const store = useAuthStore()
+      expect(await store.loadStudies()).toBe(true)
+      vi.mocked(apiGet).mockResolvedValueOnce([])
+      expect(await store.loadStudies()).toBe(true)
+      expect(store.availableStudies).toEqual([])
+    })
+
+    it('says it could not read the list when the request failed', async () => {
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiError(500, 'Server Error', null))
+      const store = useAuthStore()
+      expect(await store.loadStudies()).toBe(false)
+      expect(store.availableStudies).toEqual([])
+      vi.mocked(apiGet).mockRejectedValueOnce(new ApiNetworkError('boom', new Error()))
+      expect(await store.loadStudies()).toBe(false)
+    })
   })
 
   describe('pickStudy()', () => {
@@ -419,6 +441,134 @@ describe('useAuthStore', () => {
       const store = useAuthStore()
       await store.bootstrap()
       expect(store.needsStudyPick).toBe(false)
+    })
+  })
+
+  /**
+   * Phase 2 of the locations: /me names the locations whose uploaders the
+   * session may manage (every available location for a system
+   * administrator, the Standort-Admin's own otherwise, none for everyone
+   * else). The Uploaders page, its Home card and its rail entry hang off it.
+   */
+  describe('manageableLocations', () => {
+    const MUW = { id: 1, code: 'MUW-AUGEN', name: 'MUW Augenklinik' }
+    const GRAZ = { id: 2, code: 'GRAZ', name: 'Klinik Graz' }
+    const { manageableLocations: _omitted, ...MUW_ME_WITHOUT_FIELD } = FIXTURE_USER
+
+    it('takes the locations /me names', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, manageableLocations: [MUW, GRAZ] })
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.user?.manageableLocations).toEqual([MUW, GRAZ])
+      expect(store.manageableLocations).toEqual([MUW, GRAZ])
+      expect(store.canManageUploaders).toBe(true)
+    })
+
+    it('is an empty list, not undefined, for an answer from before the field existed', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce(MUW_ME_WITHOUT_FIELD)
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.user?.manageableLocations).toEqual([])
+      expect(store.canManageUploaders).toBe(false)
+    })
+
+    it('treats a null list like an absent one', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, manageableLocations: null })
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.user?.manageableLocations).toEqual([])
+    })
+
+    it('is empty without a user, so nothing hangs off an anonymous session', () => {
+      const store = useAuthStore()
+      expect(store.manageableLocations).toEqual([])
+      expect(store.canManageUploaders).toBe(false)
+    })
+
+    it('keeps the list when the active-study answer does not carry the field', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, manageableLocations: [MUW] })
+      const store = useAuthStore()
+      await store.bootstrap()
+      vi.mocked(apiPost).mockResolvedValueOnce(MUW_ME_WITHOUT_FIELD)
+      await store.pickStudy('S_DEFAULTS1')
+      expect(store.user?.manageableLocations).toEqual([MUW])
+    })
+
+    it('takes the list of the active-study answer when it carries one', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, manageableLocations: [MUW] })
+      const store = useAuthStore()
+      await store.bootstrap()
+      vi.mocked(apiPost).mockResolvedValueOnce({ ...FIXTURE_USER, manageableLocations: [MUW, GRAZ] })
+      await store.pickStudy('S_DEFAULTS1')
+      expect(store.user?.manageableLocations).toEqual([MUW, GRAZ])
+    })
+
+    it('keeps the list through the profile and password answers that do not carry it', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER_NEEDS_PROFILE, manageableLocations: [MUW] })
+      const store = useAuthStore()
+      await store.bootstrap()
+      vi.mocked(apiPut).mockResolvedValueOnce(MUW_ME_WITHOUT_FIELD)
+      await store.completeProfile({ displayName: 'Root User', locale: 'en', timezone: 'Europe/Vienna' })
+      expect(store.user?.manageableLocations).toEqual([MUW])
+
+      vi.mocked(apiPost).mockResolvedValueOnce(MUW_ME_WITHOUT_FIELD)
+      await store.changePassword({ currentPassword: 'old', newPassword: 'new-Passw0rd!', newPasswordRepeat: 'new-Passw0rd!' })
+      expect(store.user?.manageableLocations).toEqual([MUW])
+    })
+
+    it('is gone with the session', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, manageableLocations: [MUW] })
+      const store = useAuthStore()
+      await store.bootstrap()
+      store.clearForUnauthorized()
+      expect(store.manageableLocations).toEqual([])
+      expect(store.canManageUploaders).toBe(false)
+    })
+  })
+
+  /**
+   * The deployment's location mode (DR-040 amendment): `/me` reports it as
+   * `locationMode`; the Standorte page and the Uploaders page read it.
+   */
+  describe('locationMode', () => {
+    it('takes the mode /me reports', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'multi' })
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.locationMode).toBe('multi')
+    })
+
+    it('reads an answer without the field, from an older server, as single', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER })
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.user?.locationMode).toBeUndefined()
+      expect(store.locationMode).toBe('single')
+    })
+
+    it('is single without a user', () => {
+      expect(useAuthStore().locationMode).toBe('single')
+    })
+
+    it('keeps the mode when the active-study answer does not carry it, and takes it when it does', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'multi' })
+      const store = useAuthStore()
+      await store.bootstrap()
+      vi.mocked(apiPost).mockResolvedValueOnce({ ...FIXTURE_USER })
+      await store.pickStudy('S_DEFAULTS1')
+      expect(store.locationMode).toBe('multi')
+
+      vi.mocked(apiPost).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'single' })
+      await store.pickStudy('S_DEFAULTS1')
+      expect(store.locationMode).toBe('single')
+    })
+
+    it('is gone with the session', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce({ ...FIXTURE_USER, locationMode: 'multi' })
+      const store = useAuthStore()
+      await store.bootstrap()
+      store.clearForUnauthorized()
+      expect(store.locationMode).toBe('single')
     })
   })
 

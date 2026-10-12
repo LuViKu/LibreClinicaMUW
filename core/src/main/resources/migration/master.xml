@@ -133,5 +133,10 @@
   <include  file="migration/lc-muw-2026-10-07-retinal-task-sdretinanet.xml"/>
   <include  file="migration/lc-muw-2026-10-09-dicom-oct-volume.xml"/>
   <include  file="migration/lc-muw-2026-10-09-imaging-modality-oct-marker.xml"/>
+  <include  file="migration/lc-muw-2026-10-11-locations.xml"/>
+  <include  file="migration/lc-muw-2026-10-12-audit-types-locations.xml"/>
+  <include  file="migration/lc-muw-2026-10-12-ingest-source.xml"/>
+  <include  file="migration/lc-muw-2026-10-12-audit-types-ingest-sources.xml"/>
+  <include  file="migration/lc-muw-2026-10-13-location-mode.xml"/>
 </databaseChangeLog>
 

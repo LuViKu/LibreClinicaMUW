@@ -117,8 +117,9 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO ingest_item (kind, source_kind, device, stored_path, "
-                             + "original_filename, patient_id, received_at, status) "
-                             + "VALUES (?, ?, ?, ?, ?, ?, now(), 'UNBOUND') RETURNING ingest_item_id")) {
+                             + "original_filename, patient_id, received_at, status, origin_location_id) "
+                             + "VALUES (?, ?, ?, ?, ?, ?, now(), 'UNBOUND', (SELECT MIN(location_id) FROM location)) "
+                             + "RETURNING ingest_item_id")) {
             String name = MARKER + System.nanoTime();
             ps.setString(1, kind);
             ps.setString(2, sourceKind);

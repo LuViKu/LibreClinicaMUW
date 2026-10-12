@@ -136,11 +136,13 @@
       "dataExportTitle": "Data Export",
       "dataExportDesc": "Export datasets and download the generated files.",
       "modalitiesDesc": "Maintain the imaging modalities and their CRF fields.",
-      "adminStudiesDesc": "Every study and site on the platform: status, remove and restore, metadata download."
+      "adminStudiesDesc": "Every study and site on the platform: status, remove and restore, metadata download.",
+      "adminLocationsDesc": "The platform’s locations: address, studies and study sites, inbox files and assigned people."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
     "switchStudyDesc": "Switch to another of your studies.",
+    "uploadersDesc": "See the uploaders on the acquisition PCs and issue, replace or revoke their tokens.",
     "greeting": "Welcome, {name}",
     "greetingPlain": "Welcome",
     "sections": {
@@ -337,6 +339,8 @@
         "worklistNotImported": "the Optomed Client did not import the last worklist",
         "worklistFailed": "the worklist could not be fetched",
         "worklistTokenRejected": "the platform rejected the worklist token",
+        "tokenRequired": "token missing – enter it in the uploader's settings",
+        "tokenRejected": "token rejected – check it in the uploader's settings or replace it on the “Uploaders and tokens” page",
         "worklistOff": "the worklist is switched off on the platform, so the camera gets no patient list",
         "noToken": "no worklist token is configured",
         "dropFolderMissing": "the Optomed Client's worklist folder is missing",
@@ -1117,7 +1121,7 @@
       "sites": {
         "title": "Sites",
         "summary": "{count} sites",
-        "description": "Per-site PI, address, recruitment cap."
+        "description": "Per-site PI, location, recruitment cap."
       },
       "users": {
         "title": "Users",
@@ -1386,12 +1390,13 @@
   "sites": {
     "title": "Sites",
     "subTrail": "Build study · multi-center setup",
-    "intro": "Create child sites under this study. Each site is a study row with its own facility metadata + role bindings; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
+    "intro": "Create child sites under this study. Each site is a study row with its own role bindings and sits at a location, from which it takes its facility name and address; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
     "createAction": "New site",
     "createHeading": "Create a site under this study",
     "submitCreate": "Create site",
     "empty": "No sites configured under this study yet.",
     "pi": "Principal investigator",
+    "location": "Location",
     "statusRemoved": "Removed",
     "statusPending": "Pending",
     "disable": "Remove",
@@ -1402,10 +1407,27 @@
       "uniqueProtocolId": "Unique protocol ID",
       "principalInvestigator": "Principal investigator",
       "briefSummary": "Brief summary",
-      "facilityName": "Facility name",
-      "facilityCity": "City",
+      "location": "Location",
+      "locationHint": "The facility name and address are taken from the location.",
       "facilityContactEmail": "Contact email"
+    },
+    "created": "Site “{name}” created.",
+    "move": {
+      "action": "Change location",
+      "title": "Change location",
+      "intro": "Move site “{name}” to another location. The facility name and address are taken from the new location; the change is recorded in the audit trail.",
+      "submit": "Move site",
+      "done": "Site “{name}” is now at location “{location}”."
     }
+  },
+  "locationSelect": {
+    "label": "Location",
+    "placeholder": "— Choose a location —",
+    "none": "No location is available to you.",
+    "loadFailed": "The locations could not be loaded (HTTP {status}).",
+    "network": "Server not reachable — the locations could not be loaded.",
+    "unknown": "The locations could not be loaded.",
+    "required": "Choose a location."
   },
   "crfLibrary": {
     "title": "CRF Library",
@@ -2379,7 +2401,10 @@
     "protocolDescription": "Detailed description",
     "collaborators": "Collaborators",
     "contactEmail": "Contact e-mail",
-    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on."
+    "contactEmailHint": "The project manager's address. Required while login e-mail notification is on.",
+    "location": "Location",
+    "locationHint": "The study's location or, with several sites, the coordinating location.",
+    "locationNone": "— No location —"
   },
   "manageUsers": {
     "title": "Manage Users",
@@ -3879,6 +3904,12 @@
       "title": "Upload acquisitions",
       "lead": "OCT exports (.e2e), DICOM files (Clarus, PlexElite) and fundus photos (JPEG/PNG) through one page. Pick the visit once, drop every file of the visit — each row can still be changed on its own."
     },
+    "token": {
+      "required": "This page needs an uploader token. Please use the link your location admin gave you.",
+      "rejected": "The token was rejected or revoked. Please ask your location admin for a new link.",
+      "invalidLink": "The token in the link is incomplete or invalid. Please use the complete link your location admin gave you.",
+      "rowWaiting": "Waiting for a valid upload link"
+    },
     "footer": {
       "formats": "Heidelberg Spectralis .e2e · DICOM .dcm · JPEG/PNG"
     },
@@ -4499,6 +4530,232 @@
       "UNAVAILABLE": "Unavailable",
       "PRIVATE": "Private",
       "UNKNOWN": "Unknown"
+    }
+  },
+  "adminLocations": {
+    "title": "Locations",
+    "subtitle": "Locations: {count} ({active} active)",
+    "intro": "A location is a physical place, such as a clinic, a department or a partner hospital. A study is active at a location when it has a study site there; this page calls the sites created per study “study sites”. Files from devices belong to the location of their source.",
+    "create": "Create location",
+    "empty": "There is no location yet.",
+    "singleMode": "This installation is set up for a single location. A second location needs the deployment to be switched (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi, see the deploy README, section “Uploader tokens and locations”).",
+    "column": {
+      "code": "Code",
+      "name": "Name",
+      "place": "Place",
+      "sites": "Study sites",
+      "studies": "Studies",
+      "files": "Files",
+      "users": "People",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Active",
+      "removed": "Disabled"
+    },
+    "action": {
+      "edit": "Edit",
+      "editAria": "Edit location {name}",
+      "disable": "Disable",
+      "disableAria": "Disable location {name}",
+      "restore": "Restore",
+      "restoreAria": "Restore location {name}"
+    },
+    "dialog": {
+      "createTitle": "Create location",
+      "editTitle": "Edit location",
+      "createSubmit": "Create",
+      "editSubmit": "Save",
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "street": "Street and number",
+        "zip": "Postal code",
+        "city": "City",
+        "country": "Country"
+      },
+      "codeHelp": "2 to 30 characters: letters, digits, hyphen and underscore. The code cannot be changed later.",
+      "codeFixed": "The code is fixed once the location exists."
+    },
+    "detail": {
+      "close": "Close details",
+      "address": "Address",
+      "noAddress": "No address on file.",
+      "studiesHeading": "Studies and study sites",
+      "studiesEmpty": "No study and no study site at this location yet.",
+      "studyBadge": "Study",
+      "siteBadge": "Study site",
+      "siteOf": "of {study}",
+      "usersHeading": "Assigned people",
+      "usersHelp": "People assigned to this location explicitly see its files in the inbox, even without a study role at one of its study sites.",
+      "usersEmpty": "Nobody is assigned to this location explicitly.",
+      "addLabel": "Add a person",
+      "addPlaceholder": "Username",
+      "add": "Assign",
+      "remove": "Remove",
+      "removeAria": "Remove {user} from this location",
+      "siteAdmin": "Location admin",
+      "siteAdminAria": "Location admin right for {user}",
+      "siteAdminHelp": "Location admins see the uploaders of this location and may issue, replace and revoke their tokens. Only a system administrator grants the right.",
+      "removedNote": "The location is disabled. Restore it to assign people."
+    },
+    "created": "Location “{name}” created.",
+    "updated": "Location “{name}” saved.",
+    "disabled": "Location “{name}” disabled.",
+    "restored": "Location “{name}” restored.",
+    "assigned": "{user} is assigned to location “{name}”.",
+    "unassigned": "{user} is no longer assigned to location “{name}”.",
+    "siteAdminGranted": "{user} is now a location admin of “{name}”.",
+    "siteAdminWithdrawn": "{user} is no longer a location admin of “{name}”.",
+    "disableTitle": "Disable location",
+    "disableConfirm": "Disable location “{name}”? This only works when no study and no study site at it is active any more. The action is recorded in the audit trail, and the location can be restored.",
+    "restoreTitle": "Restore location",
+    "restoreConfirm": "Restore location “{name}”? It will be active again. The action is recorded in the audit trail.",
+    "disableFailed": "Location “{name}” could not be disabled. {reason}",
+    "restoreFailed": "Location “{name}” could not be restored. {reason}",
+    "tab": {
+      "label": "Sections of the location administration",
+      "locations": "Locations",
+      "sources": "Sources",
+      "sourcesBadgeAria": "{n} sources without a location"
+    },
+    "sources": {
+      "heading": "Sources",
+      "intro": "A source is where device files come from: an uploader on an acquisition PC, a DICOM device (by its AE title) or the Remidio account. Only a system administrator sees the files of a source without a location. Assign the source a location and its waiting files appear in that location’s inbox at once.",
+      "unassignedSummary": "Sources without a location: {sources}. Only a system administrator sees their waiting files: {files}.",
+      "allAssigned": "Every source has a location.",
+      "empty": "No source is known yet. Uploaders, DICOM devices and the Remidio account appear here once they are created or report for the first time.",
+      "column": {
+        "kind": "Kind",
+        "name": "Name",
+        "location": "Location",
+        "waiting": "Waiting files",
+        "lastSeen": "Last seen",
+        "status": "Status"
+      },
+      "kind": {
+        "uploader": "Uploader (acquisition PC)",
+        "dicom_ae": "DICOM device (AE title)",
+        "remidio": "Remidio account",
+        "portal": "Upload page"
+      },
+      "unassigned": "not assigned",
+      "locationAria": "Location of {name}",
+      "removedOption": "{name} (disabled)",
+      "waiting": "{n} file waiting | {n} files waiting",
+      "waitingHint": "Visible to system administrators only until a location is assigned.",
+      "neverSeen": "never",
+      "assigned": "Source “{name}” now belongs to location “{location}”.",
+      "assignedFiles": "Source “{name}” now belongs to location “{location}”. Waiting files that appear in its inbox: {n}.",
+      "unassignedNow": "Source “{name}” is no longer assigned to a location.",
+      "assignFailed": "Source “{name}” could not be assigned. {reason}",
+      "error": {
+        "loadFailed": "The sources could not be loaded (HTTP {status}).",
+        "anonymousFailed": "The uploaders without a token could not be determined (HTTP {status})."
+      }
+    },
+    "error": {
+      "loadFailed": "The locations could not be loaded (HTTP {status}).",
+      "detailFailed": "The location could not be loaded (HTTP {status}).",
+      "saveFailed": "The change could not be saved (HTTP {status}).",
+      "network": "The server could not be reached.",
+      "unknown": "Unknown error.",
+      "singleLocation": "This installation is set up for a single location; a second active location is possible only after switching to LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi."
+    }
+  },
+  "uploaders": {
+    "title": "Uploaders and tokens",
+    "subtitle": "Uploaders: {count} ({active} active)",
+    "intro": "An uploader is the program on an acquisition PC, such as the Export Watcher or the Optomed Bridge, that brings device files into a location’s inbox. It identifies itself with a token that is valid for exactly one location, so where a file came from is settled. “Last used” shows the last request made with the token, “Last report” the program’s last heartbeat.",
+    "create": "Create uploader",
+    "refresh": "Refresh",
+    "location": {
+      "label": "Location",
+      "single": "Location: {name}"
+    },
+    "empty": "This location has no uploader yet. “Create uploader” gives you the token for an acquisition PC.",
+    "noLocation": "No location is enabled for your account to manage uploaders at.",
+    "preSwitch": {
+      "title": "Before a switch to several locations",
+      "count": "{n} program still sends no token | {n} programs still send no token",
+      "hint": "Counted are the programs that reported in the last 7 days without a token. While this installation is set up for a single location, the server accepts their files; after a switch to several locations (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi) it turns them away. Switch only once this reads 0.",
+      "none": "Every program that reported in the last 7 days sends a token.",
+      "unknown": "Whether programs still send no token could not be checked.",
+      "show": "Show the programs",
+      "unnamed": "unnamed",
+      "seen": "last seen {when}",
+      "more": "… and {n} more"
+    },
+    "column": {
+      "name": "Name",
+      "token": "Token (start)",
+      "status": "Status",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "lastReport": "Last report"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked"
+    },
+    "createdBy": "by {user}",
+    "never": "never",
+    "action": {
+      "rename": "Rename",
+      "renameAria": "Rename uploader {name}",
+      "replace": "Replace token",
+      "replaceAria": "Replace the token of uploader {name}",
+      "revoke": "Revoke",
+      "revokeAria": "Revoke uploader {name}"
+    },
+    "dialog": {
+      "createTitle": "Create uploader",
+      "renameTitle": "Rename uploader",
+      "createSubmit": "Create",
+      "renameSubmit": "Save",
+      "field": {
+        "name": "Name"
+      },
+      "nameHelp": "What the uploader stands for, for example “Clarus PC room 3”. At most 64 characters; the name is unique within the location.",
+      "tooLong": "At most 64 characters."
+    },
+    "token": {
+      "createdTitle": "Token for “{name}”",
+      "replacedTitle": "New token for “{name}”",
+      "warning": "This token is shown only now. It cannot be retrieved later; if it is lost, replace it with a new one.",
+      "whereTo": "Enter it in the settings dialog of the uploader on the acquisition PC, not on the command line.",
+      "label": "Token (shown once)",
+      "copy": "Copy",
+      "copied": "Token copied to the clipboard.",
+      "copyFailed": "Copying did not work. The token is selected; copy it with Ctrl+C (Mac: Cmd+C).",
+      "copyAria": "Copy token",
+      "linkLabel": "Link for the upload page",
+      "linkCopy": "Copy link",
+      "linkCopyAria": "Copy the link for the upload page",
+      "linkCopied": "Link copied to the clipboard.",
+      "linkCopyFailed": "Copying did not work. The link is selected; copy it with Ctrl+C (Mac: Cmd+C).",
+      "linkNote": "The token in the link gives upload access for the location “{location}” only. Pass the link on only to people who upload acquisitions there.",
+      "linkNoteHere": "The token in the link gives upload access for this location only. Pass the link on only to people who upload acquisitions there.",
+      "saved": "I have saved the token",
+      "close": "Close",
+      "closeHint": "You can close this once you have saved the token."
+    },
+    "created": "Uploader “{name}” created.",
+    "renamed": "Uploader “{name}” renamed.",
+    "replaced": "Token of “{name}” replaced. The previous token is no longer valid.",
+    "revoked": "Uploader “{name}” revoked.",
+    "replaceTitle": "Replace token",
+    "replaceConfirm": "Replace the token of “{name}”? The previous token stops working at once: the uploader reports “token rejected” and leaves its files in the watch folder until the new token is in its settings. The new token is shown once. The action is recorded in the audit trail.",
+    "replaceConfirmRevoked": "Uploader “{name}” is revoked. A new token lifts the revocation; the previous token stays invalid. The new token is shown once. The action is recorded in the audit trail.",
+    "revokeTitle": "Revoke uploader",
+    "revokeConfirm": "Revoke uploader “{name}”? Its token is refused at once; the uploader leaves its files in the watch folder and shows that in its tray icon. “Replace token” lifts the revocation again. The action is recorded in the audit trail.",
+    "replaceFailed": "The token of “{name}” could not be replaced. {reason}",
+    "revokeFailed": "Uploader “{name}” could not be revoked. {reason}",
+    "error": {
+      "loadFailed": "The uploaders could not be loaded (HTTP {status}).",
+      "saveFailed": "The change could not be saved (HTTP {status}).",
+      "network": "The server could not be reached.",
+      "unknown": "Unknown error."
     }
   },
   "studyLifecycle": {

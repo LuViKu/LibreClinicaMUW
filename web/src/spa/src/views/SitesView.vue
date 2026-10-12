@@ -7,8 +7,13 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import HelperText from '@/components/HelperText.vue'
+import LocationSelect from '@/components/LocationSelect.vue'
+import SiteLocationDialog from '@/components/SiteLocationDialog.vue'
 
 import { useSitesStore } from '@/stores/sites'
+import { useLocationOptionsStore } from '@/stores/locationOptions'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { mayBuildStudy, maySysadminOnly } from '@/lib/studyBuildAccess'
 import { useConfirm } from '@/composables/useConfirm'
@@ -26,18 +31,33 @@ import type { StudyIdentity } from '@/types/study'
  * Role-gated client-side to Administrator + Data Manager; backend
  * re-checks authoritatively against the sysadmin / director /
  * coordinator triad.
+ *
+ * DR-040 phase 4: every site (Prüfzentrum) is at a location (Standort).
+ * The create form has a required Standort select over the locations the
+ * caller may use (preselected when there is exactly one); the facility
+ * name and address come from the location, so the form no longer asks for
+ * them. The list shows each site's location, and in multi-location mode
+ * those who may manage sites can move a site to another location.
  */
 const { t } = useI18n()
 const sites = useSitesStore()
 const auth = useAuthStore()
 const confirm = useConfirm()
+const locationOptions = useLocationOptionsStore()
 
 const parentOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 const canManage = computed(() => mayBuildStudy(auth.user?.role))
 // Disable and restore are sysadmin-only in the backend (roleMayLifecycleStudy).
 const canLifecycle = computed(() => maySysadminOnly(auth.user?.role))
+// Moving a site exists only where there is more than one place to move it to.
+const canMove = computed(() => canManage.value && auth.locationMode === 'multi')
+// The server refuses any write to a site in one of these states (StudyAdminAuthorization.studyAcceptsWrites).
+const NOT_WRITABLE = new Set(['removed', 'auto-removed', 'locked', 'frozen'])
 
-onMounted(() => { if (parentOid.value) sites.load(parentOid.value) })
+onMounted(() => {
+  if (parentOid.value) sites.load(parentOid.value)
+  if (canManage.value) void locationOptions.load()
+})
 
 watch(parentOid, (next) => { if (next) sites.load(next) })
 
@@ -48,8 +68,8 @@ interface CreateForm {
   uniqueProtocolId: string
   principalInvestigator: string
   briefSummary: string
-  facilityName: string
-  facilityCity: string
+  /** The site's location (Standort); the server copies the facility address from it. */
+  locationId: number | null
   facilityContactEmail: string
 }
 const createOpen = ref(false)
@@ -64,13 +84,42 @@ function blankForm(): CreateForm {
     uniqueProtocolId: '',
     principalInvestigator: '',
     briefSummary: '',
-    facilityName: '',
-    facilityCity: '',
+    locationId: onlyLocationId(),
     facilityContactEmail: '',
   }
 }
 
+/** The one location there is to choose, else null (the person chooses). */
+function onlyLocationId(): number | null {
+  return locationOptions.options.length === 1 ? locationOptions.options[0].id : null
+}
+
+// The options may arrive after the form was opened: preselect then.
+watch(() => locationOptions.options, () => {
+  if (createOpen.value && createForm.value.locationId == null) createForm.value.locationId = onlyLocationId()
+})
+
+// A field error belongs to the choice it was given for.
+watch(() => createForm.value.locationId, () => {
+  if (createErrors.value.locationId) {
+    const { locationId: _dropped, ...rest } = createErrors.value
+    createErrors.value = rest
+  }
+})
+
+/**
+ * The Standort is required. The one exception is single-location mode with
+ * no option to show (the list could not be loaded): there the server takes
+ * the one location itself, so the form does not block on it.
+ */
+const locationMissing = computed(
+  () =>
+    createForm.value.locationId == null &&
+    !(auth.locationMode === 'single' && locationOptions.options.length === 0 && !locationOptions.isLoading),
+)
+
 function openCreate() {
+  if (!locationOptions.loaded && !locationOptions.isLoading) void locationOptions.load()
   createForm.value = blankForm()
   createErrors.value = {}
   createFormError.value = null
@@ -81,7 +130,8 @@ const canSubmitCreate = computed(() => {
   return (
     createForm.value.name.trim() !== '' &&
     createForm.value.uniqueProtocolId.trim() !== '' &&
-    createForm.value.principalInvestigator.trim() !== ''
+    createForm.value.principalInvestigator.trim() !== '' &&
+    !locationMissing.value
   )
 })
 
@@ -96,12 +146,12 @@ async function submitCreate() {
       uniqueProtocolId: createForm.value.uniqueProtocolId.trim(),
       principalInvestigator: createForm.value.principalInvestigator.trim(),
       briefSummary: createForm.value.briefSummary.trim() || undefined,
-      facilityName: createForm.value.facilityName.trim() || undefined,
-      facilityCity: createForm.value.facilityCity.trim() || undefined,
+      locationId: createForm.value.locationId ?? undefined,
       facilityContactEmail: createForm.value.facilityContactEmail.trim() || undefined,
     })
     if (result.ok) {
       createOpen.value = false
+      useNotificationsStore().success(t('sites.created', { name: createForm.value.name.trim() }))
     } else {
       createErrors.value = result.fieldErrors
       createFormError.value = result.message ?? null
@@ -122,6 +172,22 @@ async function onDisable(site: StudyIdentity) {
 async function onRestore(site: StudyIdentity) {
   if (!parentOid.value) return
   await sites.restore(parentOid.value, site.oid)
+}
+
+/* ----------------------------- Move ------------------------------- */
+
+const moveOpen = ref(false)
+const moveSite = ref<StudyIdentity | null>(null)
+
+function openMove(site: StudyIdentity) {
+  moveSite.value = site
+  moveOpen.value = true
+}
+
+function onMoved(site: StudyIdentity) {
+  useNotificationsStore().success(
+    t('sites.move.done', { name: site.name, location: site.locationName ?? '—' }),
+  )
 }
 
 const visibleRows = computed(() => sites.rows)
@@ -178,21 +244,30 @@ const visibleRows = computed(() => sites.rows)
               <StatusPill v-else-if="site.status === 'pending'" variant="warning">{{ t('sites.statusPending') }}</StatusPill>
             </div>
             <p v-if="site.briefSummary" class="text-xs text-slate-500 mt-0.5">{{ site.briefSummary }}</p>
-            <div class="text-xs text-slate-500 mt-1">
-              {{ t('sites.pi') }}: {{ site.principalInvestigator || '—' }}
+            <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+              <span :data-testid="`site-location-${site.oid}`">{{ t('sites.location') }}: {{ site.locationName || '—' }}</span>
+              <span>{{ t('sites.pi') }}: {{ site.principalInvestigator || '—' }}</span>
             </div>
           </div>
-          <div v-if="canLifecycle" class="flex items-center gap-2 text-xs shrink-0">
+          <div v-if="canLifecycle || canMove" class="flex items-center gap-2 text-xs shrink-0">
             <button
-              v-if="site.status !== 'removed'"
-              class="text-rose-600 hover:underline"
-              @click="onDisable(site)"
-            >{{ t('sites.disable') }}</button>
-            <button
-              v-else
-              class="text-emerald-700 hover:underline"
-              @click="onRestore(site)"
-            >{{ t('sites.restore') }}</button>
+              v-if="canMove && !NOT_WRITABLE.has(site.status)"
+              class="text-muw-blue hover:underline"
+              :data-testid="`site-move-${site.oid}`"
+              @click="openMove(site)"
+            >{{ t('sites.move.action') }}</button>
+            <template v-if="canLifecycle">
+              <button
+                v-if="site.status !== 'removed'"
+                class="text-rose-600 hover:underline"
+                @click="onDisable(site)"
+              >{{ t('sites.disable') }}</button>
+              <button
+                v-else
+                class="text-emerald-700 hover:underline"
+                @click="onRestore(site)"
+              >{{ t('sites.restore') }}</button>
+            </template>
           </div>
         </li>
       </ul>
@@ -219,17 +294,23 @@ const visibleRows = computed(() => sites.rows)
             <FieldLabel for="site-summary">{{ t('sites.field.briefSummary') }}</FieldLabel>
             <TextInput id="site-summary" v-model="createForm.briefSummary" />
           </div>
-          <div>
-            <FieldLabel for="site-fac-name">{{ t('sites.field.facilityName') }}</FieldLabel>
-            <TextInput id="site-fac-name" v-model="createForm.facilityName" />
-          </div>
-          <div>
-            <FieldLabel for="site-fac-city">{{ t('sites.field.facilityCity') }}</FieldLabel>
-            <TextInput id="site-fac-city" v-model="createForm.facilityCity" />
+          <div class="col-span-2">
+            <FieldLabel for="site-location" required>{{ t('sites.field.location') }}</FieldLabel>
+            <LocationSelect
+              id="site-location"
+              v-model="createForm.locationId"
+              :options="locationOptions.options"
+              :error="!!createErrors.locationId"
+            />
+            <ErrorText v-if="createErrors.locationId" data-testid="site-location-error">{{ createErrors.locationId }}</ErrorText>
+            <ErrorText v-else-if="locationOptions.error">{{ locationOptions.error }}</ErrorText>
+            <HelperText v-else-if="locationOptions.loaded && locationOptions.options.length === 0">{{ t('locationSelect.none') }}</HelperText>
+            <HelperText v-else>{{ t('sites.field.locationHint') }}</HelperText>
           </div>
           <div class="col-span-2">
             <FieldLabel for="site-fac-email">{{ t('sites.field.facilityContactEmail') }}</FieldLabel>
             <TextInput id="site-fac-email" v-model="createForm.facilityContactEmail" type="email" />
+            <ErrorText v-if="createErrors.facilityContactEmail">{{ createErrors.facilityContactEmail }}</ErrorText>
           </div>
         </div>
         <ErrorText v-if="createFormError">{{ createFormError }}</ErrorText>
@@ -245,6 +326,15 @@ const visibleRows = computed(() => sites.rows)
           >{{ isCreating ? t('common.saving') : t('sites.submitCreate') }}</button>
         </div>
       </div>
+
+      <SiteLocationDialog
+        v-if="canMove"
+        v-model:open="moveOpen"
+        :site="moveSite"
+        :parent-oid="parentOid"
+        :options="locationOptions.options"
+        @saved="onMoved"
+      />
     </div>
   </div>
 </template>

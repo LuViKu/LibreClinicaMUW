@@ -19,11 +19,14 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
@@ -62,6 +65,24 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * reverse proxy must never expose it to the public internet. It is idempotent
  * on {@code sop_instance_uid} — a re-sent C-STORE returns the existing row.
  *
+ * <p><b>The source (DR-040 phase 2).</b> The calling AE title the sidecar passes
+ * on ({@code sourceAeTitle}) is the camera's only identity, so it is the
+ * ingest source: the first file from a title makes an <em>unassigned</em>
+ * {@code dicom_ae} source ({@link IngestSourceService}), and every file is
+ * stamped with it ({@code ingest_source_id}) and with its location as the
+ * origin. In single-location mode a new source gets the one location; in multi
+ * mode it has none, and its file waits for a system administrator until
+ * assigning the source (System &rarr; Standorte &rarr; Quellen) places it. A
+ * title that cannot be a source (none, an invalid one, one past the limit
+ * below) gets the same default-location rule and no source; the hand-off is
+ * never refused for it.
+ *
+ * <p>The sidecar's allow-list of calling AE titles
+ * ({@code DICOM_SCP_ALLOWED_CALLING_AE_TITLES}) is empty by default, and an
+ * empty list accepts any title, so a stranger who reaches the receiver's port
+ * could make sources at will. The app therefore stops making them at
+ * {@link #MAX_AE_SOURCES}; titles that are sources already keep working.
+ *
  * <p>Camera-provided string values (PatientID, modality, AE title, …) are never
  * written to the log — only the generated row id — so the endpoint is not a
  * log-injection sink.
@@ -76,7 +97,19 @@ public class DicomIngestApiController {
 
     private static final String TOKEN_HEADER = "X-MUW-Dicom-Token";
 
+    /**
+     * DR-040 phase 2 — how many calling AE titles the app makes sources of
+     * ({@link IngestSourceService#resolveAutoSource(String, String, String, int)}).
+     * A clinic has tens of cameras at most; this is room, not a quota.
+     */
+    static final int MAX_AE_SOURCES = 200;
+
+    /** The refusal above is logged at most this often, so a stream of new titles cannot flood the log. */
+    private static final long LIMIT_LOG_INTERVAL_MS = 3_600_000L;
+
     private final DataSource dataSource;
+    private final IngestSourceService sources;
+    private final AtomicLong limitLoggedAt = new AtomicLong();
 
     /** Null (hand-built controllers) reads as "not required". */
     private DeidentificationPolicy deidPolicy;
@@ -101,6 +134,7 @@ public class DicomIngestApiController {
     @Autowired
     public DicomIngestApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
+        this.sources = new IngestSourceService(dataSource);
     }
 
     /** Sidecar → app payload: DICOM identity/exam tags + shared-store paths. */
@@ -181,7 +215,7 @@ public class DicomIngestApiController {
                 return ResponseEntity.ok(dupBody(twin.ingestItemId()));
             }
             boolean held = verdict == IngestTwins.Verdict.HELD;
-            Inserted ins = insert(c, req, held ? null : target);
+            Inserted ins = insert(c, req, held ? null : target, originOf(c, req));
             if (held) {
                 IngestTwins.writeHeldAudit(dataSource, ins.id(), twin, label, null, "dicom");
             }
@@ -208,6 +242,11 @@ public class DicomIngestApiController {
                 body.put("sameImageAs", twin.ingestItemId());
             }
             return ResponseEntity.status(201).body(body);
+        } catch (IngestSourceService.Failure e) {
+            // The database could not name the source (the SQLSTATE is all that is safe to log). The sidecar
+            // answers the camera with a failure and the camera sends again; nothing was filed.
+            LOG.error("DICOM ingest: could not look up the source ({})", e.sqlState());
+            return ResponseEntity.internalServerError().body(Map.of("message", "DICOM ingest failed"));
         } catch (SQLException e) {
             // Race on the sop_instance_uid unique index — treat as idempotent.
             if ("23505".equals(e.getSQLState())) {
@@ -272,6 +311,55 @@ public class DicomIngestApiController {
     private record Inserted(long id, String status, Integer boundStudyEventId,
                             ImageIngestBinding.EventTarget target, String deviceKey) {}
 
+    /** The source of a file (null when the sender cannot be named) and the origin location it gets. */
+    private record Origin(Long sourceId, Integer locationId) {}
+
+    /**
+     * DR-040 phase 2 — who sent the file and where that is.
+     *
+     * <p>The source is the calling AE title's, made on first sight (with the one
+     * location in single-location mode, unassigned in multi mode). Its location
+     * is the file's origin. While the source has none, the origin is the
+     * default location: in single mode the one location, so a clinic keeps
+     * working before anybody assigns anything; in multi mode null, and the file
+     * waits for an administrator (and for the source to be assigned, which
+     * places it).
+     */
+    private Origin originOf(Connection c, DicomIngestRequest r) throws SQLException {
+        IngestSourceService.Source source = sourceOf(r);
+        Integer location = source == null ? null : source.locationId();
+        if (location == null) location = LocationScope.defaultLocationId(c);
+        return new Origin(source == null ? null : source.id(), location);
+    }
+
+    /**
+     * The source of the calling AE title, or null when the title cannot be
+     * one: none sent (an older sidecar sends none), one the platform does not
+     * accept as an AE title, or a new one past {@link #MAX_AE_SOURCES}.
+     */
+    private IngestSourceService.Source sourceOf(DicomIngestRequest r) {
+        String ae = r.sourceAeTitle();
+        if (isBlank(ae)) return null;
+        try {
+            var source = sources.resolveAutoSource(IngestSourceService.KIND_DICOM_AE, ae, ae, MAX_AE_SOURCES);
+            if (source.isEmpty()) noteLimitReached();
+            return source.orElse(null);
+        } catch (IngestSourceService.Refusal notATitle) {
+            return null;
+        }
+    }
+
+    /** Logs that the limit is reached, at most once an hour and without the title (it is the sender's to choose). */
+    private void noteLimitReached() {
+        long now = System.currentTimeMillis();
+        long last = limitLoggedAt.get();
+        if (now - last >= LIMIT_LOG_INTERVAL_MS && limitLoggedAt.compareAndSet(last, now)) {
+            LOG.warn("DICOM ingest: the limit of {} DICOM AE sources is reached, so a calling AE title that is not "
+                    + "one yet is filed without a source. Set DICOM_SCP_ALLOWED_CALLING_AE_TITLES on the receiver "
+                    + "to the cameras' AE titles. (Logged at most once an hour.)", MAX_AE_SOURCES);
+        }
+    }
+
     /**
      * Which camera sent this. The calling AE title is the device's own
      * identifier and is what the performed-item map is keyed on; lower-cased so
@@ -293,9 +381,12 @@ public class DicomIngestApiController {
                 : ImageIngestBinding.resolveEventTarget(c, studyEventId);
     }
 
-    /** @param target the visit the worklist named, or null to land UNBOUND */
-    private Inserted insert(Connection c, DicomIngestRequest r, ImageIngestBinding.EventTarget target)
-            throws SQLException {
+    /**
+     * @param target the visit the worklist named, or null to land UNBOUND
+     * @param origin who sent it and where that is
+     */
+    private Inserted insert(Connection c, DicomIngestRequest r, ImageIngestBinding.EventTarget target,
+                            Origin origin) throws SQLException {
         LocalDate studyDate = parseIsoDateOrNull(r.studyDate());
         String status = target != null ? "BOUND" : "UNBOUND";
         // P3.1 — the statement lives in IngestItemRepository, shared with the
@@ -331,7 +422,10 @@ public class DicomIngestApiController {
                 .acquisitionDate(studyDate)
                 .acquisitionDateSource(studyDate == null
                         ? null : IngestItemRepository.ACQ_SOURCE_FILE)
-                .laterality(r.laterality());
+                .laterality(r.laterality())
+                // DR-040 — the calling AE title's source and its location (see originOf).
+                .ingestSourceId(origin.sourceId())
+                .originLocationId(origin.locationId());
         if (target != null) {
             item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "worklist");
         }

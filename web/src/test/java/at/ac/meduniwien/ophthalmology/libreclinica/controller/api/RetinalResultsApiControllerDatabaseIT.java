@@ -745,32 +745,64 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
 
     /* ---- bind / search helpers --------------------------------------- */
 
+    /** Marks the ingest items {@link #seedParkedJob} creates, so the cleanup finds them. */
+    private static final String PARKED_ITEM_NAME = "wave1b-parked-it";
+
+    /**
+     * A parked job as the platform makes them now: it names the scan it is for,
+     * an unfiled {@code ingest_item} stamped with the origin location every
+     * arrival gets. A parked job with neither a visit nor a scan is a legacy
+     * orphan that only a system administrator can place (DR-040).
+     */
     private static long seedParkedJob() throws Exception {
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO retinal_inference_job ("
-                             + "event_crf_id, task, e2e_path, eye_laterality, "
-                             + "status, enqueued_at) VALUES (?, ?, ?, ?, ?, ?) "
-                             + "RETURNING job_id")) {
-            ps.setNull(1, java.sql.Types.INTEGER);
-            ps.setString(2, "fluid");
-            ps.setString(3, "/tmp/wave1b-parked.e2e");
-            ps.setString(4, "OD");
-            ps.setString(5, "parked");
-            ps.setTimestamp(6, new Timestamp(System.currentTimeMillis()));
-            try (ResultSet rs = ps.executeQuery()) {
-                assertTrue(rs.next());
-                return rs.getLong(1);
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            long item;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO ingest_item (kind, source_kind, stored_path, original_filename, laterality, "
+                            + "received_at, status, sha256, scan_index, byte_size, origin_location_id) "
+                            + "VALUES ('e2e', 'portal-oct', '/tmp/wave1b-parked.e2e', ?, 'OD', now(), 'UNBOUND', ?, 0, 7, "
+                            + "(SELECT min(location_id) FROM location)) RETURNING ingest_item_id")) {
+                ps.setString(1, PARKED_ITEM_NAME);
+                ps.setString(2, String.format("e%063d", System.nanoTime() % 1_000_000_000_000L));
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    item = rs.getLong(1);
+                }
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO retinal_inference_job ("
+                            + "event_crf_id, task, e2e_path, eye_laterality, "
+                            + "status, enqueued_at, ingest_item_id) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                            + "RETURNING job_id")) {
+                ps.setNull(1, java.sql.Types.INTEGER);
+                ps.setString(2, "fluid");
+                ps.setString(3, "/tmp/wave1b-parked.e2e");
+                ps.setString(4, "OD");
+                ps.setString(5, "parked");
+                ps.setTimestamp(6, new Timestamp(System.currentTimeMillis()));
+                ps.setLong(7, item);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    return rs.getLong(1);
+                }
             }
         }
     }
 
     private static void cleanupJobOnly(long jobId) throws Exception {
-        try (Connection c = DATA_SOURCE.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "DELETE FROM retinal_inference_job WHERE job_id = ?")) {
-            ps.setLong(1, jobId);
-            ps.executeUpdate();
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM retinal_inference_job WHERE job_id = ?")) {
+                ps.setLong(1, jobId);
+                ps.executeUpdate();
+            }
+            // Its scan goes with it (the job row referenced it).
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM ingest_item WHERE original_filename = ? AND NOT EXISTS ("
+                            + "SELECT 1 FROM retinal_inference_job j WHERE j.ingest_item_id = ingest_item.ingest_item_id)")) {
+                ps.setString(1, PARKED_ITEM_NAME);
+                ps.executeUpdate();
+            }
         }
     }
 

@@ -272,6 +272,60 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     }
 
     /**
+     * DR-040: the six types of the administration of locations (195-200) are
+     * admin rows, so the system audit log's admin filter finds them.
+     */
+    @Test
+    void variantForTheLocationTypes() {
+        int[] types = {AuditTypeIds.LOCATION_CREATED, AuditTypeIds.LOCATION_UPDATED, AuditTypeIds.LOCATION_DISABLED,
+                AuditTypeIds.LOCATION_RESTORED, AuditTypeIds.LOCATION_USER_ASSIGNED,
+                AuditTypeIds.LOCATION_USER_UNASSIGNED};
+        assertEquals(6, types.length);
+        for (int i = 0; i < types.length; i++) {
+            assertEquals(195 + i, types[i], "ids 195-200, in the order the changeset seeds them");
+            assertEquals("admin", AuditApiController.variantForType(types[i], null), "type " + types[i]);
+        }
+    }
+
+    /**
+     * DR-040 phase 2: the seven types of ingest sources, uploader tokens and
+     * the Standort-Admin right (201-207) are admin rows too. The service in
+     * core writes 201-205 under its own constants (it cannot see this class),
+     * so the two sets of numbers are pinned equal here.
+     */
+    @Test
+    void variantForTheIngestSourceTypesAndTheServiceAgreesOnTheirIds() {
+        int[] types = {AuditTypeIds.INGEST_SOURCE_CREATED, AuditTypeIds.UPLOADER_TOKEN_REPLACED,
+                AuditTypeIds.UPLOADER_TOKEN_REVOKED, AuditTypeIds.UPLOADER_RENAMED,
+                AuditTypeIds.INGEST_SOURCE_LOCATION_ASSIGNED, AuditTypeIds.LOCATION_ADMIN_GRANTED,
+                AuditTypeIds.LOCATION_ADMIN_REVOKED};
+        assertEquals(7, types.length);
+        for (int i = 0; i < types.length; i++) {
+            assertEquals(201 + i, types[i], "ids 201-207, in the order the changeset seeds them");
+            assertEquals("admin", AuditApiController.variantForType(types[i], null), "type " + types[i]);
+        }
+        assertEquals(AuditTypeIds.INGEST_SOURCE_CREATED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.AUDIT_INGEST_SOURCE_CREATED);
+        assertEquals(AuditTypeIds.UPLOADER_TOKEN_REPLACED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.AUDIT_UPLOADER_TOKEN_REPLACED);
+        assertEquals(AuditTypeIds.UPLOADER_TOKEN_REVOKED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.AUDIT_UPLOADER_TOKEN_REVOKED);
+        assertEquals(AuditTypeIds.UPLOADER_RENAMED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.AUDIT_UPLOADER_RENAMED);
+        assertEquals(AuditTypeIds.INGEST_SOURCE_LOCATION_ASSIGNED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService.AUDIT_INGEST_SOURCE_LOCATION_ASSIGNED);
+    }
+
+    /** 208: the single-location startup's placements are admin rows, and core writes the same id. */
+    @Test
+    void variantForTheLocationBackfillAndTheStartupAgreesOnItsId() {
+        assertEquals(208, AuditTypeIds.LOCATION_BACKFILLED);
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.LOCATION_BACKFILLED, null));
+        assertEquals(AuditTypeIds.LOCATION_BACKFILLED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationModeStartup.AUDIT_LOCATION_BACKFILLED);
+    }
+
+    /**
      * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
      * the filter parameter and reaches the SQL try-block. With the mock
      * DataSource the query throws inside the try/catch and we get a 500;

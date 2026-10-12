@@ -27,23 +27,37 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 /**
  * Which {@code ingest_item} rows a session may see or change.
  *
- * <p>The ingest inbox is a pool: an unbound file belongs to no subject, so the
+ * <p>The ingest inbox is a pool: an unfiled file belongs to no subject, so the
  * subject's study cannot say who may see it. The rule, in one place for the
- * list queries, the single-item reads and every state change:
+ * list queries, the counts, the single-item reads, the previews and every
+ * state change (bind, unbind, dismiss, restore, undo, the retinal parked-job
+ * endpoints):
  *
  * <ul>
- *   <li><strong>Bound</strong> (names a study subject): visible when that
- *       subject's study is in the session's visible set (SiteVisibilityFilter).</li>
- *   <li><strong>Unbound or dismissed with {@code origin_study_id}</strong>
+ *   <li><strong>Filed</strong> (names a study subject): visible when that
+ *       subject's study is in the session's visible set (SiteVisibilityFilter).
+ *       Unchanged by locations: the subject's study decides.</li>
+ *   <li><strong>Unfiled or dismissed with {@code origin_study_id}</strong>
  *       (uploaded by signed-in staff): visible when the origin study is in the
- *       visible set.</li>
- *   <li><strong>Unbound or dismissed with no origin</strong> (anonymous portal
- *       or device ingress, which only the internal deployment accepts): visible
- *       to every reconciler, the inbox's historical cross-study behaviour.</li>
+ *       visible set. The location of such a file does not matter.</li>
+ *   <li><strong>Unfiled or dismissed with no origin study</strong> (a device
+ *       or an anonymous page: the Export Watcher, the Optomed Bridge, the
+ *       DICOM receiver, the Remidio pull, the public upload pages): visible
+ *       when {@code origin_location_id} is one of the user's locations
+ *       ({@link at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope}:
+ *       where they hold a live role, plus their assignments). Before DR-040 it
+ *       was visible to every reconciler.</li>
+ *   <li><strong>Unfiled or dismissed with neither</strong> (the source is not
+ *       assigned to a place yet): visible to system administrators only. It
+ *       fails closed: a file nobody can place is shown to nobody who works
+ *       with patients until an administrator does.</li>
  * </ul>
  *
  * A system administrator sees everything, as in
  * {@link StudyResourceAccess#guardStudyVisibility}.
+ *
+ * <p>While there is one location, every file and every study is at it, so the
+ * rule gives what the old one did.
  */
 public final class IngestItemVisibility {
 
@@ -59,8 +73,8 @@ public final class IngestItemVisibility {
 
     /**
      * A SQL boolean expression over {@code alias} (a row of {@code ingest_item})
-     * that is true for the rows the session may see. Study ids are integers
-     * from the visibility filter, inlined as literals.
+     * that is true for the rows the session may see. Study and location ids
+     * are integers from the database, inlined as literals.
      */
     public String predicate(String alias, HttpSession session) {
         UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
@@ -68,19 +82,22 @@ public final class IngestItemVisibility {
         Set<Integer> visible = access.visibleStudyIds(session);
         String ids = visible.isEmpty() ? "-1"
                 : visible.stream().map(String::valueOf).collect(Collectors.joining(","));
+        String atMyLocations = access.visibleLocations(session).sql(alias + ".origin_location_id");
         return "((" + alias + ".bound_study_subject_id IS NOT NULL AND EXISTS ("
                 + "SELECT 1 FROM study_subject vis_ss WHERE vis_ss.study_subject_id = "
                 + alias + ".bound_study_subject_id AND vis_ss.study_id IN (" + ids + "))) "
                 + "OR (" + alias + ".bound_study_subject_id IS NULL AND ("
-                + alias + ".origin_study_id IS NULL OR " + alias + ".origin_study_id IN (" + ids + "))))";
+                + "(" + alias + ".origin_study_id IS NOT NULL AND " + alias + ".origin_study_id IN (" + ids + ")) "
+                + "OR (" + alias + ".origin_study_id IS NULL AND " + atMyLocations + "))))";
     }
 
     /**
      * For taking back an OCT upload job: the job's visit (through its CRF, or
      * the planned visit it is bound to) is in a visible study; or, for a job
      * with no visit yet, its ingest item is visible; or the caller filed it.
-     * A job with no visit and no ingest item (legacy, anonymous) is open to
-     * every reconciler, like an unbound item with no origin.
+     * A job with no visit and no ingest item (legacy, anonymous) has no origin
+     * to place it by: it is a system administrator's, like an unfiled item of
+     * unknown origin.
      */
     public boolean canSeeJob(long jobId, HttpSession session) {
         UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
@@ -100,7 +117,6 @@ public final class IngestItemVisibility {
                 + " OR (j.event_crf_id IS NULL AND j.study_event_id IS NULL AND j.ingest_item_id IS NOT NULL"
                 + "     AND EXISTS (SELECT 1 FROM ingest_item i WHERE i.ingest_item_id = j.ingest_item_id AND "
                 + predicate("i", session) + "))"
-                + " OR (j.event_crf_id IS NULL AND j.study_event_id IS NULL AND j.ingest_item_id IS NULL)"
                 + " OR EXISTS (SELECT 1 FROM ingest_item f WHERE f.ingest_item_id = j.ingest_item_id"
                 + "             AND f.bound_by_user_id = " + userId + "))";
         try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {

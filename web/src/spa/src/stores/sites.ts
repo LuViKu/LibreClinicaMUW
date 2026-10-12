@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
-import type { CreateSiteInput, StudyIdentity } from '@/types/study'
+import type { CreateSiteInput, StudyIdentity, UpdateSiteInput } from '@/types/study'
 
 /**
  * Phase E A8.4 — sites store.
@@ -49,7 +49,7 @@ export const useSitesStore = defineStore('sites', () => {
   async function update(
     parentOid: string,
     siteOid: string,
-    patch: Partial<CreateSiteInput>,
+    patch: UpdateSiteInput,
   ): Promise<MutationResult> {
     return mutate(
       () => apiPut<StudyIdentity>(
@@ -108,6 +108,8 @@ export const useSitesStore = defineStore('sites', () => {
         error.value = humanError(e, label)
         throw e
       }
+      // The per-study site is a "Prüfzentrum" in German; "Standort" is the global location.
+      const what = label === 'create' ? 'Anlegen' : 'Ändern'
       if (e instanceof ApiError) {
         const body = e.body as { message?: string; errors?: Array<{ field: string; message: string }> } | null
         const fieldErrors: Record<string, string> = {}
@@ -115,13 +117,13 @@ export const useSitesStore = defineStore('sites', () => {
         return {
           ok: false,
           fieldErrors,
-          message: body?.message ?? `Standort ${label} fehlgeschlagen (HTTP ${e.status}).`,
+          message: body?.message ?? `${what} des Prüfzentrums fehlgeschlagen (HTTP ${e.status}).`,
         }
       }
       if (e instanceof ApiNetworkError) {
-        return { ok: false, fieldErrors: {}, message: `Backend nicht erreichbar — Standort ${label} fehlgeschlagen.` }
+        return { ok: false, fieldErrors: {}, message: `Backend nicht erreichbar — ${what} des Prüfzentrums fehlgeschlagen.` }
       }
-      return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : `Unbekannter Fehler beim Standort-${label}.` }
+      return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : `Unbekannter Fehler beim ${what} des Prüfzentrums.` }
     }
   }
 

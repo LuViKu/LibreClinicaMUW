@@ -332,7 +332,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(sql.toString())) {
             for (int i = 0; i < args.size(); i++) ps.setObject(i + 1, args.get(i));
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(toRow(rs, visible));
+                while (rs.next()) rows.add(toRow(rs, visible, session));
             }
         } catch (SQLException e) {
             LOG.error("ingest inbox list failed: {}", e.getMessage());
@@ -403,7 +403,7 @@ public class IngestInboxApiController {
                     // Unbound or dismissed: visible by the uploader's study (origin_study_id).
                     return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
                 }
-                return ResponseEntity.ok(toRow(rs, visible));
+                return ResponseEntity.ok(toRow(rs, visible, session));
             }
         } catch (SQLException e) {
             LOG.error("ingest item lookup failed for {}: {}", id, e.getMessage());
@@ -464,7 +464,7 @@ public class IngestInboxApiController {
                              + " ORDER BY laterality NULLS LAST, received_at")) {
             ps.setInt(1, studyEventId);
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) rows.add(toRow(rs, visible));
+                while (rs.next()) rows.add(toRow(rs, visible, session));
             }
         } catch (SQLException e) {
             LOG.error("ingest by-event list failed for study_event {}: {}", studyEventId, e.getMessage());
@@ -1004,7 +1004,7 @@ public class IngestInboxApiController {
         };
     }
 
-    private InboxRow toRow(ResultSet rs, Set<Integer> visible) throws SQLException {
+    private InboxRow toRow(ResultSet rs, Set<Integer> visible, HttpSession session) throws SQLException {
         long id = rs.getLong("ingest_item_id");
         String patientId = rs.getString("patient_id");
         String acquisitionDate = rs.getString("acquisition_date");
@@ -1014,7 +1014,7 @@ public class IngestInboxApiController {
         int scan = rs.getInt("scan_index");
         boolean scanNull = rs.wasNull();
         long twinId = rs.getLong("twin_id");
-        Twin twin = rs.wasNull() ? null : describeTwin(twinId, visible);
+        Twin twin = rs.wasNull() ? null : describeTwin(twinId, visible, session);
         boolean oct = rs.getBoolean("oct_volume");
         Boolean octVolume = rs.wasNull() ? null : oct;
         String kind = rs.getString("kind");
@@ -1046,16 +1046,22 @@ public class IngestInboxApiController {
 
     /**
      * DR-036 — the twin as the inbox shows it. A twin filed in a study the
-     * caller cannot see is named by its number only: the label would say
-     * which subject of that study a picture belongs to.
+     * caller cannot see, or unfiled in a place the caller does not work at
+     * (another location, another site's upload), is named by its number only:
+     * the label would say which subject of that study a picture belongs to,
+     * or what a device at another location was told.
      */
-    private Twin describeTwin(long twinId, Set<Integer> visible) {
+    private Twin describeTwin(long twinId, Set<Integer> visible, HttpSession session) {
         IngestTwins.Twin t = IngestTwins.load(dataSource, twinId);
         if (t == null) return null;
         String label = t.label();
-        if (t.boundStudySubjectId() != null && visible != null) {
-            Integer studyId = subjectStudyId(t.boundStudySubjectId());
-            if (studyId == null || !visible.contains(studyId)) label = null;
+        if (t.boundStudySubjectId() != null) {
+            if (visible != null) {
+                Integer studyId = subjectStudyId(t.boundStudySubjectId());
+                if (studyId == null || !visible.contains(studyId)) label = null;
+            }
+        } else if (!visibility().canSee(twinId, session)) {
+            label = null;
         }
         return new Twin(t.ingestItemId(), t.status(), label,
                 t.receivedAt() == null ? null : t.receivedAt().toString());

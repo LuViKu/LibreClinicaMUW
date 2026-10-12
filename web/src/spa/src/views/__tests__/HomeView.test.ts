@@ -86,13 +86,23 @@ function makeRouter() {
       { path: '/ingest-inbox', name: 'ingest-inbox', component: { template: '<div />' } },
       { path: '/due-visits', name: 'due-visits', component: { template: '<div />' } },
       { path: '/admin/studies', name: 'admin-studies', component: { template: '<div />' } },
+      { path: '/admin/locations', name: 'admin-locations', component: { template: '<div />' } },
+      { path: '/uploaders', name: 'uploaders', component: { template: '<div />' } },
     ],
   })
 }
 
 type Role = 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
 
-function mountWith(roles: Role[] | null, userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN') {
+/** What `/me` lists as the locations the session may manage; none for most people. */
+type Managed = Array<{ id: number; code: string; name: string }>
+const MUW_AUGEN: Managed = [{ id: 1, code: 'MUW-AUGEN', name: 'MUW Augenklinik' }]
+
+function mountWith(
+  roles: Role[] | null,
+  userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN',
+  manageableLocations: Managed = [],
+) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore()
@@ -117,6 +127,7 @@ function mountWith(roles: Role[] | null, userType?: 'USER' | 'SYSADMIN' | 'TECHA
       mustChangePassword: false,
       passwordChangeReason: null,
       userType,
+      manageableLocations,
       activeStudy: {
         id: 1,
         oid: 'S_DEFAULTS1',
@@ -366,6 +377,81 @@ describe('HomeView dashboard', () => {
     const studyAdmin = mountWith(['Administrator'], 'USER')
     await studyAdmin.vm.$nextTick()
     expect(cardIds(studyAdmin)).not.toContain('admin-studies')
+  })
+
+  it('gives a system administrator the locations card beside the studies, and nobody else', async () => {
+    const sysadmin = mountWith(['Administrator'], 'SYSADMIN')
+    await sysadmin.vm.$nextTick()
+    const ids = cardIds(sysadmin)
+    expect(ids).toContain('admin-locations')
+    expect(ids.indexOf('admin-locations')).toBe(ids.indexOf('admin-studies') + 1)
+    const card = sysadmin.get('[data-card-id="admin-locations"]')
+    expect(card.text()).toContain(enMessages.adminLocations.title)
+    expect(card.text()).toContain(enMessages.home.administrator.adminLocationsDesc)
+    expect(card.attributes('href')).toBe('/admin/locations')
+
+    // A technical administrator is a system administrator too.
+    const techadmin = mountWith(['Administrator'], 'TECHADMIN')
+    await techadmin.vm.$nextTick()
+    expect(cardIds(techadmin)).toContain('admin-locations')
+
+    // The Administrator role alone is also a study-level role: no card.
+    const studyAdmin = mountWith(['Administrator'], 'USER')
+    await studyAdmin.vm.$nextTick()
+    expect(cardIds(studyAdmin)).not.toContain('admin-locations')
+
+    for (const role of ['Data Manager', 'CRC', 'Investigator', 'Monitor'] as Role[]) {
+      const w = mountWith([role])
+      await w.vm.$nextTick()
+      expect(cardIds(w), role).not.toContain('admin-locations')
+    }
+  })
+
+  it('gives whoever manages a location the uploaders card, whatever their study role', async () => {
+    const cases: Array<[Role, 'USER' | 'SYSADMIN']> = [
+      ['Administrator', 'SYSADMIN'],
+      ['Data Manager', 'USER'],
+      ['CRC', 'USER'],
+      ['Investigator', 'USER'],
+      ['Monitor', 'USER'],
+    ]
+    for (const [role, userType] of cases) {
+      const w = mountWith([role], userType, MUW_AUGEN)
+      await w.vm.$nextTick()
+      expect(cardIds(w), role).toContain('uploaders')
+      const card = w.get('[data-card-id="uploaders"]')
+      expect(card.text()).toContain(enMessages.uploaders.title)
+      expect(card.text()).toContain(enMessages.home.uploadersDesc)
+      expect(card.attributes('href')).toBe('/uploaders')
+      // A platform-wide destination, not one of the active study's.
+      expect(w.get('[data-testid="home-platform-workspaces"]').find('[data-card-id="uploaders"]').exists()).toBe(true)
+    }
+  })
+
+  it('hides the uploaders card from everyone whose /me lists no location', async () => {
+    const cases: Array<[Role, 'USER' | 'SYSADMIN' | 'TECHADMIN']> = [
+      ['Administrator', 'SYSADMIN'],
+      ['Administrator', 'TECHADMIN'],
+      ['Administrator', 'USER'],
+      ['Data Manager', 'USER'],
+      ['CRC', 'USER'],
+      ['Investigator', 'USER'],
+      ['Monitor', 'USER'],
+    ]
+    for (const [role, userType] of cases) {
+      const w = mountWith([role], userType, [])
+      await w.vm.$nextTick()
+      expect(cardIds(w), `${role} ${userType}`).not.toContain('uploaders')
+    }
+  })
+
+  it('hides the uploaders card for a session that has no list at all (an older /me)', async () => {
+    const w = mountWith(['Data Manager'])
+    const auth = useAuthStore()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (auth.user as any).manageableLocations
+    await w.vm.$nextTick()
+    expect(cardIds(w)).not.toContain('uploaders')
   })
 
   it('shows the platform section only when there is something in it', async () => {

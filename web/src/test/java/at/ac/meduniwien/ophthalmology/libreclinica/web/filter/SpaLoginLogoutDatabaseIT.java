@@ -86,6 +86,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AbstractApiControllerDatabaseIT;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuthApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.MeApiController;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.UploadersApiController;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
@@ -100,6 +101,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashSe
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -162,6 +165,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int NO_ROLE = 30125;
     private static final int SYS_ADMIN = 30126;
     private static final int SYS_ADMIN_REMOVED_STUDY = 30127;
+    /** A site's IT contact: the Standort-Admin right at a location and no study role at all. */
+    private static final int SITE_IT = 30128;
 
     /** S_DEFAULTS1, the study every other account here is bound to. */
     private static final int DEFAULT_STUDY = 1;
@@ -218,6 +223,9 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         sql("UPDATE study_user_role SET status_id = " + Status.DELETED.getId()
                 + " WHERE user_name = 'spa-role-removed'");
         seedAccount(NO_ROLE, "spa-no-role", String.valueOf(DEFAULT_STUDY));
+        seedAccount(SITE_IT, "spa-site-it", "NULL");
+        sql("INSERT INTO user_location (user_account_id, location_id, can_manage_sources) "
+                + "SELECT " + SITE_IT + ", location_id, true FROM location WHERE code = 'MUW-AUGEN'");
         seedAccount(SYS_ADMIN, "spa-sys-admin", String.valueOf(DEFAULT_STUDY));
         sql("UPDATE user_account SET user_type_id = 1 WHERE user_id = " + SYS_ADMIN);
         seedAccount(SYS_ADMIN_REMOVED_STUDY, "spa-sys-admin-removed-study", String.valueOf(REMOVED_STUDY));
@@ -476,6 +484,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
             new AnnotatedBeanDefinitionReader(securityConfig).register(SecurityConfig.class);
             securityConfig.registerBean(UserAccountDAO.class, () -> new UserAccountDAO(DATA_SOURCE));
             securityConfig.registerBean(PublicOctUploadRateLimitFilter.class);
+            securityConfig.registerBean(UploaderTokenFilter.class,
+                    () -> new UploaderTokenFilter(new IngestSourceService(DATA_SOURCE)));
             securityConfig.refresh();
         }
         return securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
@@ -818,6 +828,29 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         }
     }
 
+    /**
+     * DR-040 phase 2: a site's IT contact holds the Standort-Admin right and
+     * no study role. Signing in, reading {@code /me} and using the uploader
+     * endpoints must work without a bound study or a role.
+     */
+    @Test
+    void aStandortAdminWithNoStudyRoleSignsInReadsMeAndReachesTheUploaders() throws Exception {
+        assertEquals(204, login("spa-site-it", PASSWORD, JSON).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals(0, study(session).getId(), "no study is bound");
+        assertEquals(0, role(session).getId(), "no role is bound");
+
+        me(session)
+                .andExpect(jsonPath("$.username").value("spa-site-it"))
+                .andExpect(jsonPath("$.activeStudy").doesNotExist())
+                .andExpect(jsonPath("$.role").value("Investigator"))
+                .andExpect(jsonPath("$.manageableLocations.length()").value(1))
+                .andExpect(jsonPath("$.manageableLocations[0].code").value("MUW-AUGEN"));
+        MockMvc uploaders = ProductionMvc.standalone(new UploadersApiController(DATA_SOURCE)).build();
+        uploaders.perform(get("/api/v1/uploaders").session(session)).andExpect(status().isOk());
+    }
+
     @Test
     void anSpaLoginOfASystemAdministratorBindsTheStoredStudyWithoutARole() throws Exception {
         assertEquals(204, login("spa-sys-admin", PASSWORD, JSON).getStatus());
@@ -826,6 +859,25 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(((UserAccountBean) Objects.requireNonNull(session.getAttribute("userBean"))).isSysAdmin());
         assertEquals(DEFAULT_STUDY, study(session).getId());
         assertEquals(0, role(session).getId());
+    }
+
+    // --- the chain --------------------------------------------------------------
+
+    /**
+     * DR-040 phase 2 — the chain {@link SecurityConfig} builds (not a copy of its wiring) fronts the device
+     * endpoints with the uploader-token filter, ahead of the rate limiter and of everything that reads the
+     * session; and mounts it once.
+     */
+    @Test
+    void theRealChainPutsTheUploaderTokenFilterAheadOfTheRateLimiterAndTheSession() {
+        logoutFilter(); // builds the context
+        List<Class<?>> chain = securityConfig.getBean(SecurityFilterChain.class).getFilters().stream()
+                .<Class<?>>map(Object::getClass).toList();
+        int token = chain.indexOf(UploaderTokenFilter.class);
+        int rateLimit = chain.indexOf(PublicOctUploadRateLimitFilter.class);
+        int session = chain.indexOf(org.springframework.security.web.context.SecurityContextHolderFilter.class);
+        assertTrue(token >= 0 && rateLimit > token && session > rateLimit, chain.toString());
+        assertEquals(1, chain.stream().filter(UploaderTokenFilter.class::equals).count(), "mounted once: " + chain);
     }
 
     // --- the legacy sign-outs ------------------------------------------------

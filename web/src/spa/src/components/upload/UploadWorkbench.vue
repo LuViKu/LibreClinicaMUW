@@ -19,6 +19,7 @@ import UploadDropzone from './UploadDropzone.vue'
 import UploadRow from './UploadRow.vue'
 import UploadSummaryBar from './UploadSummaryBar.vue'
 import { useUploadWorkbenchStore } from '@/stores/uploadWorkbench'
+import { tokenProblem } from '@/lib/uploaderToken'
 import type { ResolveCandidate, UploadMode } from '@/api/uploadWorkbench'
 import type { StudySubjectSearchHit } from '@/api/retinal'
 
@@ -60,6 +61,22 @@ const studyPickContext = computed<{ candidates: ResolveCandidate[]; patientId: s
 
 const hasRows = computed(() => store.rows.length > 0)
 
+/**
+ * The public page only: the server wants an uploader token this page does not
+ * have, or refuses the one it has. Said once, at the top, in words that tell
+ * the person what to do; the files they dropped are not failed or lost, they
+ * wait. (The staff page has a login and never reports this.)
+ */
+const tokenMessageKey = computed<string | null>(() => {
+  if (props.mode !== 'public') return null
+  switch (tokenProblem.value) {
+    case 'required': return 'uploadPortal.token.required'
+    case 'rejected': return 'uploadPortal.token.rejected'
+    case 'invalid-link': return 'uploadPortal.token.invalidLink'
+    default: return null
+  }
+})
+
 function onFilesAdded(files: File[]): void {
   void store.addFiles(files)
 }
@@ -88,6 +105,19 @@ function onStudyPicked(candidate: ResolveCandidate): void {
 
 <template>
   <div data-testid="upload-workbench" :data-mode="props.mode">
+    <div
+      v-if="tokenMessageKey"
+      class="mb-4 flex items-start gap-3 rounded-lg bg-amber-50 ring-1 ring-amber-300 px-4 py-3 text-[13.5px] text-amber-900"
+      role="alert"
+      data-testid="token-banner"
+      :data-problem="tokenProblem"
+    >
+      <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <rect width="18" height="11" x="3" y="11" rx="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+      <p class="leading-relaxed">{{ t(tokenMessageKey) }}</p>
+    </div>
     <p
       v-if="store.deidRequired"
       class="mb-4 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-[13px] text-amber-900"

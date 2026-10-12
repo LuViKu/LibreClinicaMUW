@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-040 phase 2 — ingest sources, uploader tokens and the Standort-Admin
+        right are audited. Seeds seven audit_log_event_type rows:
+
+        Written against audit_table 'ingest_source' (entity_id the source,
+        entity_name its display name):
+
+          201 ingest_source_created             an uploader issued, or a DICOM AE
+                                                title / the Remidio account seen
+                                                for the first time (no user)
+          202 uploader_token_replaced           a new token; the old one is dead
+          203 uploader_token_revoked            the token is refused from now on
+          204 uploader_renamed                  the display name changed
+          205 ingest_source_location_assigned   the source was given a place (or
+                                                taken back to none); the text
+                                                counts the waiting files placed
+
+        Written against audit_table 'location' (entity_id the location,
+        entity_name its code):
+
+          206 location_admin_granted            a user may manage the uploaders
+                                                of the location (Standort-Admin)
+          207 location_admin_revoked            the right was taken away
+
+        No row carries a token: the eight-character hint at most. Nothing
+        personal either, except the user name of 206/207. Rows appear in the
+        system audit log, never in a study's: they belong to no study.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-12-audit-types-ingest-sources" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id IN (201, 202, 203, 204, 205, 206, 207);
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit types 201-207: ingest sources, uploader tokens and the Standort-Admin right.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="201"/>
+            <column name="name" value="ingest_source_created"/>
+            <column name="display_name" value="Ingest source created"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="202"/>
+            <column name="name" value="uploader_token_replaced"/>
+            <column name="display_name" value="Uploader token replaced"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="203"/>
+            <column name="name" value="uploader_token_revoked"/>
+            <column name="display_name" value="Uploader token revoked"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="204"/>
+            <column name="name" value="uploader_renamed"/>
+            <column name="display_name" value="Uploader renamed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="205"/>
+            <column name="name" value="ingest_source_location_assigned"/>
+            <column name="display_name" value="Ingest source assigned to location"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="206"/>
+            <column name="name" value="location_admin_granted"/>
+            <column name="display_name" value="Location administrator right granted"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="207"/>
+            <column name="name" value="location_admin_revoked"/>
+            <column name="display_name" value="Location administrator right revoked"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id IN (201, 202, 203, 204, 205, 206, 207)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

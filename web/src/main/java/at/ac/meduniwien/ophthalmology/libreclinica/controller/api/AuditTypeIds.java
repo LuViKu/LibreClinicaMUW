@@ -556,4 +556,65 @@ public final class AuditTypeIds {
      * something the upload check would have refused; field names and SHA-256 only.
      */
     public static final int DEID_SCAN_FINDING                = 194;
+
+    /*
+     * 195-200 (lc-muw-2026-10-12-audit-types-locations.xml): the administration
+     * of global locations (DR-040, AdminLocationsApiController). All six are
+     * written against audit_table "location": entity_id is the location's id,
+     * entity_name its code. None carries anything personal: the code, the
+     * location's own fields and, for an assignment, the user name. They show in
+     * the system audit log under the admin filter, never in a study's log.
+     */
+
+    /** A location created; {@code new_value} lists the fields it was created with. */
+    public static final int LOCATION_CREATED                 = 195;
+    /** A location's name or address edited; old and new value list the fields that changed. */
+    public static final int LOCATION_UPDATED                 = 196;
+    /** A location disabled (status available to removed). */
+    public static final int LOCATION_DISABLED                = 197;
+    /** A disabled location restored (status removed to available). */
+    public static final int LOCATION_RESTORED                = 198;
+    /** A user assigned to a location; {@code new_value} is {@code user=<user name>}. */
+    public static final int LOCATION_USER_ASSIGNED           = 199;
+    /** A user's assignment to a location removed; {@code old_value} is {@code user=<user name>}. */
+    public static final int LOCATION_USER_UNASSIGNED         = 200;
+
+    /*
+     * 201-207 (lc-muw-2026-10-12-audit-types-ingest-sources.xml): ingest sources,
+     * uploader tokens and the Standort-Admin right (DR-040 phase 2). 201-205 are
+     * written by IngestSourceService against audit_table "ingest_source" (entity_id
+     * is the source's id, entity_name its display name); 206-207 by
+     * AdminLocationsApiController against audit_table "location" (entity_id the
+     * location's id, entity_name its code). No row carries a token: the
+     * eight-character hint at most. Nothing personal either, except the user name
+     * of 206/207. They show in the system audit log under the admin filter, never
+     * in a study's log. IngestSourceService repeats 201-205 as its own constants,
+     * which it cannot take from here; AuditApiControllerTest keeps them equal.
+     */
+
+    /** An uploader issued, or a DICOM AE title / the Remidio account seen for the first time (no user). */
+    public static final int INGEST_SOURCE_CREATED            = 201;
+    /** An uploader's token replaced; old and new value carry the hint of each, never a token. */
+    public static final int UPLOADER_TOKEN_REPLACED          = 202;
+    /** An uploader's token revoked; refused from then on. */
+    public static final int UPLOADER_TOKEN_REVOKED           = 203;
+    /** An uploader renamed; old and new value are {@code name=<display name>}. */
+    public static final int UPLOADER_RENAMED                 = 204;
+    /** A source assigned to a location (or taken back to none); {@code items=} counts the waiting files placed. */
+    public static final int INGEST_SOURCE_LOCATION_ASSIGNED  = 205;
+    /** A user given the Standort-Admin right at a location; {@code new_value} is {@code user=<user name>}. */
+    public static final int LOCATION_ADMIN_GRANTED           = 206;
+    /** The right taken away (or the assignment that held it removed); {@code old_value} is {@code user=<user name>}. */
+    public static final int LOCATION_ADMIN_REVOKED           = 207;
+
+    /*
+     * 208 (lc-muw-2026-10-13-location-mode.xml): written by LocationModeStartup
+     * (core, which repeats it as AUDIT_LOCATION_BACKFILLED) when a start in
+     * single-location mode gave the one location to rows that had none. One row
+     * per table and start, audit_table "location", entity_id the location,
+     * entity_name its code, new_value "<table>=<rows>"; no user. Admin filter.
+     */
+
+    /** The single-location startup placed rows without a location at the one location. */
+    public static final int LOCATION_BACKFILLED              = 208;
 }
