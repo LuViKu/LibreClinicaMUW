@@ -49,11 +49,16 @@ public class InternetFacingPathBlockFilter extends OncePerRequestFilter {
                                     FilterChain chain) throws ServletException, IOException {
         for (RequestMatcher m : blocked) {
             if (m.matches(request)) {
-                LOG.debug("internet-facing: blocked {} {}", request.getMethod(), request.getRequestURI());
+                LOG.debug("internet-facing: blocked {} {}", oneLine(request.getMethod()), oneLine(request.getRequestURI()));
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 return;
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /** A request value for a log line: control characters (line breaks included) replaced, so it cannot start a second line. */
+    static String oneLine(String value) {
+        return value == null ? "" : value.replaceAll("[\\p{Cntrl}]", "_");
     }
 }

@@ -10,6 +10,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.job;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.FileOutputStream;
 import java.util.Locale;
 
@@ -60,16 +61,17 @@ public class XalanTransformJob extends QuartzJobBean {
             // Use the TransformerFactory to instantiate a Transformer that will work with  
             // the stylesheet you specify. This method call also processes the stylesheet
             // into a compiled Templates object.
-            java.io.InputStream in = new java.io.FileInputStream(dataMap.getString(XSL_FILE_PATH));
-            // tFactory.setAttribute("use-classpath", Boolean.TRUE);
-            // tFactory.setErrorListener(new ListingErrorHandler());
-            Transformer transformer = tFactory.newTransformer(new StreamSource(in));
+            try (java.io.InputStream in = new java.io.FileInputStream(dataMap.getString(XSL_FILE_PATH));
+                    FileOutputStream out = new FileOutputStream(dataMap.getString(SQL_FILE_PATH))) {
+                // tFactory.setAttribute("use-classpath", Boolean.TRUE);
+                // tFactory.setErrorListener(new ListingErrorHandler());
+                Transformer transformer = tFactory.newTransformer(new StreamSource(in));
 
-            // Use the Transformer to apply the associated Templates object to an XML document
-            // (foo.xml) and write the output to a file (foo.out).
-          //  System.out.println("--> job starting: ");
-            transformer.transform(new StreamSource(dataMap.getString(XML_FILE_PATH)), 
-                    new StreamResult(new FileOutputStream(dataMap.getString(SQL_FILE_PATH))));
+                // Use the Transformer to apply the associated Templates object to an XML document
+                // (foo.xml) and write the output to a file (foo.out).
+                transformer.transform(new StreamSource(dataMap.getString(XML_FILE_PATH)),
+                        new StreamResult(out));
+            }
         } catch (TransformerConfigurationException e) {
             logger.error("XML Transformer was not configured properly: ", e);
         } catch (FileNotFoundException e) {
@@ -78,6 +80,8 @@ public class XalanTransformJob extends QuartzJobBean {
             logger.error("TransformerFactory was not configured properly: ", e);
         } catch (TransformerException e) {
             logger.error("Error while transforming: ", e);
+        } catch (IOException e) {
+            logger.error("Error while reading or writing the transform files: ", e);
         }
     }
 

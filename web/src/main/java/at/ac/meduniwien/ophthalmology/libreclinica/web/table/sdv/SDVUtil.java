@@ -211,7 +211,12 @@ public class SDVUtil {
 
     private static int stripPrefixFromParam(String param) {
         if (param != null && param.contains(CHECKBOX_NAME)) {
-            return Integer.parseInt(param.substring(param.indexOf("_") + 1));
+            try {
+                return Integer.parseInt(param.substring(param.indexOf("_") + 1));
+            } catch (NumberFormatException e) {
+                // A malformed key names no row: ignored, like a key without the prefix.
+                return 0;
+            }
         }
         return 0;
     }

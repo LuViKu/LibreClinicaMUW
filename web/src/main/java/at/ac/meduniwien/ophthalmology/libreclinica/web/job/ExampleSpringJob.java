@@ -107,7 +107,7 @@ public class ExampleSpringJob extends QuartzJobBean {
             String alertEmail = dataMap.getString(EMAIL);
             String localeStr = dataMap.getString(LOCALE);
             if (localeStr != null) {
-                locale = new Locale(localeStr);
+                locale = Locale.of(localeStr);
                 ResourceBundleProvider.updateLocale(locale);
                 pageMessages = ResourceBundleProvider.getPageMessagesBundle();
 
@@ -163,7 +163,7 @@ public class ExampleSpringJob extends QuartzJobBean {
                 String pattern = "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator + "HHmmssSSS" + File.separator;
                 SimpleDateFormat sdfDir = new SimpleDateFormat(pattern);
                 generalFileDir = DATASET_DIR + datasetBean.getId() + File.separator + sdfDir.format(new java.util.Date());
-                if (!"".equals(exportFilePath)) {
+                if (exportFilePath == null || !exportFilePath.isEmpty()) {
                     generalFileDirCopy = SQLInitServlet.getField("filePath") + exportFilePath + File.separator;
                 }
                 // logger.debug("-- created the following dir: " +

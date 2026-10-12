@@ -77,7 +77,12 @@ final class LegacyAccessLog {
     static void hit(Entry entry, HttpServletRequest request, UserAccountBean user, boolean alias, Action action) {
         LOG.info("legacy-hit path={} bucket={} spaRoute={} method={} user={} alias={} action={}",
                 entry.legacyPath(), entry.bucket(), entry.hasSpaRoute() ? entry.spaRoute() : "none",
-                method(request), user == null ? "anonymous" : user.getName(), alias, action.label());
+                method(request), user == null ? "anonymous" : oneLine(user.getName()), alias, action.label());
+    }
+
+    /** A value for a log line: every control character (line breaks included) replaced, so it cannot start a second line. */
+    static String oneLine(String value) {
+        return value == null ? "" : value.replaceAll("[\\p{Cntrl}]", "_");
     }
 
     /**

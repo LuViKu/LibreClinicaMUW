@@ -205,7 +205,7 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
             }
             authentication = this.getAuthenticationManager().authenticate(authRequest);
             auditUserLogin(username, LoginStatus.SUCCESSFUL_LOGIN, userAccountBean);
-            resetLockCounter(username, LoginStatus.SUCCESSFUL_LOGIN, userAccountBean);
+            resetLockCounter(userAccountBean);
             // Phase D.1.b (DR-015): lazy bcrypt rehash on successful
             // legacy-format login. No-op for bcrypt rows. Plaintext is
             // held in `password` only for the lifetime of this method.
@@ -221,12 +221,12 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
             throw le;
         } catch (BadCredentialsException au) {
             auditUserLogin(username, LoginStatus.FAILED_LOGIN, userAccountBean);
-            lockAccount(username, LoginStatus.FAILED_LOGIN, userAccountBean);
+            lockAccount(userAccountBean);
             notifyDeniedLogin(userAccountBean);
             throw au;
         } catch (AuthenticationException ae) {
             auditUserLogin(username, LoginStatus.FAILED_LOGIN, userAccountBean);
-            lockAccount(username, LoginStatus.FAILED_LOGIN, userAccountBean);
+            lockAccount(userAccountBean);
             notifyDeniedLogin(userAccountBean);
             throw ae;
         }
@@ -267,13 +267,13 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
         getAuditUserLoginDao().saveOrUpdate(auditUserLogin);
     }
 
-    private void resetLockCounter(String username, LoginStatus loginStatus, UserAccountBean userAccount) {
+    private void resetLockCounter(UserAccountBean userAccount) {
         if (userAccount != null && userAccount.isActive()) {
             getUserAccountDao().updateLockCounter(userAccount.getId(), 0);
         }
     }
 
-    private void lockAccount(String username, LoginStatus loginStatus, UserAccountBean userAccount) {
+    private void lockAccount(UserAccountBean userAccount) {
         Boolean lockFeatureActive = Boolean.valueOf(getConfigurationDao().findByKey("user.lock.switch").getValue());
         if (userAccount != null && userAccount.isActive() && lockFeatureActive) {
             Integer count = userAccount.getLockCounter();

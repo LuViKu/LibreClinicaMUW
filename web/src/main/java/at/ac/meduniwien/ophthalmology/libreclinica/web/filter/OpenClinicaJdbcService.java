@@ -36,7 +36,7 @@ public class OpenClinicaJdbcService extends JdbcDaoImpl {
      */
     @Override
     protected List<UserDetails> loadUsersByUsername(String username) {
-        this.ocUsersByUsernameMapping = new OcUsersByUsernameMapping(getDataSource());
+        this.ocUsersByUsernameMapping = new OcUsersByUsernameMapping(getDataSource(), getUsersByUsernameQuery());
         return ocUsersByUsernameMapping.execute(username);
     }
 
@@ -66,9 +66,9 @@ public class OpenClinicaJdbcService extends JdbcDaoImpl {
     /**
      * Query object to look up a user.
      */
-    private class OcUsersByUsernameMapping extends MappingSqlQuery<UserDetails> {
-        protected OcUsersByUsernameMapping(DataSource ds) {
-            super(ds, getUsersByUsernameQuery());
+    private static class OcUsersByUsernameMapping extends MappingSqlQuery<UserDetails> {
+        protected OcUsersByUsernameMapping(DataSource ds, String query) {
+            super(ds, query);
             declareParameter(new SqlParameter(Types.VARCHAR));
             compile();
         }

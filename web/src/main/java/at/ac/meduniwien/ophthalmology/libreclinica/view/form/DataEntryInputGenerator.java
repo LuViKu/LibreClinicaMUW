@@ -493,8 +493,7 @@ public class DataEntryInputGenerator implements InputGenerator {
      *
      * @param tdCell
      * @param itemId
-     * @param tabNumber
-     * @param defaultValue
+     * @param responseSet
      * @param isDateType
      * @param dbValue
      * @param hasSavedData
