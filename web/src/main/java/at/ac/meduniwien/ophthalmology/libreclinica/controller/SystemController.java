@@ -16,6 +16,7 @@ import java.net.URL;
 import java.net.URI;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -439,19 +440,19 @@ public class SystemController {
             HashMap<String, Object> mapParticipantModule = getParticipateModule(studyBean);
             listOfModules.add(mapParticipantModule);
 
-            HashMap<String, Object> mapRuleDesignerModule = getRuleDesignerModuleInSession(studyBean, session);
+            HashMap<String, Object> mapRuleDesignerModule = getRuleDesignerModuleInSession(session);
             listOfModules.add(mapRuleDesignerModule);
 
-            HashMap<String, Object> mapMessagingModule = getMessagingModuleInSession(studyBean, session);
+            HashMap<String, Object> mapMessagingModule = getMessagingModuleInSession(session);
             listOfModules.add(mapMessagingModule);
 
-            HashMap<String, Object> mapDatamartModule = getDatamartModuleInSession(studyBean, session);
+            HashMap<String, Object> mapDatamartModule = getDatamartModuleInSession(session);
             listOfModules.add(mapDatamartModule);
 
-            HashMap<String, Object> mapWebServiceModule = getWebServiceModuleInSession(studyBean, session);
+            HashMap<String, Object> mapWebServiceModule = getWebServiceModuleInSession(session);
             listOfModules.add(mapWebServiceModule);
 
-            HashMap<String, Object> mapLdapModule = getLdapModuleInSession(studyBean, session);
+            HashMap<String, Object> mapLdapModule = getLdapModuleInSession(session);
             listOfModules.add(mapLdapModule);
 
             HashMap<String, Object> mapStudy = new HashMap<>();
@@ -536,7 +537,7 @@ public class SystemController {
 
         ArrayList<StudyBean> studyList = getStudyList();
         for (StudyBean studyBean : studyList) {
-            HashMap<String, Object> mapRuleDesignerModule = getWebServiceModuleInSession(studyBean, session);
+            HashMap<String, Object> mapRuleDesignerModule = getWebServiceModuleInSession(session);
 
             HashMap<String, Object> mapStudy = new HashMap<>();
             mapStudy.put("Module", mapRuleDesignerModule);
@@ -580,7 +581,7 @@ public class SystemController {
 
         ArrayList<StudyBean> studyList = getStudyList();
         for (StudyBean studyBean : studyList) {
-            HashMap<String, Object> mapRuleDesignerModule = getRuleDesignerModuleInSession(studyBean, session);
+            HashMap<String, Object> mapRuleDesignerModule = getRuleDesignerModuleInSession(session);
 
             HashMap<String, Object> mapStudy = new HashMap<>();
             mapStudy.put("Module", mapRuleDesignerModule);
@@ -635,7 +636,7 @@ public class SystemController {
 
         ArrayList<StudyBean> studyList = getStudyList();
         for (StudyBean studyBean : studyList) {
-            HashMap<String, Object> mapDatamartModule = getDatamartModuleInSession(studyBean, session);
+            HashMap<String, Object> mapDatamartModule = getDatamartModuleInSession(session);
 
             HashMap<String, Object> mapStudy = new HashMap<>();
             mapStudy.put("Module", mapDatamartModule);
@@ -679,7 +680,7 @@ public class SystemController {
 
         ArrayList<StudyBean> studyList = getStudyList();
         for (StudyBean studyBean : studyList) {
-            HashMap<String, Object> mapRuleDesignerModule = getLdapModuleInSession(studyBean, session);
+            HashMap<String, Object> mapRuleDesignerModule = getLdapModuleInSession(session);
 
             HashMap<String, Object> mapStudy = new HashMap<>();
             mapStudy.put("Module", mapRuleDesignerModule);
@@ -726,7 +727,7 @@ public class SystemController {
 
         ArrayList<StudyBean> studyList = getStudyList();
         for (StudyBean studyBean : studyList) {
-            HashMap<String, Object> mapMessagingModule = getMessagingModuleInSession(studyBean, session);
+            HashMap<String, Object> mapMessagingModule = getMessagingModuleInSession(session);
             HashMap<String, Object> mapStudy = new HashMap<>();
             mapStudy.put("Module", mapMessagingModule);
             mapStudy.put("Study Oid", studyBean.getOid());
@@ -875,7 +876,7 @@ public class SystemController {
             hashMap.put("Write Access", getWriteAccess(file));
             int count = 0;
             int fileCount = getFilesCount(file, count);
-            int dirCount = getNumberOfSubFolders(file.getCanonicalPath().toString());
+            int dirCount = getNumberOfSubFolders(file.getCanonicalPath());
             long length = 0;
             float sizeInByte = getFolderSize(file, length);
 
@@ -1055,16 +1056,18 @@ public class SystemController {
     }
 
     public HashMap<String, String> getDbRoleProperties(Connection conn, HashMap<String, String> mapRole, String username) throws SQLException {
-        String query = "select * from pg_roles where rolname='" + username + "'";
-        ResultSet resultSet = conn.prepareStatement(query).executeQuery();
-
-        while (resultSet.next()) {
-            mapRole.put("RoleName", resultSet.getString("rolname"));
-            mapRole.put("SuperUser", resultSet.getString("rolsuper").equals("t") ? "True" : "False");
-            mapRole.put("Inherit", resultSet.getString("rolinherit").equals("t") ? "True" : "False");
-            mapRole.put("CreateRole", resultSet.getString("rolcreaterole").equals("t") ? "True" : "False");
-            mapRole.put("CreateDb", resultSet.getString("rolcreatedb").equals("t") ? "True" : "False");
-            mapRole.put("Login", resultSet.getString("rolcanlogin").equals("t") ? "True" : "False");
+        try (PreparedStatement ps = conn.prepareStatement("select * from pg_roles where rolname = ?")) {
+            ps.setString(1, username);
+            try (ResultSet resultSet = ps.executeQuery()) {
+                while (resultSet.next()) {
+                    mapRole.put("RoleName", resultSet.getString("rolname"));
+                    mapRole.put("SuperUser", resultSet.getString("rolsuper").equals("t") ? "True" : "False");
+                    mapRole.put("Inherit", resultSet.getString("rolinherit").equals("t") ? "True" : "False");
+                    mapRole.put("CreateRole", resultSet.getString("rolcreaterole").equals("t") ? "True" : "False");
+                    mapRole.put("CreateDb", resultSet.getString("rolcreatedb").equals("t") ? "True" : "False");
+                    mapRole.put("Login", resultSet.getString("rolcanlogin").equals("t") ? "True" : "False");
+                }
+            }
         }
         return mapRole;
     }
@@ -1090,7 +1093,7 @@ public class SystemController {
         StudyParameterValueBean spvBean = getParticipateMod(studyBean, "participantPortal");
         String ocParticipateStatus = "";
         if (spvBean.isActive()) {
-            ocParticipateStatus = spvBean.getValue().toString(); // enabled , disabled
+            ocParticipateStatus = spvBean.getValue(); // enabled , disabled
         }
 
         HashMap<String, Object> mapParticipate = new HashMap<>();
@@ -1104,16 +1107,18 @@ public class SystemController {
         return mapModule;
     }
     
-    public HashMap<String, Object> getRuleDesignerModule(StudyBean studyBean) {
+    public HashMap<String, Object> getRuleDesignerModule() {
         String designerUrl = CoreResources.getField("designerURL");
         String result = "";
         HttpURLConnection huc = null;
+        int statusCode = -1;
         try {
             URL u = URI.create(designerUrl).toURL();
             huc = (HttpURLConnection) u.openConnection();
             huc.setRequestMethod("HEAD");
             huc.connect();
-            if (huc.getResponseCode() == 200) {
+            statusCode = huc.getResponseCode();
+            if (statusCode == 200) {
                 result = "ACTIVE";
             } else {
                 result = "INACTIVE";
@@ -1122,14 +1127,16 @@ public class SystemController {
         } catch (Exception ex) {
             result = "INACTIVE";
             // Handle invalid URL
+        } finally {
+            if (huc != null) {
+                huc.disconnect();
+            }
         }
 
         HashMap<String, String> mapMetadata = new HashMap<>();
         mapMetadata.put("Designer URL", designerUrl);
-        try {
-            mapMetadata.put("Http Status Code", String.valueOf(huc.getResponseCode()));
-        } catch (IOException e) {
-            logger.error("Error adding the status code: ", e);
+        if (statusCode >= 0) {
+            mapMetadata.put("Http Status Code", String.valueOf(statusCode));
         }
 
         HashMap<String, Object> mapRuleDesigner = new HashMap<>();
@@ -1143,7 +1150,7 @@ public class SystemController {
         return mapModule;
     }
 
-    public HashMap<String, Object> getMessagingModule(StudyBean studyBean) {
+    public HashMap<String, Object> getMessagingModule() {
 
         String result = sendEmail(mailSender, "This is the Subject Of a Rest Call for Health Check", "This is the Body Of a Rest Call for Health Check");
         String mailProtocol = CoreResources.getField("mailProtocol");
@@ -1165,7 +1172,7 @@ public class SystemController {
         return mapModule;
     }
 
-    public HashMap<String, Object> getDatamartModule(StudyBean studyBean) {
+    public HashMap<String, Object> getDatamartModule() {
 
         HashMap<String, String> datamartRole = new HashMap<>();
         String username = CoreResources.getExtractField("db1.username");
@@ -1207,18 +1214,20 @@ public class SystemController {
         return mapModule;
     }
 
-    public HashMap<String, Object> getWebServiceModule(StudyBean studyBean) {
+    public HashMap<String, Object> getWebServiceModule() {
         String webserviceUrl = CoreResources.getField("sysURL");
         webserviceUrl = webserviceUrl.replace("/MainMenu", "-ws");
 
         String result = "";
         HttpURLConnection huc = null;
+        int statusCode = -1;
         try {
             URL u = URI.create(webserviceUrl).toURL();
             huc = (HttpURLConnection) u.openConnection();
             huc.setRequestMethod("HEAD");
             huc.connect();
-            if (huc.getResponseCode() == 200) {
+            statusCode = huc.getResponseCode();
+            if (statusCode == 200) {
                 result = "ACTIVE";
             } else {
                 result = "INACTIVE";
@@ -1227,14 +1236,16 @@ public class SystemController {
         } catch (Exception ex) {
             result = "INACTIVE";
             // Handle invalid URL
+        } finally {
+            if (huc != null) {
+                huc.disconnect();
+            }
         }
 
         HashMap<String, String> mapMetadata = new HashMap<>();
         mapMetadata.put("WebService URL", webserviceUrl);
-        try {
-            mapMetadata.put("Http Status Code", String.valueOf(huc.getResponseCode()));
-        } catch (IOException e) {
-            logger.error("Error adding the status code: ", e);
+        if (statusCode >= 0) {
+            mapMetadata.put("Http Status Code", String.valueOf(statusCode));
         }
 
         HashMap<String, Object> mapWebService = new HashMap<>();
@@ -1248,7 +1259,7 @@ public class SystemController {
         return mapModule;
     }
 
-    public HashMap<String, Object> getLdapModule(StudyBean studyBean) {
+    public HashMap<String, Object> getLdapModule() {
         String enabled = CoreResources.getField("ldap.enabled");
         String ldapHost = CoreResources.getField("ldap.host");
         String username = CoreResources.getField("ldap.userDn");
@@ -1284,51 +1295,51 @@ public class SystemController {
         return mapModule;
     }
 
-    public HashMap<String, Object> getRuleDesignerModuleInSession(StudyBean studyBean, HttpSession session) {
+    public HashMap<String, Object> getRuleDesignerModuleInSession(HttpSession session) {
 
         HashMap<String, Object> mapModule = asHashMap(session.getAttribute("ruledesigner"), String.class, Object.class);
         if (mapModule == null) {
-            mapModule = getRuleDesignerModule(studyBean);
+            mapModule = getRuleDesignerModule();
             session.setAttribute("ruledesigner", mapModule);
         }
         return mapModule;
     }
 
-    public HashMap<String, Object> getMessagingModuleInSession(StudyBean studyBean, HttpSession session) {
+    public HashMap<String, Object> getMessagingModuleInSession(HttpSession session) {
 
         HashMap<String, Object> mapModule = asHashMap(session.getAttribute("messaging"), String.class, Object.class);
         if (mapModule == null) {
-            mapModule = getMessagingModule(studyBean);
+            mapModule = getMessagingModule();
             session.setAttribute("messaging", mapModule);
         }
         return mapModule;
     }
 
-    public HashMap<String, Object> getDatamartModuleInSession(StudyBean studyBean, HttpSession session) {
+    public HashMap<String, Object> getDatamartModuleInSession(HttpSession session) {
 
         HashMap<String, Object> mapModule = asHashMap(session.getAttribute("datamart"), String.class, Object.class);
         if (mapModule == null) {
-            mapModule = getDatamartModule(studyBean);
+            mapModule = getDatamartModule();
             session.setAttribute("datamart", mapModule);
         }
         return mapModule;
     }
 
-    public HashMap<String, Object> getWebServiceModuleInSession(StudyBean studyBean, HttpSession session) {
+    public HashMap<String, Object> getWebServiceModuleInSession(HttpSession session) {
 
         HashMap<String, Object> mapModule = asHashMap(session.getAttribute("webservice"), String.class, Object.class);
         if (mapModule == null) {
-            mapModule = getWebServiceModule(studyBean);
+            mapModule = getWebServiceModule();
             session.setAttribute("webservice", mapModule);
         }
         return mapModule;
     }
 
-    public HashMap<String, Object> getLdapModuleInSession(StudyBean studyBean, HttpSession session) {
+    public HashMap<String, Object> getLdapModuleInSession(HttpSession session) {
 
         HashMap<String, Object> mapModule = asHashMap(session.getAttribute("ldap"), String.class, Object.class);
         if (mapModule == null) {
-            mapModule = getLdapModule(studyBean);
+            mapModule = getLdapModule();
             session.setAttribute("ldap", mapModule);
         }
         return mapModule;
