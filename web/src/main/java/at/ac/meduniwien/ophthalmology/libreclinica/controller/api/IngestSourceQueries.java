@@ -16,7 +16,6 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * DR-040 phase 2 — the reads behind the uploaders page and the ingest-source
@@ -53,7 +52,8 @@ final class IngestSourceQueries {
         String where = "";
         if (locationIds != null) {
             if (locationIds.isEmpty()) return List.of();
-            where = " AND s.location_id IN (" + locationIds.stream().map(x -> "?").collect(Collectors.joining(", ")) + ")";
+            int n = locationIds.size();
+            where = " AND s.location_id IN (?" + ", ?".repeat(n - 1) + ")";
         }
         List<UploaderDto> out = new ArrayList<>();
         try (PreparedStatement ps = c.prepareStatement(UPLOADER_SELECT + where + UPLOADER_ORDER)) {

@@ -144,8 +144,9 @@ public class DicomWorklistApiController {
             IngestSourceService.Source source = sourceOf(ae);
             Integer location = source == null ? null : source.locationId();
             allowed = DeviceScope.studiesAtPlace(dataSource, StudyScopeConfig.WORKLIST_KEY, location);
-            place = "AE '" + ae + "' at " + (location != null ? "location id " + location
-                    : source == null ? "no source, the default location" : "no location, the default location");
+            // Ids only: the AE title is the camera's to choose and stays out of the log.
+            place = (source == null ? "a calling AE title that is not a source" : "AE source id " + source.id())
+                    + " at " + (location != null ? "location id " + location : "the default location");
         }
         String studyScope = StudyScopeConfig.inClauseOrNull(allowed);
 
