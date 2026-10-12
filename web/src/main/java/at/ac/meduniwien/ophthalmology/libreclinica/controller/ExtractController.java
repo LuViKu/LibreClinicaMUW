@@ -85,26 +85,12 @@ public class ExtractController {
             return null;
         }
 
-        ModelMap map = new ModelMap();
-        ResourceBundleProvider.updateLocale(LocaleResolver.getLocale(request));
-        // String datasetId = (String)request.getAttribute("datasetId");
-        // String id = (String)request.getAttribute("id");
-        logger.debug("found both id " + id + " and dataset " + datasetId);
-        ExtractUtils extractUtils = new ExtractUtils();
-        // get extract id
-        // get dataset id
-        // if id is a number and dataset id is a number ...
-        datasetDao = new DatasetDAO(dataSource);
-        UserAccountBean userBean = (UserAccountBean) request.getSession().getAttribute("userBean");
-        CoreResources cr =  new CoreResources();
-
-        DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(Integer.valueOf(datasetId).intValue());
-        // the dataset must be the session study's or one of its sites' (as ExportDatasetServlet requires)
-        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean sessionStudy =
-                (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean) request.getSession().getAttribute("study");
-        if (dsBean == null || !new at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope(dataSource)
-                .containsStudy(sessionStudy, dsBean.getStudyId())) {
-            logger.warn("refused an extract of dataset {}: not in the session's study", datasetId);
+        final int datasetIdNum;
+        final int extractIdNum;
+        try {
+            datasetIdNum = Integer.parseInt(datasetId.trim());
+            extractIdNum = Integer.parseInt(id.trim());
+        } catch (NumberFormatException nfe) {
             try {
                 response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
             } catch (Exception e) {
@@ -113,13 +99,37 @@ public class ExtractController {
             return null;
         }
 
-        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(Integer.valueOf(id).intValue(),datasetId);
+        ModelMap map = new ModelMap();
+        ResourceBundleProvider.updateLocale(LocaleResolver.getLocale(request));
+        logger.debug("found both id {} and dataset {}", extractIdNum, datasetIdNum);
+        ExtractUtils extractUtils = new ExtractUtils();
+        // get extract id
+        // get dataset id
+        // if id is a number and dataset id is a number ...
+        datasetDao = new DatasetDAO(dataSource);
+        UserAccountBean userBean = (UserAccountBean) request.getSession().getAttribute("userBean");
+        CoreResources cr =  new CoreResources();
+
+        DatasetBean dsBean = (DatasetBean)datasetDao.findByPK(datasetIdNum);
+        // the dataset must be the session study's or one of its sites' (as ExportDatasetServlet requires)
+        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean sessionStudy =
+                (at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean) request.getSession().getAttribute("study");
+        if (dsBean == null || !new at.ac.meduniwien.ophthalmology.libreclinica.web.filter.StudyTreeScope(dataSource)
+                .containsStudy(sessionStudy, dsBean.getStudyId())) {
+            logger.warn("refused an extract of dataset {}: not in the session's study", datasetIdNum);
+            try {
+                response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
+            } catch (Exception e) {
+                logger.error("Error in redirecting the response: ", e);
+            }
+            return null;
+        }
+
+        ExtractPropertyBean epBean = cr.findExtractPropertyBeanById(extractIdNum, String.valueOf(datasetIdNum));
         // set the job in motion
         String[] files = epBean.getFileName();
         String exportFileName;
         int  cnt = 0;
-        JobDetailFactoryBean jobDetailBean = new JobDetailFactoryBean();
-        SimpleTrigger simpleTrigger = null;
         dsBean.setName(dsBean.getName().replaceAll(" ", "_"));
     	String[] exportFiles= epBean.getExportFileName();
     	 String pattern = "yyyy" + File.separator + "MM" + File.separator + "dd" + File.separator + "HHmmssSSS" + File.separator;
@@ -170,7 +180,7 @@ public class ExtractController {
         logger.debug("found xslt file name " + xsltPath);
 
         // String xmlFilePath = generalFileDir + ODMXMLFileName;
-         simpleTrigger = xsltService.generateXsltTrigger(xsltPath,
+        SimpleTrigger simpleTrigger = xsltService.generateXsltTrigger(xsltPath,
                 endFilePath + File.separator,
                 exportFileName,
                 dsBean.getId(),
@@ -178,7 +188,7 @@ public class ExtractController {
         // System.out.println("just set locale: " + LocaleResolver.getLocale(request).getLanguage());
 
         cnt++;
-        jobDetailBean = new JobDetailFactoryBean();
+        JobDetailFactoryBean jobDetailBean = new JobDetailFactoryBean();
         jobDetailBean.setGroup(TRIGGER_GROUP_NAME);
         jobDetailBean.setName(simpleTrigger.getKey().getName()+System.currentTimeMillis());
         jobDetailBean.setJobClass(at.ac.meduniwien.ophthalmology.libreclinica.job.XsltStatefulJob.class);
@@ -194,11 +204,9 @@ public class ExtractController {
             logger.error("Error while accessing job date: ", se);
         }
 
-        request.setAttribute("datasetId", datasetId);
+        request.setAttribute("datasetId", String.valueOf(datasetIdNum));
         // set the job name here in the user's session, so that we can ping the scheduler to pull it out later
-        if(jobDetailBean!=null)
         request.getSession().setAttribute("jobName", jobDetailBean.getObject().getKey().getName());
-        if(simpleTrigger!= null)
         request.getSession().setAttribute("groupName", TRIGGER_GROUP_NAME);
 
         request.getSession().setAttribute("datasetId", Integer.valueOf(dsBean.getId()));

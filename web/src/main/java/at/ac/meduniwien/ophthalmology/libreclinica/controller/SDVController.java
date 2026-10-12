@@ -541,7 +541,7 @@ public class SDVController {
             session.setAttribute("sSdvRestore", "false");
             showMoreLink = true;
         }else if(request.getParameter("showMoreLink")!=null){
-            showMoreLink = Boolean.parseBoolean(request.getParameter("showMoreLink").toString());
+            showMoreLink = Boolean.parseBoolean(request.getParameter("showMoreLink"));
         }else if(session.getAttribute("sdv_showMoreLink")!=null) {
             showMoreLink = Boolean.parseBoolean(session.getAttribute("sdv_showMoreLink")+"");
         } else {

@@ -194,7 +194,7 @@ public class GroupClassesApiController {
         StudyGroupClassBean persisted = sgcDao.create(toCreate);
         if (persisted == null || persisted.getId() == 0) {
             LOG.warn("StudyGroupClassDAO.create returned no row for name={} study={}",
-                    body.name(), studyOid);
+                    body.name(), logSafe(studyOid));
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist group class"));
         }
@@ -215,7 +215,7 @@ public class GroupClassesApiController {
         }
 
         LOG.info("Create group class: id={} name={} study={} by user={}",
-                persisted.getId(), persisted.getName(), studyOid, me.getName());
+                persisted.getId(), persisted.getName(), logSafe(studyOid), me.getName());
 
         return ResponseEntity.status(201).body(toDto(persisted, sgDao));
     }
@@ -302,7 +302,7 @@ public class GroupClassesApiController {
         }
 
         LOG.info("Update group class: id={} study={} by user={}",
-                groupClassId, studyOid, me.getName());
+                groupClassId, logSafe(studyOid), me.getName());
 
         return ResponseEntity.ok(toDto(target, sgDao));
     }
@@ -494,7 +494,7 @@ public class GroupClassesApiController {
                 gc.getId(),
                 gc.getName());
         LOG.info("Randomized: studyOid={} class={} → group={} source={} by user={}",
-                studyOid, groupClassId, pick.groupName(), pick.source(),
+                logSafe(studyOid), groupClassId, pick.groupName(), pick.source(),
                 sessionUser(session));
         return ResponseEntity.ok(dto);
     }
@@ -559,11 +559,11 @@ public class GroupClassesApiController {
 
         int assignments = cascadeToAssignments(gc, target, me);
 
-        writeLifecycleAudit(AuditTypeIds.GROUP_CLASS_LIFECYCLE_CHANGED, me, study, gc,
-                oldStatus, target, "group_class_" + operation);
+        writeLifecycleAudit(AuditTypeIds.GROUP_CLASS_LIFECYCLE_CHANGED, me, gc,
+                oldStatus, target);
 
         LOG.info("Group class {}: studyOid={} id={} by user={} (subject assignments={})",
-                operation, studyOid, gc.getId(), me.getName(), assignments);
+                logSafe(operation), logSafe(studyOid), gc.getId(), me.getName(), assignments);
 
         StudyGroupDAO sgDao = new StudyGroupDAO(dataSource);
         return ResponseEntity.ok(toDto(gc, sgDao));
@@ -798,18 +798,14 @@ public class GroupClassesApiController {
 
     /**
      * Direct INSERT into {@code audit_log_event} for the group-class
-     * lifecycle (disable / restore) status flip. The {@code actionPrefix}
-     * argument is no longer persisted — the {@code auditTypeId} encodes
-     * the operation type — but is retained in the signature so callers
-     * can pass it for symmetry with the other lifecycle writers.
+     * lifecycle (disable / restore) status flip. The {@code auditTypeId}
+     * encodes the operation type.
      */
     private void writeLifecycleAudit(int auditTypeId,
                                      UserAccountBean me,
-                                     StudyBean study,
                                      StudyGroupClassBean target,
                                      Status oldStatus,
-                                     Status newStatus,
-                                     @SuppressWarnings("unused") String actionPrefix) {
+                                     Status newStatus) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -849,5 +845,10 @@ public class GroupClassesApiController {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    /** Request values reach the log with line breaks and other control characters replaced. */
+    private static String logSafe(Object value) {
+        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
     }
 }

@@ -465,8 +465,8 @@ public class RetinalResultsApiController {
         try (Connection c = dataSource.getConnection()) {
             address = RetinalJobAccess.addressOf(c, jobId);
         } catch (SQLException sqlEx) {
-            LOG.error("Failed to resolve retinal job {} for subject {}: {}",
-                    jobId, subjectLabel, sqlEx.getMessage());
+            LOG.error("Failed to resolve retinal job {}: {}",
+                    jobId, sqlEx.getMessage(), sqlEx);
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to resolve retinal job: " + sqlEx.getMessage()));
         }

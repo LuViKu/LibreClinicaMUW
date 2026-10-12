@@ -983,34 +983,34 @@ public class RulesApiController {
         }
 
         if (messageChanged) {
-            writeRuleActionFieldAudit(me, study, targetAction, "message", oldMessage, newMessage);
+            writeRuleActionFieldAudit(me, targetAction, "message", oldMessage, newMessage);
         }
         if (toChanged) {
-            writeRuleActionFieldAudit(me, study, targetAction, "to", oldTo, newTo);
+            writeRuleActionFieldAudit(me, targetAction, "to", oldTo, newTo);
         }
         if (evalToChanged) {
-            writeRuleActionFieldAudit(me, study, targetAction, "expression_evaluates_to",
+            writeRuleActionFieldAudit(me, targetAction, "expression_evaluates_to",
                     Boolean.toString(oldEvalTo), Boolean.toString(newEvalTo));
         }
         if (gatesChanged) {
             if (oldAdmin != newAdmin) {
-                writeRuleActionFieldAudit(me, study, targetAction, "run_administrative_data_entry",
+                writeRuleActionFieldAudit(me, targetAction, "run_administrative_data_entry",
                         Boolean.toString(oldAdmin), Boolean.toString(newAdmin));
             }
             if (oldInitial != newInitial) {
-                writeRuleActionFieldAudit(me, study, targetAction, "run_initial_data_entry",
+                writeRuleActionFieldAudit(me, targetAction, "run_initial_data_entry",
                         Boolean.toString(oldInitial), Boolean.toString(newInitial));
             }
             if (oldDouble != newDouble) {
-                writeRuleActionFieldAudit(me, study, targetAction, "run_double_data_entry",
+                writeRuleActionFieldAudit(me, targetAction, "run_double_data_entry",
                         Boolean.toString(oldDouble), Boolean.toString(newDouble));
             }
             if (oldImport != newImport) {
-                writeRuleActionFieldAudit(me, study, targetAction, "run_import_data_entry",
+                writeRuleActionFieldAudit(me, targetAction, "run_import_data_entry",
                         Boolean.toString(oldImport), Boolean.toString(newImport));
             }
             if (oldBatch != newBatch) {
-                writeRuleActionFieldAudit(me, study, targetAction, "run_batch",
+                writeRuleActionFieldAudit(me, targetAction, "run_batch",
                         Boolean.toString(oldBatch), Boolean.toString(newBatch));
             }
         }
@@ -1071,7 +1071,6 @@ public class RulesApiController {
      * rule_action diffs uniformly.
      */
     private void writeRuleActionFieldAudit(UserAccountBean me,
-                                           StudyBean study,
                                            RuleActionBean action,
                                            String columnName,
                                            String oldValue,
@@ -1306,7 +1305,7 @@ public class RulesApiController {
                     "Failed to persist rule set"));
         }
 
-        writeRuleSetCreateAudit(me, study, persisted);
+        writeRuleSetCreateAudit(me, persisted);
         LOG.info("Create rule set: id={} target='{}' study={} rules={} by={}",
                 persisted.getId(), target, study.getOid(),
                 resolvedRules.size(), me.getName());
@@ -1622,7 +1621,7 @@ public class RulesApiController {
                 }
             }
         }
-        writeRuleActionCreateAudit(me, study,
+        writeRuleActionCreateAudit(me,
                 newActionId == null ? 0 : newActionId, resolvedActionType);
         LOG.info("Create rule action: type={} rsr={} rs={} study={} by={}",
                 resolvedActionType, ruleSetRuleId, ruleSetId, study.getOid(), me.getName());
@@ -1661,14 +1660,14 @@ public class RulesApiController {
         return out;
     }
 
-    private void writeRuleSetCreateAudit(UserAccountBean me, StudyBean study, RuleSetBean rs) {
+    private void writeRuleSetCreateAudit(UserAccountBean me, RuleSetBean rs) {
         String targetValue = rs.getTarget() == null ? "" : rs.getTarget().getValue();
         writeRuleAudit(AuditTypeIds.RULE_SET_CREATED, me.getId(),
                 "rule_set", rs.getId(),
                 "create", "", targetValue);
     }
 
-    private void writeRuleActionCreateAudit(UserAccountBean me, StudyBean study,
+    private void writeRuleActionCreateAudit(UserAccountBean me,
                                             int newActionId, ActionType actionType) {
         writeRuleAudit(AuditTypeIds.RULE_ACTION_CREATED, me.getId(),
                 "rule_action", newActionId,

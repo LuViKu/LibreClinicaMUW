@@ -94,7 +94,7 @@ public class DiscrepancyNoteController {
 
 		DiscrepancyNoteBean parent = (DiscrepancyNoteBean) dndao.findByPK(Integer.valueOf(dn_id));
 		
-		if (!mayProceed(resolutionStatus, noteType, seBean, entityName, parent, ownerBean)) {
+		if (!mayProceed(resolutionStatus, noteType, seBean, entityName, ownerBean)) {
 			httpStatus = org.springframework.http.HttpStatus.BAD_REQUEST;
 			return new ResponseEntity<>(httpStatus);
 		}
@@ -172,7 +172,7 @@ public class DiscrepancyNoteController {
 		this.dnDao = dnDao;
 	}
 
-	public Boolean mayProceed(String resolutionStatus, String noteType, StudyEventBean seBean, String entityName, DiscrepancyNoteBean parent, UserAccountBean ownerBean) {
+	public Boolean mayProceed(String resolutionStatus, String noteType, StudyEventBean seBean, String entityName, UserAccountBean ownerBean) {
 		Boolean result = true;
 		if (!resolutionStatus.equals("Updated") && !resolutionStatus.equals("Resolution Proposed") && !resolutionStatus.equals("Closed") && !resolutionStatus.equals("New")) {
 			result = false;

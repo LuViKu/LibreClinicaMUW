@@ -328,7 +328,7 @@ public class CrfsApiController {
                 c.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            LOG.error("Disable CRF failed for oid={} by user={}; nothing was changed", crfOid, me.getName(), e);
+            LOG.error("Disable CRF failed for oid={} by user={}; nothing was changed", logSafe(crfOid), me.getName(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Removing CRF '" + crfOid + "' failed; nothing was changed."));
         }
@@ -336,7 +336,7 @@ public class CrfsApiController {
         CrfLifecycleCascade.Counts n = cascade.counts();
         LOG.info("Disable CRF: oid={} by user={}; auto-removed {} version(s), {} section(s), "
                         + "{} event-definition CRF(s), {} event CRF(s), {} item value(s)",
-                crfOid, me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
+                logSafe(crfOid), me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
                 n.eventCrfs(), n.itemData());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
@@ -404,7 +404,7 @@ public class CrfsApiController {
                 c.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            LOG.error("Restore CRF failed for oid={} by user={}; nothing was changed", crfOid, me.getName(), e);
+            LOG.error("Restore CRF failed for oid={} by user={}; nothing was changed", logSafe(crfOid), me.getName(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Restoring CRF '" + crfOid + "' failed; nothing was changed."));
         }
@@ -412,7 +412,7 @@ public class CrfsApiController {
         CrfLifecycleCascade.Counts n = cascade.counts();
         LOG.info("Restore CRF: oid={} by user={}; restored {} version(s), {} section(s), "
                         + "{} event-definition CRF(s), {} event CRF(s), {} item value(s)",
-                crfOid, me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
+                logSafe(crfOid), me.getName(), n.versions(), n.sections(), n.eventDefinitionCrfs(),
                 n.eventCrfs(), n.itemData());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
@@ -516,12 +516,12 @@ public class CrfsApiController {
                     c.setAutoCommit(true);
                 }
             } catch (SQLException e) {
-                LOG.error("Update CRF failed for oid={} by user={}", crfOid, me.getName(), e);
+                LOG.error("Update CRF failed for oid={} by user={}", logSafe(crfOid), me.getName(), e);
                 return ResponseEntity.status(500).body(Map.of("message",
                         "Saving CRF '" + crfOid + "' failed; nothing was changed."));
             }
             LOG.info("Update CRF: oid={} by user={} (name changed: {}, description changed: {})",
-                    crfOid, me.getName(), nameChanged, descriptionChanged);
+                    logSafe(crfOid), me.getName(), nameChanged, descriptionChanged);
         }
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
@@ -600,7 +600,7 @@ public class CrfsApiController {
                 }
             }
         } catch (SQLException e) {
-            LOG.error("CRF detail load failed for oid={}", crfOid, e);
+            LOG.error("CRF detail load failed for oid={}", logSafe(crfOid), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Loading CRF '" + crfOid + "' failed."));
         }
@@ -1209,7 +1209,7 @@ public class CrfsApiController {
             storedFilename = storedPath.getFileName().toString();
         } catch (IOException ioe) {
             LOG.warn("Failed to persist CRF upload for crfOid={} (name={})",
-                    crfOid, originalFilename, ioe);
+                    logSafe(crfOid), originalFilename, ioe);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to store uploaded file"));
         }
@@ -1262,12 +1262,12 @@ public class CrfsApiController {
                 versionDao.update(persisted);
             } catch (Exception e) {
                 LOG.warn("Could not update post-parse metadata for crfOid={} versionOid={} (continuing): {}",
-                        crfOid, persisted.getOid(), e.getMessage());
+                        logSafe(crfOid), persisted.getOid(), e.getMessage());
             }
         }
 
         LOG.info("Upload CRF version (parsed): crfOid={} versionOid={} versionName={} file={} by user={}",
-                crfOid, persisted.getOid(), versionNameTrim, storedFilename, me.getName());
+                logSafe(crfOid), persisted.getOid(), versionNameTrim, storedFilename, me.getName());
 
         writeCrfLibraryAudit(AUDIT_TYPE_CRF_VERSION_UPLOADED, me, "crf_version",
                 persisted.getId(), persisted.getName());
@@ -1366,7 +1366,7 @@ public class CrfsApiController {
         try {
             synthesizedFile = workbookAdapter.synthesize(body, crf);
         } catch (IOException ioe) {
-            LOG.warn("Failed to synthesise authoring workbook for crfOid={}: {}", crfOid, ioe.getMessage(), ioe);
+            LOG.warn("Failed to synthesise authoring workbook for crfOid={}: {}", logSafe(crfOid), ioe.getMessage(), ioe);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to materialise authoring workbook: " + ioe.getMessage()));
         }
@@ -1416,7 +1416,7 @@ public class CrfsApiController {
                 versionDao.update(persisted);
             } catch (Exception e) {
                 LOG.warn("Could not update post-parse metadata for crfOid={} versionOid={} (continuing): {}",
-                        crfOid, persisted.getOid(), e.getMessage());
+                        logSafe(crfOid), persisted.getOid(), e.getMessage());
             }
         }
 
@@ -1426,7 +1426,7 @@ public class CrfsApiController {
         writeItemTerminology(persisted.getId(), body);
 
         LOG.info("Author CRF version (JSON): crfOid={} versionOid={} versionName={} sections={} items={} by user={}",
-                crfOid, persisted.getOid(), versionNameTrim,
+                logSafe(crfOid), persisted.getOid(), versionNameTrim,
                 body.sections() == null ? 0 : body.sections().size(),
                 countItems(body), me.getName());
 
@@ -1692,14 +1692,14 @@ public class CrfsApiController {
             }
         } catch (SQLException e) {
             LOG.error("Disable CRF version failed for versionOid={} by user={}; nothing was changed",
-                    versionOid, me.getName(), e);
+                    logSafe(versionOid), me.getName(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Removing CRF version '" + versionOid + "' failed; nothing was changed."));
         }
 
         LOG.info("Disable CRF version: crfOid={} versionOid={} by user={}; auto-removed {} section(s), "
                         + "{} event CRF(s), {} item value(s); {} default(s) moved",
-                crfOid, versionOid, me.getName(), n.sections(), n.eventCrfs(), n.itemData(), moves.size());
+                logSafe(crfOid), logSafe(versionOid), me.getName(), n.sections(), n.eventCrfs(), n.itemData(), moves.size());
 
         return ResponseEntity.ok(toVersionDto(versionDao.findByOid(versionOid)));
     }
@@ -1764,13 +1764,13 @@ public class CrfsApiController {
             }
         } catch (SQLException e) {
             LOG.error("Lock CRF version failed for versionOid={} by user={}; nothing was changed",
-                    versionOid, me.getName(), e);
+                    logSafe(versionOid), me.getName(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Locking CRF version '" + versionOid + "' failed; nothing was changed."));
         }
 
         LOG.info("Lock CRF version: crfOid={} versionOid={} by user={}; {} default(s) moved",
-                crfOid, versionOid, me.getName(), moves.size());
+                logSafe(crfOid), logSafe(versionOid), me.getName(), moves.size());
 
         return ResponseEntity.ok(toVersionDto(versionDao.findByOid(versionOid)));
     }
@@ -1812,10 +1812,10 @@ public class CrfsApiController {
         versionDao.update(target);
         writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
                 me, "crf_version", target.getId(), target.getOid(),
-                oldStatus, Status.AVAILABLE, "crf_version_unlock");
+                oldStatus, Status.AVAILABLE);
 
         LOG.info("Unlock CRF version: crfOid={} versionOid={} by user={}",
-                crfOid, versionOid, me.getName());
+                logSafe(crfOid), logSafe(versionOid), me.getName());
 
         return ResponseEntity.ok(toVersionDto(target));
     }
@@ -1893,14 +1893,14 @@ public class CrfsApiController {
             }
         } catch (SQLException e) {
             LOG.error("Restore CRF version failed for versionOid={} by user={}; nothing was changed",
-                    versionOid, me.getName(), e);
+                    logSafe(versionOid), me.getName(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Restoring CRF version '" + versionOid + "' failed; nothing was changed."));
         }
 
         LOG.info("Restore CRF version: crfOid={} versionOid={} by user={}; restored {} section(s), "
                         + "{} event CRF(s), {} item value(s)",
-                crfOid, versionOid, me.getName(), n.sections(), n.eventCrfs(), n.itemData());
+                logSafe(crfOid), logSafe(versionOid), me.getName(), n.sections(), n.eventCrfs(), n.itemData());
 
         return ResponseEntity.ok(toVersionDto(versionDao.findByOid(versionOid)));
     }
@@ -2002,17 +2002,17 @@ public class CrfsApiController {
             }
         } catch (Exception e) {
             LOG.warn("Hard-remove failed for crfOid={} versionOid={}: {}",
-                    crfOid, versionOid, e.getMessage(), e);
+                    logSafe(crfOid), logSafe(versionOid), e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Hard-remove failed: " + e.getMessage()));
         }
 
         writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
                 me, "crf_version", target.getId(), target.getOid(),
-                target.getStatus(), Status.DELETED, "crf_version_hard_remove");
+                target.getStatus(), Status.DELETED);
 
         LOG.info("Hard-remove CRF version: crfOid={} versionOid={} by user={}",
-                crfOid, versionOid, me.getName());
+                logSafe(crfOid), logSafe(versionOid), me.getName());
 
         return ResponseEntity.noContent().build();
     }
@@ -2109,7 +2109,7 @@ public class CrfsApiController {
                     .body(bytes);
         } catch (IOException ioe) {
             LOG.warn("Failed to stream spreadsheet for crfOid={} versionOid={}: {}",
-                    crfOid, versionOid, ioe.getMessage(), ioe);
+                    logSafe(crfOid), logSafe(versionOid), ioe.getMessage(), ioe);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Could not read spreadsheet from disk"));
         }
@@ -2214,7 +2214,7 @@ public class CrfsApiController {
                 : migrationService.commitMigration(crf, from, to, filter, me);
 
         LOG.info("Migrate CRF version: crfOid={} from={} to={} dryRun={} migrated={} by user={}",
-                crfOid, fromOid, toOid, dryRun, result.totalMigrated(), me.getName());
+                logSafe(crfOid), fromOid, toOid, dryRun, result.totalMigrated(), me.getName());
 
         return ResponseEntity.ok(result);
     }
@@ -2437,8 +2437,7 @@ public class CrfsApiController {
                                      int entityId,
                                      String entityOid,
                                      Status oldStatus,
-                                     Status newStatus,
-                                     String actionPrefix) {
+                                     Status newStatus) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -2522,5 +2521,10 @@ public class CrfsApiController {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    /** Request values reach the log with line breaks and other control characters replaced. */
+    private static String logSafe(Object value) {
+        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
     }
 }
