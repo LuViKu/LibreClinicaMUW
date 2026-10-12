@@ -15,12 +15,10 @@ import java.util.Date;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.rule.RuleDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +63,6 @@ public class RuleExecutionBusinessObject {
     @Deprecated
     public void runRule(int eventCrfId) {
         // int eventCrfId = 11;
-        EventCRFBean eventCrfBean = getEventCRFBean(eventCrfId);
         RuleSetBean ruleSetBean = getRuleSetBean();
         ArrayList<RuleBean> rules = getRuleBeans(ruleSetBean);
         for (RuleBean rule : rules) {
@@ -127,10 +124,6 @@ public class RuleExecutionBusinessObject {
     }
 
     // These are dao mostly calls see how to reduce redundancy
-    private EventCRFBean getEventCRFBean(int eventCrfBeanId) {
-        EventCRFDAO eventCrfDao = new EventCRFDAO(sm.getDataSource());
-        return eventCrfBeanId > 0 ? (EventCRFBean) eventCrfDao.findByPK(eventCrfBeanId) : null;
-    }
 
     private RuleSetBean getRuleSetBean() {
         // RuleSetDAO ruleSetDao = new RuleSetDAO(sm.getDataSource());

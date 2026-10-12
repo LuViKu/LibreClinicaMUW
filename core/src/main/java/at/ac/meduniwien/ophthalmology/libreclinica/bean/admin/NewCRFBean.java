@@ -360,10 +360,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
          * rather than to the success page, tbh, 6-6-03
          */
         PreparedStatement s = null;
-        PreparedStatement ps = null;
-        PreparedStatement ps_update = null;
         Connection con = null;
-        ResultSet rs = null;
         ResultSet rs2 = null;
         ArrayList<String> error = new ArrayList<>();
         int count = 0;
@@ -415,28 +412,25 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             if (crfId != 0) {
                 String sql = digester.getQuery("findDefaultVersion");
                 logger.debug("findDefaultVersion [" + sql + "]");
-                ps = con.prepareStatement(sql);
-                ps.setInt(1, crfId);
-                rs = ps.executeQuery();
-                if (rs.next()) {
-                    // do nothing on purpose? no, we check to see if it was null
-                    // first
-                    rs.getInt(1);
-                    if (rs.wasNull()) {
-
-                        String sql2 = digester.getQuery("updateDefaultVersion");
-                        ps_update = con.prepareStatement(sql2);
-                        ps_update.setInt(1, crfId);
-                        ps_update.setInt(2, crfId);
-                        if (ps_update.executeUpdate() != 1) {
-                            throw new OpenClinicaException("error, updated more than one row, smart assigner part of insertToDB, NewCRFBean", "");
+                try (PreparedStatement psFind = con.prepareStatement(sql)) {
+                    psFind.setInt(1, crfId);
+                    try (ResultSet rsFind = psFind.executeQuery()) {
+                        if (rsFind.next()) {
+                            // check to see if the default version was null
+                            rsFind.getInt(1);
+                            if (rsFind.wasNull()) {
+                                String sql2 = digester.getQuery("updateDefaultVersion");
+                                try (PreparedStatement psUpdate = con.prepareStatement(sql2)) {
+                                    psUpdate.setInt(1, crfId);
+                                    psUpdate.setInt(2, crfId);
+                                    if (psUpdate.executeUpdate() != 1) {
+                                        throw new OpenClinicaException("error, updated more than one row, smart assigner part of insertToDB, NewCRFBean", "");
+                                    }
+                                }
+                            }
                         }
-                        // }
-                        // rs2.close();
                     }
                 }
-                rs.close();
-                ps.close();
             } // hairy code--but it will serve as a 'smart assigner' to set a
               // version active if
               // it's the first version entered, tbh, 8-29
@@ -480,7 +474,7 @@ public class NewCRFBean extends Object implements java.io.Serializable {
         } finally {
             // Close every resource even if an earlier close fails; report the first failure.
             SQLException closeFailure = null;
-            for (AutoCloseable c : new AutoCloseable[] { rs2, rs, ps_update, ps, s, con }) {
+            for (AutoCloseable c : new AutoCloseable[] { rs2, s, con }) {
                 if (c == null) {
                     continue;
                 }

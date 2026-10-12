@@ -750,7 +750,7 @@ public class ImportCRFDataService {
                     // now, didn't check decimal for testInt.
                 } catch (Exception e) {// should be a sub class
                     // pass if blank, tbh 07/2010
-                    if (!"".equals(displayItemBean.getData().getValue())) {
+                    if (valueIsNotEmptyString(displayItemBean.getData().getValue())) {
                         hardv.put(itemOid, "This value is not an integer.");
                     }
                 }
@@ -769,7 +769,7 @@ public class ImportCRFDataService {
                     }
                 } catch (Exception ee) {
                     // pass if blank, tbh
-                    if (!"".equals(displayItemBean.getData().getValue())) {
+                    if (valueIsNotEmptyString(displayItemBean.getData().getValue())) {
                         hardv.put(itemOid, "This value is not a real number.");
                     }
                 }
@@ -792,7 +792,7 @@ public class ImportCRFDataService {
                             hardv.put(itemOid, "This value exceeds required decimal=" + decimal);
                         }
                     } catch (Exception e) {
-                        if (!"".equals(displayItemBean.getData().getValue())) {
+                        if (valueIsNotEmptyString(displayItemBean.getData().getValue())) {
                             hardv.put(itemOid, "This value is not a real number.");
                         }
                     }
@@ -1174,4 +1174,9 @@ public class ImportCRFDataService {
         }
     }
 
+
+    /** True unless the value is the empty string; a null value counts as not empty (as {@code !"".equals(v)} did). */
+    private static boolean valueIsNotEmptyString(String v) {
+        return v == null || v.length() > 0;
+    }
 }

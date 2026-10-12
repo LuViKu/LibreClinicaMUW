@@ -320,9 +320,9 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
             }
             throw cancelled;
         }
-        LOG.info("Dataset bundle: dataset_id={} subjects={} files={} bytes={} omitted={} by user={}",
+        LOG.info("Dataset bundle: dataset_id={} subjects={} files={} bytes={} omitted={} by user_id={}",
                 dataset.getId(), subjects.size(), written.filesWritten(), written.bytesWritten(),
-                written.omitted().size(), submittedBy.getName());
+                written.omitted().size(), submittedBy.getId());
 
         // Registered the way the text formats are, so the SPA's file table,
         // the download endpoint and the retention sweep all see one more

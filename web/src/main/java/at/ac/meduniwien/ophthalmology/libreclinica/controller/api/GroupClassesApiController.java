@@ -267,7 +267,7 @@ public class GroupClassesApiController {
             String newVal = body.name().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setName(newVal);
-                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, study, target, "name", oldVal, newVal);
+                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, target, "name", oldVal, newVal);
             }
         }
         if (body.groupClassType() != null) {
@@ -275,7 +275,7 @@ public class GroupClassesApiController {
             int oldTypeId = target.getGroupClassTypeId();
             if (oldTypeId != newTypeId) {
                 target.setGroupClassTypeId(newTypeId);
-                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, study, target, "group_class_type_id",
+                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, target, "group_class_type_id",
                         String.valueOf(oldTypeId), String.valueOf(newTypeId));
             }
         }
@@ -284,7 +284,7 @@ public class GroupClassesApiController {
             String newVal = body.subjectAssignment().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setSubjectAssignment(newVal);
-                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, study, target, "subject_assignment", oldVal, newVal);
+                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, target, "subject_assignment", oldVal, newVal);
             }
         }
 
@@ -773,7 +773,6 @@ public class GroupClassesApiController {
      */
     private void writeAudit(int auditTypeId,
                             UserAccountBean me,
-                            StudyBean study,
                             StudyGroupClassBean target,
                             String columnName,
                             String oldVal,

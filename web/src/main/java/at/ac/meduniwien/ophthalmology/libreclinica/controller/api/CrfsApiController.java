@@ -1209,7 +1209,7 @@ public class CrfsApiController {
             storedFilename = storedPath.getFileName().toString();
         } catch (IOException ioe) {
             LOG.warn("Failed to persist CRF upload for crfOid={} (name={})",
-                    logSafe(crfOid), originalFilename, ioe);
+                    logSafe(crfOid), logSafe(originalFilename), ioe);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to store uploaded file"));
         }
@@ -1266,8 +1266,8 @@ public class CrfsApiController {
             }
         }
 
-        LOG.info("Upload CRF version (parsed): crfOid={} versionOid={} versionName={} file={} by user={}",
-                logSafe(crfOid), persisted.getOid(), versionNameTrim, storedFilename, me.getName());
+        LOG.info("Upload CRF version (parsed): crfOid={} versionOid={} versionName={} file={} by userId={}",
+                logSafe(crfOid), persisted.getOid(), logSafe(versionNameTrim), logSafe(storedFilename), me.getId());
 
         writeCrfLibraryAudit(AUDIT_TYPE_CRF_VERSION_UPLOADED, me, "crf_version",
                 persisted.getId(), persisted.getName());
@@ -2213,8 +2213,8 @@ public class CrfsApiController {
                 ? migrationService.planMigration(crf, from, to, filter)
                 : migrationService.commitMigration(crf, from, to, filter, me);
 
-        LOG.info("Migrate CRF version: crfOid={} from={} to={} dryRun={} migrated={} by user={}",
-                logSafe(crfOid), fromOid, toOid, dryRun, result.totalMigrated(), me.getName());
+        LOG.info("Migrate CRF version: crfOid={} from={} to={} dryRun={} migrated={} by userId={}",
+                logSafe(crfOid), logSafe(fromOid), logSafe(toOid), dryRun, result.totalMigrated(), me.getId());
 
         return ResponseEntity.ok(result);
     }
@@ -2525,6 +2525,6 @@ public class CrfsApiController {
 
     /** Request values reach the log with line breaks and other control characters replaced. */
     private static String logSafe(Object value) {
-        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
+        return value == null ? null : String.valueOf(value).replaceAll("[\\r\\n]", "_").replaceAll("\\p{Cntrl}", "_");
     }
 }

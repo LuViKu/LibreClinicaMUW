@@ -571,7 +571,7 @@ public class BatchCRFMigrationController implements Runnable {
     private File createLogFile(String fileName) {
         File logDir = new File(getFilePath());
         if (!logDir.mkdirs() && !logDir.isDirectory()) {
-            logger.warn("Could not create the batch migration log directory {}", logDir);
+            logger.warn("Could not create the batch migration log directory");
         }
         String logFileName = getFilePath() + File.separator + fileName;
         return new File(logFileName);

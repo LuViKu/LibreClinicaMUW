@@ -1378,7 +1378,7 @@ break;
         // time is not specified.
         // In this case, 12:00 am has been set as default according to original
         // setting
-        if ("-1".equals(hour) && "-1".equals(minute) && half != null && half.isEmpty()) {
+        if ("-1".equals(hour) && "-1".equals(minute) && half.isEmpty()) {
             hour = "12";
             minute = "00";
             half = "am";

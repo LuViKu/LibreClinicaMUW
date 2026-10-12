@@ -567,7 +567,9 @@ public class TextIO {
     }
 
     private void errorMessage(String message, String expecting) { // Report
-        logger.info("ERROR: {} (expected: {})", message, expecting);
+        String m = message == null ? "" : message.replace('\n', '_').replace('\r', '_');
+        String e = expecting == null ? "" : expecting.replace('\n', '_').replace('\r', '_');
+        logger.info("ERROR: {} (expected: {})", m, e);
     }
 
     private char lookChar() { // return next character from input

@@ -155,7 +155,7 @@ public class ExtractController {
 
 
         // need to set the dataset path here, tbh
-        logger.debug("found odm xml file path " + generalFileDir);
+        logger.debug("odm xml file directory resolved");
         // next, can already run jobs, translations, and then add a message to be notified later
         //JN all the properties need to have the variables...
         String xsltPath = SQLInitServlet.getField("filePath") + "xslt" + File.separator +files[cnt];
@@ -177,7 +177,7 @@ public class ExtractController {
         // also need to add the status fields discussed w/ cc:
         // result code, user message, optional URL, archive message, log file message
         // asdf table: sort most recent at top
-        logger.debug("found xslt file name " + xsltPath);
+        logger.debug("found xslt file name {}", files[cnt]);
 
         // String xmlFilePath = generalFileDir + ODMXMLFileName;
         SimpleTrigger simpleTrigger = xsltService.generateXsltTrigger(xsltPath,

@@ -1290,8 +1290,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     for (DisplayItemBean displayItem : changedItemsList) {
                         String formName = getInputName(displayItem);
 
-                        ItemDataBean idb = displayItem.getData();
-                        ItemBean item_bean = displayItem.getItem();
                         ItemFormMetadataBean ifmb = displayItem.getMetadata();
 
 

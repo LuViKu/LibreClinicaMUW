@@ -104,6 +104,7 @@ def _is_dicom(filename: str | None, body: bytes) -> bool:
 def _log_safe(value: str, limit: int = 64) -> str:
     """Drop non-printable characters (CR/LF included) and truncate, for logging
     a value read from an uploaded file."""
+    value = value.replace("\r", "").replace("\n", "")
     return "".join(c for c in value if c.isprintable())[:limit]
 
 
@@ -138,7 +139,7 @@ def _check_device(task: str, body: bytes) -> None:
     if not device_supported(task, manufacturer, model):  # type: ignore[arg-type]
         LOG.warning(
             "/run refused task=%s for device %r / %r",
-            task, _log_safe(manufacturer), _log_safe(model),
+            _log_safe(task), _log_safe(manufacturer), _log_safe(model),
         )
         raise HTTPException(
             status_code=422,

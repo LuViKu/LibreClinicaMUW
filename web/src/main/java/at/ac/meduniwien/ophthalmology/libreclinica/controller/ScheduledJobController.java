@@ -320,6 +320,6 @@ public class ScheduledJobController {
 
     /** Request values reach the log with line breaks and control characters replaced. */
     private static String logSafe(String value) {
-        return value == null ? null : value.replaceAll("\\p{Cntrl}", "_");
+        return value == null ? null : value.replaceAll("[\\r\\n]", "_").replaceAll("\\p{Cntrl}", "_");
     }
 }

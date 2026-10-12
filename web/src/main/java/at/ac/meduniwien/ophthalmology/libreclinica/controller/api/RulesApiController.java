@@ -522,12 +522,12 @@ public class RulesApiController {
         ruleSetDao.saveOrUpdate(rs);
 
         if (runScheduleChanged) {
-            writeRuleSetFieldAudit(me, study, rs, "run_schedule",
+            writeRuleSetFieldAudit(me, rs, "run_schedule",
                     Boolean.toString(oldRunSchedule),
                     Boolean.toString(newRunSchedule));
         }
         if (runTimeChanged) {
-            writeRuleSetFieldAudit(me, study, rs, "run_time",
+            writeRuleSetFieldAudit(me, rs, "run_time",
                     oldRunTime == null ? "" : oldRunTime,
                     newRunTime == null ? "" : newRunTime);
         }
@@ -1709,7 +1709,7 @@ public class RulesApiController {
         rs.setUpdatedDate(new java.util.Date());
         ruleSetDao.saveOrUpdate(rs);
 
-        writeRuleSetAudit(me, study, rs, oldStatus, targetStatus, operation);
+        writeRuleSetAudit(me, rs, oldStatus, targetStatus, operation);
 
         LOG.info("Rule set {}: id={} study={} by={}",
                 operation, ruleSetId, study.getOid(), me.getName());
@@ -1768,7 +1768,7 @@ public class RulesApiController {
         target.setUpdatedDate(new java.util.Date());
         ruleSetRuleDao.saveOrUpdate(target);
 
-        writeRuleSetRuleAudit(me, study, target, oldStatus, targetStatus, operation);
+        writeRuleSetRuleAudit(me, target, oldStatus, targetStatus, operation);
 
         LOG.info("Attached rule {}: id={} rule_set={} study={} by={}",
                 operation, ruleSetRuleId, ruleSetId, study.getOid(), me.getName());
@@ -1782,7 +1782,6 @@ public class RulesApiController {
     }
 
     private void writeRuleSetAudit(UserAccountBean me,
-                                   StudyBean study,
                                    RuleSetBean rs,
                                    Status oldStatus,
                                    Status newStatus,
@@ -1800,7 +1799,6 @@ public class RulesApiController {
      * 2 rows depending on which fields actually changed.
      */
     private void writeRuleSetFieldAudit(UserAccountBean me,
-                                        StudyBean study,
                                         RuleSetBean rs,
                                         String columnName,
                                         String oldValue,
@@ -1811,7 +1809,6 @@ public class RulesApiController {
     }
 
     private void writeRuleSetRuleAudit(UserAccountBean me,
-                                       StudyBean study,
                                        RuleSetRuleBean rsr,
                                        Status oldStatus,
                                        Status newStatus,

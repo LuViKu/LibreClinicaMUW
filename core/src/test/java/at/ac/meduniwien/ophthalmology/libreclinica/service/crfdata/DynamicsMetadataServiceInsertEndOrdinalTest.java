@@ -171,7 +171,7 @@ public class DynamicsMetadataServiceInsertEndOrdinalTest {
             property.setOid(destinationOid);
             property.setValue("Y");
 
-            service.insert(1, List.of(property), new UserAccountBean(), ruleSet, null);
+            service.insert(1, List.of(property), new UserAccountBean(), ruleSet);
         }
         return rows;
     }

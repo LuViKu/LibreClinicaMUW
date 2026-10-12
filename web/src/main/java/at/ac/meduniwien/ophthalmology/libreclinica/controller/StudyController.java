@@ -675,7 +675,7 @@ public class StudyController {
 
 		siteDTO.setErrors(errorObjects);
 
-		if (!errorObjects.isEmpty()) {
+		if (!errorObjects.isEmpty() || parentStudy == null) {
 			siteDTO.setMessage(validation_failed_message);
 			response = new ResponseEntity<>(siteDTO, org.springframework.http.HttpStatus.BAD_REQUEST);
 		} else {

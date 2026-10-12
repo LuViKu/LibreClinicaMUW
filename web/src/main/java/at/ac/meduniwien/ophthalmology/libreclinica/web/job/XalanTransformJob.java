@@ -9,7 +9,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.job;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.FileOutputStream;
 import java.util.Locale;
@@ -73,8 +72,6 @@ public class XalanTransformJob extends QuartzJobBean {
             }
         } catch (TransformerConfigurationException e) {
             logger.error("XML Transformer was not configured properly: ", e);
-        } catch (FileNotFoundException e) {
-            logger.error("XLS file not found: ", e);
         } catch (TransformerFactoryConfigurationError e) {
             logger.error("TransformerFactory was not configured properly: ", e);
         } catch (TransformerException e) {

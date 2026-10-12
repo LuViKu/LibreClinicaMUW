@@ -59,6 +59,6 @@ public class InternetFacingPathBlockFilter extends OncePerRequestFilter {
 
     /** A request value for a log line: control characters (line breaks included) replaced, so it cannot start a second line. */
     static String oneLine(String value) {
-        return value == null ? "" : value.replaceAll("[\\p{Cntrl}]", "_");
+        return value == null ? "" : value.replaceAll("\\p{Cntrl}", "_");
     }
 }

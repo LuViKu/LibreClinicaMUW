@@ -906,7 +906,7 @@ public class SystemController {
 
                 int count = 0;
                 int fileCount = getFilesCount(file, count);
-                int dirCount = getNumberOfSubFolders(file.getCanonicalPath().toString());
+                int dirCount = getNumberOfSubFolders(file.getCanonicalPath());
                 long length = 0;
                 float sizeInByte = getFolderSize(file, length);
 
@@ -935,7 +935,7 @@ public class SystemController {
             // hashMap.put("ownership", owner.getName());
             hashMap.put("Folder Name", file.getName());
             listOfHashMaps.add(hashMap);
-            int dirCount = getNumberOfSubFolders(file.getCanonicalPath().toString());
+            int dirCount = getNumberOfSubFolders(file.getCanonicalPath());
             if (dirCount != 0) {
                 hashMap.put("Sub Folders", displayOwnerShipForTomcatSubDirectories(file));
             }
@@ -956,7 +956,7 @@ public class SystemController {
                 // hashMap.put("ownership", owner.getName());
                 hashMap.put("Folder Name", file.getName());
                 listOfHashMaps.add(hashMap);
-                int dirCount = getNumberOfSubFolders(file.getCanonicalPath().toString());
+                int dirCount = getNumberOfSubFolders(file.getCanonicalPath());
                 if (dirCount != 0) {
                     // hashMap.put("Sub Folders", displayOwnerShipForTomcatSubDirectories(file));
                 }

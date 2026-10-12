@@ -709,11 +709,10 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
 
                         // BWP >>
                         cell = sheet.getRow(k).getCell((short) 19);
-                        String dataType = getValue(cell);
-                        dataType = dataType.replaceAll("<[^>]*>", "");
+                        String dataType = java.util.Objects.toString(getValue(cell), "").replaceAll("<[^>]*>", "");
                         item_from_row.setDataType(dataType);
                         String dataTypeIdString = "1";
-                        if (dataType == null || dataType.trim().isEmpty()) {
+                        if (dataType.trim().isEmpty()) {
                             // errors.add("The DATA_TYPE column was blank at row
                             // " + k + ", items worksheet.");
                             // htmlErrors.put(j + "," + k + ",19", "REQUIRED

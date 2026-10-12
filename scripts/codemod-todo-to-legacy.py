@@ -46,7 +46,7 @@ def rewrite(text: str) -> tuple[str, int]:
         nonlocal n
         n += 1
         prefix = m.group(1)
-        colon = m.group(2)
+        # group 2 is the optional colon, dropped
         trailing = m.group(3)
         return f"{prefix} LEGACY:{trailing}"
 

@@ -1233,7 +1233,7 @@ public class UsersApiController {
             current = activeRawRoles(username, study.getId());
         } catch (SQLException e) {
             LOG.warn("Failed to read current grants for (study={}, user={}): {}",
-                    study.getId(), username, e.getMessage());
+                    study.getId(), String.valueOf(username).replaceAll("\\p{Cntrl}", "_"), String.valueOf(e.getMessage()).replaceAll("\\p{Cntrl}", "_"));
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to load current role grants"));
         }

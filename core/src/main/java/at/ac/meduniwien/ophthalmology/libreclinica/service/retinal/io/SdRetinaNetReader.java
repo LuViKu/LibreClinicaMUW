@@ -129,15 +129,23 @@ public final class SdRetinaNetReader {
     }
 
     private static void collect(String name, byte[] bytes,
-                                TreeMap<Integer, byte[]> layers, TreeMap<Integer, byte[]> lesions) {
+                                TreeMap<Integer, byte[]> layers, TreeMap<Integer, byte[]> lesions) throws IOException {
         Matcher m = LAYER_FILE.matcher(name);
         if (m.find()) {
-            layers.put(Integer.parseInt(m.group(1)), bytes);
+            layers.put(parseIndex(name, m.group(1)), bytes);
             return;
         }
         m = LESION_FILE.matcher(name);
         if (m.find()) {
-            lesions.put(Integer.parseInt(m.group(1)), bytes);
+            lesions.put(parseIndex(name, m.group(1)), bytes);
+        }
+    }
+
+    private static int parseIndex(String name, String digits) throws IOException {
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            throw new IOException("Bad layer/lesion index in " + name, e);
         }
     }
 

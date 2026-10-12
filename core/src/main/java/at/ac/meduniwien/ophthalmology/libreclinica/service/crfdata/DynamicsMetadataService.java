@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemFo
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemGroupMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.StratificationFactorBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
 import org.slf4j.Logger;
@@ -416,20 +415,19 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return format;
     }
 
-    public void insert(ItemDataBean itemDataBean, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet,List<StratificationFactorBean> stratificationFactorBeans) {
-        insert(itemDataBean.getId(), properties, ub, ruleSet, itemDataBean.getStatus(), stratificationFactorBeans);
+    public void insert(ItemDataBean itemDataBean, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet) {
+        insert(itemDataBean.getId(), properties, ub, ruleSet, itemDataBean.getStatus());
     }
 
-    public void insert(Integer itemDataId, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet,List<StratificationFactorBean> stratificationFactorBeans) {
-        insert(itemDataId, properties, ub, ruleSet, null, stratificationFactorBeans);
+    public void insert(Integer itemDataId, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet) {
+        insert(itemDataId, properties, ub, ruleSet, null);
     }
 
     private void insert(Integer itemDataId,
                         List<PropertyBean> properties,
                         UserAccountBean ub,
                         RuleSetBean ruleSet,
-                        Status itemDataStatus,
-                        List<StratificationFactorBean> stratificationFactorBeans) {
+                        Status itemDataStatus) {
 
         ItemDataBean itemDataBeanA = (ItemDataBean) getItemDataDAO().findByPK(itemDataId);
         EventCRFBean eventCrfBeanA = getEventCRFDAO().findByPK(itemDataBeanA.getEventCRFId());

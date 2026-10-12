@@ -1589,8 +1589,8 @@ public class EventDefinitionsApiController {
         target.setUpdatedDate(new java.util.Date());
         assignmentDao.update(target);
 
-        LOG.info("Update CRF assignment: study={} event={} crf={} by user={}",
-                logSafe(studyOid), logSafe(sedOid), crfOid, me.getName());
+        LOG.info("Update CRF assignment: study={} event={} crf={} by userId={}",
+                logSafe(studyOid), logSafe(sedOid), logSafe(crfOid), me.getId());
 
         return ResponseEntity.ok(toAssignmentDto(target, crfDao, versionDao));
     }
@@ -1634,8 +1634,8 @@ public class EventDefinitionsApiController {
         target.setUpdatedDate(new java.util.Date());
         assignmentDao.update(target);
 
-        LOG.info("Remove CRF assignment: study={} event={} crf={} by user={}",
-                logSafe(studyOid), logSafe(sedOid), crfOid, me.getName());
+        LOG.info("Remove CRF assignment: study={} event={} crf={} by userId={}",
+                logSafe(studyOid), logSafe(sedOid), logSafe(crfOid), me.getId());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         return ResponseEntity.ok(toAssignmentDto(target, crfDao, versionDao));
@@ -1883,6 +1883,6 @@ public class EventDefinitionsApiController {
 
     /** Request values reach the log with line breaks and other control characters replaced. */
     private static String logSafe(Object value) {
-        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
+        return value == null ? null : String.valueOf(value).replaceAll("[\\r\\n]", "_").replaceAll("\\p{Cntrl}", "_");
     }
 }
