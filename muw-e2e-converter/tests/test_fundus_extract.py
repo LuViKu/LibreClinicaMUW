@@ -8,8 +8,6 @@ fovea, bbox) get exercised by the preprocess endpoint tests.
 
 from __future__ import annotations
 
-import os
-
 import pydicom
 import pytest
 

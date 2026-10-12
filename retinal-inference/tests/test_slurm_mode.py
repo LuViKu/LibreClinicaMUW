@@ -13,7 +13,7 @@ import pytest
 from retinal_inference import config as _config
 from retinal_inference.api import run as run_module
 from retinal_inference.inference import apptainer as ap
-from retinal_inference.inference.adapter import cancel_event, reset_adapter
+from retinal_inference.inference.adapter import cancel_event
 from retinal_inference.models.responses import FullVolumeResult
 
 

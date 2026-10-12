@@ -68,7 +68,7 @@ def _clinic_export(path: Path) -> tuple[Dataset, bytes]:
 
 def test_identity_is_replaced_by_the_subject_label(tmp_path):
     path = tmp_path / "clarus.dcm"
-    original, pixels = _clinic_export(path)
+    _clinic_export(path)
 
     _, changed = deidentify.rewrite(path, "HAE-001")
     back = pydicom.dcmread(str(path))

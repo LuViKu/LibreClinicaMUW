@@ -39,11 +39,7 @@ def rewrite(text: str) -> tuple[str, int]:
         # `// TODO:`    → `// LEGACY:`
         # `// TODO foo` → `// LEGACY: foo`
         prefix = m.group(1)
-        colon = m.group(2)
         trailing = m.group(3)
-        if colon == ":" or trailing == " ":
-            return f"{prefix} LEGACY:{trailing}"
-        # End of line — no following content
         return f"{prefix} LEGACY:{trailing}"
 
     def repl_javadoc(m: re.Match) -> str:
