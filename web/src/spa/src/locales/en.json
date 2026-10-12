@@ -136,7 +136,8 @@
       "dataExportTitle": "Data Export",
       "dataExportDesc": "Export datasets and download the generated files.",
       "modalitiesDesc": "Maintain the imaging modalities and their CRF fields.",
-      "adminStudiesDesc": "Every study and site on the platform: status, remove and restore, metadata download."
+      "adminStudiesDesc": "Every study and site on the platform: status, remove and restore, metadata download.",
+      "adminLocationsDesc": "The platform’s locations: address, studies and study sites, inbox files and assigned people."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
@@ -4500,6 +4501,90 @@
       "UNAVAILABLE": "Unavailable",
       "PRIVATE": "Private",
       "UNKNOWN": "Unknown"
+    }
+  },
+  "adminLocations": {
+    "title": "Locations",
+    "subtitle": "Locations: {count} ({active} active)",
+    "intro": "A location is a physical place, such as a clinic, a department or a partner hospital. A study is active at a location when it has a study site there; this page calls the sites created per study “study sites”. Files from devices belong to the location of their source.",
+    "create": "Create location",
+    "empty": "There is no location yet.",
+    "column": {
+      "code": "Code",
+      "name": "Name",
+      "place": "Place",
+      "sites": "Study sites",
+      "studies": "Studies",
+      "files": "Files",
+      "users": "People",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Active",
+      "removed": "Disabled"
+    },
+    "action": {
+      "edit": "Edit",
+      "editAria": "Edit location {name}",
+      "disable": "Disable",
+      "disableAria": "Disable location {name}",
+      "restore": "Restore",
+      "restoreAria": "Restore location {name}"
+    },
+    "dialog": {
+      "createTitle": "Create location",
+      "editTitle": "Edit location",
+      "createSubmit": "Create",
+      "editSubmit": "Save",
+      "field": {
+        "code": "Code",
+        "name": "Name",
+        "street": "Street and number",
+        "zip": "Postal code",
+        "city": "City",
+        "country": "Country"
+      },
+      "codeHelp": "2 to 30 characters: letters, digits, hyphen and underscore. The code cannot be changed later.",
+      "codeFixed": "The code is fixed once the location exists."
+    },
+    "detail": {
+      "close": "Close details",
+      "address": "Address",
+      "noAddress": "No address on file.",
+      "studiesHeading": "Studies and study sites",
+      "studiesEmpty": "No study and no study site at this location yet.",
+      "studyBadge": "Study",
+      "siteBadge": "Study site",
+      "siteOf": "of {study}",
+      "usersHeading": "Assigned people",
+      "usersHelp": "People assigned to this location explicitly see its files in the inbox, even without a study role at one of its study sites.",
+      "usersEmpty": "Nobody is assigned to this location explicitly.",
+      "addLabel": "Add a person",
+      "addPlaceholder": "Username",
+      "add": "Assign",
+      "remove": "Remove",
+      "removeAria": "Remove {user} from this location",
+      "siteAdmin": "Location admin",
+      "removedNote": "The location is disabled. Restore it to assign people."
+    },
+    "created": "Location “{name}” created.",
+    "updated": "Location “{name}” saved.",
+    "disabled": "Location “{name}” disabled.",
+    "restored": "Location “{name}” restored.",
+    "assigned": "{user} is assigned to location “{name}”.",
+    "unassigned": "{user} is no longer assigned to location “{name}”.",
+    "disableTitle": "Disable location",
+    "disableConfirm": "Disable location “{name}”? This only works when no study and no study site at it is active any more. The action is recorded in the audit trail, and the location can be restored.",
+    "restoreTitle": "Restore location",
+    "restoreConfirm": "Restore location “{name}”? It will be active again. The action is recorded in the audit trail.",
+    "disableFailed": "Location “{name}” could not be disabled. {reason}",
+    "restoreFailed": "Location “{name}” could not be restored. {reason}",
+    "error": {
+      "loadFailed": "The locations could not be loaded (HTTP {status}).",
+      "detailFailed": "The location could not be loaded (HTTP {status}).",
+      "saveFailed": "The change could not be saved (HTTP {status}).",
+      "network": "The server could not be reached.",
+      "unknown": "Unknown error."
     }
   },
   "studyLifecycle": {

@@ -159,6 +159,11 @@ public class SitesApiController {
 
         List<ValidationErrorBody.FieldError> errors =
                 validateCreateShape(body);
+        // DR-040: the site's location: the one named, or the only active one;
+        // required once there are several.
+        UserAccountBean caller = (UserAccountBean) session.getAttribute("userBean");
+        LocationChoice.Result where = LocationChoice.resolve(dataSource, caller, body.locationId());
+        if (where.error() != null) errors.add(where.error());
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
@@ -207,6 +212,7 @@ public class SitesApiController {
         toCreate.setStatus(Status.PENDING);
         toCreate.setOwner(me);
         toCreate.setParentStudyId(parent.getId());
+        toCreate.setLocationId(where.locationId());
         // The OID goes in with the insert: StudyDAO.create keeps a preset OID
         // when it is free (and varies it when it is not). Setting it afterwards
         // took a second StudyDAO.update, which dereferences the old status a

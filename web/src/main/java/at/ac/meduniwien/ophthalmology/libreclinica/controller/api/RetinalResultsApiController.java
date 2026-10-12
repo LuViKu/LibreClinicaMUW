@@ -120,8 +120,9 @@ public class RetinalResultsApiController {
 
     /**
      * A parked job (no visit yet) belongs to the pool of its ingest item: visible
-     * when that item is (origin study of a staff upload), open to every reconciler
-     * when it has none (anonymous portal), like the ingest inbox itself.
+     * when that item is (the origin study of a staff upload, the origin location
+     * of a device or anonymous one), a system administrator's when the item has
+     * no origin, like the ingest inbox itself ({@link IngestItemVisibility}).
      */
     private boolean mayWorkOnJob(long jobId, HttpSession session) {
         if (itemVisibility == null) itemVisibility = new IngestItemVisibility(dataSource, access());

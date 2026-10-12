@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifact
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestFileReference;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.PerformedItemAutoTicker;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
@@ -361,7 +362,10 @@ final class IngestUploadService {
                         .acquisitionDateSource(acquisitionSource)
                         .imagingModalityId(modalityId)
                         // Who may see the file while it is unbound: the uploader's study (staff only).
-                        .originStudyId(up.originStudyId());
+                        .originStudyId(up.originStudyId())
+                        // DR-040 — and where it came from: the uploader's study's location,
+                        // else the only active location (the portal).
+                        .originLocationId(LocationScope.originForStaffUpload(c, up.originStudyId()));
                 if (desc != null) {
                     item.sopInstanceUid(desc.sopInstanceUid())
                             .sopClassUid(desc.sopClassUid())

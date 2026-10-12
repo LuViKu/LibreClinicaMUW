@@ -42,5 +42,10 @@ public record CreateStudyRequest(
         String protocolDescription,
         String contactEmail,
         String protocolType,
-        String phase
+        String phase,
+        /**
+         * DR-040 — the study's location. Optional while exactly one active
+         * location exists (that one is used); required once there are several.
+         */
+        Integer locationId
 ) {}

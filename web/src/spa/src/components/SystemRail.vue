@@ -2,10 +2,11 @@
 /**
  * System section rail — the instance-level pages, navigable as a section.
  *
- * Seven pages are about the running instance rather than any one study: the
- * system status, the list of every study, the system-wide audit trail, the
- * login history (since 2026-09-30), the password policy, the application
- * configuration and the scheduled jobs. Until 2026-09-22 none of the five
+ * Eight pages are about the running instance rather than any one study: the
+ * system status, the list of every study, the locations (Standorte, since
+ * 2026-10-11), the system-wide audit trail, the login history (since
+ * 2026-09-30), the password policy, the application configuration and the
+ * scheduled jobs. Until 2026-09-22 none of the five
  * that existed then was linked from anywhere — the top bar carried one
  * Administrator-only entry, to the audit trail, and the other four were reachable by typing
  * their address. A status page nobody can reach by clicking does not report
@@ -27,10 +28,14 @@ interface RailItem {
   labelKey: string
 }
 
-/** Overview first, then the studies, the two trails, the two settings pages, then the jobs. */
+/**
+ * Overview first, then the studies and the locations they are active at, the
+ * two trails, the two settings pages, then the jobs.
+ */
 const ITEMS: readonly RailItem[] = [
   { id: 'status', to: '/admin/system-status', labelKey: 'adminSystemStatus.title' },
   { id: 'studies', to: '/admin/studies', labelKey: 'adminStudies.title' },
+  { id: 'locations', to: '/admin/locations', labelKey: 'adminLocations.title' },
   { id: 'audit', to: '/system/audit-log', labelKey: 'system.rail.audit' },
   { id: 'login-history', to: '/admin/login-history', labelKey: 'adminLoginHistory.title' },
   { id: 'password-policy', to: '/admin/password-policy', labelKey: 'adminPasswordPolicy.title' },

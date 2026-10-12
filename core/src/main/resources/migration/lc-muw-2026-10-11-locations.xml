@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-040 phase 1 — global locations, and the origin location of an
+        ingested file.
+
+        A "Standort" in the SPA is a study site: a sub-study that exists per
+        study. Nothing else has a place, so a device upload (Export Watcher,
+        Optomed Bridge, Remidio pull, DICOM receiver, public upload page)
+        reached the inbox with no origin and every reconciler saw it. This
+        adds the place:
+
+          location        a physical place (a clinic, a department, a partner
+                          hospital), global, managed by system administrators.
+          study.location_id
+                          a site's location; a single-site study's location;
+                          for a parent study that has sites, its coordinating
+                          location (may be NULL).
+          user_location   an explicit assignment of staff to a location, for
+                          people without a role on a site there (technicians,
+                          photographers). can_manage_sources is the
+                          Standort-Admin right of phase 2; nothing reads it yet.
+          ingest_item.origin_location_id
+                          where a file came from. NULL means "origin unknown",
+                          which IngestItemVisibility shows to system
+                          administrators only.
+
+        NO BEHAVIOUR CHANGE ON DAY ONE. The second changeset creates one
+        location and points every existing study, site and ingest item at it,
+        so nothing becomes administrator-only and nobody loses sight of a
+        file. The separation starts with the second location.
+
+        Three changesets, in this order on purpose. The foreign keys of the two
+        large tables come LAST: with them in place the backfill UPDATE would
+        check the key once per row.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-11-location-schema" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="location"/>
+            </not>
+        </preConditions>
+        <comment>location, user_location, study.location_id, ingest_item.origin_location_id (no foreign keys on the large tables yet).</comment>
+
+        <createTable tableName="location">
+            <column autoIncrement="true" name="location_id" type="SERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_location" nullable="false"/>
+            </column>
+            <!-- A stable identifier an administrator and an API both use. Unique
+                 without regard to case (the index below). -->
+            <column name="code" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The status ids of the rest of the schema: 1 available, 5 removed. -->
+            <column name="status_id" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="street" type="VARCHAR(255)"/>
+            <column name="city" type="VARCHAR(255)"/>
+            <column name="zip" type="VARCHAR(64)"/>
+            <column name="country" type="VARCHAR(64)"/>
+            <column name="owner_id" type="INT"/>
+            <column name="date_created" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_updated" type="TIMESTAMP"/>
+            <column name="update_id" type="INT"/>
+        </createTable>
+        <sql>CREATE UNIQUE INDEX ux_location_code ON location (lower(code))</sql>
+
+        <createTable tableName="user_location">
+            <column name="user_account_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="location_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The Standort-Admin right (phase 2). Nothing reads it yet. -->
+            <column name="can_manage_sources" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="granted_by" type="INT"/>
+            <column name="date_granted" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="user_location" columnNames="user_account_id, location_id"
+                       constraintName="pk_user_location"/>
+        <addForeignKeyConstraint baseTableName="user_location" baseColumnNames="user_account_id"
+                                 constraintName="fk_user_location_user"
+                                 referencedTableName="user_account" referencedColumnNames="user_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="user_location" baseColumnNames="location_id"
+                                 constraintName="fk_user_location_location"
+                                 referencedTableName="location" referencedColumnNames="location_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+        <createIndex tableName="user_location" indexName="ix_user_location_location">
+            <column name="location_id"/>
+        </createIndex>
+
+        <addColumn tableName="study">
+            <column name="location_id" type="INT"/>
+        </addColumn>
+        <addColumn tableName="ingest_item">
+            <column name="origin_location_id" type="INT"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="origin_location_id"/>
+            <dropColumn tableName="study" columnName="location_id"/>
+            <dropTable tableName="user_location"/>
+            <dropTable tableName="location"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The one default location, and everything pointed at it.
+
+        Idempotent: the location is inserted only when there is none, and the
+        two UPDATEs touch only rows without a location. After this no study,
+        site or ingest item is left without one, which is what keeps the
+        internal deployment behaving as before. An administrator renames the
+        location in System > Standorte.
+
+        An ingest_item row of every status gets the location, filed ones
+        included: a filed item is decided by its subject's study, but a
+        file taken back into the inbox later (unbind) lands in the pool of
+        the place it came from.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-11-location-seed-backfill" dbms="postgresql">
+        <comment>One default location; every existing study, site and ingest item gets it.</comment>
+
+        <sql splitStatements="true" endDelimiter=";">
+            INSERT INTO location (code, name, status_id)
+            SELECT 'MUW-AUGEN', 'Medizinische Universität Wien – Augenklinik', 1
+             WHERE NOT EXISTS (SELECT 1 FROM location);
+
+            UPDATE study
+               SET location_id = (SELECT MIN(location_id) FROM location)
+             WHERE location_id IS NULL;
+
+            UPDATE ingest_item
+               SET origin_location_id = (SELECT MIN(location_id) FROM location)
+             WHERE origin_location_id IS NULL;
+        </sql>
+
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";">
+                UPDATE ingest_item SET origin_location_id = NULL;
+                UPDATE study SET location_id = NULL;
+                DELETE FROM location WHERE code = 'MUW-AUGEN';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-11-location-constraints" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_constraint
+                 WHERE conname IN ('fk_study_location', 'fk_ingest_item_origin_location');
+            </sqlCheck>
+        </preConditions>
+        <comment>Foreign keys and the index of the two location columns, after the backfill.</comment>
+
+        <addForeignKeyConstraint baseTableName="study" baseColumnNames="location_id"
+                                 constraintName="fk_study_location"
+                                 referencedTableName="location" referencedColumnNames="location_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="ingest_item" baseColumnNames="origin_location_id"
+                                 constraintName="fk_ingest_item_origin_location"
+                                 referencedTableName="location" referencedColumnNames="location_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <createIndex tableName="ingest_item" indexName="idx_ingest_item_origin_location">
+            <column name="origin_location_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="ingest_item" indexName="idx_ingest_item_origin_location"/>
+            <dropForeignKeyConstraint baseTableName="ingest_item" constraintName="fk_ingest_item_origin_location"/>
+            <dropForeignKeyConstraint baseTableName="study" constraintName="fk_study_location"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-040 phase 1 — the administration of global locations is audited.
+        Seeds six audit_log_event_type rows, all written against
+        audit_table 'location' (entity_id the location, entity_name its code):
+
+          195 location_created          a location created
+          196 location_updated          its name or address edited
+          197 location_disabled         disabled (status removed)
+          198 location_restored         restored (status available)
+          199 location_user_assigned    a user assigned to the location
+          200 location_user_unassigned  the assignment removed
+
+        No row carries anything personal: the code, the location's own fields
+        and, for an assignment, the user name. Rows appear in the system audit
+        log, never in a study's: they belong to no study.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-12-audit-types-locations" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id IN (195, 196, 197, 198, 199, 200);
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit types 195-200: the administration of locations.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="195"/>
+            <column name="name" value="location_created"/>
+            <column name="display_name" value="Location created"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="196"/>
+            <column name="name" value="location_updated"/>
+            <column name="display_name" value="Location changed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="197"/>
+            <column name="name" value="location_disabled"/>
+            <column name="display_name" value="Location disabled"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="198"/>
+            <column name="name" value="location_restored"/>
+            <column name="display_name" value="Location restored"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="199"/>
+            <column name="name" value="location_user_assigned"/>
+            <column name="display_name" value="User assigned to location"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="200"/>
+            <column name="name" value="location_user_unassigned"/>
+            <column name="display_name" value="User removed from location"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id IN (195, 196, 197, 198, 199, 200)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -91,7 +91,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     @Test
     void createValidate_RequiresNameAndUniqueProtocolIdAndPi() {
         CreateSiteRequest body =
-                new CreateSiteRequest(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                new CreateSiteRequest(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
         java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
@@ -106,7 +106,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     void createValidate_RejectsBadUniqueProtocolIdFormat() {
         CreateSiteRequest body =
                 new CreateSiteRequest("Vienna", "has spaces!", null, "Dr. Smith",
-                        null, null, null, null, null, null, null, null, null, null);
+                        null, null, null, null, null, null, null, null, null, null, null);
         java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long uidErrors = errors.stream().filter(e -> "uniqueProtocolId".equals(e.field())).count();

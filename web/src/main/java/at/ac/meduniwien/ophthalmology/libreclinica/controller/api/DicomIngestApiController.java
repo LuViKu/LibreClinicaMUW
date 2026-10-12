@@ -23,6 +23,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
@@ -331,7 +332,9 @@ public class DicomIngestApiController {
                 .acquisitionDate(studyDate)
                 .acquisitionDateSource(studyDate == null
                         ? null : IngestItemRepository.ACQ_SOURCE_FILE)
-                .laterality(r.laterality());
+                .laterality(r.laterality())
+                // DR-040 — the only active location, or none until the calling AE title is assigned.
+                .originLocationId(LocationScope.defaultLocationId(c));
         if (target != null) {
             item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(), "worklist");
         }

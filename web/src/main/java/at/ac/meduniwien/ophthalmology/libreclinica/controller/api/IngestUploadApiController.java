@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
@@ -390,6 +391,21 @@ public class IngestUploadApiController {
                 ps.executeUpdate();
             } catch (SQLException e) {
                 LOG.warn("could not record the origin study of OCT upload ingest_item {}: {}", id, e.getMessage());
+            }
+            // DR-040 — and where it came from. The OCT route stamped the anonymous default; a signed-in
+            // uploader's scan carries the location of the study they work in.
+            try (Connection c = dataSource.getConnection()) {
+                Integer location = LocationScope.originForStaffUpload(c, actor.study().getId());
+                if (location != null) {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "UPDATE ingest_item SET origin_location_id = ? WHERE ingest_item_id = ?")) {
+                        ps.setInt(1, location);
+                        ps.setLong(2, id);
+                        ps.executeUpdate();
+                    }
+                }
+            } catch (SQLException e) {
+                LOG.warn("could not record the origin location of OCT upload ingest_item {}: {}", id, e.getMessage());
             }
         }
         String status = String.valueOf(body.get("status"));

@@ -113,7 +113,10 @@ class IngestStartAnalysisDatabaseIT extends AbstractApiControllerDatabaseIT {
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO ingest_item (kind, source_kind, stored_path, original_filename, laterality, "
                              + "received_at, status, bound_study_subject_id, bound_study_event_id, sha256, "
-                             + "scan_index, byte_size) VALUES (?, 'upload', ?, ?, 'OD', now(), ?, ?, ?, ?, 0, 7) "
+                             + "scan_index, byte_size, origin_location_id) VALUES (?, 'upload', ?, ?, 'OD', now(), ?, ?, ?, ?, 0, 7, "
+                             // A real upload is stamped with its origin location on arrival; an item
+                             // without one is an administrator's (DR-040).
+                             + "(SELECT min(location_id) FROM location)) "
                              + "RETURNING ingest_item_id")) {
             ps.setString(1, kind);
             ps.setString(2, p.toString());

@@ -272,6 +272,22 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     }
 
     /**
+     * DR-040: the six types of the administration of locations (195-200) are
+     * admin rows, so the system audit log's admin filter finds them.
+     */
+    @Test
+    void variantForTheLocationTypes() {
+        int[] types = {AuditTypeIds.LOCATION_CREATED, AuditTypeIds.LOCATION_UPDATED, AuditTypeIds.LOCATION_DISABLED,
+                AuditTypeIds.LOCATION_RESTORED, AuditTypeIds.LOCATION_USER_ASSIGNED,
+                AuditTypeIds.LOCATION_USER_UNASSIGNED};
+        assertEquals(6, types.length);
+        for (int i = 0; i < types.length; i++) {
+            assertEquals(195 + i, types[i], "ids 195-200, in the order the changeset seeds them");
+            assertEquals("admin", AuditApiController.variantForType(types[i], null), "type " + types[i]);
+        }
+    }
+
+    /**
      * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
      * the filter parameter and reaches the SQL try-block. With the mock
      * DataSource the query throws inside the try/catch and we get a 500;

@@ -24,7 +24,7 @@ The internet-facing deployment closes the device ingress, so the gap is internal
 | Table / column | Purpose |
 |---|---|
 | `location` (`location_id`, `code` unique, `name`, `status_id`, `address` fields, `owner_id`, `date_created`, `date_updated`) | the place |
-| `study.location_id` (nullable FK) | a site's location; for a study without sites, the study's own location. Null on a parent study that has sites |
+| `study.location_id` (nullable FK) | a site's location; for a study without sites, the study's own location; for a parent study that has sites, its *coordinating* location (may be null). The migration sets it on every existing study row |
 | `user_location` (`user_account_id`, `location_id`, `can_manage_sources`, `granted_by`, `date_granted`) | explicit scope for staff without a study role (technicians, photographers); `can_manage_sources` is the **Standort-Admin** right for that location (below) |
 | `ingest_source` (`ingest_source_id`, `kind` uploader / dicom_ae / remidio / portal, `source_key`, `location_id` nullable, `display_name`, `token_hash`, `token_hint`, `created_by`, `created_at`, `last_used_at`, `revoked_at`, `revoked_by`) | one row per source. An **uploader** source is created by issuing a token (it has its location from the start); a DICOM AE or the Remidio account is created by an administrator or the first time it is seen, and gets its location assigned. Only the token's hash is stored, and `token_hint` keeps its first characters so a person can tell tokens apart |
 | `ingest_item.origin_location_id` (nullable FK), `ingest_item.ingest_source_id` (nullable FK) | where a file came from |
@@ -83,6 +83,14 @@ A system administrator has every location. All of this is computed in one place,
 - **Site form** (`SitesView`): a required "Standort" select over the global locations. The address fields come from the location, so the free facility fields are no longer typed per site.
 - **Sources:** every `ingest_source` with its location. "Unknown" sources are highlighted together with their pending file count, and assigning a location moves their files into the right inboxes at once.
 - **User page:** explicit location assignments, for staff without a study role, and the Standort-Admin right per location.
+
+## Phase 1 as built (2026-10-11)
+
+- **Schema** (`lc-muw-2026-10-11-locations.xml`): `location`, `user_location` (with `can_manage_sources`, unused until phase 2), `study.location_id`, `ingest_item.origin_location_id`, one seeded location (`MUW-AUGEN`, renameable in the UI), every study row and ingest item backfilled.
+- **`LocationScope`** and the single inbox rule in `IngestItemVisibility`: an unfiled or dismissed item with no origin study is visible when its origin location is one of the user's; with neither origin it is a system administrator's. A retinal job with neither a visit nor a scan record is an administrator's.
+- **Stamping:** every ingest path writes `origin_location_id` (staff uploads from the session study's location, device ingress from the default location, NULL when several locations exist and the source is not assigned yet). New studies and sites get the default location while exactly one location exists; with more than one, the create APIs require `locationId`.
+- **Administration:** `AdminLocationsApiController` (`/api/v1/admin/locations`, system administrators only), audit types 195-200, and the System → Standorte screen.
+- **Not in phase 1:** `ingest_source`, uploader tokens, the Standort-Admin right (phase 2); location-scoped worklist and Remidio sync (phase 3); the site form's location select and the wording of the per-study site (phase 4).
 
 ## Phases
 

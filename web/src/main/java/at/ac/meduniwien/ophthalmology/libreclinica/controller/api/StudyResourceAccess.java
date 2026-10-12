@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 /**
@@ -59,10 +60,12 @@ public final class StudyResourceAccess {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final LocationScope locationScope;
 
     public StudyResourceAccess(DataSource dataSource, SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.locationScope = new LocationScope(dataSource);
     }
 
     /**
@@ -146,6 +149,16 @@ public final class StudyResourceAccess {
             LOG.warn("study lookup failed for study_subject {}: {}", studySubjectId, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * The locations whose study-independent data (today: the unfiled files of
+     * the ingest inbox) the session's user may see, DR-040. Unlike
+     * {@link #visibleStudyIds}, it does not depend on the study bound to the
+     * session: it follows the user's roles and assignments.
+     */
+    public LocationScope.Visible visibleLocations(HttpSession session) {
+        return locationScope.visibleLocations((UserAccountBean) session.getAttribute("userBean"));
     }
 
     /** What the session may see, per the site-visibility rules. */

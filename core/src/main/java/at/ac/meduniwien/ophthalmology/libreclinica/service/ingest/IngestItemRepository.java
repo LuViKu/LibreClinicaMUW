@@ -274,6 +274,18 @@ public final class IngestItemRepository {
          */
         public Builder originStudyId(Integer v) { return set("origin_study_id", v, Types.INTEGER); }
 
+        /**
+         * DR-040 — the location the file came from. Staff uploads carry the
+         * location of the study they were working in; device and anonymous
+         * ingress carry the only active location, and while a second one
+         * exists and the source is not yet assigned, nothing.
+         *
+         * <p>Null is not a default, it is a statement: the origin is unknown,
+         * and the inbox shows the file to system administrators only. Every
+         * ingress sets this, with a null where it has nothing to say.
+         */
+        public Builder originLocationId(Integer v) { return set("origin_location_id", v, Types.INTEGER); }
+
         /* ---------------- the binding ---------------- */
 
         /**

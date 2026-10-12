@@ -177,8 +177,9 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO ingest_item (kind, source_kind, content_type, stored_path, "
                              + "preview_png_path, original_filename, patient_id, laterality, "
-                             + "acquisition_date, received_at, status) "
-                             + "VALUES ('image', 'upload', 'image/png', ?, ?, ?, ?, 'OD', ?::date, NOW(), 'UNBOUND') "
+                             + "acquisition_date, received_at, status, origin_location_id) "
+                             + "VALUES ('image', 'upload', 'image/png', ?, ?, ?, ?, 'OD', ?::date, NOW(), 'UNBOUND', "
+                             + "(SELECT MIN(location_id) FROM location)) "
                              + "RETURNING ingest_item_id")) {
             ps.setString(1, preview.toString());
             ps.setString(2, withPreview ? preview.toString() : null);
