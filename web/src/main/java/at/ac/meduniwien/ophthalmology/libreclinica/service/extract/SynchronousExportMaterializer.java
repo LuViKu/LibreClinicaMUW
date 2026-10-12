@@ -315,7 +315,7 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
             // no export and can be gigabytes of imaging; nothing is
             // registered yet, so the zip is the only trace to remove.
             if (zip.exists() && !zip.delete()) {
-                LOG.warn("Could not remove the partial bundle of a cancelled export: {}", zip.getName());
+                LOG.warn("Could not remove the partial bundle of a cancelled export: dataset_id={}", dataset.getId());
             }
             throw cancelled;
         }
