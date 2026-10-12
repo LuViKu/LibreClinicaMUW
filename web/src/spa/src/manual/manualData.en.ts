@@ -95,9 +95,9 @@ export const manualEn: Manual = {
     {
       id: 'administrator', role: 'administrator', kicker: 'Kapitel 01',
       title: 'Administrator', deutsch: 'Administrator/-in',
-      oneLiner: 'System + study setup: users, sites, studies, CRFs, rules, config, audit. A superset of every other role.',
+      oneLiner: 'System + study setup: users, locations and uploaders, studies and sites, CRFs, rules, config, audit. A superset of every other role.',
       intro: [
-        'The **Administrator** is the superset role in LibreClinicaMUW. It combines **system setup** (user accounts, sites, modality catalog, password policy, scheduled jobs, system status) and **study setup** (creating studies, building event definitions and CRFs, rules, datasets, importing data). Wherever the application gates a screen on *Administrator*, you reach it; several of those screens are visible to no other role.',
+        'The **Administrator** is the superset role in LibreClinicaMUW. It combines **system setup** (user accounts, locations, uploader tokens, modality catalog, password policy, scheduled jobs, system status) and **study setup** (creating studies and their sites, building event definitions and CRFs, rules, datasets, importing data). Wherever the application gates a screen on *Administrator*, you reach it; several of those screens are visible to no other role.',
       ],
       callout: {
         kind: 'info', title: 'Role gating',
@@ -139,18 +139,23 @@ export const manualEn: Manual = {
           ],
         },
         {
-          id: 'ad-sites', num: '3', title: 'Sites', deutsch: 'Standorte', route: '/sites',
+          id: 'ad-sites', num: '3', title: 'Sites', deutsch: 'Prüfzentren', route: '/sites',
           roles: ['administrator','data-manager'],
           shot: 'administrator/03-sites.png',
-          goal: 'Create and manage the sites (centres) under the active study.',
+          goal: 'Create and manage the sites of the active study.',
+          body: [
+            'A **site** (German *Prüfzentrum*) is a study\u2019s presence at one place: it belongs to exactly one study and is at exactly one **location** (German *Standort*, see *Locations*). Roles, subjects and visits are kept apart per site.',
+          ],
           steps: [
-            'Open **Standorte** (Sites) from the home page (`/sites`).',
-            'Click **Neuer Standort** (New Site) to open the inline create form.',
-            'Fill the required fields — *Name*, *Unique Protocol ID*, *Principal Investigator* — and any optional details, then click create.',
+            'Open **Prüfzentren** (Sites) from the home page or the **Studienaufbau** rail (`/sites`). The list shows each site\u2019s location.',
+            'Click **Neues Prüfzentrum** (New Site) to open the inline create form.',
+            'Fill the required fields — *Name*, *Unique Protocol ID*, *Principal Investigator* — and choose the **Standort** (location) the site is at. The facility name and address are taken from the location; you enter the contact e-mail yourself. Then click create.',
             'For an existing site, use **Entfernen** (Disable) to soft-remove it or **Wiederherstellen** (Restore) to bring it back.',
+            'Only on an installation with several locations: **Standort ändern** (Change location) on a row moves a site to another location. The facility address is taken from the new location, and the move is recorded in the audit trail.',
           ],
           notes: [
             'The active study must be the top-level parent — the screen is hidden when the active study is itself a site. Managing sites is open to Administrator and Data Manager.',
+            'On a single-location installation the form has its one location already chosen.',
             'Disabling a site keeps its enrolled subjects and visits in the audit trail but makes them unreachable until the site is restored; the confirmation dialog states this.',
           ],
         },
@@ -301,7 +306,7 @@ export const manualEn: Manual = {
           shot: 'administrator/13-system-status.png',
           goal: 'Check the health of the running application after a restart or incident.',
           steps: [
-            'Open **Systemstatus** via **System** in the top bar (`/admin/system-status`) — the section\'s landing page. The entry sits right of the study chip because these five pages concern the instance, not a study; the **System** rail switches between them.',
+            'Open **Systemstatus** via **System** in the top bar (`/admin/system-status`) — the section\'s landing page. The entry sits right of the study chip because the pages of this section concern the instance, not a study; the **System** rail switches between them.',
             'Read the three panels: **JVM** (Java version, heap, threads, CPUs), **Database** (reachability, product/version, Liquibase changelog count), and **Application** (status OK/OutOfMemory, uptime).',
             'Click **Aktualisieren** (Refresh) to re-poll; the last-refreshed time is shown next to the button.',
           ],
@@ -376,6 +381,67 @@ export const manualEn: Manual = {
             'Each row shows the **Job**, **PatientId**, **Auge** (eye), **Task** and **Hochgeladen** (upload time). Select rows and use the row **Aktion** to bind a parked scan to a subject\u2019s visit, or **Neu laden** to refresh.',
           ],
           notes: ['Administrator-only. Parked jobs have no study-subject linkage yet, which is why they surface here rather than on a per-subject page.'],
+        },
+        {
+          id: 'ad-locations', num: '19', title: 'Locations', deutsch: 'Standorte', route: '/admin/locations',
+          roles: ['administrator'],
+          goal: 'Maintain the platform\u2019s locations and decide who sees a location\u2019s device files.',
+          body: [
+            'A **location** (*Standort*) is a physical place: a clinic, a department or a partner hospital. Locations are platform-wide; a study is active at a location by having a **site** (*Prüfzentrum*) there. Files from devices belong to the location of their source and appear in the **Eingang** (inbox) only for people who belong to that location — through a role at one of its sites or through an explicit assignment.',
+          ],
+          steps: [
+            'Open **System** → **Standorte** (`/admin/locations`). The list shows each location\u2019s code, name, place, its counts of sites, studies, files and people, and its status.',
+            'Use **Bearbeiten** (Edit) to change the name and address; the **code** is fixed once created. **Deaktivieren** (Disable) works only when no study and no site at the location is still active; **Wiederherstellen** (Restore) makes it active again.',
+            'Click a location\u2019s name to open its details: address, studies and sites, and the **Zugewiesene Personen** (assigned people).',
+            'Under **Person hinzufügen** (Add a person) enter a username and click **Zuweisen** (Assign). A photographer without a study role, for example, then sees this location\u2019s device files in the inbox.',
+            'Tick **Standort-Admin** (location admin) for an assigned person to let them issue, replace and revoke this location\u2019s uploader tokens (see *Uploaders and tokens*). Typically this is the local IT contact or study coordinator. A study role does not include this right.',
+            'The **Quellen** (Sources) tab lists where device files come from: uploaders on acquisition PCs, DICOM devices (by their AE title) and the Remidio account. Choose a location for a source that has none; its waiting files appear in that location\u2019s inbox at once. The number on the tab counts the sources without a location.',
+          ],
+          notes: [
+            '**One location or several** is set by IT at deployment, not on this page. By default an installation is set up for **one** location: the page then offers no *Standort anlegen* (Create location) and says so in a note, and everything belongs to that one location automatically. For a second location, IT sets `LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi` and restarts — only once every acquisition PC has its token.',
+            'With several locations, the files of a source without a location are visible to system administrators only, until the source is assigned.',
+            'Administrator-only. Creating, editing, disabling, restoring, assignments, the Standort-Admin right and assigning sources are recorded in the system audit log.',
+          ],
+        },
+        {
+          id: 'ad-uploaders', num: '20', title: 'Uploaders and tokens', deutsch: 'Uploader und Tokens', route: '/uploaders',
+          roles: ['administrator'],
+          goal: 'Give every acquisition PC its own token, so that its files arrive at the right location.',
+          body: [
+            'An **uploader** is the program on an acquisition PC — the Export Watcher (Clarus, Spectralis) or the Optomed Bridge — that brings device files into the inbox. It identifies itself with a **token** that is valid for exactly one location. The token opens no session and gives no access to study data: it only lets the program look up visits, upload files, report heartbeats and fetch the worklist for its location.',
+          ],
+          steps: [
+            'Open **Uploader und Tokens** from **System** or the home-page card (`/uploaders`). If you may manage several locations, choose the location at the top.',
+            'Click **Uploader anlegen** (Create uploader) and enter a name that tells the PC apart (e.g. "Clarus-PC Raum 3"; unique per location).',
+            'The dialog shows the token **this one time only**. Copy it, tick **Ich habe den Token gesichert** (I have saved the token) and close the dialog. Only a hash and the first characters are stored (column *Token (Anfang)*); a lost token cannot be looked up, only replaced.',
+            'Enter the token on the acquisition PC: the uploader\u2019s tray icon → *Settings...* → field **Uploader-Token** → paste → save. Never pass it on a command line.',
+            'After a few minutes click **Aktualisieren** (Refresh): the row then shows **Zuletzt verwendet** (Last used) and **Letzte Meldung** (Last report).',
+            '**Token ersetzen** (Replace token) issues a new token at once; the old one stops working that moment. Do it when a PC is replaced or a token may have been seen by the wrong person, ideally when someone can enter the new token on the PC straight away. **Sperren** (Revoke) refuses the token for good, for example when a PC is retired; *Token ersetzen* lifts a revocation.',
+          ],
+          notes: [
+            'Open to Administrators (every location) and to **Standort-Admins** (their own location only), whatever their study role; a Standort-Admin reaches the page through the home-page card. Creating, replacing, revoking and renaming are recorded in the system audit log — the token itself never.',
+            'On a single-location installation, uploaders keep working without a token. Administrators then see on this page how many programs sent without a token in the last 7 days; before a switch to several locations that number must be 0.',
+          ],
+          subsections: [
+            {
+              title: 'Browser upload page', deutsch: 'Upload-Seite im Browser',
+              steps: [
+                'Next to the token, the dialog shows a **Link für die Upload-Seite** (link for the upload page, `…/upload#token=…`). Whoever opens the upload page through this link uploads for this location.',
+                'The link is the token in another form: give it only to people who upload captures at this location. The page removes the token from the address bar when it opens and keeps it for the browser session only.',
+              ],
+            },
+            {
+              title: '"Token fehlt" or "Token abgelehnt"', deutsch: 'HTTP 401',
+              steps: [
+                '**Token fehlt** (token missing; 401 *uploader token required*): the installation is set up for several locations and the PC sends no token. Issue one and enter it.',
+                '**Token abgelehnt** (token rejected; 401 *uploader token rejected*): the token is unknown, replaced or revoked, or its location is disabled. Check what was entered on the PC, or replace the token.',
+              ],
+              notes: [
+                'On a 401 every file stays on the PC; nothing is lost. Once the token is right, the uploader sends them by itself on its next round. Because its heartbeat is refused too, such a PC may look silent on **Systemstatus**; its tray icon says why.',
+                'In these cases the browser upload page asks the person to use the Standort-Admin\u2019s link or to request a new one.',
+              ],
+            },
+          ],
         },
       ],
     },
@@ -810,7 +876,7 @@ export const manualEn: Manual = {
               goal: 'Add a study visit so data entry can begin.',
               steps: [
                 'On the subject casebook, click **Visite planen** (Schedule Event) in the events panel header.',
-                'Pick the event definition, location and start date, then confirm. The new visit appears in the events table.',
+                'Pick the event definition, the start date and, optionally, the visit place (*Ort*), then confirm. The new visit appears in the events table.',
                 'Click **CRFs öffnen** on the visit row to open the event detail page (`/events/:id`), listing every CRF with its version, status, whether it is required (`*`), and an action.',
                 'For a CRF not yet started, click **Datenerfassung starten**; for one in progress, click **CRF öffnen**.',
               ],

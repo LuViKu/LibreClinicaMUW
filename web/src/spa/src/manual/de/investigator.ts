@@ -56,7 +56,7 @@ export const investigatorDe: ManualChapter = {
       ],
       notes: [
         'Die Subject-ID wird bereits während der Eingabe auf Verfügbarkeit geprüft; eine Meldung „bereits vergeben“ erscheint inline, bevor Sie absenden.',
-        'Wenn der Server den Eintrag ablehnt (z. B. eine doppelte ID an diesem Standort), wird das betreffende Feld rot markiert — korrigieren Sie es und speichern Sie erneut.',
+        'Wenn der Server den Eintrag ablehnt (z. B. eine doppelte ID in diesem Prüfzentrum), wird das betreffende Feld rot markiert — korrigieren Sie es und speichern Sie erneut.',
       ],
     },
     {
@@ -82,7 +82,7 @@ export const investigatorDe: ManualChapter = {
           goal: 'Fügen Sie eine Studienvisite hinzu, damit die Datenerfassung beginnen kann.',
           steps: [
             'Klicken Sie im Casebook des Teilnehmers im Kopfbereich des Events-Panels auf **Visite planen** (Schedule Event).',
-            'Wählen Sie die Event-Definition, den Standort und das Startdatum und bestätigen Sie. Die neue Visite erscheint in der Events-Tabelle.',
+            'Wählen Sie die Event-Definition, das Startdatum und optional den Ort der Visite und bestätigen Sie. Die neue Visite erscheint in der Events-Tabelle.',
             'Klicken Sie in der Visitenzeile auf **CRFs öffnen**, um die Event-Detailseite (`/events/:id`) zu öffnen, die jedes CRF mit Version, Status, der Angabe, ob es erforderlich ist (`*`), und einer Aktion auflistet.',
             'Für ein noch nicht begonnenes CRF klicken Sie auf **Datenerfassung starten**; für ein in Bearbeitung befindliches klicken Sie auf **CRF öffnen**.',
           ],

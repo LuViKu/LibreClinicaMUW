@@ -3,9 +3,9 @@ import type { ManualChapter } from '../manualTypes'
 export const administratorDe: ManualChapter = {
   id: 'administrator', role: 'administrator', kicker: 'Kapitel 01',
   title: 'Administrator/-in', deutsch: 'Administrator',
-  oneLiner: 'System- und Studienaufbau: Nutzer, Standorte, Studien, CRFs, Regeln, Konfiguration, Audit. Eine Obermenge jeder anderen Rolle.',
+  oneLiner: 'System- und Studienaufbau: Nutzer, Standorte und Uploader, Studien und Prüfzentren, CRFs, Regeln, Konfiguration, Audit. Eine Obermenge jeder anderen Rolle.',
   intro: [
-    'Die Rolle **Administrator/-in** ist die übergeordnete Rolle (Obermenge) in LibreClinicaMUW. Sie vereint den **Systemaufbau** (Nutzerkonten, Standorte, Modalitätenkatalog, Passwort-Richtlinie, geplante Jobs, Systemstatus) und den **Studienaufbau** (Anlegen von Studien, Erstellen von Visiten-Definitionen und CRFs, Regeln, Datensätze, Datenimport). Überall dort, wo die Anwendung eine Ansicht auf *Administrator/-in* beschränkt, erhalten Sie Zugriff; mehrere dieser Ansichten sind für keine andere Rolle sichtbar.',
+    'Die Rolle **Administrator/-in** ist die übergeordnete Rolle (Obermenge) in LibreClinicaMUW. Sie vereint den **Systemaufbau** (Nutzerkonten, Standorte, Uploader-Tokens, Modalitätenkatalog, Passwort-Richtlinie, geplante Jobs, Systemstatus) und den **Studienaufbau** (Anlegen von Studien und ihren Prüfzentren, Erstellen von Visiten-Definitionen und CRFs, Regeln, Datensätze, Datenimport). Überall dort, wo die Anwendung eine Ansicht auf *Administrator/-in* beschränkt, erhalten Sie Zugriff; mehrere dieser Ansichten sind für keine andere Rolle sichtbar.',
   ],
   callout: {
     kind: 'info', title: 'Rollensteuerung',
@@ -47,19 +47,24 @@ export const administratorDe: ManualChapter = {
       ],
     },
     {
-      id: 'ad-sites', num: '3', title: 'Standorte', deutsch: 'Sites', route: '/sites',
+      id: 'ad-sites', num: '3', title: 'Prüfzentren', deutsch: 'Sites', route: '/sites',
       roles: ['administrator','data-manager'],
       shot: 'administrator/03-sites.png',
-      goal: 'Legen Sie die Standorte (Zentren) unter der aktiven Studie an und verwalten Sie sie.',
+      goal: 'Legen Sie die Prüfzentren der aktiven Studie an und verwalten Sie sie.',
+      body: [
+        'Ein **Prüfzentrum** ist die Teilnahme einer Studie an einem Ort: Es gehört zu genau einer Studie und liegt an genau einem **Standort** (siehe *Standorte*). Rollen, Teilnehmende und Visiten werden je Prüfzentrum getrennt.',
+      ],
       steps: [
-        'Öffnen Sie **Standorte** (Sites) über die Startseite (`/sites`).',
-        'Klicken Sie auf **Neuer Standort** (New Site), um das Inline-Formular zum Anlegen zu öffnen.',
-        'Füllen Sie die Pflichtfelder aus — *Name*, *Unique Protocol ID*, *Principal Investigator* — sowie etwaige optionale Angaben, und klicken Sie dann auf Anlegen.',
-        'Verwenden Sie bei einem bestehenden Standort **Entfernen** (Disable) zum sanften Entfernen oder **Wiederherstellen** (Restore), um ihn zurückzuholen.',
+        'Öffnen Sie **Prüfzentren** (Sites) über die Startseite oder die Seitenleiste **Studienaufbau** (`/sites`). Die Liste zeigt bei jedem Prüfzentrum seinen Standort.',
+        'Klicken Sie auf **Neues Prüfzentrum** (New Site), um das Inline-Formular zum Anlegen zu öffnen.',
+        'Füllen Sie die Pflichtfelder aus — *Name*, *Unique Protocol ID*, *Principal Investigator* — und wählen Sie den **Standort**, an dem das Prüfzentrum liegt. Name und Anschrift der Einrichtung übernimmt die Anwendung vom Standort; die Kontakt-E-Mail geben Sie selbst an. Klicken Sie dann auf Anlegen.',
+        'Verwenden Sie bei einem bestehenden Prüfzentrum **Entfernen** (Disable) zum sanften Entfernen oder **Wiederherstellen** (Restore), um es zurückzuholen.',
+        'Nur bei einer Installation mit mehreren Standorten: **Standort ändern** in der Zeile verlegt ein Prüfzentrum an einen anderen Standort. Die Einrichtungsanschrift wird dabei vom neuen Standort übernommen; die Änderung wird im Audit-Trail dokumentiert.',
       ],
       notes: [
-        'Die aktive Studie muss die übergeordnete Studie der obersten Ebene sein — die Ansicht ist ausgeblendet, wenn die aktive Studie selbst ein Standort ist. Die Verwaltung von Standorten ist für Administrator/-in und Studienleitung zugänglich.',
-        'Das Deaktivieren eines Standorts bewahrt seine eingeschlossenen Teilnehmenden und Visiten im Audit-Trail, macht sie aber unzugänglich, bis der Standort wiederhergestellt wird; der Bestätigungsdialog weist darauf hin.',
+        'Die aktive Studie muss die übergeordnete Studie der obersten Ebene sein — die Ansicht ist ausgeblendet, wenn die aktive Studie selbst ein Prüfzentrum ist. Die Verwaltung von Prüfzentren ist für Administrator/-in und Studienleitung zugänglich.',
+        'Bei einer Installation mit nur einem Standort ist dieser im Formular bereits gewählt.',
+        'Das Deaktivieren eines Prüfzentrums bewahrt seine eingeschlossenen Teilnehmenden und Visiten im Audit-Trail, macht sie aber unzugänglich, bis das Prüfzentrum wiederhergestellt wird; der Bestätigungsdialog weist darauf hin.',
       ],
     },
     {
@@ -69,7 +74,7 @@ export const administratorDe: ManualChapter = {
       goal: 'Verfolgen Sie die Checkliste zum Studienaufbau und führen Sie jede Aufbauaufgabe zum Abschluss.',
       steps: [
         'Öffnen Sie **Studienaufbau** (Build Study) über die Startseite oder die obere Leiste (`/build-study`).',
-        'Lesen Sie die Fortschrittskarte (abgeschlossene Aufgaben, Prozentsatz, Anzahl der Standorte und der eingeschlossenen Teilnehmenden).',
+        'Lesen Sie die Fortschrittskarte (abgeschlossene Aufgaben, Prozentsatz, Anzahl der Prüfzentren und der eingeschlossenen Teilnehmenden).',
         'Arbeiten Sie die Aufgabenkacheln ab — *Create Study*, *CRF Library*, *Event Definitions*, *Sites*, *Group Classes*, *Rules*, *Manage Users* — jeweils mit einer Status-Plakette. Klicken Sie auf **→ Weiter**, um zu der jeweiligen Aufgabe zu springen.',
         'Klicken Sie bei optionalen Aufgaben mit Nullzähler auf **Als abgeschlossen markieren** (Mark as complete), um diese zu bestätigen.',
         'Verwenden Sie als Administrator/-in die Symbolleiste, um den Studienstatus zu ändern: Wählen Sie einen Zielstatus und bestätigen Sie im Dialog **Status wechseln zu …**, wobei Sie beim Wechsel zu LOCKED oder FROZEN einen Grund angeben.',
@@ -209,7 +214,7 @@ export const administratorDe: ManualChapter = {
       shot: 'administrator/13-system-status.png',
       goal: 'Prüfen Sie den Zustand der laufenden Anwendung nach einem Neustart oder Zwischenfall.',
       steps: [
-        'Öffnen Sie **Systemstatus** über **System** in der oberen Leiste (`/admin/system-status`) — die Einstiegsseite des Bereichs. Der Eintrag steht rechts neben dem Studien-Chip, weil diese fünf Seiten die Instanz betreffen und keine Studie; die Seitenleiste **System** wechselt zwischen ihnen.',
+        'Öffnen Sie **Systemstatus** über **System** in der oberen Leiste (`/admin/system-status`) — die Einstiegsseite des Bereichs. Der Eintrag steht rechts neben dem Studien-Chip, weil die Seiten dieses Bereichs die Instanz betreffen und keine Studie; die Seitenleiste **System** wechselt zwischen ihnen.',
         'Lesen Sie die drei Panels: **JVM** (Java-Version, Heap, Threads, CPUs), **Database** (Erreichbarkeit, Produkt/Version, Anzahl der Liquibase-Changelogs) und **Application** (Status OK/OutOfMemory, Laufzeit).',
         'Klicken Sie auf **Aktualisieren** (Refresh), um erneut abzufragen; die Zeit der letzten Aktualisierung wird neben der Schaltfläche angezeigt.',
       ],
@@ -285,6 +290,67 @@ export const administratorDe: ManualChapter = {
         '**Zuordnen …** ordnet eine Karte (oder eine Auswahl) der Visite einer teilnehmenden Person zu; **Verwerfen** markiert eine Datei mit Begründung als keine Studiendaten. **Hochladen** öffnet den Uploader für eigene Dateien.',
       ],
       notes: ['Studienleitung, Prüfärztin/-arzt und Administrator/-in dürfen zuordnen. Eine Zuordnung setzt in der Visite das Häkchen „durchgeführt“ für die Modalität; das Aufheben nimmt es zurück. Verworfene Dateien löscht die Aufbewahrungsroutine nach 30 Tagen.'],
+    },
+    {
+      id: 'ad-locations', num: '19', title: 'Standorte', deutsch: 'Locations', route: '/admin/locations',
+      roles: ['administrator'],
+      goal: 'Pflegen Sie die Standorte der Plattform und legen Sie fest, wer die Gerätedateien eines Standorts sieht.',
+      body: [
+        'Ein **Standort** ist ein physischer Ort: eine Klinik, eine Abteilung oder ein Partnerkrankenhaus. Standorte gelten plattformweit; eine Studie ist an einem Standort aktiv, wenn sie dort ein **Prüfzentrum** hat. Dateien von Geräten gehören zum Standort ihrer Quelle und erscheinen im **Eingang** nur bei Personen, die diesem Standort zugeordnet sind — über eine Rolle an einem seiner Prüfzentren oder über eine ausdrückliche Zuweisung.',
+      ],
+      steps: [
+        'Öffnen Sie **System** → **Standorte** (`/admin/locations`). Die Liste zeigt je Standort Kürzel, Name, Ort, die Zahl der Prüfzentren, Studien, Dateien und Personen sowie den Status.',
+        'Mit **Bearbeiten** ändern Sie Name und Anschrift; das **Kürzel** ist nach dem Anlegen fest. **Deaktivieren** ist nur möglich, wenn an dem Standort keine Studie und kein Prüfzentrum mehr aktiv ist; **Wiederherstellen** macht ihn wieder aktiv.',
+        'Klicken Sie auf den Namen eines Standorts, um seine Details zu öffnen: Anschrift, Studien und Prüfzentren und die **Zugewiesenen Personen**.',
+        'Unter **Person hinzufügen** geben Sie einen Benutzernamen ein und klicken auf **Zuweisen**. So sieht etwa eine Fotografin ohne Studienrolle die Gerätedateien dieses Standorts im Eingang.',
+        'Setzen Sie bei einer zugewiesenen Person das Häkchen **Standort-Admin**: Sie darf dann die Uploader-Tokens dieses Standorts ausstellen, ersetzen und sperren (siehe *Uploader und Tokens*). Typischerweise ist das die IT-Ansprechperson oder die Studienkoordination vor Ort. Eine Studienrolle enthält dieses Recht nicht.',
+        'Der Reiter **Quellen** listet, woher Gerätedateien kommen: Uploader auf Erfassungs-PCs, DICOM-Geräte (über ihren AE-Titel) und das Remidio-Konto. Wählen Sie für eine Quelle ohne Standort den Standort aus; ihre wartenden Dateien erscheinen sofort im Eingang dieses Standorts. Die Zahl am Reiter nennt die Quellen ohne Standort.',
+      ],
+      notes: [
+        '**Ein Standort oder mehrere** legt die IT beim Deployment fest, nicht diese Seite. Standardmäßig ist eine Installation für **einen** Standort eingerichtet: Die Seite bietet dann *Standort anlegen* nicht an und sagt das in einem Hinweis, und alles gehört automatisch zu diesem einen Standort. Für einen zweiten Standort setzt die IT `LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi` und startet neu — erst, wenn jeder Erfassungs-PC seinen Token hat.',
+        'Bei mehreren Standorten sieht die Dateien einer Quelle ohne Standort nur ein Systemadministrator, bis die Quelle zugeordnet ist.',
+        'Ausschließlich Administrator/-innen vorbehalten. Anlegen, Bearbeiten, Deaktivieren, Wiederherstellen, Zuweisungen, das Standort-Admin-Recht und das Zuordnen von Quellen werden im System-Audit-Protokoll dokumentiert.',
+      ],
+    },
+    {
+      id: 'ad-uploaders', num: '20', title: 'Uploader und Tokens', deutsch: 'Uploaders and tokens', route: '/uploaders',
+      roles: ['administrator'],
+      goal: 'Geben Sie jedem Erfassungs-PC einen eigenen Token, damit seine Dateien beim richtigen Standort ankommen.',
+      body: [
+        'Ein **Uploader** ist das Programm auf einem Erfassungs-PC — der Export Watcher (Clarus, Spectralis) oder die Optomed Bridge —, das Gerätedateien in den Eingang bringt. Er weist sich mit einem **Token** aus, der für genau einen Standort gilt. Der Token öffnet keine Sitzung und gibt keinen Zugriff auf Studiendaten: Er erlaubt nur, für seinen Standort Visiten nachzuschlagen, Dateien hochzuladen, Heartbeats zu melden und die Worklist abzurufen.',
+      ],
+      steps: [
+        'Öffnen Sie **Uploader und Tokens** über **System** oder die Karte auf der Startseite (`/uploaders`). Dürfen Sie mehrere Standorte verwalten, wählen Sie oben den Standort.',
+        'Klicken Sie auf **Uploader anlegen** und geben Sie einen Namen ein, an dem man den PC erkennt (z. B. „Clarus-PC Raum 3“; je Standort einmalig).',
+        'Der Dialog zeigt den Token **nur dieses eine Mal**. Kopieren Sie ihn, setzen Sie das Häkchen **Ich habe den Token gesichert** und schließen Sie den Dialog. Gespeichert werden nur ein Hash und die ersten Zeichen (Spalte *Token (Anfang)*); ein verlorener Token lässt sich nicht nachschlagen, nur ersetzen.',
+        'Tragen Sie den Token am Erfassungs-PC ein: Tray-Symbol des Uploaders → *Settings...* → Feld **Uploader-Token** → einfügen → speichern. Geben Sie ihn nie in einer Befehlszeile an.',
+        'Klicken Sie nach einigen Minuten auf **Aktualisieren**: Die Zeile zeigt dann **Zuletzt verwendet** und **Letzte Meldung**.',
+        '**Token ersetzen** erzeugt sofort einen neuen Token; der alte gilt ab diesem Moment nicht mehr. Nötig ist das, wenn ein PC getauscht wird oder ein Token in falsche Hände geraten sein könnte — am besten, wenn jemand den neuen Token gleich am PC eintragen kann. **Sperren** weist den Token dauerhaft ab, etwa wenn ein PC außer Betrieb geht; *Token ersetzen* hebt eine Sperre wieder auf.',
+      ],
+      notes: [
+        'Zugänglich für Administrator/-innen (alle Standorte) und für **Standort-Admins** (nur ihr eigener Standort), unabhängig von ihrer Studienrolle; Standort-Admins erreichen die Seite über die Karte auf der Startseite. Anlegen, Ersetzen, Sperren und Umbenennen werden im System-Audit-Protokoll dokumentiert — der Token selbst nie.',
+        'Ist die Installation für einen Standort eingerichtet, arbeiten Uploader auch ohne Token weiter. Administrator/-innen sehen dann auf dieser Seite, wie viele Programme in den letzten 7 Tagen noch ohne Token gesendet haben; vor einer Umstellung auf mehrere Standorte muss dort 0 stehen.',
+      ],
+      subsections: [
+        {
+          title: 'Upload-Seite im Browser', deutsch: 'Browser upload page',
+          steps: [
+            'Neben dem Token zeigt der Dialog einen **Link für die Upload-Seite** (`…/upload#token=…`). Wer die Upload-Seite über diesen Link öffnet, lädt für diesen Standort hoch.',
+            'Der Link ist der Token in anderer Form: Geben Sie ihn nur an Personen weiter, die an diesem Standort Aufnahmen hochladen. Die Seite entfernt den Token beim Öffnen aus der Adresszeile und behält ihn nur für die Browser-Sitzung.',
+          ],
+        },
+        {
+          title: '„Token fehlt“ oder „Token abgelehnt“', deutsch: 'HTTP 401',
+          steps: [
+            '**Token fehlt** (401 *uploader token required*): Die Installation ist für mehrere Standorte eingerichtet, und der PC sendet keinen Token. Stellen Sie einen aus und tragen Sie ihn ein.',
+            '**Token abgelehnt** (401 *uploader token rejected*): Der Token ist unbekannt, ersetzt oder gesperrt, oder sein Standort ist deaktiviert. Prüfen Sie die Eingabe am PC oder ersetzen Sie den Token.',
+          ],
+          notes: [
+            'Bei einer 401 bleiben alle Dateien auf dem PC liegen; nichts geht verloren. Sobald der Token stimmt, lädt der Uploader sie beim nächsten Durchlauf von selbst hoch. Weil auch sein Heartbeat abgewiesen wird, kann ein solcher PC im **Systemstatus** stumm wirken; das Tray-Symbol nennt den Grund.',
+            'Die Upload-Seite im Browser bittet in diesen Fällen, den Link des Standort-Admins zu verwenden oder einen neuen anzufordern.',
+          ],
+        },
+      ],
     },
   ],
 }

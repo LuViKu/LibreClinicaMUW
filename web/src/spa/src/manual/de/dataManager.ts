@@ -23,7 +23,7 @@ export const dataManagerDe: ManualChapter = {
         'Nutzen Sie die obere Leiste oder die Dashboard-Karten, um eine Aufgabe zu beginnen — die meiste Aufbauarbeit beginnt bei **Studienaufbau** (Build Study), dessen Seitenleiste alle Aufbau-Schritte auflistet.',
       ],
       notes: [
-        'Die obere Leiste zeigt die aktive Studie/den aktiven Standort, Ihren Namen mit einem farbcodierten **Rollen-Chip**, die Sprachanzeige und **Abmelden**.',
+        'Die obere Leiste zeigt die aktive Studie bzw. das aktive Prüfzentrum, Ihren Namen mit einem farbcodierten **Rollen-Chip**, die Sprachanzeige und **Abmelden**.',
       ],
     },
     {
@@ -49,8 +49,8 @@ export const dataManagerDe: ManualChapter = {
       shot: 'data-manager/02-build-study.png',
       goal: 'Die Aufgaben verfolgen und abschließen, die eine Studie nutzbar machen.',
       steps: [
-        'Öffnen Sie **Studienaufbau** (Build Study). Der Kopfbereich zeigt eine **Fortschritts**-Karte sowie die Zählungen **Standorte** und **aufgenommene Teilnehmende**.',
-        'Arbeiten Sie die nummerierte Aufgabenliste ab — **CRFs**, **Visiten-Definitionen** (Event Definitions), **Teilnehmer-Gruppen** (Group Classes), **Regeln** (Rules) (und, für Administrationen, Studie anlegen / Standorte / Benutzer). Jede Karte zeigt eine Status-Pille und eine einzeilige Zusammenfassung.',
+        'Öffnen Sie **Studienaufbau** (Build Study). Der Kopfbereich zeigt eine **Fortschritts**-Karte sowie die Zählungen **Prüfzentren** und **aufgenommene Teilnehmende**.',
+        'Arbeiten Sie die nummerierte Aufgabenliste ab — **CRFs**, **Visiten-Definitionen** (Event Definitions), **Teilnehmer-Gruppen** (Group Classes), **Regeln** (Rules) (und, für Administrationen, Studie anlegen / Prüfzentren / Benutzer). Jede Karte zeigt eine Status-Pille und eine einzeilige Zusammenfassung.',
         'Klicken Sie auf **Weiter →** bei einer Aufgabe, um zu dem Bildschirm zu springen, der sie abschließt.',
         'Für die optionalen Aufgaben, zu denen es legitim nichts hinzuzufügen gibt, nutzen Sie **Als abgeschlossen markieren**, um sie zu bestätigen.',
       ],
