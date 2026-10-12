@@ -101,11 +101,11 @@ public class ListSubjectDataServlet extends SecureController {
         ListSubjectFilter filter = buildFilter(dt, dateFormatPattern);
         ListSubjectSort sort = buildSort(dt);
 
-        Integer totalRows = subjectDao.getCountWithFilter(new ListSubjectFilter(dateFormatPattern), currentStudy);
+        Integer totalRows = subjectDao.getCountWithFilter(new ListSubjectFilter(dateFormatPattern));
         if (totalRows == null) {
             totalRows = 0;
         }
-        Integer filteredRows = subjectDao.getCountWithFilter(filter, currentStudy);
+        Integer filteredRows = subjectDao.getCountWithFilter(filter);
         if (filteredRows == null) {
             filteredRows = 0;
         }
@@ -113,7 +113,7 @@ public class ListSubjectDataServlet extends SecureController {
         int rowStart = Math.max(dt.getStart(), 0);
         int rowEnd = rowStart + length;
         Collection<SubjectBean> page = subjectDao.getWithFilterAndSort(
-                currentStudy, filter, sort, rowStart, rowEnd);
+                filter, sort, rowStart, rowEnd);
 
         List<ListSubjectRow> rows = new ArrayList<>(page.size());
         for (SubjectBean subject : page) {

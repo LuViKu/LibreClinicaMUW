@@ -28,9 +28,4 @@ public class UserAccountDao extends AbstractDomainDao<UserAccount> {
                 .setParameter("user_name", userName);
         return q.getSingleResultOrNull();
     }
-
-    public UserAccount findByUserId(Integer userId) {
-        getSessionFactory().getStatistics().logSummary();
-        return getCurrentSession().byId(UserAccount.class).load(userId);
-    }
 }

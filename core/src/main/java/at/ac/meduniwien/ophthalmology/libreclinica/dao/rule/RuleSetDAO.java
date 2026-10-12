@@ -151,7 +151,7 @@ public class RuleSetDAO extends AuditableEntityDAO<RuleSetBean> {
 
         if (isQuerySuccessful()) {
             ruleSetBean.setActive(true);
-            getRuleSetRuleDao().autoRemoveByRuleSet(ruleSetBean, ub);
+            getRuleSetRuleDao().autoRemoveByRuleSet(ruleSetBean);
             ruleSetBean.setStatus(Status.DELETED);
             getRuleSetAuditDao().create(ruleSetBean, ub);
 

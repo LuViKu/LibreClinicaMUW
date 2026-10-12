@@ -461,56 +461,6 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
         return discNotes;
     }
 
-    public ArrayList<DiscrepancyNoteBean> getNotesWithFilterAndSort(StudyBean currentStudy, ListNotesFilter filter, ListNotesSort sort) {
-        ArrayList<DiscrepancyNoteBean> discNotes = new ArrayList<>();
-        setTypesExpected();
-        this.setTypeExpected(12, TypeNames.STRING);
-        this.setTypeExpected(13, TypeNames.INT);
-        this.setTypeExpected(14, TypeNames.INT);
-
-        HashMap<Integer, Object> variables = new HashMap<>();
-        variables.put(1, currentStudy.getId());
-        variables.put(2, currentStudy.getId());
-        variables.put(3, currentStudy.getId());
-        variables.put(4, currentStudy.getId());
-        variables.put(5, currentStudy.getId());
-        variables.put(6, currentStudy.getId());
-        variables.put(7, currentStudy.getId());
-        variables.put(8, currentStudy.getId());
-        variables.put(9, currentStudy.getId());
-        variables.put(10, currentStudy.getId());
-        String sql = digester.getQuery("findAllSubjectDNByStudy");
-        sql += filter.execute("", variables);
-        sql += " UNION ";
-        sql += digester.getQuery("findAllStudySubjectDNByStudy");
-        sql += filter.execute("", variables);
-        sql += " UNION ";
-        sql += digester.getQuery("findAllStudyEventDNByStudy");
-        sql += filter.execute("", variables);
-        sql += " UNION ";
-        sql += digester.getQuery("findAllEventCrfDNByStudy");
-        if (currentStudy.isSite(currentStudy.getParentStudyId())) {
-            sql += " and ec.event_crf_id not in ( " + this.findSiteHiddenEventCrfIdsString(currentStudy) + " ) ";
-        }
-        sql += filter.execute("", variables);
-        sql += " UNION ";
-        sql += digester.getQuery("findAllItemDataDNByStudy");
-        if (currentStudy.isSite(currentStudy.getParentStudyId())) {
-            sql += " and ec.event_crf_id not in ( " + this.findSiteHiddenEventCrfIdsString(currentStudy) + " ) ";
-        }
-        sql += filter.execute("", variables);
-        sql += " order by label";
-
-        ArrayList<HashMap<String, Object>> rows = select(sql, variables);
-        for (HashMap<String, Object> row : rows) {
-            DiscrepancyNoteBean discBean = this.getEntityFromHashMap(row);
-            discBean = findSingleMapping(discBean);
-            discNotes.add(discBean);
-        }
-        
-        return discNotes;
-    }
-
     public ArrayList<DiscrepancyNoteBean> findAllByEntityAndColumn(String entityName, int entityId, String column) {
         this.setTypesExpected();
         this.setTypeExpected(12, TypeNames.STRING);// ss.label

@@ -210,21 +210,6 @@ public class SectionDAO extends AuditableEntityDAO<SectionBean> {
         ArrayList<HashMap<String, Object>> rows = this.select(sql);
         return getNumItemsBySectionIdFromRows(rows);
     }
-/**
- * Groups by sectionId and takes sectionID
- * @param sb
- * @return
- */
-    public HashMap<Integer, Integer> getNumItemsBySection(SectionBean sb){
-        this.unsetTypeExpected();
-        this.setTypeExpected(1, TypeNames.INT); // section_id
-        this.setTypeExpected(2, TypeNames.LONG); // count
-
-        String sql = digester.getQuery("getNumItemsBySection");
-        ArrayList<HashMap<String, Object>> rows = this.select(sql);
-        return getNumItemsBySectionIdFromRows(rows);
-    }
-    
     public HashMap<Integer, Integer> getNumItemsPlusRepeatBySectionId(EventCRFBean ecb) {
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT); // section_id

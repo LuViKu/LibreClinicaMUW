@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.helper.SdvFilterDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.EventCRFSDVFilter;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.EventCRFSDVSort;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.StudySubjectSDVFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.StudySubjectSDVSort;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
@@ -385,10 +384,9 @@ public class SDVController {
             totalRows = eventCRFBeans.size();
         } else {
             EventCRFSDVFilter filter = new EventCRFSDVFilter(studyId);
-            EventCRFSDVSort sort = new EventCRFSDVSort();
             totalRows = eventCRFDAO.getCountWithFilter(studyId, studyId, filter);
             eventCRFBeans = eventCRFDAO.getWithFilterAndSort(
-                    studyId, studyId, filter, sort, rowStart, rowEnd);
+                    studyId, studyId, filter, rowStart, rowEnd);
         }
 
         List<Map<String, Object>> rows = new ArrayList<>(eventCRFBeans.size());
