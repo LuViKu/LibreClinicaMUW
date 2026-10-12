@@ -31,6 +31,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 
@@ -220,6 +221,41 @@ class LegacyServletTelemetryFilterTest {
         assertTrue(resp.getContentAsString().contains("href=\"/LibreClinica/app/manage-users\""),
                 resp.getContentAsString());
         assertTrue(hits().get(0).endsWith("user=manual_dm alias=false action=gone"), hits().get(0));
+    }
+
+    @Test
+    void inMultiLocationModeTheCreatePagesAreGoneForAnAdministratorToo() throws Exception {
+        try {
+            LocationMode.set(LocationMode.MULTI);
+            for (String path : List.of("/CreateStudy", "/CreateSubStudy")) {
+                MockHttpServletRequest req = request("GET", path, null);
+                req.setSession(admin());
+                MockHttpServletResponse resp = new MockHttpServletResponse();
+                FilterChain chain = Mockito.mock(FilterChain.class);
+
+                filter().doFilter(req, resp, chain);
+
+                verify(chain, never()).doFilter(any(), any());
+                assertEquals(HttpServletResponse.SC_GONE, resp.getStatus(), path);
+            }
+            // Another screen is untouched by the mode.
+            FilterChain chain = Mockito.mock(FilterChain.class);
+            MockHttpServletRequest other = request("GET", "/ListUserAccounts", null);
+            other.setSession(admin());
+            filter().doFilter(other, new MockHttpServletResponse(), chain);
+            verify(chain).doFilter(any(), any());
+        } finally {
+            LocationMode.set(LocationMode.SINGLE);
+        }
+    }
+
+    @Test
+    void inSingleLocationModeTheCreatePagesStayOpen() throws Exception {
+        MockHttpServletRequest req = request("GET", "/CreateStudy", null);
+        req.setSession(admin());
+        FilterChain chain = Mockito.mock(FilterChain.class);
+        filter().doFilter(req, new MockHttpServletResponse(), chain);
+        verify(chain).doFilter(any(), any());
     }
 
     @Test

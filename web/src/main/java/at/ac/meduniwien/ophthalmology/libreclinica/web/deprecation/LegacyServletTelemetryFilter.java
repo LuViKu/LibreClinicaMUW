@@ -28,6 +28,7 @@ import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.ObjectMapper;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyAccessLog.Action;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletDeprecationCatalog.Entry;
 
@@ -256,6 +257,12 @@ public class LegacyServletTelemetryFilter implements Filter {
             return;
         }
         UserAccountBean user = LegacyAccessLog.sessionUser(httpReq);
+        if (closedByLocationMode(entry)) {
+            // DR-040: no way round it, not even for an administrator (see below).
+            LegacyAccessLog.hit(entry, httpReq, user, false, Action.GONE);
+            gone(httpReq, httpResp, entry);
+            return;
+        }
         boolean closed = uncatalogued || closedPaths.contains(entry.legacyPath());
         if (closed && internetFacing && user == null
                 && INTERNET_FACING_ANONYMOUS_ONLY.contains(entry.legacyPath())) {
@@ -324,8 +331,22 @@ public class LegacyServletTelemetryFilter implements Filter {
                 + UriUtils.encodePath(path.substring(1), StandardCharsets.UTF_8) + suffix;
     }
 
+    /**
+     * DR-040 phase 4 — the screens that create a study or a site without
+     * asking where it is. In multi-location mode such a study would be at no
+     * location, so they are closed for everyone, administrators included (the
+     * {@code /legacy/} alias too): studies and sites are created in the app,
+     * which asks for the location.
+     */
+    static final Set<String> CLOSED_IN_MULTI_LOCATION_MODE = Set.of("/CreateStudy", "/CreateSubStudy");
+
+    static boolean closedByLocationMode(Entry entry) {
+        return LocationMode.current() == LocationMode.MULTI
+                && CLOSED_IN_MULTI_LOCATION_MODE.contains(entry.legacyPath());
+    }
+
     @SuppressWarnings("resource") // the servlet container owns and closes the response stream/writer
-    private static void gone(HttpServletRequest req, HttpServletResponse resp, Entry entry) throws IOException {
+    static void gone(HttpServletRequest req, HttpServletResponse resp, Entry entry) throws IOException {
         resp.setStatus(HttpServletResponse.SC_GONE);
         resp.setHeader("Cache-Control", "no-store");
         resp.setCharacterEncoding(StandardCharsets.UTF_8.name());

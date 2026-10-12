@@ -90,6 +90,21 @@ class LegacyAliasServletTest {
     }
 
     @Test
+    void inMultiLocationModeTheAliasDoesNotOpenTheCreatePages() throws Exception {
+        try {
+            at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.set(
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.MULTI);
+            MockHttpServletResponse resp = serve(aliasRequest("GET", "/CreateSubStudy",
+                    sessionOf(1, "root", UserType.SYSADMIN)));
+            assertEquals(410, resp.getStatus());
+            assertEquals(null, resp.getForwardedUrl());
+        } finally {
+            at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.set(
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.SINGLE);
+        }
+    }
+
+    @Test
     void administratorIsForwardedToTheScreen() throws Exception {
         MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListUserAccounts",
                 sessionOf(1, "root", UserType.SYSADMIN)));
