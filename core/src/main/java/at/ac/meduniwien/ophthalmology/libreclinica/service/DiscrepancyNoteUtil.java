@@ -552,55 +552,6 @@ public class DiscrepancyNoteUtil {
     }
 
     /**
-     * Get all discrepancy notes for a study, including "threads" of parent and
-     * child discrepancy notes.
-     *
-     * @param currentStudy
-     *            A StudyBean object.
-     * @param resolutionStatusIds
-     *            A HashSet object consisting of resolution status ids (i.e.,
-     *            1,2,3).
-     * @param dataSource
-     *            A DataSource used for various DAO methods.
-     * @param discNoteType
-     *            An int discrepancy note type id; only DiscrepancyNoteBeans
-     *            will be returned if they have this discrepancyNoteTypeId.
-     * @param updateStatusOfParents
-     * @return A List of DiscrepancyNoteBeans.
-     */
-    public List<DiscrepancyNoteBean> getThreadedDNotesForStudy(StudyBean currentStudy, Set<Integer> resolutionStatusIds, DataSource dataSource,
-            int discNoteType, boolean updateStatusOfParents) {
-
-        List<DiscrepancyNoteBean> allDiscNotes = new ArrayList<DiscrepancyNoteBean>();
-        if (currentStudy == null)
-            return allDiscNotes;
-
-        // Do the returned DN's have to be filtered? A valid resolution status
-        // has to be between 1 and 5; 0 is "invalid";
-        // -1 means that no resolutionStatus parameter was passed into the
-        // servlet
-        boolean filterDiscNotes = checkResolutionStatus(resolutionStatusIds);
-
-        boolean filterforDiscNoteType = discNoteType >= 1 && discNoteType <= 4;
-
-        DiscrepancyNoteDAO discrepancyNoteDAO = new DiscrepancyNoteDAO(dataSource);
-        // what is the purpose of this data member?
-        discrepancyNoteDAO.setFetchMapping(true);        
-        allDiscNotes = discrepancyNoteDAO.findAllDiscrepancyNotesDataByStudy(currentStudy);
-
-        if (filterDiscNotes) {
-            // filter for the resolution status
-            allDiscNotes = filterDiscNotes(allDiscNotes, resolutionStatusIds);
-        }
-        if (filterforDiscNoteType) {
-            // filter for the ddiscrepancyNoteTypeId
-            allDiscNotes = filterforDiscNoteType(allDiscNotes, discNoteType);
-        }
-
-        return allDiscNotes;
-    }
-
-    /**
      * Take a List of "parent" DiscrepancyNoteBeans and if they have any
      * "children," make sure that the resolution status id of the parent matches
      * that of the last child DiscrepancyNoteBean.
@@ -1002,28 +953,6 @@ public class DiscrepancyNoteUtil {
                 tempMap.put(statusName, number);
             }
 
-        }
-
-        return summaryMap;
-    }
-
-    public Map<String, Map<String, String>> generateDiscNoteSummary(ArrayList<DiscrepancyNoteBean> discList) {
-        Map<String, Map<String, String>> summaryMap = new HashMap<>();
-        Map<String, String> tempMap = null;
-        int tempType = 0;
-        String tempTotal = "--";
-        for (ResolutionStatus status: ResolutionStatus.getMembers()) {
-            tempMap = new HashMap<String, String>();
-            summaryMap.put(status.getName(), tempMap);
-            //tempTotal = countNotes(discList, RESOLUTION_STATUS.get(status.getName()), 0);
-            tempTotal = countNotes(discList, status.getId(), 0);
-            tempMap.put("Total", tempTotal.equals("0")?"--":tempTotal);
-            for (String typeName: TYPE_NAMES) {
-                tempType = TYPES.get(typeName);
-                //String number = countNotes(discList, RESOLUTION_STATUS.get(status.getName()), tempType);
-                String number = countNotes(discList, status.getId(), tempType);
-                tempMap.put(typeName, number.equals("0")?"--":number);
-            }
         }
 
         return summaryMap;
@@ -1432,7 +1361,7 @@ public class DiscrepancyNoteUtil {
         return 0;
     }
 
-    public List<DiscrepancyNoteThread> createThreads(List<DiscrepancyNoteBean> allDiscNotes, DataSource dataSource, StudyBean currentStudy) {
+    public List<DiscrepancyNoteThread> createThreads(List<DiscrepancyNoteBean> allDiscNotes, StudyBean currentStudy) {
 
         List<DiscrepancyNoteThread> dnThreads = new ArrayList<DiscrepancyNoteThread>();
         if (allDiscNotes == null || allDiscNotes.isEmpty()) {

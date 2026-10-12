@@ -141,10 +141,6 @@ public class GenerateClinicalDataServiceImpl implements GenerateClinicalDataServ
 
 	}
 
-	public GenerateClinicalDataServiceImpl(String StudyOID) {
-
-	}
-
 	public LinkedHashMap<String,OdmClinicalDataBean> getClinicalData(String studyOID) {
 		LinkedHashMap<String, OdmClinicalDataBean> hm = new LinkedHashMap<String,OdmClinicalDataBean>();
 		Study study = new Study();

@@ -149,13 +149,13 @@ public class DatasetFilterSubjectResolver {
             List<String> values = new ArrayList<>();
             JsonNode arr = n.get("values");
             if (arr != null && arr.isArray()) {
-                arr.forEach(v -> values.add(v.asText()));
+                arr.forEach(v -> values.add(v.asString()));
             }
             JsonNode value = n.get("value");
             return new ParsedFilter(
                     text(n.get("itemOid")),
                     text(n.get("operator")),
-                    value == null || value.isNull() ? null : value.asText(),
+                    value == null || value.isNull() ? null : value.asString(),
                     values);
         } catch (Exception e) {
             LOG.warn("unreadable saved filter — ignored: {}", e.getMessage());
@@ -164,7 +164,7 @@ public class DatasetFilterSubjectResolver {
     }
 
     private static String text(JsonNode n) {
-        return n == null || n.isNull() ? null : n.asText();
+        return n == null || n.isNull() ? null : n.asString();
     }
 
     private Integer resolveItemId(String itemOid) {

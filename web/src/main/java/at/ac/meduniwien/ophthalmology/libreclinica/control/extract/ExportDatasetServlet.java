@@ -266,7 +266,7 @@ public class ExportDatasetServlet extends SecureController {
 
                 // lines 443-776 in this servlet, tbh 01/2009
                 String DDLFileName = "";
-                HashMap<String, Integer> answerMap = generateFileService.createSPSSFile(db, eb, currentStudy, parentStudy, sysTimeBegin, generalFileDir, answer, "", ub);
+                HashMap<String, Integer> answerMap = generateFileService.createSPSSFile(db, eb, sysTimeBegin, generalFileDir, answer, "", ub);
                 // String DDLFileName = createSPSSFile(db, eb, currentstudyid,
                 // parentstudy);
                 /*

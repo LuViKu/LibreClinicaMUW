@@ -13,7 +13,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.SubjectTransferBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.service.StudyParameterValueBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
@@ -108,9 +107,6 @@ public class SubjectService implements SubjectServiceInterface {
         
         return studySubject;
 
-    }
-
-    public void validateSubjectTransfer(SubjectTransferBean subjectTransferBean) {
     }
 
     /**

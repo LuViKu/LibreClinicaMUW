@@ -148,7 +148,7 @@ public class DiscrepancyNoteOutputServlet extends SecureController {
         DiscrepancyNoteUtil discNoteUtil = new DiscrepancyNoteUtil();
 
         List<DiscrepancyNoteThread> discrepancyNoteThreads =
-            discNoteUtil.createThreads(allDiscNotes, sm.getDataSource(), studyBean);
+            discNoteUtil.createThreads(allDiscNotes, studyBean);
 
         if ("csv".equalsIgnoreCase(format)) {
             /*response.setContentLength(

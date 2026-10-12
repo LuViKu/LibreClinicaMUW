@@ -171,7 +171,6 @@ public class ExtractController {
 
         // String xmlFilePath = generalFileDir + ODMXMLFileName;
          simpleTrigger = xsltService.generateXsltTrigger(xsltPath,
-        		 generalFileDir, // xml_file_path
                 endFilePath + File.separator,
                 exportFileName,
                 dsBean.getId(),
