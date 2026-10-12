@@ -50,7 +50,7 @@ public class BeanPropertyRuleRunner extends RuleRunner{
 	StudyEventDAO studyEventDAO;
 	
 	public BeanPropertyRuleRunner(DataSource ds, String requestURLMinusServletPath, String contextPath, JavaMailSenderImpl mailSender) {
-		super(ds, contextPath, contextPath, mailSender);
+		super(ds, requestURLMinusServletPath, contextPath, mailSender);
 	}
 
 	public void runRules(List<RuleSetBean> ruleSets, DataSource ds,
@@ -101,7 +101,7 @@ public class BeanPropertyRuleRunner extends RuleRunner{
 	                        		beanPropertyService.runAction(ruleActionBean,eow,userId,changeDetails.getRunningInTransaction());
 	                        	}else if (ruleActionBean instanceof NotificationActionBean){
                                     notificationActionProcessor = new NotificationActionProcessor(ds, mailSender, ruleSetRule); 
-                                    notificationActionProcessor.runNotificationAction(ruleActionBean,ruleSet,studySubjectBeanId,eventOrdinal);
+                                    notificationActionProcessor.runNotificationAction(ruleActionBean,ruleSet,eventOrdinal);
 	                        	}                	
 	                        }
 	                    }catch (OpenClinicaSystemException osa) {
@@ -118,7 +118,7 @@ public class BeanPropertyRuleRunner extends RuleRunner{
 	
 	public boolean checkTargetMatch(RuleSetBean ruleSet,StudyEventChangeDetails changeDetails)
 	{
-		Boolean result = true;
+		boolean result = true;
     	String targetProperty = ruleSet.getTarget().getValue().substring(ruleSet.getTarget().getValue().indexOf("."));
 
     	//Compare Target rule property (STATUS or STARTDATE) to what has been changed in event.

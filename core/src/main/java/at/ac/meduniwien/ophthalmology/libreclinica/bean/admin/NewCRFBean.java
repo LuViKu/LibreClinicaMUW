@@ -478,24 +478,24 @@ public class NewCRFBean extends Object implements java.io.Serializable {
             }
 
         } finally {
-            try {
-                if (con != null)
-                    con.close();
-                if (s != null)
-                    s.close();
-                if (ps != null)
-                    ps.close();
-                if (ps_update != null)
-                	ps.close();
-                if (rs != null)
-                    rs.close();
-                if (rs2 != null)
-                    rs2.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-                throw new OpenClinicaException(e.getMessage(), "1");
+            // Close every resource even if an earlier close fails; report the first failure.
+            SQLException closeFailure = null;
+            for (AutoCloseable c : new AutoCloseable[] { rs2, rs, ps_update, ps, s, con }) {
+                if (c == null) {
+                    continue;
+                }
+                try {
+                    c.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    if (closeFailure == null) {
+                        closeFailure = e instanceof SQLException ? (SQLException) e : new SQLException(e);
+                    }
+                }
             }
-
+            if (closeFailure != null) {
+                throw new OpenClinicaException(closeFailure.getMessage(), "1");
+            }
         }
 
     }
