@@ -1,7 +1,5 @@
 # LibreClinica MUW · 1.5.0-beta.18-muw release notes
 
-> **DRAFT for the next release.** The version is not bumped yet (the build still says `1.5.0-beta.17-muw`), and `1.5.0-beta.18-muw` is the expected name, not a tag. Phase 4 of DR-040 (the location on sites and studies) is described as built on its branch. CI results and test counts are still to be filled in at release time.
-
 _Successor to **1.5.0-beta.17-muw**. A feature release: platform-wide **locations** (DR-040). A location (*Standort*) is a physical place: a clinic, a department or a partner hospital. Studies and their sites are placed at locations, every file a device sends has an origin location, and the inbox shows a person only the device files of their own locations. Acquisition PCs authenticate with a per-uploader **token** issued for one location. Whether an installation has one location or several is a **deploy-time mode**, and the default (`single`) changes nothing for the internal deployment. The per-study site is now called **Prüfzentrum** in German, so that "Standort" means only the global place._
 
 For older releases see [release-notes-1.5.0-beta.17-muw.md](release-notes-1.5.0-beta.17-muw.md) and its predecessors.
