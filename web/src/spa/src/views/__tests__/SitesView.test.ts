@@ -52,6 +52,7 @@ const SITE_ONE = {
 interface MountOptions {
   mode?: LocationMode
   locations?: LocationOption[]
+  siteStatus?: string
 }
 
 const mounted: VueWrapper[] = []
@@ -74,7 +75,9 @@ async function mountAs(role: AuthenticatedUser['role'], opts: MountOptions = {})
   } as unknown as AuthenticatedUser
   const locations = opts.locations ?? [MUW]
   vi.mocked(apiGet).mockImplementation(async (path: string) => {
-    if (path === SITES_PATH) return [structuredClone(SITE_ONE)]
+    if (path === SITES_PATH) {
+      return [{ ...structuredClone(SITE_ONE), ...(opts.siteStatus ? { status: opts.siteStatus } : {}) }]
+    }
     if (path === LOCATIONS_PATH) return structuredClone(locations)
     throw new Error(`unexpected GET ${path}`)
   })
@@ -232,6 +235,13 @@ describe('SitesView move a site to another location', () => {
       const w = await mountAs('Administrator', { mode })
       expect(w.find('[data-testid="site-move-SITE_1"]').exists(), String(mode)).toBe(false)
       expect(w.text()).not.toContain(enMessages.sites.move.action)
+    }
+  })
+
+  it('is not offered for a site the server refuses writes to', async () => {
+    for (const siteStatus of ['removed', 'auto-removed', 'locked', 'frozen']) {
+      const w = await mountAs('Administrator', { mode: 'multi', locations: [GRAZ, MUW], siteStatus })
+      expect(w.find('[data-testid="site-move-SITE_1"]').exists(), siteStatus).toBe(false)
     }
   })
 

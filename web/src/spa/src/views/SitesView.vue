@@ -51,6 +51,8 @@ const canManage = computed(() => mayBuildStudy(auth.user?.role))
 const canLifecycle = computed(() => maySysadminOnly(auth.user?.role))
 // Moving a site exists only where there is more than one place to move it to.
 const canMove = computed(() => canManage.value && auth.locationMode === 'multi')
+// The server refuses any write to a site in one of these states (StudyAdminAuthorization.studyAcceptsWrites).
+const NOT_WRITABLE = new Set(['removed', 'auto-removed', 'locked', 'frozen'])
 
 onMounted(() => {
   if (parentOid.value) sites.load(parentOid.value)
@@ -249,7 +251,7 @@ const visibleRows = computed(() => sites.rows)
           </div>
           <div v-if="canLifecycle || canMove" class="flex items-center gap-2 text-xs shrink-0">
             <button
-              v-if="canMove"
+              v-if="canMove && !NOT_WRITABLE.has(site.status)"
               class="text-muw-blue hover:underline"
               :data-testid="`site-move-${site.oid}`"
               @click="openMove(site)"
