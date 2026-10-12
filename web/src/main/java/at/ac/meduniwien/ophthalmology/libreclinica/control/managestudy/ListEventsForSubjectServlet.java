@@ -267,11 +267,7 @@ public class ListEventsForSubjectServlet extends SecureController {
             dssb.setStudySubject(studySub);
             dssb.setStudyGroups(subGClasses);
             dssb.setStudyEvents(displayEvents);
-            if (definitionId > 0) {
-                dssb.setSedId(definitionId);
-            } else {
-                dssb.setSedId(-1);
-            }
+            dssb.setSedId(definitionId);
             displayStudySubs.add(dssb);
         }
 

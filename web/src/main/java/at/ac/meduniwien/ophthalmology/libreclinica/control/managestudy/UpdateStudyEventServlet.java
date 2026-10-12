@@ -145,7 +145,7 @@ public class UpdateStudyEventServlet extends SecureController {
             checkStudyFrozen(Page.MANAGE_STUDY, respage.getString("current_study_frozen"));
         }
 
-        if (studyEventId == 0 || studySubjectId == 0) {
+        if (studyEventId == 0 || studySubjectId <= 0) {
             addPageMessage(respage.getString("choose_a_study_event_to_edit"));
             request.setAttribute("id", Integer.valueOf(studySubjectId).toString());
             forwardPage(Page.VIEW_STUDY_SUBJECT_SERVLET);
@@ -153,13 +153,10 @@ public class UpdateStudyEventServlet extends SecureController {
         }
 
         StudySubjectDAO ssdao = new StudySubjectDAO(sm.getDataSource());
-        StudySubjectBean ssub = null;
-        if (studySubjectId > 0) {
-            ssub = ssdao.findByPK(studySubjectId);
-            request.setAttribute("studySubject", ssub);
-            // for the workflow box, so it can link back to view study subject
-            request.setAttribute("id", studySubjectId + "");
-        }
+        StudySubjectBean ssub = ssdao.findByPK(studySubjectId);
+        request.setAttribute("studySubject", ssub);
+        // for the workflow box, so it can link back to view study subject
+        request.setAttribute("id", studySubjectId + "");
         // YW 11-07-2007, a study event could not be updated if its study subject has been removed
         // Status s = ((StudySubjectBean)new StudySubjectDAO(sm.getDataSource()).findByPK(studySubjectId)).getStatus();
         Status s = ssub.getStatus();
@@ -442,7 +439,7 @@ public class UpdateStudyEventServlet extends SecureController {
                 populateUncompletedCRFsWithCRFAndVersions(uncompletedEventDefinitionCRFs);
 
                 ArrayList<DisplayEventCRFBean> displayEventCRFs =
-                    ViewStudySubjectServlet.getDisplayEventCRFs(sm.getDataSource(), eventCRFs, eventDefinitionCRFs, ub, currentRole, studyEvent
+                    ViewStudySubjectServlet.getDisplayEventCRFs(sm.getDataSource(), eventCRFs, ub, currentRole, studyEvent
                             .getSubjectEventStatus(), study);
 
                 request.setAttribute("studySubject", ssb);
@@ -583,7 +580,7 @@ public class UpdateStudyEventServlet extends SecureController {
                 populateUncompletedCRFsWithCRFAndVersions(uncompletedEventDefinitionCRFs);
 
                 ArrayList<DisplayEventCRFBean> displayEventCRFs =
-                    ViewStudySubjectServlet.getDisplayEventCRFs(sm.getDataSource(), eventCRFs, eventDefinitionCRFs, ub, currentRole, studyEvent
+                    ViewStudySubjectServlet.getDisplayEventCRFs(sm.getDataSource(), eventCRFs, ub, currentRole, studyEvent
                             .getSubjectEventStatus(), study);
 
                 request.setAttribute("studySubject", ssb);

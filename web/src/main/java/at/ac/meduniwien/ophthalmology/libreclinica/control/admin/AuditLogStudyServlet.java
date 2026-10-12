@@ -46,10 +46,6 @@ public class AuditLogStudyServlet extends SecureController {
 
     // <ResourceBundle resword,resexception,respage;
 
-    public static String getLink(int userId) {
-        return "AuditLogStudy";
-    }
-
     /*
      * (non-Javadoc) Assume that we get the user id automatically. We will jump
      * from the edit user page if the user is an admin, they can get to see the

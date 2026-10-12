@@ -34,10 +34,6 @@ import jakarta.servlet.http.HttpServletRequest;
 @SuppressWarnings("all")
 public class RuleValidator extends Validator {
 
-    public RuleValidator(HttpServletRequest request, FormDiscrepancyNotes notes) {
-        super(request);
-    }
-
     public RuleValidator(HttpServletRequest request) {
         super(request);
     }

@@ -398,9 +398,9 @@ public class ChangeStudyServlet extends SecureController {
         java.util.List<java.util.Map<String, Object>> rows = new java.util.ArrayList<java.util.Map<String, Object>>();
         for (StudyBean studyBean : studies) {
             Integer count = subjectDao.getCountofStudySubjectsAtStudyOrSite(studyBean);
-            Integer expected = studyBean.getExpectedTotalEnrollment();
-            long pct = expected == null || expected == 0 ? 0L
-                    : Math.round((count.doubleValue() / expected.doubleValue()) * 100);
+            int expected = studyBean.getExpectedTotalEnrollment();
+            long pct = expected == 0 ? 0L
+                    : Math.round((count.doubleValue() / expected) * 100);
             java.util.Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
             row.put("name", studyBean.getName());
             row.put("enrolled", count);
@@ -414,9 +414,9 @@ public class ChangeStudyServlet extends SecureController {
     private void setupStudyStatisticsTable() {
         StudySubjectDAO subjectDao = getStudySubjectDAO();
         Integer count = subjectDao.getCountofStudySubjectsAtStudy(currentStudy);
-        Integer expected = currentStudy.getExpectedTotalEnrollment();
-        long pct = expected == null || expected == 0 ? 0L
-                : Math.round((count.doubleValue() / expected.doubleValue()) * 100);
+        int expected = currentStudy.getExpectedTotalEnrollment();
+        long pct = expected == 0 ? 0L
+                : Math.round((count.doubleValue() / expected) * 100);
         java.util.Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
         row.put("name", currentStudy.getName());
         row.put("enrolled", count);

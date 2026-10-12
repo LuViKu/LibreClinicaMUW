@@ -548,12 +548,10 @@ public abstract class CoreSecureController extends HttpServlet {
      *
      * @param jspPage
      *            The page to go to.
-     * @param checkTrail
-     *            The command to check for, and set a trail in the session.
      * @param request
      * @param response
      */
-    protected void forwardPage(Page jspPage, boolean checkTrail, HttpServletRequest request, HttpServletResponse response) {
+    protected void forwardPage(Page jspPage, HttpServletRequest request, HttpServletResponse response) {
         Page page1 = Page.valueOf(jspPage.name());
         String temp;
 
@@ -634,10 +632,6 @@ public abstract class CoreSecureController extends HttpServlet {
             temp = null;
         }
 
-    }
-
-    protected void forwardPage(Page jspPage, HttpServletRequest request, HttpServletResponse response) {
-        this.forwardPage(jspPage, true, request, response);
     }
 
     /**
@@ -879,7 +873,7 @@ public abstract class CoreSecureController extends HttpServlet {
         int sizeTo = recipientsArray.size();
         InternetAddress[] addressTo = new InternetAddress[sizeTo];
         for (int i = 0; i < sizeTo; i++) {
-            addressTo[i] = new InternetAddress(recipientsArray.get(i).toString());
+            addressTo[i] = new InternetAddress(recipientsArray.get(i));
         }
         return addressTo;
 

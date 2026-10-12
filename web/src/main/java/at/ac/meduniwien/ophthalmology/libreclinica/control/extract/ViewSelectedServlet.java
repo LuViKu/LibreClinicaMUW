@@ -129,7 +129,7 @@ public class ViewSelectedServlet extends SecureController {
             return;
         }
 
-        items = getAllSelected(db, idao, imfdao);
+        items = getAllSelected(db, imfdao);
 
         session.setAttribute("allSelectedItems", items);
 
@@ -144,7 +144,7 @@ public class ViewSelectedServlet extends SecureController {
 
     }
 
-    public static ArrayList<ItemBean> getAllSelected(DatasetBean db, ItemDAO idao, ItemFormMetadataDAO imfdao) throws Exception {
+    public static ArrayList<ItemBean> getAllSelected(DatasetBean db, ItemFormMetadataDAO imfdao) throws Exception {
         ArrayList<ItemBean> items = new ArrayList<>();
         // ArrayList itemIds = db.getItemIds();
         ArrayList<ItemBean> itemDefCrfs = db.getItemDefCrf();

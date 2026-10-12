@@ -550,7 +550,7 @@ public class DefineStudyEventServlet extends SecureController {
         StudyEventDefinitionDAO edao = new StudyEventDefinitionDAO(sm.getDataSource());
         StudyEventDefinitionBean sed = (StudyEventDefinitionBean) session.getAttribute("definition");
         // added tbh 092007, to catch bug # 1531
-        if (sed.getName() == "" || sed.getName() == null) {
+        if (sed.getName() == null || sed.getName().isEmpty()) {
             throw new NullPointerException();
         }
         logger.debug("Definition bean to be created:" + sed.getName() + sed.getStudyId());

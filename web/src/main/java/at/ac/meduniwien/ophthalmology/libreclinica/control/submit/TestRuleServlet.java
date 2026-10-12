@@ -412,7 +412,7 @@ public class TestRuleServlet extends SecureController {
         if (persistentRuleSet != null) {
 if(item!=null)
         	request.setAttribute("ruleSetId", item.getId());
-else
+else if (sed != null)
 		request.setAttribute("ruleSetId", sed.getId());
 
         }

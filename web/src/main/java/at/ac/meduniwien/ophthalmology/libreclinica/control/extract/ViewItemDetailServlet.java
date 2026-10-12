@@ -117,7 +117,7 @@ public class ViewItemDetailServlet extends SecureController {
 
         }
 
-        SectionBean section = (SectionBean) sectionDao.findByPK(imfBean.getSectionId());
+        SectionBean section = imfBean != null ? (SectionBean) sectionDao.findByPK(imfBean.getSectionId()) : new SectionBean();
         request.setAttribute(VERSION_ITEMS, versionItems);
         request.setAttribute(ITEM_BEAN, item);
         request.setAttribute("crf", crf);

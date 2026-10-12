@@ -137,9 +137,7 @@ public class DiscrepancyNoteOutputServlet extends SecureController {
         		currentStudy,
         		filter,
                 ViewNotesSortCriteria.buildFilterCriteria(getSortOrder(request)));
-        ArrayList<DiscrepancyNoteBean> allDiscNotes = notes instanceof ArrayList
-        		? (ArrayList<DiscrepancyNoteBean>) notes
-        		: new ArrayList<DiscrepancyNoteBean>(notes);
+        ArrayList<DiscrepancyNoteBean> allDiscNotes = new ArrayList<DiscrepancyNoteBean>(notes);
         
         allDiscNotes = populateRowsWithAttachedData(allDiscNotes);
 
@@ -442,7 +440,7 @@ public class DiscrepancyNoteOutputServlet extends SecureController {
 
                     ItemGroupMetadataBean itemGroupMetadataBean =
                             (ItemGroupMetadataBean)igmdao.findByItemAndCrfVersion(ib.getId(), cvb.getId());
-                    Boolean isRepeatForSure = itemGroupMetadataBean.isRepeatingGroup();
+                    boolean isRepeatForSure = itemGroupMetadataBean.isRepeatingGroup();
                     if (isRepeatForSure){
                         ItemGroupBean ig = (ItemGroupBean)igdao.findByPK(itemGroupMetadataBean.getItemGroupId());
                         dnb.setItemDataOrdinal(idb.getOrdinal());

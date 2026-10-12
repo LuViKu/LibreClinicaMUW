@@ -144,8 +144,8 @@ public class UploadFileServlet extends SecureController {
     }
     */
 
-   public class OCFileRename implements at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.FileRenamePolicy {
-    	private String checksum(File f, InputStream content) throws Exception {
+   public static class OCFileRename implements at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.FileRenamePolicy {
+    	private String checksum(InputStream content) throws Exception {
     		byte[] buffer = new byte[8192];
     		MessageDigest md = MessageDigest.getInstance("SHA-1");
 
@@ -175,7 +175,7 @@ public class UploadFileServlet extends SecureController {
                 fileName = fileName.replaceAll("\\W+", "_");
             }
             try {
-            	String prefix = fileName + checksum(f, content) + "_";
+            	String prefix = fileName + checksum(content) + "_";
             	String suffix = pathAndName.substring(p);
             	File directory = new File(pathAndName.substring(0, n));
             	File newFile = File.createTempFile(prefix, suffix, directory);

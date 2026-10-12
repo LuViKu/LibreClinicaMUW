@@ -64,7 +64,7 @@ public abstract class ListStudySubjectServlet extends SecureController {
 	 */
 	private static final long serialVersionUID = 6119891528224678112L;
 	// Shaoyu Su
-    Locale locale;
+    protected Locale locale;
     // BWP Issue 3195, 3330 <<
     public static String SUBJECT_PAGE_NUMBER = "ebl_page";
     public static String PAGINATING_QUERY = "paginatingQuery";
@@ -423,7 +423,7 @@ public abstract class ListStudySubjectServlet extends SecureController {
         // construct info needed on view study event page
         DisplayStudyEventBean de = new DisplayStudyEventBean();
         de.setStudyEvent(event);
-        de.setDisplayEventCRFs(ViewStudySubjectServlet.getDisplayEventCRFs(ds, eventCRFs, eventDefinitionCRFs, ub, currentRole, event.getSubjectEventStatus(),
+        de.setDisplayEventCRFs(ViewStudySubjectServlet.getDisplayEventCRFs(ds, eventCRFs, ub, currentRole, event.getSubjectEventStatus(),
                 study));
         ArrayList<DisplayEventDefinitionCRFBean> al = ViewStudySubjectServlet.getUncompletedCRFs(ds, eventDefinitionCRFs, eventCRFs, event.getSubjectEventStatus());
         // ViewStudySubjectServlet.populateUncompletedCRFsWithCRFAndVersions(ds,

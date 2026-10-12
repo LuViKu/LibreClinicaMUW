@@ -232,10 +232,8 @@ public class UpdateSubjectServlet extends SecureController {
                 	Date fakeDOB = yformat.parse(submitted_date);
                 	if(subject.getDateOfBirth() != null)
                 	{
-                	@SuppressWarnings("deprecation")
-					int year = subject.getDateOfBirth().getYear();
-					@SuppressWarnings("deprecation")
-					int fakeYear = fakeDOB.getYear();
+					int year = yearOf(subject.getDateOfBirth());
+					int fakeYear = yearOf(fakeDOB);
 					if (year == fakeYear){
                 		isTheSameDate=true;
                 		String  converted_date = yformat.format(subject.getDateOfBirth());
@@ -425,4 +423,10 @@ public class UpdateSubjectServlet extends SecureController {
         }
     }
 
+
+    private static int yearOf(Date date) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        return cal.get(Calendar.YEAR);
+    }
 }
