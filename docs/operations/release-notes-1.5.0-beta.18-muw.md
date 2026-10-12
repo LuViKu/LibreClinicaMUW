@@ -1,6 +1,6 @@
 # LibreClinica MUW · 1.5.0-beta.18-muw release notes
 
-> **DRAFT for the next release.** The version is not bumped yet (the build still says `1.5.0-beta.17-muw`), and `1.5.0-beta.18-muw` is the expected name, not a tag. Phase 4 of DR-040 (the location on sites and studies) is being built while this is written; its parts below follow the phase 4 contract and must be checked against the merged code before publishing. CI results, test counts and the PR number of phase 4 are still to be filled in.
+> **DRAFT for the next release.** The version is not bumped yet (the build still says `1.5.0-beta.17-muw`), and `1.5.0-beta.18-muw` is the expected name, not a tag. Phase 4 of DR-040 (the location on sites and studies) is described as built on its branch. CI results and test counts are still to be filled in at release time.
 
 _Successor to **1.5.0-beta.17-muw**. A feature release: platform-wide **locations** (DR-040). A location (*Standort*) is a physical place: a clinic, a department or a partner hospital. Studies and their sites are placed at locations, every file a device sends has an origin location, and the inbox shows a person only the device files of their own locations. Acquisition PCs authenticate with a per-uploader **token** issued for one location. Whether an installation has one location or several is a **deploy-time mode**, and the default (`single`) changes nothing for the internal deployment. The per-study site is now called **Prüfzentrum** in German, so that "Standort" means only the global place._
 
@@ -71,12 +71,10 @@ Work through [Upgrading the app VM](#upgrading-the-app-vm) in order, then throug
 
 ### Sites are "Prüfzentren" and sit at a location (phase 4, PR pending)
 
-_To be checked against the merged phase 4 before publishing._
-
 - **Wording.** In German the per-study site is a **Prüfzentrum** (plural *Prüfzentren*): on the Sites page, its home card, the rails, System → Standorte and the manual. "Standort" means only the global place. English keeps "site" and "location".
 - **Creating a site** (`/sites`) requires a **Standort**. The facility name, city, postcode and country are copied from the location; the free facility name and city fields are gone, and the contact e-mail stays. The select is preselected when there is only one option. The site list shows each site's location.
-- **Moving a site** (*Standort ändern*, multi mode only, for those who may manage sites) re-copies the facility fields from the new location and is audited.
-- **Creating and editing a study** (system administrators): in multi mode a Standort select, for the study or, with several sites, its coordinating location. In single mode the server takes the one location.
+- **Moving a site** (*Standort ändern*, multi mode only, for those who may manage sites; not offered for a removed, locked or frozen site) re-copies the facility fields from the new location. The new location must be available and in the mover's own scope. The move is audited as a site field change (`location`, old and new location code), so it needs no new audit type.
+- **Creating a study** (system administrators) **and editing one** (also its study directors): in multi mode a Standort select, for the study or, with several sites, its coordinating location. In single mode the server takes the one location. A site's location is changed only on the Sites page.
 - **The legacy JSP pages `CreateStudy` and `CreateSubStudy` answer 410 in multi mode**, because they cannot choose a location. Single mode is unchanged.
 - **API:** new `GET /api/v1/locations` returns the locations the caller may place a study or site at. `StudyIdentityDto` gains `locationId`, `locationCode` and `locationName`. `PUT /api/v1/studies/{parentOid}/sites/{siteOid}` and `PUT /api/v1/studies/{studyOid}` take an optional `locationId`.
 
@@ -121,7 +119,7 @@ Five new changelog files, eight changesets, all additive. The only data changes 
 | `lc-muw-2026-10-12-audit-types-ingest-sources.xml` | seeds audit types 201–207 (source created, token replaced, token revoked, uploader renamed, source assigned to a location, Standort-Admin right granted, revoked). |
 | `lc-muw-2026-10-13-location-mode.xml` | seeds audit type 208 (`location_backfilled`, written by the single-mode startup). |
 
-The backfill updates every row of `study` and `ingest_item` once; the dry run shows how long that takes on the production data. Liquibase stays at 4.31.1. _If phase 4 adds a changeset, add it here (check `master.xml`)._
+The backfill updates every row of `study` and `ingest_item` once; the dry run shows how long that takes on the production data. Liquibase stays at 4.31.1. Phase 4 adds no changeset.
 
 ---
 
