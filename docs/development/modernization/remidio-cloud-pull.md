@@ -149,7 +149,7 @@ plain HTTPS/JSON from the app VM, no raw sockets, no Python-only libraries.
   record. The poller never stores identity beyond the pseudonymous MRN.
 - The app VM needs outbound HTTPS to `*.appspot.com` and to the signed-URL host
   (`storage.googleapis.com`). Verified from the developer machine; to be
-  checked from `vrc-lin-tasks`.
+  checked from the app VM (`vtc-internal`).
 - A second Remidio device (another site or the same site) needs no code: one
   more `siteCustomId` in the property, or a second poller instance.
 - Remidio outages surface as a stale "last successful pull" timestamp on the

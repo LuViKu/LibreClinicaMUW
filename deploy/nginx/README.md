@@ -24,10 +24,16 @@ the SPA at clean root URLs (`/login`, `/subjects/…`) instead of
 
 ## Prerequisites (from IT)
 
-1. Internal DNS: `ecrf.augen.meduniwien.ac.at` → the VM (CNAME to
-   `vrc-lin-tasks.augen.meduniwien.ac.at`), MUW-network-only.
-2. A SAN cert covering **both** names — see the CSR you generated at
-   `/etc/libreclinica/tls/ecrf-augen.csr`.
+1. Internal DNS: `ecrf.augen.meduniwien.ac.at` → the VM (CNAME to the VM's
+   own name `vtc-internal.augen.meduniwien.ac.at`, until 2026-10
+   `vrc-lin-tasks.augen.meduniwien.ac.at`, which no longer resolves),
+   MUW-network-only.
+2. A SAN cert covering **both** names, `ecrf.augen.meduniwien.ac.at` and
+   `vtc-internal.augen.meduniwien.ac.at` — see the CSR you generated at
+   `/etc/libreclinica/tls/ecrf-augen.csr`. A cert issued before the rename
+   still names `vrc-lin-tasks`; it keeps working for `ecrf`, the name everyone
+   uses, and needs reissuing only for the VM's own name. Whatever IT reissues
+   must keep `ecrf.augen.meduniwien.ac.at` in it.
 3. Port **443** open to the VM from the MUW network.
 
 ## Cert placement
@@ -101,7 +107,7 @@ sudo systemctl restart libreclinica
 - [ ] Public portals: `https://ecrf.augen.meduniwien.ac.at/bcva-entry/<studyOid>`
       and `/oct-upload` load.
 - [ ] Plain 8080 is not reachable from another MUW host:
-      `curl -m5 http://vrc-lin-tasks.augen.meduniwien.ac.at:8080/` fails.
+      `curl -m5 http://vtc-internal.augen.meduniwien.ac.at:8080/` fails.
 
 ## Rollback
 
@@ -261,7 +267,7 @@ its own compose project and repository). This nginx serves it at
   ```
 
 - **DNS:** IT adds a CNAME `einteilung.augen.meduniwien.ac.at` →
-  `vrc-lin-tasks.augen.meduniwien.ac.at`.
+  `vtc-internal.augen.meduniwien.ac.at` (the VM's own name).
 - **Rollback:** `sudo rm /etc/libreclinica/nginx-sites/dutyplan.conf` and
   `nginx -s reload` as above. The `edge` network can stay.
 
