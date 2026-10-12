@@ -146,6 +146,34 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
 
     private static final RequestMatcher[] GUARDED = new RequestMatcher[GUARDED_PATTERNS.length];
 
+    /** The guarded route a request matched, as its pattern; never the raw path the client sent. */
+    static String routeOf(HttpServletRequest request) {
+        for (int i = 0; i < GUARDED.length; i++) {
+            try {
+                if (GUARDED[i].matches(request)) return GUARDED_PATTERNS[i];
+            } catch (RuntimeException undecidable) {
+                return "(a guarded route)";
+            }
+        }
+        return "(not a guarded route)";
+    }
+
+    /** The request method as one of the names a log line may carry. */
+    static String methodOf(HttpServletRequest request) {
+        String m = request.getMethod();
+        if (m == null) return "OTHER";
+        return switch (m) {
+            case "GET" -> "GET";
+            case "POST" -> "POST";
+            case "PUT" -> "PUT";
+            case "DELETE" -> "DELETE";
+            case "HEAD" -> "HEAD";
+            case "PATCH" -> "PATCH";
+            case "OPTIONS" -> "OPTIONS";
+            default -> "OTHER";
+        };
+    }
+
     /** The guarded path patterns (a copy), for the test that every anonymous device entry is among them. */
     public static java.util.List<String> guardedPatterns() {
         return java.util.List.of(GUARDED_PATTERNS);
@@ -269,7 +297,7 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
         }
         UploaderSources.bind(request, source);
         if (LOG.isDebugEnabled()) {
-            LOG.debug("uploader token accepted for source {} on {}", source.id(), request.getRequestURI());
+            LOG.debug("uploader token accepted for source {} on {}", source.id(), routeOf(request));
         }
         chain.doFilter(request, response);
     }
@@ -371,7 +399,9 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
     }
 
     /**
-     * One line per outcome and minute: the method, the path and what happened.
+     * One line per outcome and minute: the method, the guarded route and what
+     * happened. Both are named by the filter ({@link #methodOf}, {@link #routeOf}),
+     * never copied from the request line, which the client wrote.
      * A misconfigured uploader retries all day and an attacker as fast as it can;
      * neither fills the log. The remote address, the header and the token stay out.
      */
@@ -380,7 +410,7 @@ public class UploaderTokenFilter extends OncePerRequestFilter {
         long last = loggedAt[i].get();
         if (now - last >= LOG_EVERY_MS && loggedAt[i].compareAndSet(last, now)) {
             int skipped = suppressed[i].getAndSet(0);
-            LOG.warn("device endpoint {} {}: {}{}", request.getMethod(), request.getRequestURI(), outcome.text,
+            LOG.warn("device endpoint {} {}: {}{}", methodOf(request), routeOf(request), outcome.text,
                     skipped > 0 ? " (" + skipped + " similar in the last minute)" : "");
         } else {
             suppressed[i].incrementAndGet();

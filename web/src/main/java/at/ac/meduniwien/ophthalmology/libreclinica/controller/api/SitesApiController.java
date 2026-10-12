@@ -361,7 +361,7 @@ public class SitesApiController {
             // StudyDAO.update never writes the location; the move is its own statement.
             setLocation(site.getId(), moveTo.id());
             site.setLocationId(moveTo.id());
-            LOG.info("Move site: siteOid={} to location id {} by user={}", siteOid, moveTo.id(), me.getName());
+            LOG.info("Move site: site id {} to location id {} by user id {}", site.getId(), moveTo.id(), me.getId());
         }
 
         LOG.info("Update site: parentOid={} siteOid={} by user={}", parentOid, siteOid, me.getName());
