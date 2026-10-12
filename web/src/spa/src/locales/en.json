@@ -1390,7 +1390,7 @@
   "sites": {
     "title": "Sites",
     "subTrail": "Build study · multi-center setup",
-    "intro": "Create child sites under this study. Each site is a study row with its own facility metadata + role bindings; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
+    "intro": "Create child sites under this study. Each site is a study row with its own role bindings and sits at a location, from which it takes its facility name and address; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
     "createAction": "New site",
     "createHeading": "Create a site under this study",
     "submitCreate": "Create site",

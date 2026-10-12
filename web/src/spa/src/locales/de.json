@@ -20,7 +20,7 @@
     "modalities": "Modalitäten",
     "dueVisits": "Fällige Visiten",
     "ingestInbox": "Eingang",
-    "sites": "Standorte"
+    "sites": "Prüfzentren"
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
@@ -113,7 +113,7 @@
       "buildStudyDesc": "Visiten, CRFs und Regeln der Studie einrichten.",
       "manageUsersDesc": "Konten anlegen, Rollen zuweisen, Einladungen nachhalten.",
       "pendingInvitesBadgeAria": "{n} offene Einladungen",
-      "openQueriesDesc": "Offene Rückfragen an allen Standorten beantworten.",
+      "openQueriesDesc": "Offene Rückfragen an allen Prüfzentren beantworten.",
       "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
       "importCrfDesc": "CRF-Daten aus einer Datei in die Studie übernehmen.",
       "rulesDesc": "Prüf- und Ablaufregeln für die CRFs pflegen.",
@@ -130,14 +130,14 @@
       "editStudyDesc": "Name, Sponsor, Protokoll und Laufzeit der Studie bearbeiten.",
       "createStudyTitle": "Neue Studie anlegen",
       "createStudyDesc": "Eine neue Studie anlegen; Sie werden ihr als Studienleitung zugewiesen.",
-      "sitesTitle": "Standorte verwalten",
-      "sitesDesc": "Standorte anlegen, aktivieren und Rollen je Standort vergeben.",
+      "sitesTitle": "Prüfzentren verwalten",
+      "sitesDesc": "Prüfzentren anlegen, aktivieren und Rollen je Prüfzentrum vergeben.",
       "auditLogDesc": "Nachvollziehen, wer wann was geändert hat.",
       "dataExportTitle": "Datenexport",
       "dataExportDesc": "Datensätze exportieren und erzeugte Dateien herunterladen.",
       "modalitiesDesc": "Untersuchungsmodalitäten und ihre CRF-Felder pflegen.",
-      "adminStudiesDesc": "Alle Studien und Standorte der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download.",
-      "adminLocationsDesc": "Die Standorte der Plattform: Anschrift, Studien und Studien-Standorte, Dateien im Eingang und zugewiesene Personen."
+      "adminStudiesDesc": "Alle Studien und Prüfzentren der Plattform: Status, Entfernen und Wiederherstellen, Metadaten-Download.",
+      "adminLocationsDesc": "Die Standorte der Plattform: Anschrift, Studien und Prüfzentren, Dateien im Eingang und zugewiesene Personen."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -608,7 +608,7 @@
   },
   "sdv": {
     "title": "Quelldatenvergleich",
-    "subTrail": "Alle Standorte · Visite × CRF",
+    "subTrail": "Alle Prüfzentren · Visite × CRF",
     "searchPlaceholder": "Teilnehmer, Visite oder CRF suchen…",
     "showingCount": "{visible} von {total} sichtbar · {verifiable} prüfbar",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
@@ -635,7 +635,7 @@
     },
     "column": {
       "subject": "Teilnehmer",
-      "site": "Standort",
+      "site": "Prüfzentrum",
       "event": "Visite",
       "eventDate": "Visitendatum",
       "crf": "CRF",
@@ -692,7 +692,7 @@
     "title": "Rückfragen & Diskrepanzen",
     "statusFilter": "Nach Status filtern",
     "typeFilter": "Nach Art filtern",
-    "subTrail": "Alle Standorte",
+    "subTrail": "Alle Prüfzentren",
     "searchPlaceholder": "Teilnehmer, Item oder Beschreibung suchen…",
     "showingCount": "{visible} von {total} sichtbar",
     "empty": "Keine Einträge für den aktuellen Filter.",
@@ -787,7 +787,7 @@
   },
   "auditLog": {
     "title": "Audit Trail der Studie",
-    "subTrail": "Alle Standorte · regulatorische Historie",
+    "subTrail": "Alle Prüfzentren · regulatorische Historie",
     "intro": "Jede Datenänderung, Signatur, jeder SDV-Vorgang, jede Rückfrage und jede administrative Aktion. Unveränderlich. Filter schränken die Sicht ein; nichts wird je verborgen.",
     "showingCount": "{visible} von {total} Ereignissen sichtbar",
     "empty": "Keine Ereignisse für den aktuellen Filter.",
@@ -1059,7 +1059,7 @@
     "completion": "Aufbau-Fortschritt",
     "progressAriaLabel": "Aufbau zu {percent}% abgeschlossen",
     "taskListAriaLabel": "Aufgaben für den Studienaufbau",
-    "sites": "Standorte",
+    "sites": "Prüfzentren",
     "enrolledSubjects": "Aufgenommene Teilnehmer",
     "noDeepLinkYet": "Ansicht ausstehend",
     "adminOnly": "Nur Administrator",
@@ -1075,7 +1075,7 @@
     },
     "statusDialog": {
       "title": "Studie auf {target} setzen?",
-      "intro": "Der Übergang wird im Audit Trail dokumentiert und auf alle untergeordneten Standorte angewendet. Übergänge in Gesperrt / Eingefroren erfordern eine Begründung für den Audit-Eintrag.",
+      "intro": "Der Übergang wird im Audit Trail dokumentiert und auf alle untergeordneten Prüfzentren angewendet. Übergänge in Gesperrt / Eingefroren erfordern eine Begründung für den Audit-Eintrag.",
       "reasonLabel": "Begründung",
       "reasonPlaceholder": "z. B. GCP-bedingte Sperre nach Database-Lock-Review",
       "reasonRequired": "Eine Begründung ist für Gesperrt- / Eingefroren-Übergänge erforderlich.",
@@ -1119,14 +1119,14 @@
         "description": "Feld- und formularübergreifende Prädikate mit Aktionstypen."
       },
       "sites": {
-        "title": "Standorte",
-        "summary": "{count} Standorte",
-        "description": "Pro Standort PI, Anschrift, Rekrutierungs-Obergrenze."
+        "title": "Prüfzentren",
+        "summary": "{count} Prüfzentren",
+        "description": "Pro Prüfzentrum PI, Anschrift, Rekrutierungs-Obergrenze."
       },
       "users": {
         "title": "Nutzer/-innen",
         "summary": "{count} Personen",
-        "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs."
+        "description": "Pro Prüfzentrum Prüfärzte, Monitore, Datenmanager, CRCs."
       }
     },
     "rail": {
@@ -1388,22 +1388,22 @@
     }
   },
   "sites": {
-    "title": "Standorte",
+    "title": "Prüfzentren",
     "subTrail": "Studienaufbau · Multi-Center-Konfiguration",
-    "intro": "Untergeordnete Standorte unter dieser Studie anlegen. Jeder Standort ist eine eigenständige Studienzeile mit eigenen Standort-Metadaten + Rollenzuweisungen; Teilnehmer/innen und Visiten sind je Standort getrennt. Die aktive Studie muss die übergeordnete Studie sein — bei Bedarf über die Auswahl wechseln.",
-    "createAction": "Neuer Standort",
-    "createHeading": "Standort unter dieser Studie anlegen",
-    "submitCreate": "Standort anlegen",
-    "empty": "Noch keine Standorte unter dieser Studie.",
+    "intro": "Untergeordnete Prüfzentren unter dieser Studie anlegen. Jedes Prüfzentrum ist eine eigenständige Studienzeile mit eigenen Rollenzuweisungen und liegt an einem Standort, von dem es Name und Anschrift der Einrichtung übernimmt; Teilnehmer/innen und Visiten sind je Prüfzentrum getrennt. Die aktive Studie muss die übergeordnete Studie sein — bei Bedarf über die Auswahl wechseln.",
+    "createAction": "Neues Prüfzentrum",
+    "createHeading": "Prüfzentrum unter dieser Studie anlegen",
+    "submitCreate": "Prüfzentrum anlegen",
+    "empty": "Noch keine Prüfzentren unter dieser Studie.",
     "pi": "Studienleitung",
     "location": "Standort",
     "statusRemoved": "Entfernt",
     "statusPending": "In Vorbereitung",
     "disable": "Entfernen",
     "restore": "Wiederherstellen",
-    "disableConfirm": "Standort »{name}« entfernen? Bereits erfasste Teilnehmer/innen und Visiten bleiben im Audit Trail dokumentiert, sind aber bis zur Wiederherstellung nicht erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableConfirm": "Prüfzentrum »{name}« entfernen? Bereits erfasste Teilnehmer/innen und Visiten bleiben im Audit Trail dokumentiert, sind aber bis zur Wiederherstellung nicht erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
     "field": {
-      "name": "Standort-Name",
+      "name": "Name des Prüfzentrums",
       "uniqueProtocolId": "Eindeutige Protokoll-ID",
       "principalInvestigator": "Studienleitung",
       "briefSummary": "Kurzbeschreibung",
@@ -1411,7 +1411,7 @@
       "locationHint": "Name und Anschrift der Einrichtung werden vom Standort übernommen.",
       "facilityContactEmail": "Kontakt-E-Mail"
     },
-    "created": "Standort „{name}“ angelegt.",
+    "created": "Prüfzentrum „{name}“ angelegt.",
     "move": {
       "action": "Standort ändern",
       "title": "Standort ändern",
@@ -1473,7 +1473,7 @@
       "noItems": "Noch keine Items in einer Version.",
       "studiesHeading": "Studien, die dieses CRF verwenden",
       "noStudies": "Keine Visiten-Definition einer Studie verwendet dieses CRF.",
-      "siteOf": "Standort von {study}",
+      "siteOf": "Prüfzentrum von {study}",
       "col": {
         "version": "Version",
         "name": "Name",
@@ -2182,8 +2182,8 @@
       "source": "Aktuelle Version",
       "target": "Neue Version",
       "versionOption": "{name} ({count} Event-CRFs)",
-      "sites": "Standorte",
-      "allSites": "Die Studie und alle ihre Standorte",
+      "sites": "Prüfzentren",
+      "allSites": "Die Studie und alle ihre Prüfzentren",
       "studyLevel": "{study} (auf Studienebene eingeschlossene Teilnehmer/innen)",
       "events": "Visiten-Definitionen",
       "allEvents": "Alle Visiten-Definitionen",
@@ -2202,7 +2202,7 @@
       "signatures": "Signaturen über den verschobenen Event-CRFs werden entfernt: {subjects} signierte Teilnehmer/innen, {events} signierte Visite(n), {crfs} signierte Event-CRF(s).",
       "hidden": "{count} erfasste(r) Wert(e) gehören zu Items, die Version »{to}« nicht hat; sie bleiben in der Datenbank, werden aber nicht mehr angezeigt:",
       "locked": "{count} Event-CRF(s) sind gesperrt und werden nicht verschoben:",
-      "notOffered": "Nicht verschoben, weil die Visiten-Definition des Standorts nicht beide Versionen anbietet:",
+      "notOffered": "Nicht verschoben, weil die Visiten-Definition des Prüfzentrums nicht beide Versionen anbietet:",
       "notOfferedRow": "{site} · {event}: {count} Event-CRF(s)",
       "truncated": "Die ersten {shown} von {count} Event-CRFs sind aufgelistet.",
       "confirm": "Mir ist bewusst, dass bei diesen {count} Event-CRF(s) die SDV zurückgesetzt und die Signaturen entfernt werden."
@@ -2220,7 +2220,7 @@
     },
     "col": {
       "subject": "Teilnehmer/in",
-      "site": "Standort",
+      "site": "Prüfzentrum",
       "event": "Visite",
       "clears": "Setzt zurück"
     },
@@ -2384,7 +2384,7 @@
     "create": {
       "title": "Neue Studie anlegen",
       "subTrail": "Studienaufbau",
-      "intro": "Definiert die Protokoll-Identität. Sie werden als Koordinator/in der neuen Studie zugewiesen und können von dort Visiten, CRFs und Standorte konfigurieren. Sysadmin only.",
+      "intro": "Definiert die Protokoll-Identität. Sie werden als Koordinator/in der neuen Studie zugewiesen und können von dort Visiten, CRFs und Prüfzentren konfigurieren. Sysadmin only.",
       "submit": "Studie anlegen"
     },
     "edit": {
@@ -2438,7 +2438,7 @@
     "column": {
       "user": "Nutzer/-in",
       "role": "Rolle",
-      "site": "Standort",
+      "site": "Prüfzentrum",
       "auth": "Auth",
       "lastLogin": "Letzte Anmeldung",
       "active": "Aktiv"
@@ -2739,7 +2739,7 @@
       "warnRange": "Wert außerhalb des Normbereichs — Import + SDV-Flag",
       "reasonHeading": "Änderungsgrund",
       "reasonHint": "{count} Überschreibungen erfordern einen Änderungsgrund. Wird im Audit Trail bei jedem überschriebenen Item dokumentiert.",
-      "reasonPlaceholder": "z. B. Standort hat korrigierte ODM nach Vor-Ort-Quelldatenabgleich gesendet.",
+      "reasonPlaceholder": "z. B. Prüfzentrum hat korrigierte ODM nach Vor-Ort-Quelldatenabgleich gesendet.",
       "cta": "Weiter zum Commit",
       "noRows": "Die hochgeladene XML enthielt keine Item-Datenzeilen.",
       "loadingMoreRows": "{shown} von {total} Zeilen angezeigt. Scrollen, um weitere zu laden.",
@@ -2795,8 +2795,8 @@
       "preflightBlocked": "Pre-Flight-Prüfungen blockieren diese Signatur — bitte zuerst die fehlgeschlagenen Prüfungen klären.",
       "unknown": "Signatur konnte nicht erfasst werden — bitte erneut versuchen."
     },
-    "attestation": "Mit der untenstehenden Signatur erkläre ich, {name} (Prüfarzt/-ärztin, Standort {site}), dass die für Teilnehmer {id} erfassten Daten nach bestem Wissen vollständig, korrekt und mit den Quelldokumenten übereinstimmend sind. Die elektronische Signatur wird gemäß ICH-GCP und 21 CFR Part 11 §11.50 im Audit Trail dokumentiert.",
-    "acknowledgement": "Ich verstehe, dass die Signatur alle CRFs gegen weitere Bearbeitung durch das Standort-Personal sperrt, bis eine administrative Rücksetzung erfolgt.",
+    "attestation": "Mit der untenstehenden Signatur erkläre ich, {name} (Prüfarzt/-ärztin, Prüfzentrum {site}), dass die für Teilnehmer {id} erfassten Daten nach bestem Wissen vollständig, korrekt und mit den Quelldokumenten übereinstimmend sind. Die elektronische Signatur wird gemäß ICH-GCP und 21 CFR Part 11 §11.50 im Audit Trail dokumentiert.",
+    "acknowledgement": "Ich verstehe, dass die Signatur alle CRFs gegen weitere Bearbeitung durch das Personal des Prüfzentrums sperrt, bis eine administrative Rücksetzung erfolgt.",
     "column": {
       "event": "Visite",
       "status": "Status",
@@ -2906,7 +2906,7 @@
     "subtitle": "Willkommen, {name}. Wählen Sie die Studie, an der Sie arbeiten möchten. Sie können später in der oberen Leiste wechseln.",
     "empty": "Sie haben noch keine Rolle in einer Studie. Bitten Sie den Data Manager um Zugang.",
     "activeBadge": "Aktiv",
-    "siteBadge": "Standort",
+    "siteBadge": "Prüfzentrum",
     "binding": "Wird gebunden…",
     "signOut": "Abmelden"
   },
@@ -2932,7 +2932,7 @@
     },
     "fields": {
       "subjectIdGeneration": "Generierung der Probanden-ID",
-      "subjectIdPrefixSuffix": "Standort-Präfix/-Suffix erlauben",
+      "subjectIdPrefixSuffix": "Präfix/Suffix je Prüfzentrum erlauben",
       "subjectPersonIdRequired": "Pflicht für Personen-ID",
       "personIdShownOnCRF": "Personen-ID auf CRF-Kopf anzeigen",
       "collectDob": "Geburtsdatum erfassen",
@@ -3439,7 +3439,7 @@
       },
       "uniqueIdentifier": {
         "label": "Eindeutige Studienteilnehmer-ID",
-        "hint": "Site- oder studienweit eindeutige ID."
+        "hint": "Je Prüfzentrum oder studienweit eindeutige ID."
       },
       "secondaryId": {
         "label": "Sekundär-ID",
@@ -4145,7 +4145,7 @@
         "empty": "Keine passenden Studienteilnehmer gefunden.",
         "searching": "Wird gesucht…",
         "cancel": "Abbrechen",
-        "siteLabel": "Standort",
+        "siteLabel": "Prüfzentrum",
         "studyLabel": "Studie",
         "loadError": "Suche fehlgeschlagen."
       },
@@ -4160,7 +4160,7 @@
         "title": "Studie wählen",
         "subtitle": "PatientId existiert in mehreren Studien — bitte die Zuordnung wählen für",
         "subjectLabelPrefix": "Teilnehmer-ID:",
-        "siteLabelPrefix": "Standort:",
+        "siteLabelPrefix": "Prüfzentrum:",
         "visitFound": "Visite gefunden",
         "noVisit": "Keine Visite am Scan-Datum",
         "cancel": "Abbrechen"
@@ -4503,7 +4503,7 @@
   },
   "adminStudies": {
     "title": "Studien",
-    "subtitle": "Alle Studien der Plattform, auch entfernte: {studies} Studien, {sites} Standorte.",
+    "subtitle": "Alle Studien der Plattform, auch entfernte: {studies} Studien, {sites} Prüfzentren.",
     "create": "Studie anlegen",
     "searchPlaceholder": "Name, Protokoll-ID, OID oder PI suchen …",
     "column": {
@@ -4518,7 +4518,7 @@
     "metadata": "Metadaten (ODM)",
     "remove": "Entfernen",
     "restore": "Wiederherstellen",
-    "sitesNote": "Standorte werden auf der Standortseite ihrer Studie entfernt und wiederhergestellt.",
+    "sitesNote": "Prüfzentren werden auf der Seite „Prüfzentren“ ihrer Studie entfernt und wiederhergestellt.",
     "downloadFailed": "Die Metadaten von {study} konnten nicht heruntergeladen werden. {reason}",
     "status": {
       "AVAILABLE": "Verfügbar",
@@ -4535,7 +4535,7 @@
   "adminLocations": {
     "title": "Standorte",
     "subtitle": "Standorte: {count} ({active} aktiv)",
-    "intro": "Ein Standort ist ein physischer Ort, etwa eine Klinik, eine Abteilung oder ein Partnerkrankenhaus. Eine Studie ist an einem Standort aktiv, wenn sie dort einen Studien-Standort hat; so heißen auf dieser Seite die Standorte, die je Studie angelegt werden. Dateien von Geräten gehören zum Standort ihrer Quelle.",
+    "intro": "Ein Standort ist ein physischer Ort, etwa eine Klinik, eine Abteilung oder ein Partnerkrankenhaus. Eine Studie ist an einem Standort aktiv, wenn sie dort ein Prüfzentrum hat. Dateien von Geräten gehören zum Standort ihrer Quelle.",
     "create": "Standort anlegen",
     "empty": "Es gibt noch keinen Standort.",
     "singleMode": "Diese Installation ist für einen einzigen Standort eingerichtet. Ein zweiter Standort setzt die Umstellung beim Deployment voraus (LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi, siehe Deploy-README, Abschnitt „Uploader tokens and locations“).",
@@ -4543,7 +4543,7 @@
       "code": "Kürzel",
       "name": "Name",
       "place": "Ort",
-      "sites": "Studien-Standorte",
+      "sites": "Prüfzentren",
       "studies": "Studien",
       "files": "Dateien",
       "users": "Personen",
@@ -4581,13 +4581,13 @@
       "close": "Details schließen",
       "address": "Anschrift",
       "noAddress": "Keine Anschrift hinterlegt.",
-      "studiesHeading": "Studien und Studien-Standorte",
-      "studiesEmpty": "An diesem Standort gibt es noch keine Studie und keinen Studien-Standort.",
+      "studiesHeading": "Studien und Prüfzentren",
+      "studiesEmpty": "An diesem Standort gibt es noch keine Studie und kein Prüfzentrum.",
       "studyBadge": "Studie",
-      "siteBadge": "Studien-Standort",
+      "siteBadge": "Prüfzentrum",
       "siteOf": "von {study}",
       "usersHeading": "Zugewiesene Personen",
-      "usersHelp": "Personen, die diesem Standort ausdrücklich zugewiesen sind, sehen seine Dateien im Eingang, auch ohne Studienrolle an einem seiner Studien-Standorte.",
+      "usersHelp": "Personen, die diesem Standort ausdrücklich zugewiesen sind, sehen seine Dateien im Eingang, auch ohne Studienrolle an einem seiner Prüfzentren.",
       "usersEmpty": "Niemand ist diesem Standort ausdrücklich zugewiesen.",
       "addLabel": "Person hinzufügen",
       "addPlaceholder": "Benutzername",
@@ -4608,7 +4608,7 @@
     "siteAdminGranted": "{user} ist jetzt Standort-Admin für „{name}“.",
     "siteAdminWithdrawn": "{user} ist nicht mehr Standort-Admin für „{name}“.",
     "disableTitle": "Standort deaktivieren",
-    "disableConfirm": "Standort „{name}“ deaktivieren? Das geht nur, wenn an ihm keine Studie und kein Studien-Standort mehr aktiv ist. Die Aktion wird im Audit Trail dokumentiert; der Standort lässt sich wiederherstellen.",
+    "disableConfirm": "Standort „{name}“ deaktivieren? Das geht nur, wenn an ihm keine Studie und kein Prüfzentrum mehr aktiv ist. Die Aktion wird im Audit Trail dokumentiert; der Standort lässt sich wiederherstellen.",
     "restoreTitle": "Standort wiederherstellen",
     "restoreConfirm": "Standort „{name}“ wiederherstellen? Er ist danach wieder aktiv. Die Aktion wird im Audit Trail dokumentiert.",
     "disableFailed": "Standort „{name}“ konnte nicht deaktiviert werden. {reason}",
@@ -4765,7 +4765,7 @@
     "previewFailed": "Der Umfang der Entfernung konnte nicht ermittelt werden.",
     "nothingUnder": "Unter dieser Studie liegt noch nichts anderes.",
     "impact": {
-      "sites": "Standorte: {n}",
+      "sites": "Prüfzentren: {n}",
       "roleBindings": "Rollenzuweisungen: {n}",
       "subjects": "Studienteilnehmer/-innen: {n}",
       "groupClasses": "Gruppenklassen: {n}",
@@ -4776,7 +4776,7 @@
       "datasets": "Datensätze: {n}"
     },
     "removeReversible": "Es wird nichts gelöscht: Die Daten bleiben in der Datenbank, und eine entfernte Studie kann wiederhergestellt werden. Bis dahin kann niemand die Studie öffnen oder mit ihren Daten arbeiten.",
-    "restoreIntro": "Die Studie erhält den Status zurück, den sie beim Entfernen hatte, zusammen mit den Standorten, Rollenzuweisungen, Studienteilnehmer/-innen, Visiten und Daten, die mit ihr entfernt wurden. Was schon vorher für sich entfernt wurde, bleibt entfernt.",
+    "restoreIntro": "Die Studie erhält den Status zurück, den sie beim Entfernen hatte, zusammen mit den Prüfzentren, Rollenzuweisungen, Studienteilnehmer/-innen, Visiten und Daten, die mit ihr entfernt wurden. Was schon vorher für sich entfernt wurde, bleibt entfernt.",
     "reason": "Begründung",
     "reasonPlaceholder": "Wird im Audit-Trail festgehalten",
     "reasonRequired": "Bitte eine Begründung angeben; sie wird im Audit-Trail festgehalten.",

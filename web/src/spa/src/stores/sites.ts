@@ -108,6 +108,8 @@ export const useSitesStore = defineStore('sites', () => {
         error.value = humanError(e, label)
         throw e
       }
+      // The per-study site is a "Prüfzentrum" in German; "Standort" is the global location.
+      const what = label === 'create' ? 'Anlegen' : 'Ändern'
       if (e instanceof ApiError) {
         const body = e.body as { message?: string; errors?: Array<{ field: string; message: string }> } | null
         const fieldErrors: Record<string, string> = {}
@@ -115,13 +117,13 @@ export const useSitesStore = defineStore('sites', () => {
         return {
           ok: false,
           fieldErrors,
-          message: body?.message ?? `Standort ${label} fehlgeschlagen (HTTP ${e.status}).`,
+          message: body?.message ?? `${what} des Prüfzentrums fehlgeschlagen (HTTP ${e.status}).`,
         }
       }
       if (e instanceof ApiNetworkError) {
-        return { ok: false, fieldErrors: {}, message: `Backend nicht erreichbar — Standort ${label} fehlgeschlagen.` }
+        return { ok: false, fieldErrors: {}, message: `Backend nicht erreichbar — ${what} des Prüfzentrums fehlgeschlagen.` }
       }
-      return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : `Unbekannter Fehler beim Standort-${label}.` }
+      return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : `Unbekannter Fehler beim ${what} des Prüfzentrums.` }
     }
   }
 
