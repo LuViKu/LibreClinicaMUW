@@ -24,6 +24,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody.FieldError;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,12 +58,16 @@ import org.springframework.web.bind.annotation.RestController;
  * sites point at one ({@code study.location_id}); devices and ingested files
  * will follow in the next phase. This controller is the SPA's whole backend
  * for the page; the contract is the list below, and every state change is
- * audited (types 195-200, {@link AuditTypeIds}).
+ * audited (types 195-200, and 206-207 for the Standort-Admin right,
+ * {@link AuditTypeIds}).
  *
  * <ul>
  *   <li>{@code GET    /admin/locations} — every location, removed ones
  *       included, ordered by name, with the four counts.</li>
- *   <li>{@code POST   /admin/locations} — create; 201.</li>
+ *   <li>{@code POST   /admin/locations} — create; 201. In single-location
+ *       mode ({@link LocationMode#SINGLE}) 409
+ *       {@code {"message":"single-location deployment"}} while a location is
+ *       available: the deployment serves one place.</li>
  *   <li>{@code GET    /admin/locations/{id}} — the location with its studies
  *       and sites and its explicitly assigned users.</li>
  *   <li>{@code PUT    /admin/locations/{id}} — edit the name and address; the
@@ -70,9 +75,15 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code POST   /admin/locations/{id}/disable} — 409 while a study or
  *       site that is not removed is still at the location, and for the only
  *       available location (so a study can always be created somewhere).</li>
- *   <li>{@code POST   /admin/locations/{id}/restore}</li>
+ *   <li>{@code POST   /admin/locations/{id}/restore} — in single-location
+ *       mode the same 409 while another location is available.</li>
  *   <li>{@code PUT    /admin/locations/{id}/users/{username}} — assign a user
- *       (idempotent); {@code DELETE} unassigns (idempotent).</li>
+ *       (idempotent). An optional body {@code {"canManageSources": true|false}}
+ *       grants or takes away the user's Standort-Admin right at the location
+ *       (phase 2: they may issue, revoke and replace the tokens of its
+ *       uploaders); an absent body, {@code {}} and {@code null} keep the right
+ *       as it is, and a new assignment starts without it.
+ *       {@code DELETE} unassigns (idempotent) and takes the right with it.</li>
  * </ul>
  *
  * <p><strong>Authorization.</strong> System administrators only: anonymous
@@ -185,6 +196,9 @@ public class AdminLocationsApiController {
         List<FieldError> errors = new ArrayList<>(shapeErrors(code, name, street, city, zip, country, true));
 
         return inTransaction("create the location", c -> {
+            if (LocationMode.current() == LocationMode.SINGLE && otherAvailable(c, 0) > 0) {
+                return conflict(SINGLE_MODE);
+            }
             if (code != null && CODE_PATTERN.matcher(code).matches()) {
                 addIfPresent(errors, taken(c, "code", code, 0));
             }
@@ -312,7 +326,9 @@ public class AdminLocationsApiController {
             }
             if (otherAvailable(c, id) == 0) {
                 return conflict("Location " + before.code() + " cannot be disabled: it is the only available "
-                        + "location. Create another one first.");
+                        + (LocationMode.current() == LocationMode.SINGLE
+                                ? "location, and this deployment serves exactly one."
+                                : "location. Create another one first."));
             }
 
             setStatus(c, id, REMOVED, me.getId());
@@ -335,6 +351,9 @@ public class AdminLocationsApiController {
             Stored before = lockRow(c, id);
             if (before == null) return notFound(id);
             if (before.statusId() == AVAILABLE) return ResponseEntity.ok(summaryOf(c, id));
+            if (LocationMode.current() == LocationMode.SINGLE && otherAvailable(c, id) > 0) {
+                return conflict(SINGLE_MODE);
+            }
 
             setStatus(c, id, AVAILABLE, me.getId());
             audit(c, AuditTypeIds.LOCATION_RESTORED, me.getId(), id, before.code(), "removed", "available");
@@ -346,12 +365,15 @@ public class AdminLocationsApiController {
     /* PUT / DELETE — a user's explicit assignment                             */
     /* ====================================================================== */
 
-    @Operation(operationId = "assignLocationUser", summary = "Assign a user to a location explicitly; assigning an assigned user changes nothing")
+    @Operation(operationId = "assignLocationUser",
+               summary = "Assign a user to a location explicitly, and grant or revoke their Standort-Admin right; "
+                       + "assigning an assigned user with no change to the right changes nothing")
     @PutMapping(value = "/{id}/users/{username}", produces = MediaType.APPLICATION_JSON_VALUE)
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = LocationDetailDto.class)))
     public ResponseEntity<?> assignLocationUser(@PathVariable("id") int id,
                                                 @PathVariable("username") String username,
+                                                @RequestBody(required = false) LocationUserWriteRequest body,
                                                 HttpSession session) {
         ResponseEntity<?> guard = requireSysadmin(session);
         if (guard != null) return guard;
@@ -368,21 +390,42 @@ public class AdminLocationsApiController {
                 return ResponseEntity.status(404).body(Map.of("message", "No active user '" + username + "'"));
             }
 
-            // can_manage_sources stays false in phase 1: the Standort-Admin right is granted in phase 2.
+            // The Standort-Admin right (DR-040 phase 2): a body that names it sets it, anything else
+            // keeps it as it is (false for a new assignment).
+            Boolean wanted = body == null ? null : body.canManageSources();
+            boolean grantOnInsert = Boolean.TRUE.equals(wanted);
             int inserted;
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO user_location (user_account_id, location_id, can_manage_sources, granted_by, date_granted) "
-                            + "VALUES (?, ?, false, ?, now()) ON CONFLICT (user_account_id, location_id) DO NOTHING")) {
+                            + "VALUES (?, ?, ?, ?, now()) ON CONFLICT (user_account_id, location_id) DO NOTHING")) {
                 ps.setInt(1, user.id());
                 ps.setInt(2, id);
-                ps.setInt(3, me.getId());
+                ps.setBoolean(3, grantOnInsert);
+                ps.setInt(4, me.getId());
                 inserted = ps.executeUpdate();
             }
             if (inserted > 0) {
                 audit(c, AuditTypeIds.LOCATION_USER_ASSIGNED, me.getId(), id, location.code(), null,
                         "user=" + user.name());
-                LOG.info("locations: user id={} assigned to {} (id {}) by sysadmin id={}",
-                        user.id(), location.code(), id, me.getId());
+                if (grantOnInsert) {
+                    audit(c, AuditTypeIds.LOCATION_ADMIN_GRANTED, me.getId(), id, location.code(), null,
+                            "user=" + user.name());
+                }
+                LOG.info("locations: user id={} assigned to {} (id {}) by sysadmin id={}{}",
+                        user.id(), location.code(), id, me.getId(), grantOnInsert ? ", with the Standort-Admin right" : "");
+            } else if (wanted != null && wanted != holdsRight(c, user.id(), id)) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "UPDATE user_location SET can_manage_sources = ? WHERE user_account_id = ? AND location_id = ?")) {
+                    ps.setBoolean(1, wanted);
+                    ps.setInt(2, user.id());
+                    ps.setInt(3, id);
+                    ps.executeUpdate();
+                }
+                audit(c, wanted ? AuditTypeIds.LOCATION_ADMIN_GRANTED : AuditTypeIds.LOCATION_ADMIN_REVOKED,
+                        me.getId(), id, location.code(),
+                        wanted ? null : "user=" + user.name(), wanted ? "user=" + user.name() : null);
+                LOG.info("locations: Standort-Admin right of user id={} at {} (id {}) {} by sysadmin id={}",
+                        user.id(), location.code(), id, wanted ? "granted" : "revoked", me.getId());
             }
             return ResponseEntity.ok(detailOf(c, id));
         });
@@ -408,6 +451,7 @@ public class AdminLocationsApiController {
                 return ResponseEntity.status(404).body(Map.of("message", "No user '" + username + "'"));
             }
 
+            boolean heldRight = holdsRight(c, user.id(), id);
             int deleted;
             try (PreparedStatement ps = c.prepareStatement(
                     "DELETE FROM user_location WHERE user_account_id = ? AND location_id = ?")) {
@@ -418,6 +462,11 @@ public class AdminLocationsApiController {
             if (deleted > 0) {
                 audit(c, AuditTypeIds.LOCATION_USER_UNASSIGNED, me.getId(), id, location.code(),
                         "user=" + user.name(), null);
+                if (heldRight) {
+                    // The right goes with the assignment, so taking the assignment away takes it away too.
+                    audit(c, AuditTypeIds.LOCATION_ADMIN_REVOKED, me.getId(), id, location.code(),
+                            "user=" + user.name(), null);
+                }
                 LOG.info("locations: user id={} unassigned from {} (id {}) by sysadmin id={}",
                         user.id(), location.code(), id, me.getId());
             }
@@ -507,6 +556,9 @@ public class AdminLocationsApiController {
     private static ResponseEntity<?> notFound(int id) {
         return ResponseEntity.status(404).body(Map.of("message", "No location with id " + id));
     }
+
+    /** The 409 of a second available location in single-location mode; the SPA keys on this text. */
+    static final String SINGLE_MODE = "single-location deployment";
 
     private static ResponseEntity<?> conflict(String message) {
         return ResponseEntity.status(409).body(Map.of("message", message));
@@ -698,6 +750,18 @@ public class AdminLocationsApiController {
                 return new Stored(rs.getInt("location_id"), rs.getString("code"), rs.getString("name"),
                         rs.getInt("status_id"), rs.getString("street"), rs.getString("city"),
                         rs.getString("zip"), rs.getString("country"));
+            }
+        }
+    }
+
+    /** True when the user is assigned to the location and holds the Standort-Admin right there. */
+    private static boolean holdsRight(Connection c, int userId, int locationId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT can_manage_sources FROM user_location WHERE user_account_id = ? AND location_id = ?")) {
+            ps.setInt(1, userId);
+            ps.setInt(2, locationId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean(1);
             }
         }
     }

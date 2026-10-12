@@ -56,6 +56,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     static final Map<String, String> OUT_OF_SCOPE_CONTROLLERS = new TreeMap<>(Map.ofEntries(
             Map.entry("AdminApiController", "system administration (password policy, config, cluster); admin role, no site data"),
             Map.entry("AdminLocationsApiController", "system administration (global locations and their user assignments); sysadmin only, holds no site-owned record"),
+            Map.entry("AdminIngestSourcesApiController", "system administration (ingest sources and their locations); sysadmin only, holds no site-owned record"),
             Map.entry("AdminMailApiController", "system administration (test e-mail); admin role"),
             Map.entry("AuthApiController", "logout; no record id"),
             Map.entry("BugReportApiController", "free-text report to the maintainers; no record id"),
@@ -75,6 +76,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
             Map.entry("SystemHealthApiController", "system administration (storage, uploaders)"),
             Map.entry("TerminologyApiController", "global terminology dictionary"),
             Map.entry("UploaderHeartbeatApiController", "uploader device heartbeat; no record id"),
+            Map.entry("UploadersApiController", "uploaders and their tokens (DR-040), authorised by location, not by study: a system administrator, or a Standort-Admin for the locations they hold the right at (another location's uploader is a 404); no site-owned clinical record is reachable"),
             Map.entry("UsersApiController", "user administration (account management), not site clinical data"),
             Map.entry("MeApiController", "own account/session; setActiveStudy is exercised by the session-tampering tests"),
             Map.entry("DicomIngestApiController", "machine ingest endpoint (internal), no session; see unauthenticated probes"),
@@ -89,6 +91,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
     /** Individual handlers of otherwise in-scope controllers that are out of scope, with the reason. */
     static final Map<String, String> OUT_OF_SCOPE_HANDLERS = new TreeMap<>(Map.ofEntries(
             Map.entry("SubjectsApiController#create", "creates in the session's own study; no foreign id (label uniqueness is study-wide by design)"),
+            Map.entry("AdminIngestSourcesApiController#listAnonymousUploaders", "system administration (uploader programs without a token: name, kind and last heartbeat); sysadmin only, no study, site or patient data"),
             Map.entry("SubjectsApiController#checkLabel", "label-uniqueness probe; uniqueness is study-wide by design"),
             Map.entry("StudiesApiController#create", "creates a new top-level study (sysadmin); no foreign id")));
 

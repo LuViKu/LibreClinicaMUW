@@ -24,9 +24,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
  * the caller's is the same answer, so the field is not an oracle for the
  * places other people work at.
  *
- * <p>When the request names none, the only AVAILABLE location is used. Once
- * there are several, "the" location is no longer a fact the server knows, and
- * a study created without one would be nobody's: the field is required.
+ * <p>When the request names none, the default location is used: in
+ * single-location mode the one location. In multi mode "the" location is not a
+ * fact the server knows, and a study created without one would be nobody's:
+ * the field is required.
  */
 final class LocationChoice {
 

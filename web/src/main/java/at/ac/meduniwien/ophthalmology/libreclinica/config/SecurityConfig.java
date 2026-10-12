@@ -34,12 +34,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.JitProvisioningS
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LookupOnlyProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaSecurityContextLogoutHandler;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
 import org.springframework.security.web.transport.HttpsRedirectFilter;
 import org.springframework.scheduling.annotation.EnableScheduling;
+
+import jakarta.servlet.Filter;
 
 /**
  * Phase C.14 cliff (2026-05-30): Java replacement for the
@@ -381,6 +384,10 @@ public class SecurityConfig {
             // path that doesn't match its guarded prefix; cost is one
             // request URI startsWith for the rest of the chain.
             PublicOctUploadRateLimitFilter publicOctUploadRateLimitFilter,
+            // DR-040 phase 2: the front door of the device endpoints. Turns the
+            // X-MUW-Uploader-Token header into the ingest source (or answers 401 /
+            // 429) ahead of the rate limiter, which keys its budget by the source.
+            UploaderTokenFilter uploaderTokenFilter,
             // Second, internet-facing deployment: closes the portals, device
             // APIs and operational endpoints. Off for the internal deployment.
             @Value("${libreclinica.deployment.internet-facing:false}") boolean internetFacing,
@@ -429,7 +436,6 @@ public class SecurityConfig {
             .anonymous(_ -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
             .authorizeHttpRequests(authorization(internetFacing, ssoProperties.isEnabled(), deidRequired))
-            .addFilterBefore(publicOctUploadRateLimitFilter, RATE_LIMIT_ANCHOR)
             .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
             .logout(logout -> logout
@@ -440,19 +446,18 @@ public class SecurityConfig {
                 .logoutSuccessHandler(logoutHandler)
             );
 
+        // The account-less device endpoints: the 404 block when the deployment
+        // asks for one, then the uploader-token front door, then the rate limiter.
+        //
         // Internet-facing deployment: answer 404 for the portals, device APIs
-        // and operational endpoints before the rate limiter or any controller
-        // sees the request. Registered after the rate-limit filter's anchor but
-        // placed before it so it runs first. The authorization rules deny the
-        // same paths as a second layer.
-        if (internetFacing) {
-            http.addFilterBefore(
-                    new InternetFacingPathBlockFilter(internetFacingDeniedPaths(ssoProperties.isEnabled())),
-                    PublicOctUploadRateLimitFilter.class);
-        } else if (deidRequired) {
-            http.addFilterBefore(new InternetFacingPathBlockFilter(DEIDENTIFICATION_CLOSED_PATHS),
-                    PublicOctUploadRateLimitFilter.class);
-        }
+        // and operational endpoints before the token check, the rate limiter or
+        // any controller sees the request. The authorization rules deny the
+        // same paths as a second layer. Required de-identification closes the
+        // upload routes the same way without making the deployment internet-facing.
+        Filter deviceBlock = internetFacing
+                ? new InternetFacingPathBlockFilter(internetFacingDeniedPaths(ssoProperties.isEnabled()))
+                : deidRequired ? new InternetFacingPathBlockFilter(DEIDENTIFICATION_CLOSED_PATHS) : null;
+        addDeviceFilters(http, deviceBlock, uploaderTokenFilter, publicOctUploadRateLimitFilter);
 
         // Phase D.3 (DR-014): institution-agnostic SSO pre-auth.
         // Wired AHEAD of myFilter (the local username/password filter)
@@ -498,6 +503,28 @@ public class SecurityConfig {
         }
 
         return http.build();
+    }
+
+    /**
+     * Mounts the filters in front of the account-less device endpoints, in the
+     * order they must run: the 404 block (null when the deployment has none),
+     * the uploader-token front door ({@link UploaderTokenFilter}), the rate
+     * limiter. The rate limiter sits at {@link #RATE_LIMIT_ANCHOR}; each of the
+     * others is placed immediately before the one after it, so the order holds
+     * whatever else is registered at the anchor.
+     *
+     * <p>The token filter must run after the block, so an internet-facing request
+     * is answered 404 and never learns whether it would have needed a token, and
+     * before the rate limiter, which reads the source the token filter leaves on
+     * the request to give a known uploader a budget of its own.
+     */
+    static void addDeviceFilters(HttpSecurity http, Filter block, UploaderTokenFilter tokens,
+                                 PublicOctUploadRateLimitFilter rateLimit) {
+        http.addFilterBefore(rateLimit, RATE_LIMIT_ANCHOR);
+        http.addFilterBefore(tokens, PublicOctUploadRateLimitFilter.class);
+        if (block != null) {
+            http.addFilterBefore(block, UploaderTokenFilter.class);
+        }
     }
 
     /**

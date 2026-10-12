@@ -2,6 +2,8 @@ import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vu
 import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import { canViewRetinalMetrics } from '@/lib/retinalAccess'
+import { userMayManageUploaders } from '@/lib/locationAccess'
+import { isTokenHash } from '@/lib/uploaderToken'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
@@ -14,6 +16,10 @@ import { canViewRetinalMetrics } from '@/lib/retinalAccess'
  *  - `meta.role` mismatched → redirect to home (the role chip on the
  *    target page would have lied, and routes that demand a specific
  *    role often surface PHI-sensitive data — fail closed).
+ *  - no bound study → the study picker, for every protected route but
+ *    `meta.manageUploaders` when the session may manage a location's
+ *    uploaders (a Standort-Admin who holds no study role has nothing to
+ *    pick); that right, not a role, is what the route is gated by.
  *
  * Routes are added per-sub-phase as workflows ship.
  */
@@ -25,8 +31,14 @@ const router = createRouter({
   // Phase E.6 polish — honour the in-route hash so navigations from
   // CrfEntryView post-completion (#events) land on the correct panel
   // of subject-detail instead of the page top.
-  scrollBehavior(to, _from, savedPosition) {
+  scrollBehavior(to, from, savedPosition) {
     if (savedPosition) return savedPosition
+    // The public upload page's uploader token travels as a fragment
+    // (`/upload#token=…`). It is no anchor: looking for an element by it would
+    // put the token into a development-build warning, and taking it out of the
+    // address bar afterwards must not move the page.
+    if (isTokenHash(to.hash)) return false
+    if (isTokenHash(from.hash) && !to.hash && to.path === from.path) return false
     if (to.hash) return { el: to.hash, behavior: 'smooth' }
     return { top: 0 }
   },
@@ -146,6 +158,20 @@ const router = createRouter({
       name: 'admin-locations',
       component: () => import('@/views/AdminLocationsView.vue'),
       meta: { title: 'Standorte', role: 'Administrator' as const },
+    },
+    /* Uploaders and tokens (phase 2 of the locations): the programs on the
+       acquisition PCs and the token each one uses to bring files into one
+       location's inbox. For a system administrator (every location) and for
+       a Standort-Admin (their own), which is no study role: the route carries
+       no `role` but `manageUploaders`, which guard() answers from /me's
+       manageableLocations the way `blinded` is answered from the study's
+       setting. Registered outside /admin because a Standort-Admin is no
+       administrator and has no System section. */
+    {
+      path: '/uploaders',
+      name: 'uploaders',
+      component: () => import('@/views/UploadersView.vue'),
+      meta: { title: 'Uploader und Tokens', manageUploaders: true },
     },
     {
       path: '/admin/password-policy',
@@ -605,13 +631,29 @@ export function guard(
   if (auth.needsProfile) return { name: 'first-login' }
   // Phase E.4 M1: a bound study is required for every protected route.
   // If the user lacks one, send them through the picker first.
-  if (auth.needsStudyPick) return { name: 'pick-study' }
+  //
+  // One exception (2026-10-12): the Uploaders page, for a session that may
+  // manage a location's uploaders. A Standort-Admin is typically a site's IT
+  // contact who holds no study role at all, so there is no study for them to
+  // bind and the picker would be a dead end. The exception is exactly this one
+  // route and exactly this one right: every other route, and everyone without
+  // a non-empty manageableLocations, still goes through the picker. (The
+  // refusal of a session without the right comes further down.)
+  const studyFree = to.meta.manageUploaders === true && userMayManageUploaders(auth.user)
+  if (auth.needsStudyPick && !studyFree) return { name: 'pick-study' }
   // Phase E.6: forced password change wins over role checks — the
   // legacy SecureController bounces every request (except the
   // ResetPassword target itself) to the change-password page until
   // the user updates their credential. Mirror that here so role-gated
   // views can't render PHI to a stale credential.
   if (auth.needsPasswordChange) return { name: 'change-password' }
+
+  // Uploaders and their tokens (2026-10-12): a right, not a role. /me names the
+  // locations this session may manage (every available location for a system
+  // administrator, a Standort-Admin's own otherwise); none means there is
+  // nothing here for them, and they get the refusal the role-gated admin
+  // routes give: home. See lib/locationAccess.
+  if (to.meta.manageUploaders === true && !userMayManageUploaders(auth.user)) return { name: 'home' }
 
   // Phase E.6 (2026-06-03): meta.role accepts a single role OR an
   // array of roles. Audit Trail, for example, opens to Monitor +

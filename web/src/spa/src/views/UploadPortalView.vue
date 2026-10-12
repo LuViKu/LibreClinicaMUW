@@ -7,14 +7,23 @@
  * access gate, and the backend throttles per client). The two older paths
  * redirect here for a release, because they are in bookmarks and on the
  * QR codes at the cameras.
+ *
+ * In multi-location mode the page needs to say which location it belongs
+ * to: the Standort-Admin's link is `/upload#token=mwu_…`, the token is taken
+ * from the fragment, kept for the browser session and sent with every request
+ * (see `composables/useUploaderTokenIntake` and `api/uploadWorkbench`). With
+ * no token in the link the page works as it always did, for as long as the
+ * server serves it anonymously.
  */
 import { useI18n } from 'vue-i18n'
 
 import PublicFooter from '@/components/octportal/PublicFooter.vue'
 import PublicTopBar from '@/components/octportal/PublicTopBar.vue'
 import UploadWorkbench from '@/components/upload/UploadWorkbench.vue'
+import { useUploaderTokenIntake } from '@/composables/useUploaderTokenIntake'
 
 const { t } = useI18n()
+useUploaderTokenIntake()
 </script>
 
 <template>

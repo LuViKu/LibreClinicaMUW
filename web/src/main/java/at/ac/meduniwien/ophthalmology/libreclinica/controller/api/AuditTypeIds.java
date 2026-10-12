@@ -578,4 +578,43 @@ public final class AuditTypeIds {
     public static final int LOCATION_USER_ASSIGNED           = 199;
     /** A user's assignment to a location removed; {@code old_value} is {@code user=<user name>}. */
     public static final int LOCATION_USER_UNASSIGNED         = 200;
+
+    /*
+     * 201-207 (lc-muw-2026-10-12-audit-types-ingest-sources.xml): ingest sources,
+     * uploader tokens and the Standort-Admin right (DR-040 phase 2). 201-205 are
+     * written by IngestSourceService against audit_table "ingest_source" (entity_id
+     * is the source's id, entity_name its display name); 206-207 by
+     * AdminLocationsApiController against audit_table "location" (entity_id the
+     * location's id, entity_name its code). No row carries a token: the
+     * eight-character hint at most. Nothing personal either, except the user name
+     * of 206/207. They show in the system audit log under the admin filter, never
+     * in a study's log. IngestSourceService repeats 201-205 as its own constants,
+     * which it cannot take from here; AuditApiControllerTest keeps them equal.
+     */
+
+    /** An uploader issued, or a DICOM AE title / the Remidio account seen for the first time (no user). */
+    public static final int INGEST_SOURCE_CREATED            = 201;
+    /** An uploader's token replaced; old and new value carry the hint of each, never a token. */
+    public static final int UPLOADER_TOKEN_REPLACED          = 202;
+    /** An uploader's token revoked; refused from then on. */
+    public static final int UPLOADER_TOKEN_REVOKED           = 203;
+    /** An uploader renamed; old and new value are {@code name=<display name>}. */
+    public static final int UPLOADER_RENAMED                 = 204;
+    /** A source assigned to a location (or taken back to none); {@code items=} counts the waiting files placed. */
+    public static final int INGEST_SOURCE_LOCATION_ASSIGNED  = 205;
+    /** A user given the Standort-Admin right at a location; {@code new_value} is {@code user=<user name>}. */
+    public static final int LOCATION_ADMIN_GRANTED           = 206;
+    /** The right taken away (or the assignment that held it removed); {@code old_value} is {@code user=<user name>}. */
+    public static final int LOCATION_ADMIN_REVOKED           = 207;
+
+    /*
+     * 208 (lc-muw-2026-10-13-location-mode.xml): written by LocationModeStartup
+     * (core, which repeats it as AUDIT_LOCATION_BACKFILLED) when a start in
+     * single-location mode gave the one location to rows that had none. One row
+     * per table and start, audit_table "location", entity_id the location,
+     * entity_name its code, new_value "<table>=<rows>"; no user. Admin filter.
+     */
+
+    /** The single-location startup placed rows without a location at the one location. */
+    public static final int LOCATION_BACKFILLED              = 208;
 }

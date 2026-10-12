@@ -29,6 +29,11 @@ import type { CreateLocationInput, Location } from '@/types/location'
  * On edit every optional field is sent, a blank one as an empty string,
  * so clearing a field works whether the server reads an absent field as
  * "unchanged" or as "cleared". On create the blank ones are left out.
+ *
+ * Whether a second location may exist is the deployment's choice
+ * (`LIBRECLINICA_DEPLOYMENT_LOCATIONS`), not this dialog's: in single mode
+ * the page does not offer to create one, and a refusal that still comes
+ * back is shown as a message of the form.
  */
 interface Props {
   open: boolean

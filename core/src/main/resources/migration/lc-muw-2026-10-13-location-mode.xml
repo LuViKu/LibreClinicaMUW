@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-040: the location mode (single | multi) is a deploy-time choice.
+        In single mode the startup gives the one location to every study,
+        ingest source and unfiled file that has none (LocationModeStartup),
+        so a later switch to multi finds nothing without a place. Each table
+        that changed gets one row of:
+
+          208 location_backfilled   audit_table 'location', entity_id the
+                                    location, entity_name its code,
+                                    new_value '<table>=<rows>'; no user
+
+        Rows appear in the system audit log, never in a study's.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-13-audit-type-location-backfilled" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 208;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit type 208: the single-location startup placed rows without a location.</comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="208"/>
+            <column name="name" value="location_backfilled"/>
+            <column name="display_name" value="Rows placed at the location"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 208</where>
+            </delete>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

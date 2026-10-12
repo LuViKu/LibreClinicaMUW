@@ -308,7 +308,7 @@ public class IngestUploadApiController {
         if (!visibility().canSeeJob(jobId, session)) {
             return ResponseEntity.status(404).body(Map.of("message", "No retinal_inference_job with id " + jobId));
         }
-        return oct.undo(jobId);
+        return oct.undoFor(null, jobId);
     }
 
     /* ---------------- guards / helpers ---------------- */

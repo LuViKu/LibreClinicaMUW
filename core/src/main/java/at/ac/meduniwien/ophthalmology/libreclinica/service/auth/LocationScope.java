@@ -60,12 +60,13 @@ import org.springframework.stereotype.Component;
  *
  * <h2>The default location</h2>
  *
- * {@link #defaultLocationId()} is the only AVAILABLE location when exactly one
- * exists, else null. While there is one location, everything is at it and
- * nothing changes; the separation starts with the second. A study without a
- * location of its own reads as being at the default one for the same reason,
- * so a study created by a path that does not know about locations (a data fix,
- * an import) cannot take its users' files away on a single-location install.
+ * {@link #defaultLocationId()} depends on the deployment's {@link LocationMode},
+ * never on how many locations exist. In single mode it is the one AVAILABLE
+ * location: everything is at it, and a study without a location of its own
+ * reads as being there, so a study created by a path that does not know about
+ * locations (a data fix, an import) cannot take its users' files away. In
+ * multi mode it is always null: what has no place of its own belongs to none
+ * and waits for an administrator.
  */
 @Component
 public class LocationScope {
@@ -150,9 +151,10 @@ public class LocationScope {
     /* ------------------------------------------------------------------ */
 
     /**
-     * The only AVAILABLE location, or null when there are none or several.
-     * Null is the right answer for "which place does this device belong to"
-     * once a second location exists: a file nobody has assigned waits for an
+     * Where something without a place of its own belongs: in single mode the
+     * one AVAILABLE location; in multi mode, and when there is none, null. Null
+     * is the right answer for "which place does this device belong to" on a
+     * multi-location deployment: a file nobody has assigned waits for an
      * administrator.
      */
     public Integer defaultLocationId() {
@@ -165,6 +167,9 @@ public class LocationScope {
     }
 
     public static Integer defaultLocationId(Connection c) throws SQLException {
+        if (LocationMode.current() == LocationMode.MULTI) return null;
+        // Single mode has one active location (the startup refuses a database with
+        // more); several would still read as none rather than as an arbitrary one.
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT location_id FROM location WHERE status_id = ? ORDER BY location_id LIMIT 2")) {
             ps.setInt(1, STATUS_AVAILABLE);
@@ -229,6 +234,46 @@ public class LocationScope {
                 return rs.wasNull() ? null : id;
             }
         }
+    }
+
+    /**
+     * The studies and sites that are at a location: every {@code study} row that
+     * is not removed and sits at {@code locationId}. The device endpoints use it
+     * to answer a request that carries an uploader token only for the visits of
+     * that token's place (DR-040 phase 2); intersected with the scope the
+     * deployment configured, it is the whole of what such a request may reach.
+     *
+     * <p>A study with no location of its own reads as being at the default
+     * location, the same rule {@link #visibleLocations} applies, so a study
+     * created by a path that does not know about locations does not drop out of
+     * its only clinic's lookups. In multi mode there is no default and such a
+     * study is at none.
+     *
+     * <p>Both the ids of sites and of the studies without sites are returned;
+     * a parent study that has sites is in the set only when its coordinating
+     * location is {@code locationId}. A subject is enrolled at exactly one of
+     * these rows ({@code study_subject.study_id}), which is what the lookups
+     * compare against.
+     */
+    public static Set<Integer> studyIdsAtLocation(Connection c, int locationId) throws SQLException {
+        Integer defaultId = defaultLocationId(c);
+        String sql = "SELECT s.study_id FROM study s"
+                + " WHERE COALESCE(s.status_id, ?) NOT IN (?, ?)"
+                + "   AND COALESCE(s.location_id, CAST(? AS INTEGER)) = ?"
+                + " ORDER BY s.study_id";
+        Set<Integer> ids = new LinkedHashSet<>();
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            int i = 1;
+            ps.setInt(i++, STATUS_AVAILABLE);
+            ps.setInt(i++, STATUS_REMOVED);
+            ps.setInt(i++, STATUS_AUTO_REMOVED);
+            if (defaultId == null) ps.setNull(i++, Types.INTEGER); else ps.setInt(i++, defaultId);
+            ps.setInt(i, locationId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) ids.add(rs.getInt(1));
+            }
+        }
+        return Collections.unmodifiableSet(ids);
     }
 
     /**

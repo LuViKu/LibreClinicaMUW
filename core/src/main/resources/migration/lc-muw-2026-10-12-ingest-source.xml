@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-040 phase 2 — ingest sources and uploader tokens.
+
+        Phase 1 gave every ingested file an origin location. A file that comes
+        from a device still got it from a guess (the only location, or none),
+        because nothing said WHERE a device is. This adds the thing that says
+        so:
+
+          ingest_source   where files come from. kind 'uploader' is an
+                          acquisition-PC program (Export Watcher, Optomed
+                          Bridge) that authenticates with a token; 'dicom_ae'
+                          is a DICOM calling AE title; 'remidio' the Remidio
+                          cloud account; 'portal' is reserved for the public
+                          upload page. location_id is the place the source is
+                          at; NULL means "not assigned yet", and what such a
+                          source sends waits for a system administrator.
+
+          An uploader's token is shown once, when it is issued, and never
+          stored: token_hash is the lowercase hex SHA-256 of it (unique, so a
+          request is matched by one index lookup) and token_hint the first
+          eight characters after the "mwu_" prefix, so a person can tell tokens
+          apart. A revoked token stays on the row (revoked_at) so that the
+          refusal is a state and not a missing row.
+
+          last_used_at is the last time the source was seen, written at most
+          once a minute. instance_uid names the heartbeat instance
+          (uploader_instance) the token last reported as.
+
+          ingest_item.ingest_source_id
+                          which source delivered the file. NULL for everything
+                          that arrived before this change (they keep the
+                          origin_location_id phase 1 gave them).
+
+        NO BEHAVIOUR CHANGE. No source exists after this changeset, no ingest
+        item points at one, and nothing reads the table until the token checks
+        of the device endpoints are switched on.
+
+        The two indexes that carry the rules are partial on purpose:
+          - (kind, source_key) is unique where a key exists: one AE title, one
+            Remidio account, one row. Uploaders have no key.
+          - (location_id, lower(display_name)) is unique for uploaders: a
+            person tells uploaders of one place apart by name.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-10-12-ingest-source-schema" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="ingest_source"/>
+            </not>
+        </preConditions>
+        <comment>ingest_source: where ingested files come from, and the uploader tokens that identify them.</comment>
+
+        <createTable tableName="ingest_source">
+            <column autoIncrement="true" name="ingest_source_id" type="SERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_ingest_source" nullable="false"/>
+            </column>
+            <!-- uploader | dicom_ae | remidio | portal (the check below). -->
+            <column name="kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The AE title of a dicom_ae, the account name of a remidio; NULL for an uploader. -->
+            <column name="source_key" type="VARCHAR(64)"/>
+            <column name="display_name" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- NULL: not assigned to a place yet. -->
+            <column name="location_id" type="INT"/>
+            <!-- Lowercase hex SHA-256 of the token. The token itself is never stored. -->
+            <column name="token_hash" type="VARCHAR(64)">
+                <constraints unique="true" uniqueConstraintName="ux_ingest_source_token_hash"/>
+            </column>
+            <!-- The first eight characters after "mwu_": enough to tell tokens apart, not to use one. -->
+            <column name="token_hint" type="VARCHAR(16)"/>
+            <column name="created_by" type="INT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_used_at" type="TIMESTAMP"/>
+            <column name="revoked_at" type="TIMESTAMP"/>
+            <column name="revoked_by" type="INT"/>
+            <!-- uploader_instance.instance_uid of the program this token last reported as. -->
+            <column name="instance_uid" type="VARCHAR(36)"/>
+        </createTable>
+
+        <sql>ALTER TABLE ingest_source ADD CONSTRAINT ck_ingest_source_kind
+             CHECK (kind IN ('uploader', 'dicom_ae', 'remidio', 'portal'))</sql>
+        <addForeignKeyConstraint baseTableName="ingest_source" baseColumnNames="location_id"
+                                 constraintName="fk_ingest_source_location"
+                                 referencedTableName="location" referencedColumnNames="location_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <sql>CREATE UNIQUE INDEX ux_ingest_source_kind_key ON ingest_source (kind, source_key)
+             WHERE source_key IS NOT NULL</sql>
+        <sql>CREATE UNIQUE INDEX ux_ingest_source_uploader_name ON ingest_source (location_id, lower(display_name))
+             WHERE kind = 'uploader'</sql>
+        <createIndex tableName="ingest_source" indexName="ix_ingest_source_location">
+            <column name="location_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="ingest_source"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-12-ingest-item-source" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="ingest_source_id"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.ingest_source_id: which source delivered the file (NULL before this change).</comment>
+
+        <addColumn tableName="ingest_item">
+            <column name="ingest_source_id" type="INT"/>
+        </addColumn>
+        <!-- Every existing row is NULL, so the key is cheap to add. -->
+        <addForeignKeyConstraint baseTableName="ingest_item" baseColumnNames="ingest_source_id"
+                                 constraintName="fk_ingest_item_ingest_source"
+                                 referencedTableName="ingest_source" referencedColumnNames="ingest_source_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <!-- Partial: most rows predate sources, and the two readers (the pending count and the
+             stamping of a newly assigned source) both ask for one source's rows. -->
+        <sql>CREATE INDEX idx_ingest_item_ingest_source ON ingest_item (ingest_source_id)
+             WHERE ingest_source_id IS NOT NULL</sql>
+
+        <rollback>
+            <dropIndex tableName="ingest_item" indexName="idx_ingest_item_ingest_source"/>
+            <dropForeignKeyConstraint baseTableName="ingest_item" constraintName="fk_ingest_item_ingest_source"/>
+            <dropColumn tableName="ingest_item" columnName="ingest_source_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

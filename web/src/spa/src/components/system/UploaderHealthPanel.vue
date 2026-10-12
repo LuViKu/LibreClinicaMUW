@@ -21,6 +21,7 @@ import { useI18n } from 'vue-i18n'
 import { apiDelete, apiGet, ApiError } from '@/api/client'
 import { useConfirm } from '@/composables/useConfirm'
 import { formatAgo, formatBytes, formatInstant, secondsSince } from '@/lib/byteFormat'
+import { programName } from '@/lib/uploaderPrograms'
 import type { Uploader, UploadersResponse } from '@/types/systemHealth'
 
 const props = defineProps<{ refreshKey?: number }>()
@@ -45,16 +46,6 @@ async function load() {
 
 onMounted(load)
 watch(() => props.refreshKey, load)
-
-/** Program names are product names: the same in every language, so not in the locale files. */
-const PROGRAM_NAMES: Record<string, string> = {
-  'export-watcher': 'Export Watcher',
-  'optomed-bridge': 'Optomed Bridge',
-}
-
-function programName(kind: string): string {
-  return PROGRAM_NAMES[kind] ?? kind
-}
 
 /** `server-unreachable` → `serverUnreachable`, the key the locale files use. */
 function camel(code: string): string {

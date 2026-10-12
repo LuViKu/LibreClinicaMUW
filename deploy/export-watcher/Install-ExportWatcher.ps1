@@ -10,8 +10,12 @@
     2. puts a shortcut in the user's Startup folder that launches
        ExportWatcher.ps1 hidden at login;
     3. starts the watcher now.
-  There is no secret to enter: the public upload front door takes none.
-  Switch it on from the tray icon's Settings once the folder is right.
+  Nothing secret is entered here. While the platform's upload front door is
+  open the watcher needs no token; once an administrator has issued this PC
+  an uploader token (DR-040), type it into the tray icon's Settings
+  ("Uploader-Token") - never here, so it is DPAPI-protected on save and never
+  sits in a shell history. Switch the watcher on from the same Settings
+  dialog once the folder is right.
 .PARAMETER BaseUrl
   The platform's base URL including the context path, e.g.
   https://ecrf.augen.meduniwien.ac.at/LibreClinica
@@ -100,5 +104,5 @@ if ($p.WaitForExit(4000)) {
     exit 1
 }
 Write-Host "Export Watcher running (pid $($p.Id)) - look for the grey square in the tray."
-Write-Host "Right-click it -> Settings... -> check the folder -> Enabled. The icon turns teal when enabled."
+Write-Host "Right-click it -> Settings... -> check the folder (and the Uploader-Token, once one is issued) -> Enabled. The icon turns teal when enabled."
 Write-Host "Point the device's export at $folder."

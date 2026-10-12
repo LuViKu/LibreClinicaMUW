@@ -15,6 +15,19 @@
  * panel lists its studies and sites (read only) and the people assigned to
  * it explicitly, who can be added by username and removed. Every change
  * confirms itself with a notice.
+ *
+ * Each assigned person carries a Standort-Admin checkbox: the right to issue,
+ * replace and revoke the uploader tokens of this location (phase 2). A second
+ * tab, "Quellen", lists where device files come from and lets the
+ * administrator assign each source a location (LocationSourcesPanel); its
+ * badge counts the sources that still have none.
+ *
+ * How many locations may be active is the deployment's choice
+ * (`LIBRECLINICA_DEPLOYMENT_LOCATIONS`, reported by `/me` as `locationMode`).
+ * In single mode, once one location is active, the page offers neither to
+ * create another nor to restore a disabled one, and says instead that a
+ * second location is a deploy step; the server would refuse both with a 409.
+ * Multi mode offers both, as before.
  */
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,8 +40,11 @@ import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import LocationEditDialog from '@/components/LocationEditDialog.vue'
+import LocationSourcesPanel from '@/components/LocationSourcesPanel.vue'
 
 import { useAdminLocationsStore } from '@/stores/adminLocations'
+import { useAuthStore } from '@/stores/auth'
+import { useAdminIngestSourcesStore } from '@/stores/adminIngestSources'
 import { useAdminStudiesStore } from '@/stores/adminStudies'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useConfirm } from '@/composables/useConfirm'
@@ -36,13 +52,53 @@ import type { Location, LocationUser } from '@/types/location'
 
 const { t, te } = useI18n()
 const store = useAdminLocationsStore()
+const auth = useAuthStore()
 const adminStudies = useAdminStudiesStore()
+const sourcesStore = useAdminIngestSourcesStore()
 const notifications = useNotificationsStore()
 const confirm = useConfirm()
 
-onMounted(() => { void store.load() })
+onMounted(() => {
+  void store.load()
+  // Read with the page, not with the tab: the tab's badge is how a source that
+  // still has no location is noticed from the first tab.
+  void sourcesStore.load()
+})
+
+/* ------------------------------ The tabs ------------------------------ */
+
+type TabName = 'locations' | 'sources'
+const TABS: readonly TabName[] = ['locations', 'sources']
+const tab = ref<TabName>('locations')
+
+function selectTab(name: TabName, focus = false) {
+  tab.value = name
+  if (focus) void nextTick(() => document.getElementById(`locations-tab-${name}`)?.focus())
+}
+
+/** Arrow keys, Home and End move between the tabs and select the one they reach. */
+function onTabKeydown(e: KeyboardEvent) {
+  const i = TABS.indexOf(tab.value)
+  let next: number
+  if (e.key === 'ArrowRight') next = (i + 1) % TABS.length
+  else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length
+  else if (e.key === 'Home') next = 0
+  else if (e.key === 'End') next = TABS.length - 1
+  else return
+  e.preventDefault()
+  selectTab(TABS[next], true)
+}
 
 const activeCount = computed(() => store.locations.filter((l) => l.status === 'available').length)
+
+/** The deployment keeps exactly one active location (`/me`'s `locationMode`). */
+const singleMode = computed(() => auth.locationMode === 'single')
+/**
+ * Single mode with its one location active: a further one can be neither
+ * created nor restored. Until the list has arrived the page cannot tell, so
+ * it offers neither meanwhile rather than a button that may vanish.
+ */
+const atSingleLimit = computed(() => singleMode.value && (!store.loaded || activeCount.value > 0))
 
 function nonBlank(v: string | null | undefined): v is string {
   return v != null && v.trim() !== ''
@@ -115,7 +171,7 @@ async function restore(l: Location) {
 const detailTitle = ref<HTMLElement | null>(null)
 const assignName = ref('')
 /** A refusal of the last change in the panel; the add field is marked only when the add was refused. */
-const panelError = ref<{ from: 'assign' | 'unassign'; message: string } | null>(null)
+const panelError = ref<{ from: 'assign' | 'unassign' | 'siteAdmin'; message: string } | null>(null)
 const assigning = ref(false)
 
 /** What the panel's heading shows while the detail is still on its way. */
@@ -211,6 +267,44 @@ async function unassign(u: LocationUser) {
     panelError.value = { from: 'unassign', message: result.message }
   }
 }
+
+/** Usernames whose Standort-Admin box has a request on its way; a second click meanwhile is put aside. */
+const siteAdminBusy = ref<string[]>([])
+
+/**
+ * Grants or withdraws the Standort-Admin right of an assigned person. The box
+ * has already flipped when this runs; the answer decides whether it stays.
+ * A refusal puts it back and is shown in the panel, and the box is never
+ * disabled while the request runs, so the cursor stays on it.
+ */
+async function toggleSiteAdmin(u: LocationUser, event: Event) {
+  const d = store.detail
+  const box = event.target as HTMLInputElement
+  if (!d || siteAdminBusy.value.includes(u.username)) {
+    box.checked = u.canManageSources
+    return
+  }
+  const wanted = box.checked
+  panelError.value = null
+  siteAdminBusy.value = [...siteAdminBusy.value, u.username]
+  try {
+    const result = await store.setCanManageSources(d.id, u.username, wanted)
+    if (result.ok) {
+      const user = nameOfUser(result.location.users, u.username)
+      notifications.success(
+        t(wanted ? 'adminLocations.siteAdminGranted' : 'adminLocations.siteAdminWithdrawn', {
+          user,
+          name: result.location.name,
+        }),
+      )
+    } else {
+      box.checked = u.canManageSources
+      panelError.value = { from: 'siteAdmin', message: result.message }
+    }
+  } finally {
+    siteAdminBusy.value = siteAdminBusy.value.filter((n) => n !== u.username)
+  }
+}
 </script>
 
 <template>
@@ -226,8 +320,16 @@ async function unassign(u: LocationUser) {
             {{ t('adminLocations.subtitle', { count: store.locations.length, active: activeCount }) }}
           </p>
           <p class="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">{{ t('adminLocations.intro') }}</p>
+          <!-- In single mode a second location is a deploy step, not a click: say so where "create" would be. -->
+          <p
+            v-if="tab === 'locations' && singleMode"
+            class="text-xs text-slate-600 mt-2 max-w-3xl leading-relaxed"
+            data-testid="locations-single-mode"
+          >
+            {{ t('adminLocations.singleMode') }}
+          </p>
         </template>
-        <template v-if="!store.error" #actions>
+        <template v-if="tab === 'locations' && !store.error && !atSingleLimit" #actions>
           <button
             type="button"
             class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium muw-focus"
@@ -239,6 +341,62 @@ async function unassign(u: LocationUser) {
         </template>
       </PageHeader>
 
+      <div
+        class="mb-5 flex gap-1 border-b border-slate-200"
+        role="tablist"
+        :aria-label="t('adminLocations.tab.label')"
+        @keydown="onTabKeydown"
+      >
+        <button
+          id="locations-tab-locations"
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'locations'"
+          aria-controls="locations-panel-locations"
+          :tabindex="tab === 'locations' ? 0 : -1"
+          class="px-3 py-2 text-[13px] font-medium -mb-px border-b-2 muw-focus"
+          :class="tab === 'locations'
+            ? 'border-muw-blue text-muw-blue'
+            : 'border-transparent text-slate-600 hover:text-slate-800'"
+          data-testid="locations-tab-locations"
+          @click="selectTab('locations')"
+        >{{ t('adminLocations.tab.locations') }}</button>
+        <button
+          id="locations-tab-sources"
+          type="button"
+          role="tab"
+          :aria-selected="tab === 'sources'"
+          aria-controls="locations-panel-sources"
+          :tabindex="tab === 'sources' ? 0 : -1"
+          class="px-3 py-2 text-[13px] font-medium -mb-px border-b-2 muw-focus"
+          :class="tab === 'sources'
+            ? 'border-muw-blue text-muw-blue'
+            : 'border-transparent text-slate-600 hover:text-slate-800'"
+          data-testid="locations-tab-sources"
+          @click="selectTab('sources')"
+        >
+          {{ t('adminLocations.tab.sources') }}
+          <!-- Sources that still have no location: the number is for the eye, the sentence for the ear. -->
+          <template v-if="sourcesStore.unassignedCount > 0">
+            <span
+              class="ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900"
+              aria-hidden="true"
+              data-testid="locations-tab-sources-badge"
+            >{{ sourcesStore.unassignedCount }}</span>
+            <span class="sr-only"> {{ t('adminLocations.tab.sourcesBadgeAria', { n: sourcesStore.unassignedCount }) }}</span>
+          </template>
+        </button>
+      </div>
+
+      <!-- The Standorte panel runs from here to the end of the location's detail section.
+           Its content is not re-indented, to keep this change's diff to what changed. -->
+      <div
+        v-if="tab === 'locations'"
+        id="locations-panel-locations"
+        role="tabpanel"
+        aria-labelledby="locations-tab-locations"
+        data-testid="locations-panel-locations"
+      >
       <div
         v-if="store.error"
         class="mb-3 rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800"
@@ -329,27 +487,33 @@ async function unassign(u: LocationUser) {
                 >
                   {{ t('adminLocations.action.edit') }}
                 </button>
-                <span class="text-slate-400" aria-hidden="true">·</span>
-                <button
-                  v-if="loc.status === 'removed'"
-                  type="button"
-                  class="text-muw-teal-700 hover:underline muw-focus rounded-sm"
-                  :aria-label="t('adminLocations.action.restoreAria', { name: loc.name })"
-                  :data-testid="`location-restore-${loc.id}`"
-                  @click="restore(loc)"
-                >
-                  {{ t('adminLocations.action.restore') }}
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="text-rose-600 hover:underline muw-focus rounded-sm"
-                  :aria-label="t('adminLocations.action.disableAria', { name: loc.name })"
-                  :data-testid="`location-disable-${loc.id}`"
-                  @click="disable(loc)"
-                >
-                  {{ t('adminLocations.action.disable') }}
-                </button>
+                <!-- In single mode with a location active, a disabled one cannot come back. -->
+                <template v-if="loc.status === 'removed'">
+                  <template v-if="!atSingleLimit">
+                    <span class="text-slate-400" aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      class="text-muw-teal-700 hover:underline muw-focus rounded-sm"
+                      :aria-label="t('adminLocations.action.restoreAria', { name: loc.name })"
+                      :data-testid="`location-restore-${loc.id}`"
+                      @click="restore(loc)"
+                    >
+                      {{ t('adminLocations.action.restore') }}
+                    </button>
+                  </template>
+                </template>
+                <template v-else>
+                  <span class="text-slate-400" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    class="text-rose-600 hover:underline muw-focus rounded-sm"
+                    :aria-label="t('adminLocations.action.disableAria', { name: loc.name })"
+                    :data-testid="`location-disable-${loc.id}`"
+                    @click="disable(loc)"
+                  >
+                    {{ t('adminLocations.action.disable') }}
+                  </button>
+                </template>
               </div>
             </td>
           </tr>
@@ -443,7 +607,8 @@ async function unassign(u: LocationUser) {
               <h3 id="location-users-heading" class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {{ t('adminLocations.detail.usersHeading') }}
               </h3>
-              <p class="mb-3 text-xs leading-relaxed text-slate-500">{{ t('adminLocations.detail.usersHelp') }}</p>
+              <p class="mb-1 text-xs leading-relaxed text-slate-500">{{ t('adminLocations.detail.usersHelp') }}</p>
+              <p class="mb-3 text-xs leading-relaxed text-slate-500">{{ t('adminLocations.detail.siteAdminHelp') }}</p>
 
               <form
                 v-if="store.detail.status === 'available'"
@@ -488,25 +653,48 @@ async function unassign(u: LocationUser) {
                   <span class="min-w-0">
                     <span class="font-medium text-slate-900">{{ u.displayName }}</span>
                     <span class="ml-1 font-mono text-[11px] text-slate-500">{{ u.username }}</span>
-                    <StatusPill v-if="u.canManageSources" compact variant="info" class="ml-1">
-                      {{ t('adminLocations.detail.siteAdmin') }}
-                    </StatusPill>
                   </span>
-                  <button
-                    type="button"
-                    class="shrink-0 text-xs text-rose-600 hover:underline muw-focus rounded-sm"
-                    :aria-label="t('adminLocations.detail.removeAria', { user: u.displayName || u.username })"
-                    :data-testid="`location-unassign-${u.username}`"
-                    @click="unassign(u)"
-                  >
-                    {{ t('adminLocations.detail.remove') }}
-                  </button>
+                  <span class="flex shrink-0 items-center gap-3">
+                    <!-- The Standort-Admin right: the box flips first, the answer decides whether it stays. -->
+                    <label class="inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5 rounded border-slate-300 muw-focus"
+                        :checked="u.canManageSources"
+                        :disabled="store.detail.status !== 'available'"
+                        :aria-label="t('adminLocations.detail.siteAdminAria', { user: u.displayName || u.username })"
+                        :data-testid="`location-siteadmin-${u.username}`"
+                        @change="toggleSiteAdmin(u, $event)"
+                      />
+                      {{ t('adminLocations.detail.siteAdmin') }}
+                    </label>
+                    <button
+                      type="button"
+                      class="text-xs text-rose-600 hover:underline muw-focus rounded-sm"
+                      :aria-label="t('adminLocations.detail.removeAria', { user: u.displayName || u.username })"
+                      :data-testid="`location-unassign-${u.username}`"
+                      @click="unassign(u)"
+                    >
+                      {{ t('adminLocations.detail.remove') }}
+                    </button>
+                  </span>
                 </li>
               </ul>
             </section>
           </div>
         </template>
       </section>
+      </div>
+
+      <div
+        v-else
+        id="locations-panel-sources"
+        role="tabpanel"
+        aria-labelledby="locations-tab-sources"
+        data-testid="locations-panel-sources"
+      >
+        <LocationSourcesPanel />
+      </div>
     </div>
 
     <LocationEditDialog

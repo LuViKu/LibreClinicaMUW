@@ -23,6 +23,14 @@ import type { StudyOption } from '@/types/auth'
  * them the list is every such study and site (the admin study list),
  * not only their own bindings; without that, an administrator who holds
  * no study role would find nothing to pick.
+ *
+ * A Standort-Admin who holds no study role has nothing to pick either, and
+ * unlike an administrator no way to get a list. That is the typical IT
+ * contact of a site, and the picker would be a dead end for them: when the
+ * list was read, is empty, and no study is bound, they are sent on to the
+ * Uploaders page, the one place they have work. Everyone else keeps the
+ * picker and its message; so does anyone when the list could not be read,
+ * since an unknown list is not an empty one.
  */
 const { t } = useI18n()
 const router = useRouter()
@@ -31,10 +39,13 @@ const adminStudies = useAdminStudiesStore()
 
 const submitting = ref<string | null>(null)
 const localError = ref<string | null>(null)
+/** Set while the picker hands a Standort-Admin on, so that it shows "loading" and not its empty message. */
+const leaving = ref(false)
 
 onMounted(async () => {
-  await auth.loadStudies()
+  const read = await auth.loadStudies()
   if (auth.isSysAdmin) await adminStudies.load()
+  await leaveWhenNothingToPick(read)
 })
 
 const options = computed<StudyOption[]>(() => {
@@ -44,6 +55,30 @@ const options = computed<StudyOption[]>(() => {
 })
 
 const loading = computed(() => auth.isLoading || adminStudies.isLoading)
+
+/**
+ * Sends a Standort-Admin with no study to pick to the Uploaders page, replacing
+ * the picker in the history so that "back" does not return to an empty list.
+ *
+ * Only when the picker really has nothing to offer: the lists were read (an
+ * unknown list is not an empty one), none is left, and no study is bound
+ * (someone with a bound study came here to switch, and has one to switch to).
+ */
+async function leaveWhenNothingToPick(read: boolean): Promise<void> {
+  if (!read || !auth.canManageUploaders || auth.user?.activeStudy) return
+  if (auth.isSysAdmin && adminStudies.error) return
+  if (options.value.length > 0) return
+  leaving.value = true
+  try {
+    const failure = await router.replace({ name: 'uploaders' })
+    // A successful replace unmounts this view, and it stays "leaving" until then. If the
+    // navigation did not happen (it was cancelled), the picker is still here: show what it has.
+    if (failure) leaving.value = false
+  } catch (e) {
+    leaving.value = false
+    throw e
+  }
+}
 
 async function choose(option: StudyOption): Promise<void> {
   submitting.value = option.oid
@@ -80,7 +115,7 @@ function roleVariant(role: string): 'investigator' | 'monitor' | 'data-manager' 
         </p>
       </div>
 
-      <div v-if="loading && options.length === 0"
+      <div v-if="(loading || leaving) && options.length === 0"
            class="text-slate-500 italic text-center py-8">
         {{ t('common.loading') }}
       </div>

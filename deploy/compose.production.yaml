@@ -101,6 +101,10 @@ services:
       # disables the public portals, device and internal endpoints in the app.
       # Off unless /etc/libreclinica/env says otherwise.
       LIBRECLINICA_DEPLOYMENT_INTERNET_FACING: "${LIBRECLINICA_DEPLOYMENT_INTERNET_FACING:-false}"
+      # DR-040 location mode: single (one location, uploads without a token
+      # work) unless /etc/libreclinica/env says multi. Switching is a deploy
+      # step: deploy/README.md, "Uploader tokens and locations".
+      LIBRECLINICA_DEPLOYMENT_LOCATIONS: "${LIBRECLINICA_DEPLOYMENT_LOCATIONS:-single}"
       # Skip the demo Liquibase context (subjects + CRFs + dn_item_data
       # seed) — production starts on a clean schema.
       LIQUIBASE_CONTEXTS: ""

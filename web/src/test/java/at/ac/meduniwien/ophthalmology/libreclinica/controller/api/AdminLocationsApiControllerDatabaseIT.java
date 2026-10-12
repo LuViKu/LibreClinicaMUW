@@ -43,12 +43,14 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,9 +124,14 @@ class AdminLocationsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         mvc = mvcOn(new AdminLocationsApiController(DATA_SOURCE));
     }
 
-    /** Back to the changelog's one location, no assignments, no audit rows of locations. */
+    /**
+     * Back to the changelog's one location, no assignments, no audit rows of
+     * locations. Multi-location mode: most tests here make further locations;
+     * the single-mode rules have tests of their own.
+     */
     @BeforeEach
     void reset() throws Exception {
+        LocationMode.set(LocationMode.MULTI);
         try (Connection c = DATA_SOURCE.getConnection()) {
             exec(c, "DELETE FROM audit_log_event WHERE audit_table = 'location'");
             exec(c, "DELETE FROM ingest_item WHERE device = 'locadm-cam'");
@@ -650,6 +657,61 @@ class AdminLocationsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         exec("UPDATE study SET location_id = " + defaultId + " WHERE unique_identifier IN ('locadm-p1', 'locadm-s1')");
         call(post(BASE + "/" + id + "/disable"), admin(), 200);
         assertEquals(5, row(id).get("status_id"));
+    }
+
+    @AfterAll
+    static void backToSingleMode() {
+        LocationMode.set(LocationMode.SINGLE);
+    }
+
+    /* ====================================================================== */
+    /* Single-location mode                                                    */
+    /* ====================================================================== */
+
+    @Test
+    void inSingleModeASecondLocationIsRefused() throws Exception {
+        LocationMode.set(LocationMode.SINGLE);
+        JsonNode body = call(json(post(BASE), "{\"code\":\"IT-SECOND\",\"name\":\"Second Clinic\"}"), admin(), 409);
+        assertEquals("single-location deployment", body.get("message").asText());
+        assertEquals(0, LifecycleFixtures.intQuery("SELECT count(*) FROM location WHERE code = 'IT-SECOND'"));
+        assertEquals(0, audits().size(), "a refused create is not audited");
+    }
+
+    @Test
+    void inSingleModeTheOneLocationCanStillBeEditedAndRemadeWhenNoneIsActive() throws Exception {
+        LocationMode.set(LocationMode.SINGLE);
+        call(json(put(BASE + "/" + defaultId), "{\"name\":\"Renamed Clinic\"}"), admin(), 200);
+        // No location active at all (disabled behind the API's back): one may be created.
+        exec("UPDATE location SET status_id = 5 WHERE location_id = " + defaultId);
+        create("IT-REPLACEMENT", "Replacement Clinic");
+    }
+
+    @Test
+    void inSingleModeRestoringASecondLocationIsRefusedButTheOnlyOneMayComeBack() throws Exception {
+        int other = create("IT-OTHER", "Other Clinic");          // multi mode
+        call(post(BASE + "/" + other + "/disable"), admin(), 200);
+        exec("DELETE FROM audit_log_event WHERE audit_table = 'location'");
+
+        LocationMode.set(LocationMode.SINGLE);
+        JsonNode body = call(post(BASE + "/" + other + "/restore"), admin(), 409);
+        assertEquals("single-location deployment", body.get("message").asText());
+        assertEquals(5, row(other).get("status_id"), "still disabled");
+        assertEquals(0, audits().size());
+
+        // With the default gone it is the only one, and may come back.
+        exec("UPDATE location SET status_id = 5 WHERE location_id = " + defaultId);
+        call(post(BASE + "/" + other + "/restore"), admin(), 200);
+        assertEquals(1, row(other).get("status_id"));
+    }
+
+    @Test
+    void inSingleModeTheOnlyLocationIsNotDisabledAndTheMessageSaysWhy() throws Exception {
+        int id = create("IT-ONLY", "Only Clinic");               // multi mode
+        exec("UPDATE location SET status_id = 5 WHERE location_id = " + defaultId);
+        LocationMode.set(LocationMode.SINGLE);
+        JsonNode body = call(post(BASE + "/" + id + "/disable"), admin(), 409);
+        assertTrue(body.get("message").asText().contains("serves exactly one"), body.toString());
+        assertEquals(1, row(id).get("status_id"));
     }
 
     @Test

@@ -43,6 +43,23 @@
                answer leaves it for the next sweep; after 5 attempts it goes
                to _failed\ so a bad file cannot burn the budget forever.
 
+    token      (DR-040) When an uploader token is set in Settings, EVERY
+               request - resolve, commit, heartbeat - carries it in the header
+               X-MUW-Uploader-Token, and the platform takes this PC's location
+               from it. No token set = no header = the anonymous behaviour of
+               before, which the platform serves only while its front door is
+               open. The platform answers 401 "uploader token required" or
+               "uploader token rejected". A 401 is NOT a failed lookup and is
+               never treated like a 429: the sweep stops, every file stays
+               where it is (nothing goes to _uploaded\, _failed\ or
+               _skipped\, nothing is filed without a visit, no attempt is
+               counted), the tray says "Token fehlt" or "Token abgelehnt -
+               bitte in den Einstellungen pruefen", the coded problem
+               token-required / token-rejected goes into the heartbeat, and the
+               next sweep (the normal interval, no backoff) tries again. Files
+               the platform accepted earlier in that sweep are still moved to
+               _uploaded\.
+
   The convention this relies on is the one every device ingress here uses:
   the patient id the photographer types into the device IS the study subject
   label. Clarus: the DICOM PatientID. Spectralis: the HEYEX patient id -
@@ -54,10 +71,14 @@
   on the Clarus PC it runs beside the Optomed bridge, on the Spectralis PC
   alone - one watcher per export folder, never one watcher for both PCs.
 
-  Settings: %ProgramData%\LibreClinica\export-watcher.json. No secret: the
-  public front door takes none. Log alongside, rotated at 1 MB. Only counts
-  and pseudonymous labels are ever logged - never names, dates of birth or
-  filenames (an export is often named after the patient).
+  Settings: %ProgramData%\LibreClinica\export-watcher.json. The only secret in
+  it is the optional uploader token (UploaderTokenProtected), DPAPI-protected
+  to the user who saved it, as the Optomed bridge protects its token. It is
+  typed into the Settings dialog ("Uploader-Token"), never passed on a command
+  line, and shown there only as "gesetzt" / "nicht gesetzt". Log alongside,
+  rotated at 1 MB. Only counts and pseudonymous labels are ever logged - never
+  names, dates of birth, filenames (an export is often named after the
+  patient) or the token.
 
   What stays on the PC: the exports themselves, moved into _uploaded\ and
   kept there until the retention setting removes them. That is off by
@@ -80,7 +101,8 @@
 .PARAMETER Heartbeat
   Headless: send one heartbeat to the platform and print the answer - the
   quickest check that this PC reaches the platform and shows up on the
-  System Status page. Nothing is uploaded.
+  System Status page. Nothing is uploaded. It prints whether an uploader token
+  is set - never the token - and, on a 401, which of the two refusals it was.
 
   The tray app sends one every HeartbeatIntervalSec (default 120), switched
   on or not (DR-033): whether it runs, whether uploading is on, how many
@@ -96,7 +118,9 @@
     string arrives as a smart quote and terminates it (2026-09-24: the script
     did not parse on Windows at all; it had only ever run on PowerShell 7).
   The headless modes (-Once, -SelfTest) also run on PowerShell 7 on Linux,
-  which is how the chain is tested from a Mac against the dev stack.
+  which is how the chain is tested from a Mac against the dev stack. DPAPI is
+  Windows only: there a saved uploader token cannot be read and the run is
+  anonymous.
 #>
 [CmdletBinding()]
 param(
@@ -114,7 +138,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 $script:AppName     = 'Export Watcher'
 # Shown on the System Status page beside this PC's name. Bump with every
 # change to this script, so a PC still running an old copy stands out.
-$script:Version     = '2026-09-28.1'
+$script:Version     = '2026-10-12.2'
 $script:Kind        = 'export-watcher'
 $script:StateDir    = Split-Path -Parent $ConfigPath
 $script:LogPath     = Join-Path $script:StateDir 'export-watcher.log'
@@ -153,11 +177,14 @@ function Write-Log {
 }
 
 # ----------------------------------------------------------------------------
-# settings - a JSON file, no secret in it
+# settings - a JSON file; the uploader token DPAPI-protected to the saving user
 # ----------------------------------------------------------------------------
 function Get-DefaultConfig {
     [pscustomobject]@{
         BaseUrl        = 'https://ecrf.augen.meduniwien.ac.at/LibreClinica'
+        # DR-040 - this PC's uploader token, DPAPI-protected (see Protect-Token).
+        # Empty = none: the requests go out without it, as they always did.
+        UploaderTokenProtected = ''
         WatchFolder    = (Join-Path $(if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }) 'Documents\LibreClinica-Export')
         SweepIntervalSec = 20
         DeviceDicom    = 'clarus'      # the device key on a .dcm upload (imaging catalogue: FUNDUS_CLARUS)
@@ -197,6 +224,23 @@ function Save-Config([pscustomobject]$cfg) {
     $cfg | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
 }
 
+# DPAPI, current-user scope: the saved value is readable by the user who saved
+# it, on this PC. (As in OptomedBridge.ps1 - keep the two word for word.)
+function Protect-Token([string]$plain) {
+    if ([string]::IsNullOrEmpty($plain)) { return '' }
+    (ConvertTo-SecureString $plain -AsPlainText -Force) | ConvertFrom-SecureString
+}
+
+function Unprotect-Token([string]$protected) {
+    if ([string]::IsNullOrEmpty($protected)) { return '' }
+    try {
+        $ss = ConvertTo-SecureString $protected
+        $b  = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
+        try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) }
+        finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
+    } catch { Write-Log 'token could not be unprotected (saved by another user?)' 'ERROR'; '' }
+}
+
 # ----------------------------------------------------------------------------
 # HTTP - one client; long timeout because an .e2e is tens of megabytes
 # ----------------------------------------------------------------------------
@@ -209,6 +253,99 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 }
 
 # ----------------------------------------------------------------------------
+# the uploader token (DR-040) - one per uploader, issued for one location
+# The shared part is kept word for word as in OptomedBridge.ps1.
+# ----------------------------------------------------------------------------
+# It travels in the header X-MUW-Uploader-Token on every request to the
+# platform, and nowhere else: never in the log, in a message, in the tray or in
+# the heartbeat. None set = no header = the anonymous request of before.
+$script:TokenHeader   = 'X-MUW-Uploader-Token'
+$script:UpTokenSource = $null    # the saved (protected) value the cached token was read from
+$script:UpTokenPlain  = ''
+
+# 'mwu_' and 43 base64url characters (32 random bytes), as the platform issues it.
+function Test-UploaderTokenFormat([string]$token) {
+    $token -cmatch '^mwu_[A-Za-z0-9_-]{43}\z'
+}
+
+# For the log and the console: whether one is saved, never what it is.
+function Get-UploaderTokenState([pscustomobject]$cfg) {
+    if ([string]$cfg.UploaderTokenProtected) { 'set' } else { 'not set' }
+}
+
+# Unprotected once per saved value, not once per request: a token that cannot
+# be read (saved by another user) is reported once, not at every request.
+function Get-UploaderToken([pscustomobject]$cfg) {
+    $protected = [string]$cfg.UploaderTokenProtected
+    if ($protected -ne $script:UpTokenSource) {
+        $script:UpTokenSource = $protected
+        $script:UpTokenPlain = Unprotect-Token $protected
+    }
+    $script:UpTokenPlain
+}
+
+function Add-UploaderHeader([System.Net.Http.HttpRequestMessage]$req, [pscustomobject]$cfg) {
+    $token = Get-UploaderToken $cfg
+    if ($token) { $req.Headers.TryAddWithoutValidation($script:TokenHeader, $token) | Out-Null }
+}
+
+# Every request to the platform that is not the worklist leaves through here,
+# so that the token is on all of them.
+function Send-DeviceRequest([System.Net.Http.HttpClient]$client, [pscustomobject]$cfg, [string]$method, [string]$path, $content = $null) {
+    $req = New-Object System.Net.Http.HttpRequestMessage $method, (Get-ApiUrl $cfg $path)
+    if ($null -ne $content) { $req.Content = $content }
+    Add-UploaderHeader $req $cfg
+    $client.SendAsync($req).GetAwaiter().GetResult()
+}
+
+function Read-ResponseText($resp) {
+    try { $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() } catch { '' }
+}
+
+# What a 401 from the platform means. It answers {"message":"uploader token
+# required"} to a request that needs a token and carries none, and
+# {"message":"uploader token rejected"} to one whose token is unknown, revoked
+# or belongs to a removed location. Any other 401 text (a proxy, an older
+# platform) counts as a rejection. Whatever the text, a 401 is the platform not
+# accepting this uploader: it must never end with a file filed anywhere.
+function Get-TokenProblemCode([int]$status, [string]$body) {
+    if ($status -ne 401) { return $null }
+    if ($body -match 'uploader token required') { return 'token-required' }
+    'token-rejected'
+}
+
+# The words for the tray, and the same for the icon's tooltip (63 characters).
+function Get-TokenProblemText([string]$code) {
+    if ($code -eq 'token-required') { 'Token fehlt' } else { 'Token abgelehnt - bitte in den Einstellungen pruefen' }
+}
+function Get-TokenProblemTip([string]$code) {
+    if ($code -eq 'token-required') { 'Token fehlt' } else { 'Token abgelehnt - Einstellungen pruefen' }
+}
+
+# The token problem in a set of coded problems (code -> $true), or ''.
+function Get-TokenProblemIn([hashtable]$problems) {
+    foreach ($code in @('token-rejected', 'token-required')) { if ($problems.ContainsKey($code)) { return $code } }
+    ''
+}
+
+# A refused token ends the round it happens in. The throw carries the code
+# (not the token) up to the one place that records it.
+function New-TokenRefusal([string]$code) {
+    $ex = New-Object System.InvalidOperationException ('uploader token refused: ' + $code)
+    $ex.Data['tokenProblem'] = $code
+    $ex
+}
+
+function Get-TokenRefusalCode($errorRecord) {
+    $e = $errorRecord.Exception
+    while ($e) {
+        if ($e.Data.Contains('tokenProblem')) { return [string]$e.Data['tokenProblem'] }
+        $e = $e.InnerException
+    }
+    $null
+}
+
+# ----------------------------------------------------------------------------
 # health - what the heartbeat reports (DR-033). Counts, ages, disk figures and
 # coded problems; never a label, a filename or anything about a patient.
 # ----------------------------------------------------------------------------
@@ -217,6 +354,8 @@ function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
 $script:HbHttp = New-Object System.Net.Http.HttpClient
 $script:HbHttp.Timeout = [TimeSpan]::FromSeconds(10)
 $script:HbLastCode = -1           # the last heartbeat's HTTP status; a change is logged, a repeat is not
+$script:HbLastProblem = ''        # ... with the token problem a 401 came with; a change in it is logged too
+$script:HbProblem = ''            # the token problem of the last heartbeat (token-required / token-rejected), for -Heartbeat
 $script:StopSent = $false
 $script:LastActivityUtc = $null   # end of the last sweep
 $script:LastUploadUtc = $null     # the last 201
@@ -226,6 +365,20 @@ $script:UploadedToday = 0
 $script:SweepProblems = @{}
 
 function Add-Problem([string]$code) { $script:SweepProblems[$code] = $true }
+
+$script:TokenLogged = ''          # the token refusal last written to the log; a repeat is not (the sweep retries)
+
+# A token the platform refused, recorded where the sweep ends: the coded problem
+# for the heartbeat, one line in the log (a refusal that persists is written
+# once, not at every retry) and the words for the tray, which are returned.
+function Write-TokenRefusal([string]$code) {
+    Add-Problem $code
+    if ($code -ne $script:TokenLogged) {
+        $script:TokenLogged = $code
+        Write-Log "sweep: the platform refused the uploader token ($code) - the files stay where they are, the next sweep tries again" 'ERROR'
+    }
+    Get-TokenProblemText $code
+}
 
 function Add-Uploaded {
     if ((Get-Date).Date -ne $script:UploadedDay) { $script:UploadedDay = (Get-Date).Date; $script:UploadedToday = 0 }
@@ -336,17 +489,24 @@ function Get-HeartbeatBody([pscustomobject]$cfg, [bool]$running, [string]$stopRe
 # nothing answered).
 function Send-Heartbeat([pscustomobject]$cfg, [bool]$running = $true, [string]$stopReason = '') {
     $code = 0
+    $problem = ''
     try {
         $json = Get-HeartbeatBody $cfg $running $stopReason | ConvertTo-Json -Depth 4 -Compress
         $content = New-Object System.Net.Http.StringContent($json, [Text.Encoding]::UTF8, 'application/json')
-        $resp = $script:HbHttp.PostAsync((Get-ApiUrl $cfg '/api/v1/device/uploader/heartbeat'), $content).GetAwaiter().GetResult()
+        $resp = Send-DeviceRequest $script:HbHttp $cfg 'POST' '/api/v1/device/uploader/heartbeat' $content
         $code = [int]$resp.StatusCode
+        # A 401 usually means no heartbeat arrives at all, so this line and the
+        # sweep's tray status are the only places the refusal can be seen.
+        if ($code -eq 401) { $problem = Get-TokenProblemCode 401 (Read-ResponseText $resp) }
     } catch { $code = 0 }
-    if ($code -ne $script:HbLastCode) {
+    $script:HbProblem = $problem
+    if ($code -ne $script:HbLastCode -or $problem -ne $script:HbLastProblem) {
         $script:HbLastCode = $code
+        $script:HbLastProblem = $problem
         switch ($code) {
             200     { Write-Log 'heartbeat: reporting to the platform' }
             0       { Write-Log 'heartbeat: the platform does not answer' 'WARN' }
+            401     { Write-Log "heartbeat: the platform refused the uploader token ($problem)" 'WARN' }
             404     { Write-Log 'heartbeat: the platform does not take heartbeats (an older version, or switched off there)' 'WARN' }
             429     { Write-Log 'heartbeat: the platform refused it (HTTP 429: too many uploaders registered, or too many heartbeats from this address)' 'WARN' }
             default { Write-Log "heartbeat: HTTP $code" 'WARN' }
@@ -609,10 +769,16 @@ function Resolve-Batch([pscustomobject]$cfg, [object[]]$scans) {
     if ($ask.Count -eq 0) { return ,$result }
     $payload = @{ scans = $ask } | ConvertTo-Json -Depth 4 -Compress
     $content = New-Object System.Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')
-    $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/resolve'), $content).GetAwaiter().GetResult()
+    $resp = Send-DeviceRequest $script:Http $cfg 'POST' '/api/v1/public/upload/resolve' $content
     if (-not $resp.IsSuccessStatusCode) {
-        if ([int]$resp.StatusCode -eq 429) { Add-Problem 'rate-limited' }
-        Write-Log "resolve: HTTP $([int]$resp.StatusCode) - filing without a visit this sweep" 'WARN'
+        $status = [int]$resp.StatusCode
+        # A 401 is not a lookup that failed - the platform does not take this
+        # uploader as it is. Carrying on and filing the captures without a visit,
+        # as a 429 does, would be wrong: the sweep ends here with every file
+        # untouched (see Invoke-Sweep).
+        if ($status -eq 401) { throw (New-TokenRefusal (Get-TokenProblemCode 401 (Read-ResponseText $resp))) }
+        if ($status -eq 429) { Add-Problem 'rate-limited' }
+        Write-Log "resolve: HTTP $status - filing without a visit this sweep" 'WARN'
         return ,$result
     }
     $r = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
@@ -645,7 +811,7 @@ function Send-Commit([pscustomobject]$cfg, [IO.FileInfo]$f, [pscustomobject]$sca
     foreach ($k in $fields.Keys) {
         if ($null -ne $fields[$k] -and "$($fields[$k])" -ne '') { $mp.Add((New-Object System.Net.Http.StringContent("$($fields[$k])")), $k) }
     }
-    $resp = $script:Http.PostAsync((Get-ApiUrl $cfg '/api/v1/public/upload/commit'), $mp).GetAwaiter().GetResult()
+    $resp = Send-DeviceRequest $script:Http $cfg 'POST' '/api/v1/public/upload/commit' $mp
     [pscustomobject]@{ Status = [int]$resp.StatusCode; Body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() }
 }
 
@@ -673,6 +839,18 @@ function Move-Aside([IO.FileInfo]$f, [string]$sub) {
         try { (Get-Item -LiteralPath $target).LastWriteTimeUtc = [datetime]::UtcNow } catch { }
     }
     $script:SizeSeen.Remove($f.FullName); $script:Attempts.Remove($f.FullName)
+}
+
+# The files a sweep set aside or gave up on without asking the platform (see
+# Invoke-SweepCore). Never throws: a file that will not move stays, and is met
+# again by the next sweep.
+function Move-SetAside($skipped, $failed) {
+    foreach ($f in @($skipped)) {
+        try { Move-Aside $f $script:SkippedDir } catch { Add-Problem 'unreadable-files'; Write-Log 'sweep: a non-image object could not be set aside' 'WARN' }
+    }
+    foreach ($f in @($failed)) {
+        try { Move-Aside $f $script:FailedDir } catch { Add-Problem 'unreadable-files'; Write-Log 'sweep: an unreadable file could not be moved to _failed' 'WARN' }
+    }
 }
 
 # ----------------------------------------------------------------------------
@@ -712,6 +890,11 @@ function Invoke-Sweep([pscustomobject]$cfg) {
     $script:SweepProblems = @{}
     try { Invoke-SweepCore $cfg }
     catch {
+        # A refused uploader token is neither the network nor a file's failure:
+        # the sweep stopped with every file where it was, and the words for the
+        # tray are its result. The next sweep tries again, at the normal interval.
+        $refused = Get-TokenRefusalCode $_
+        if ($refused) { return (Write-TokenRefusal $refused) }
         # Whatever the sweep did not handle itself was the network or the platform.
         Add-Problem 'server-unreachable'
         throw
@@ -735,12 +918,22 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
     # identify everything first, so one /resolve covers the sweep
     $work = New-Object Collections.ArrayList   # @{ File; Scan }
     $unreadable = 0; $setAside = 0
+    # What this sweep decides without the platform - Raw Data objects to set
+    # aside, unreadable files out of attempts - is moved only at the end, once
+    # the platform has answered: a sweep that stops on a refused token moves
+    # no file at all (see Invoke-Sweep).
+    $skipLater = New-Object Collections.ArrayList
+    $failLater = New-Object Collections.ArrayList
     foreach ($f in $ready) {
         try {
-            $scans = @(Get-FileScans $cfg $f)
+            # No @( ) around this call. Get-FileScans returns its list as ,@(...), which is what keeps a
+            # single scan an array; @( ) would keep that wrapper too and nest two or more scans inside ONE
+            # element, and the filter below would then drop the file as a non-image (a two-volume .e2e
+            # was set aside to _skipped\ and never uploaded). Assigned plainly, $scans is the list itself.
+            $scans = Get-FileScans $cfg $f
             if (-not $cfg.UploadNonImage -and @($scans | Where-Object { -not $_.NonImage }).Count -eq 0) {
                 # a Raw Data object or a report, not a picture: not for the visit
-                $setAside++; Move-Aside $f $script:SkippedDir; continue
+                $setAside++; [void]$skipLater.Add($f); continue
             }
             foreach ($s in $scans) { [void]$work.Add(@{ File = $f; Scan = $s }) }
         } catch {
@@ -748,25 +941,31 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
             Add-Problem 'unreadable-files'
             $n = 1 + [int]$script:Attempts[$f.FullName]; $script:Attempts[$f.FullName] = $n
             Write-Log ("identify: unreadable {0} file (attempt {1}): {2}" -f $f.Extension, $n, $_.Exception.Message) 'WARN'
-            if ($n -ge $script:MaxAttempts) { Move-Aside $f $script:FailedDir }
+            if ($n -ge $script:MaxAttempts) { [void]$failLater.Add($f) }
         }
     }
     if ($work.Count -eq 0) {
+        Move-SetAside $skipLater $failLater       # nothing was asked of the platform, so nothing can have been refused
         $summary = 'nothing to upload ({0} unreadable, {1} non-image set aside)' -f $unreadable, $setAside
         if ($setAside -gt 0) { Write-Log "sweep: $summary" }
         return $summary
     }
 
     $scans = @($work | ForEach-Object { $_.Scan })
-    $events = Resolve-Batch $cfg $scans
+    $events = Resolve-Batch $cfg $scans       # throws on a refused token: nothing has been moved yet
 
     $ok = 0; $bound = 0; $dup = 0; $fail = 0
+    $tokenProblem = $null
     $filesDone = @{}
     for ($i = 0; $i -lt $work.Count; $i++) {
         $f = $work[$i].File; $s = $work[$i].Scan; $ev = $events[$i]
         if ($filesDone.ContainsKey($f.FullName) -and $filesDone[$f.FullName] -eq 'failed') { continue }
         try {
             $r = Send-Commit $cfg $f $s $ev
+            # A 401 is not this file's failure: it stays as it is, no attempt is
+            # counted, and the loop ends - so every file after it stays too.
+            $refused = Get-TokenProblemCode $r.Status $r.Body
+            if ($refused) { $tokenProblem = $refused; $filesDone[$f.FullName] = 'refused'; break }
             switch ($r.Status) {
                 201 { $ok++; if ($ev) { $bound++ }; $filesDone[$f.FullName] = 'ok'; Add-Uploaded }
                 409 { $dup++; if (-not $filesDone.ContainsKey($f.FullName)) { $filesDone[$f.FullName] = 'ok' } }
@@ -788,9 +987,18 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
         $f = Get-Item $path -ErrorAction SilentlyContinue
         if (-not $f) { continue }
         if ($filesDone[$path] -eq 'ok') { Move-Aside $f $script:UploadedDir; continue }
+        if ($filesDone[$path] -eq 'refused') { continue }
         $n = 1 + [int]$script:Attempts[$path]; $script:Attempts[$path] = $n
         if ($n -ge $script:MaxAttempts) { Write-Log ("upload: giving up on a {0} file after {1} attempts - moved to {2}" -f $f.Extension, $n, $script:FailedDir) 'ERROR'; Move-Aside $f $script:FailedDir }
     }
+    if ($tokenProblem) {
+        # What the platform accepted before the refusal is filed above; every
+        # other file is exactly where it was.
+        if (($ok + $dup) -gt 0) { Write-Log ("sweep: uploaded {0} ({1} bound), {2} already there, then the platform refused the uploader token" -f $ok, $bound, $dup) }
+        throw (New-TokenRefusal $tokenProblem)
+    }
+    Move-SetAside $skipLater $failLater
+    $script:TokenLogged = ''      # the platform took the token: a refusal after this is news again
     $summary = 'uploaded {0} ({1} bound), {2} already there, {3} failed, {4} non-image set aside' -f $ok, $bound, $dup, $fail, $setAside
     Write-Log "sweep: $summary"
     $summary
@@ -815,13 +1023,14 @@ if ($Heartbeat) {
     $cfg = Read-Config
     $code = Send-Heartbeat $cfg
     $answer = if ($code -eq 200) { 'recorded' } elseif ($code -eq 0) { 'no answer' } else { "HTTP $code" }
-    Write-Host ("heartbeat as '{0}' ({1} {2}) to {3}: {4}" -f (Get-DisplayName $cfg), $script:Kind, $script:Version, $cfg.BaseUrl, $answer)
+    if ($script:HbProblem) { $answer = "HTTP 401 - $(Get-TokenProblemText $script:HbProblem) ($script:HbProblem)" }
+    Write-Host ("heartbeat as '{0}' ({1} {2}) to {3}: {4}; uploader token: {5}" -f (Get-DisplayName $cfg), $script:Kind, $script:Version, $cfg.BaseUrl, $answer, (Get-UploaderTokenState $cfg))
     if ($code -eq 200) { exit 0 } else { exit 1 }
 }
 
 if ($Once) {
     $cfg = Read-Config
-    Write-Log "$script:AppName one sweep of $($cfg.WatchFolder) against $($cfg.BaseUrl)"
+    Write-Log "$script:AppName one sweep of $($cfg.WatchFolder) against $($cfg.BaseUrl) (uploader token: $(Get-UploaderTokenState $cfg))"
     # a file must be seen twice to count as settled; a headless sweep does both passes
     Invoke-Sweep $cfg | Out-Null
     Start-Sleep -Seconds 2
@@ -858,7 +1067,7 @@ $ownConsole = [LibreClinicaTray.Console]::GetConsoleWindow()
 if ($ownConsole -ne [IntPtr]::Zero) { [LibreClinicaTray.Console]::ShowWindow($ownConsole, 0) | Out-Null }   # 0 = SW_HIDE
 
 $script:Cfg = Read-Config
-Write-Log "$script:AppName starting (enabled=$($script:Cfg.Enabled), folder=$($script:Cfg.WatchFolder))"
+Write-Log "$script:AppName starting (enabled=$($script:Cfg.Enabled), folder=$($script:Cfg.WatchFolder), uploader token: $(Get-UploaderTokenState $script:Cfg))"
 
 function New-TrayIcon([bool]$enabled) {
     # Drawn, not shipped: a filled square (the bridge is a circle), teal when enabled, grey when not.
@@ -888,7 +1097,13 @@ $menu.Items.Add('-') | Out-Null
 $exitItem = $menu.Items.Add('Exit')
 $tray.ContextMenuStrip = $menu
 
-function Set-Status([string]$text) { $status.Text = $text; $tray.Text = "$script:AppName - $text".Substring(0, [Math]::Min(63, ("$script:AppName - $text").Length)) }
+# $tip: what the icon's tooltip says when it should not be the status line (the
+# tooltip is 63 characters at most, which the German token texts exceed).
+function Set-Status([string]$text, [string]$tip = '') {
+    if (-not $tip) { $tip = $text }
+    $status.Text = $text
+    $tray.Text = "$script:AppName - $tip".Substring(0, [Math]::Min(63, ("$script:AppName - $tip").Length))
+}
 
 function Show-Problem([string]$text) {
     # One balloon per ten minutes: a dead network must not become a stream of them.
@@ -898,7 +1113,15 @@ function Show-Problem([string]$text) {
 }
 
 function Invoke-SweepNow {
-    try { Set-Status ((Invoke-Sweep $script:Cfg) + ' @ ' + (Get-Date -Format 'HH:mm')) }
+    try {
+        $summary = Invoke-Sweep $script:Cfg
+        # A refused token needs a person at Settings: the status line and the
+        # tooltip say so in words, and so does a balloon (at most one in ten minutes).
+        $tokenProblem = Get-TokenProblemIn $script:SweepProblems
+        $tip = ''
+        if ($tokenProblem) { $tip = Get-TokenProblemTip $tokenProblem; Show-Problem (Get-TokenProblemText $tokenProblem) }
+        Set-Status ($summary + ' @ ' + (Get-Date -Format 'HH:mm')) $tip
+    }
     catch { Write-Log "sweep: $($_.Exception.Message)" 'ERROR'; Set-Status 'sweep: failed'; Show-Problem "Upload failed: $($_.Exception.Message)" }
 }
 
@@ -936,7 +1159,7 @@ $exitItem.Add_Click({ Send-StopHeartbeat $script:Cfg 'exit'; $tray.Visible = $fa
 $settingsItem.Add_Click({
     $f = New-Object Windows.Forms.Form
     $f.Text = "$script:AppName - Settings"; $f.StartPosition = 'CenterScreen'; $f.FormBorderStyle = 'FixedDialog'
-    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 368
+    $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = New-Object Drawing.Size 520, 436
 
     $y = 14
     function Add-Row([string]$label, [Windows.Forms.Control]$ctl) {
@@ -955,8 +1178,21 @@ $settingsItem.Add_Click({
     $nuKeep   = New-Object Windows.Forms.NumericUpDown; $nuKeep.Minimum = 1; $nuKeep.Maximum = 3650
     $nuKeep.Value = [Math]::Min(3650, [Math]::Max(1, [int]$script:Cfg.DeleteUploadedAfterDays))
     $cbOn     = New-Object Windows.Forms.CheckBox; $cbOn.Text = 'Enabled'; $cbOn.Checked = [bool]$script:Cfg.Enabled
+    # The uploader token is never shown, not even masked - only whether one is
+    # saved. Typing a new one replaces it; an empty field keeps it; the tick
+    # removes it (uploads then go without a token, as before DR-040).
+    $tbUpTok  = New-Object Windows.Forms.TextBox; $tbUpTok.UseSystemPasswordChar = $true
+    $cbUpTokClear = $null
+    if ([bool]$script:Cfg.UploaderTokenProtected) {
+        $cbUpTokClear = New-Object Windows.Forms.CheckBox; $cbUpTokClear.Text = 'Token entfernen (derzeit gesetzt; leer = behalten)'
+        $upTokState = $cbUpTokClear
+    } else {
+        $upTokState = New-Object Windows.Forms.Label; $upTokState.Text = 'derzeit nicht gesetzt (Uploads ohne Token)'; $upTokState.AutoSize = $true
+    }
 
     Add-Row 'Platform base URL' $tbUrl
+    Add-Row 'Uploader-Token' $tbUpTok
+    Add-Row '' $upTokState
     Add-Row 'Export folder to watch' $tbFolder
     Add-Row 'Device name for .dcm' $tbDcm
     Add-Row 'Device name for .e2e' $tbE2e
@@ -966,11 +1202,21 @@ $settingsItem.Add_Click({
     Add-Row 'Delete them after (days)' $nuKeep
     Add-Row '' $cbOn
 
-    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 328
-    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 328
+    $ok = New-Object Windows.Forms.Button; $ok.Text = 'Save'; $ok.DialogResult = 'OK'; $ok.Location = New-Object Drawing.Point 330, 396
+    $cancel = New-Object Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'; $cancel.Location = New-Object Drawing.Point 420, 396
     $f.Controls.AddRange(@($ok, $cancel)); $f.AcceptButton = $ok; $f.CancelButton = $cancel
 
-    if ($f.ShowDialog() -eq 'OK') {
+    # An Uploader-Token that does not look like one is refused here, with the
+    # dialog shown again and everything typed still in it - never saved as garbage.
+    $answer = 'Cancel'
+    while ($true) {
+        $answer = $f.ShowDialog()
+        if ($answer -ne 'OK') { break }
+        $typed = $tbUpTok.Text.Trim()
+        if (-not $typed -or (Test-UploaderTokenFormat $typed)) { break }
+        [Windows.Forms.MessageBox]::Show("Der Uploader-Token hat nicht das erwartete Format: 'mwu_' gefolgt von 43 Zeichen (Buchstaben, Ziffern, - und _). Bitte genau so einfuegen, wie er angezeigt wurde, ohne Leerzeichen oder Zeilenumbrueche. Es wurde nichts gespeichert.", "$script:AppName - Uploader-Token", 'OK', 'Warning') | Out-Null
+    }
+    if ($answer -eq 'OK') {
         $script:Cfg.BaseUrl = $tbUrl.Text.Trim()
         $script:Cfg.WatchFolder = $tbFolder.Text.Trim()
         $script:Cfg.DeviceDicom = $tbDcm.Text.Trim()
@@ -980,12 +1226,16 @@ $settingsItem.Add_Click({
         $script:Cfg.DeleteUploaded = $cbDel.Checked
         $script:Cfg.DeleteUploadedAfterDays = [int]$nuKeep.Value
         $script:Cfg.Enabled = $cbOn.Checked
+        $typed = $tbUpTok.Text.Trim()
+        if ($typed) { $script:Cfg.UploaderTokenProtected = Protect-Token $typed }
+        elseif ($null -ne $cbUpTokClear -and $cbUpTokClear.Checked) { $script:Cfg.UploaderTokenProtected = '' }
+        $typed = $null
         Save-Config $script:Cfg
         $enabledItem.Checked = $cbOn.Checked
         Update-Timers
         # a changed retention applies on the next sweep, not in an hour
         $script:LastRetentionUtc = [datetime]::MinValue
-        Write-Log ("settings saved (delete uploaded exports: {0}, after {1} day(s))" -f $script:Cfg.DeleteUploaded, $script:Cfg.DeleteUploadedAfterDays)
+        Write-Log ("settings saved (delete uploaded exports: {0}, after {1} day(s); uploader token: {2})" -f $script:Cfg.DeleteUploaded, $script:Cfg.DeleteUploadedAfterDays, (Get-UploaderTokenState $script:Cfg))
         if ($script:Cfg.Enabled) { Invoke-SweepNow }
         Send-Heartbeat $script:Cfg | Out-Null
     }

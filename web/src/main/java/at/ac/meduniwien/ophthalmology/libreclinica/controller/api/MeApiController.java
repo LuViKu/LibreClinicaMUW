@@ -39,6 +39,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequire
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
@@ -132,6 +133,9 @@ public class MeApiController {
 
     private final DataSource dataSource;
 
+    /** Which locations the caller may manage the uploaders of (DR-040 phase 2). */
+    private final LocationAdminAuthorization locationAdmin;
+
     /** Null (hand-built controllers) reads as "not required". */
     private DeidentificationPolicy deidPolicy;
 
@@ -143,6 +147,7 @@ public class MeApiController {
     @Autowired
     public MeApiController(@Qualifier("dataSource") DataSource dataSource) {
         this.dataSource = dataSource;
+        this.locationAdmin = new LocationAdminAuthorization(dataSource);
     }
 
     @GetMapping
@@ -291,7 +296,10 @@ public class MeApiController {
                 req.reason,
                 activeStudy,
                 ub.isTechAdmin() ? "TECHADMIN" : ub.isSysAdmin() ? "SYSADMIN" : "USER",
-                DeidentificationPolicy.required(deidPolicy)
+                DeidentificationPolicy.required(deidPolicy),
+                // Soft-failed to none inside: a lookup that breaks must not cost the user their session.
+                locationAdmin.manageableLocations(ub),
+                LocationMode.current().wire()
         );
 
         return ResponseEntity.ok(dto);

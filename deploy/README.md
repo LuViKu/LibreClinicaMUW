@@ -412,6 +412,10 @@ core.optomed.worklist.enabled=true
 core.optomed.worklist.token=<a long random secret - NOT the DICOM token>
 ```
 
+(Since DR-040 the bridge also takes an uploader token, which names the PC's
+location; this shared one stays accepted during the rollout. See "Uploader
+tokens and locations" below.)
+
 and, once the clinic PC has a fixed address, uncomment the `allow`/`deny`
 lines in the `/device/optomed/` location of `deploy/nginx/ecrf.conf`.
 
@@ -475,9 +479,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-ExportWatcher.ps1 
 # and point the device's export at that folder.
 ```
 
-No secret is entered anywhere: the public front door takes none. Settings
-are in `%ProgramData%\LibreClinica\export-watcher.json`, the log beside
-them (counts and pseudonymous labels only, never names or filenames).
+In single-location mode (the default) the public front door takes no secret,
+so the watcher needs no setup beyond this; since DR-040 it can also carry an
+uploader token, which every PC needs in multi-location mode (see "Uploader
+tokens and locations" below). Settings are in
+`%ProgramData%\LibreClinica\export-watcher.json`, the log beside them (counts
+and pseudonymous labels only, never names or filenames).
 Before switching it on, check the readers on a real export:
 
 ```powershell
@@ -501,6 +508,132 @@ patient's name in its header until the platform pseudonymises its copy on
 ingest, which is the case for switching it on; the device keeps the original
 capture. `_skipped\` (the Clarus Raw Data objects) and `_failed\` are never
 touched.
+
+### Uploader tokens and locations (DR-040)
+
+Every file in the inbox has an origin **location** (a *Standort*: a clinic or
+department), and a program on an acquisition PC - the Export Watcher, the
+Optomed Bridge - says which one with a **token**: a long random string (`mwu_`
+and 43 characters) that it sends in the `X-MUW-Uploader-Token` header of every
+request - the visit lookup, the upload, the heartbeat and the Optomed
+worklist. The platform takes the PC's location from it: the lookup answers
+only for visits at that location, the files are filed at it, and the worklist
+lists only its visits. A token opens no session and reads no study data. It is
+shown **once**, when it is issued; the platform keeps only a hash of it and its
+first eight characters (the *Token (Anfang)* column), so a lost token is
+replaced, never looked up.
+
+**Single or multi: chosen at deploy time.** `LIBRECLINICA_DEPLOYMENT_LOCATIONS`
+in `/etc/libreclinica/env` sets the location mode; the number of locations
+never changes it.
+
+| | `single` (default; the internal VM) | `multi` |
+|---|---|---|
+| Locations | exactly one; *Neuer Standort* is not offered and a second is refused | any number |
+| Upload without a token | works, filed at the one location | `401 uploader token required`, from the first location on |
+| Upload with a valid token | works, filed under that uploader | works, for that uploader's location only |
+| A study, source or file without a location | belongs to the one location | system administrators only, until assigned |
+
+Any other value stops the start, and so does `single` on a database with more
+than one active location (the log says which: set `multi`, or disable all but
+one location). In single mode every start gives the one location to studies,
+sources and unfiled files that have none (audit type 208), so a later switch to
+multi finds nothing without a place.
+
+**Who may issue one.** System administrators, for every location, and a
+**Standort-Admin**, for their own location only. A system administrator grants
+that right per person and location under **System → Standorte** (the
+location's *Zugewiesene Personen*, checkbox *Standort-Admin*; typically a
+site's IT contact or a study coordinator). A study role does not include it: a
+token lets its holder put scans into a location's inbox and fetch its visit
+list, so it is a deliberate grant. Tokens are issued, replaced and revoked on
+**System → Uploader und Tokens**, which also shows when each was last used and
+when the program last reported.
+
+**Rolling it out, one acquisition PC at a time,** in this order:
+
+1. **Update the script** on the PC: `ExportWatcher.ps1` 2026-10-12.2 or
+   `OptomedBridge.ps1` 2026-10-12.1 (or newer). Both send a token when one is
+   set and behave as before while none is, so this step changes nothing yet.
+2. **Issue a token** on *Uploader und Tokens*: *Uploader anlegen*, the
+   location, a name that tells the PC apart (for example "Clarus-PC Raum 3";
+   unique per location). Copy the token while the dialog shows it.
+3. **Enter it in the uploader's settings:** tray icon → *Settings...* →
+   *Uploader-Token* → paste → save. It is protected with DPAPI for the Windows
+   user who saved it, shown there only as "gesetzt", and never passed on a
+   command line.
+4. **Check the Uploader page:** within a few minutes the PC's row shows
+   *Zuletzt verwendet* and *Letzte Meldung*. On the PC itself:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -Heartbeat
+# heartbeat as 'CLARUS-PC' (export-watcher 2026-10-12.2) to https://…: recorded; uploader token: set
+# a refused token reads: …: HTTP 401 - Token abgelehnt - bitte in den Einstellungen pruefen (token-rejected); uploader token: set
+```
+
+**When the platform answers 401.** In multi mode a request without a token is
+`401 {"message":"uploader token required"}`. A token that is unknown, revoked,
+replaced or at a disabled location is `401 {"message":"uploader token
+rejected"}`. The programs treat a 401 as the platform not accepting them, never
+as a failed upload: the round stops, **every file stays where it is** (nothing
+moves to `_uploaded\`, `_failed\` or `_skipped\`, nothing is filed without a
+visit, no attempt is counted), the tray says *Token fehlt* or *Token abgelehnt,
+bitte in den Einstellungen pruefen*, and the next sweep (the bridge: the next
+round) tries again at the normal interval. Once the token is right the waiting
+files go through by themselves. The heartbeat is refused as well, so such a PC
+may simply look silent on System Status; its tray icon and `-Heartbeat` say why.
+
+**Switching from single to multi** is a deploy step, done once:
+
+1. Still in single mode, issue a token for every acquisition PC and enter it in
+   its settings (the steps above). In single mode a token already works, and the
+   PC's files are filed under its name.
+2. Wait until *Uploader und Tokens* says that no program sends without a token
+   any more. It counts the programs seen in the last seven days that have never
+   reported with one (`GET /api/v1/admin/ingest-sources/anonymous-uploaders`,
+   system administrators). Every program it counts stops at the switch.
+3. Set `LIBRECLINICA_DEPLOYMENT_LOCATIONS=multi` in `/etc/libreclinica/env`
+   and restart the stack.
+4. Create the further locations on **System → Standorte**, assign them their
+   sites and people, and the DICOM and Remidio sources on the *Quellen* tab.
+
+The older shared `core.optomed.worklist.token` is accepted for the worklist
+only in single mode; it names no location, so in multi mode the bridge needs
+its uploader token. Going back from multi to single works only while at most
+one location is active.
+
+**Rotating or revoking a token.** *Token ersetzen* makes a new token at once
+and the old one stops working that moment: the PC reports "Token abgelehnt" and
+keeps its files until the new token is in its settings, so do it when someone
+can reach the PC. It also reactivates a revoked uploader. *Sperren* revokes the
+token for good (the row stays, as *Gesperrt*; replacing the token lifts it).
+Rotate when a PC is replaced or a token may have been seen by someone it should
+not; revoke when the PC is retired. Both are audited (who, which location,
+which uploader - never the token itself).
+
+**DICOM cameras and the Remidio account have no token.** A DICOM camera is
+known by its **calling AE title**, the Remidio pull by the Remidio *site* it
+lists (`core.remidio.siteCustomId`). The first file from either makes a source
+with no location in multi mode; in single mode it gets the one location and
+nothing needs doing. In multi mode assign each on **System → Standorte →
+Quellen**: until then what it sends waits for a system administrator, and
+assigning the source puts those files into that location's inbox at once. The DICOM receiver accepts any calling AE title when
+`DICOM_SCP_ALLOWED_CALLING_AE_TITLES` is empty (its default), so the app makes
+**at most 200 DICOM sources** and files a title past that without one (one log
+line an hour says so). Set the allow-list to the cameras' AE titles and the
+limit is never near.
+
+**The Export Watcher fix in 2026-10-12.2, and putting files back.** Before
+2026-10-12.2, a `.e2e` file with **more than one OCT volume** was set aside to
+`_skipped\` as if it were a non-image object, and never uploaded; a file with
+one volume was fine. After installing the new version, move those files back:
+every `.e2e` in a `_skipped\` folder is such a casualty (the Clarus Raw Data
+objects set aside on purpose are `.dcm`; leave them), so move the `.e2e` files
+out of `_skipped\` into the folder they came from, which the watcher watches.
+Where *UploadNonImage* was on, such a file may be in `_failed\` instead; move
+it back the same way. The next sweep uploads them. The platform recognises a
+volume it already has by the file's content hash and the volume's number and
+answers "already there", so a repeat is harmless.
 
 ### Uploaders and storage on the System Status page (DR-033)
 

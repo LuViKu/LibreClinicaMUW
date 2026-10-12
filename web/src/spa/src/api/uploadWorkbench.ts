@@ -6,6 +6,16 @@
  * {@code /ingest-inbox/upload} (the staff route, session cookie, attributed).
  * The two backends answer in the same shapes, so the difference is one
  * parameter here and nowhere else.
+ *
+ * The uploader token. In multi-location mode the public route answers
+ * 401 unless the request names the location it belongs to with an uploader
+ * token (`X-MUW-Uploader-Token`, see `lib/uploaderToken`). {@link authHeaders}
+ * is the one place that decides whether a request carries it, and every
+ * request of the public mode goes through it: the fetches through
+ * {@link send}, the upload through the same function for its XHR. The staff
+ * mode never carries it, and no other API client has the header at all.
+ * A 401 about the token is told apart from every other error
+ * ({@link failure}) and reported to the page, which shows what to do.
  */
 import type {
   EventCandidate,
@@ -17,6 +27,13 @@ import type {
 import { sha256OfFile } from '@/api/octPortal'
 import { listDueVisits } from '@/api/events'
 import { apiGet } from '@/api/client'
+import {
+  UPLOADER_TOKEN_HEADER,
+  UploadTokenError,
+  getUploaderToken,
+  reportTokenProblem,
+  tokenReasonOf,
+} from '@/lib/uploaderToken'
 
 export type { EventCandidate, PublicStudyEvent, PublicSubjectHit, ResolveCandidate, ResolveScanResult }
 export { sha256OfFile }
@@ -66,10 +83,44 @@ function messageFrom(body: unknown, fallback: string): string {
   return fallback
 }
 
+/**
+ * The headers a request of this mode carries beyond its own: the uploader
+ * token on the public route, when this browser session has one, and nothing on
+ * the staff route, whose session identifies it.
+ */
+function authHeaders(mode: UploadMode): Record<string, string> {
+  if (mode !== 'public') return {}
+  const token = getUploaderToken()
+  return token ? { [UPLOADER_TOKEN_HEADER]: token } : {}
+}
+
+/** Every fetch of the combined uploader: the URL, the credentials and the token, built here and only here. */
+async function send(mode: UploadMode, path: string, init: RequestInit): Promise<Response> {
+  const headers = { ...(init.headers as Record<string, string> | undefined), ...authHeaders(mode) }
+  const res = await fetch(`${base(mode)}${path}`, { ...init, headers, credentials: credentials(mode) })
+  // An answer that is not a refusal of the token settles an earlier complaint about it.
+  if (res.ok && mode === 'public') reportTokenProblem(null)
+  return res
+}
+
+/**
+ * The error for a failed request. A 401 that says the uploader token is
+ * missing or refused becomes an {@link UploadTokenError} and is reported to
+ * the page; anything else is an {@link UploadApiError} with the server's words.
+ */
+function failure(mode: UploadMode, status: number, body: unknown, fallback: string): Error {
+  const reason = mode === 'public' ? tokenReasonOf(status, body) : null
+  if (reason) {
+    reportTokenProblem(reason)
+    return new UploadTokenError(reason, body)
+  }
+  return new UploadApiError(status, messageFrom(body, fallback), body)
+}
+
 async function request<T>(mode: UploadMode, path: string, init: RequestInit, fallback: string): Promise<T> {
-  const res = await fetch(`${base(mode)}${path}`, { ...init, credentials: credentials(mode) })
+  const res = await send(mode, path, init)
   const body = await parseJsonOrNull(res)
-  if (!res.ok) throw new UploadApiError(res.status, messageFrom(body, `${fallback} → ${res.status}`), body)
+  if (!res.ok) throw failure(mode, res.status, body, `${fallback} → ${res.status}`)
   return body as T
 }
 
@@ -146,12 +197,10 @@ export interface DayVisit {
 export async function listVisitsForDay(mode: UploadMode, date?: string): Promise<DayVisit[] | null> {
   if (mode === 'public') {
     const qs = date ? `?date=${encodeURIComponent(date)}` : ''
-    const res = await fetch(`${base('public')}/visits${qs}`, {
-      method: 'GET', credentials: 'omit', headers: { Accept: 'application/json' },
-    })
+    const res = await send('public', `/visits${qs}`, { method: 'GET', headers: { Accept: 'application/json' } })
     if (res.status === 404) return null
     const body = await parseJsonOrNull(res)
-    if (!res.ok) throw new UploadApiError(res.status, messageFrom(body, `visits → ${res.status}`), body)
+    if (!res.ok) throw failure('public', res.status, body, `visits → ${res.status}`)
     const visits = (body as { visits?: Array<Omit<DayVisit, 'studySubjectId'>> } | null)?.visits ?? []
     return visits.map((v) => ({ ...v, studySubjectId: null }))
   }
@@ -265,6 +314,7 @@ export function commitFile(
     xhr.open('POST', `${base(mode)}/commit`)
     xhr.withCredentials = mode === 'staff'
     xhr.setRequestHeader('Accept', 'application/json')
+    for (const [name, value] of Object.entries(authHeaders(mode))) xhr.setRequestHeader(name, value)
     if (onProgress) {
       xhr.upload.onprogress = (e: ProgressEvent) => {
         if (e.lengthComputable && e.total > 0) onProgress(Math.min(100, (e.loaded / e.total) * 100))
@@ -280,9 +330,10 @@ export function commitFile(
         body = null
       }
       if (xhr.status >= 200 && xhr.status < 300) {
+        if (mode === 'public') reportTokenProblem(null)
         resolve(body as CommitResponse)
       } else {
-        reject(new UploadApiError(xhr.status, messageFrom(body, `POST /commit → ${xhr.status}`), body))
+        reject(failure(mode, xhr.status, body, `POST /commit → ${xhr.status}`))
       }
     }
     xhr.send(form)
@@ -293,22 +344,18 @@ export function commitFile(
 
 /** Take back an image or DICOM upload within the window. */
 export async function undoItem(mode: UploadMode, ingestItemId: number): Promise<void> {
-  const res = await fetch(`${base(mode)}/items/${ingestItemId}`, {
-    method: 'DELETE', credentials: credentials(mode), headers: { Accept: 'application/json' },
-  })
+  const res = await send(mode, `/items/${ingestItemId}`, { method: 'DELETE', headers: { Accept: 'application/json' } })
   if (!res.ok) {
     const body = await parseJsonOrNull(res)
-    throw new UploadApiError(res.status, messageFrom(body, `DELETE /items/${ingestItemId} → ${res.status}`), body)
+    throw failure(mode, res.status, body, `DELETE /items/${ingestItemId} → ${res.status}`)
   }
 }
 
 /** Take back an OCT scan's job within the window. */
 export async function undoJob(mode: UploadMode, jobId: number): Promise<void> {
-  const res = await fetch(`${base(mode)}/jobs/${jobId}`, {
-    method: 'DELETE', credentials: credentials(mode), headers: { Accept: 'application/json' },
-  })
+  const res = await send(mode, `/jobs/${jobId}`, { method: 'DELETE', headers: { Accept: 'application/json' } })
   if (!res.ok) {
     const body = await parseJsonOrNull(res)
-    throw new UploadApiError(res.status, messageFrom(body, `DELETE /jobs/${jobId} → ${res.status}`), body)
+    throw failure(mode, res.status, body, `DELETE /jobs/${jobId} → ${res.status}`)
   }
 }

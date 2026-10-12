@@ -2,10 +2,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
-  AuthState, AuthenticatedUser, LoginFailure, LoginFailureReason, PasswordChangeFieldError,
-  PasswordChangeRequest, ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
-  StudyWritePermissions, UserRole,
+  AuthState, AuthenticatedUser, LocationMode, LoginFailure, LoginFailureReason, ManageableLocation,
+  PasswordChangeFieldError, PasswordChangeRequest, ProfileFieldError, ProfileUpdateRequest,
+  SsoConfig, StudyOption, StudyWritePermissions, UserRole,
 } from '@/types/auth'
+import {
+  isLocationMode, locationModeOf, manageableLocationsOf, userMayManageUploaders,
+} from '@/lib/locationAccess'
 import { useSubjectsStore } from './subjects'
 import { useEventsStore } from './events'
 import { useNotesStore } from './notes'
@@ -114,6 +117,41 @@ export const useAuthStore = defineStore('auth', () => {
   )
   /** Only a technical administrator may make another one. */
   const isTechAdmin = computed(() => user.value?.userType === 'TECHADMIN')
+  /**
+   * The locations whose uploaders this session may manage (`/me`'s
+   * `manageableLocations`): every available location for a system
+   * administrator, a Standort-Admin's own otherwise. Empty for everyone else.
+   */
+  const manageableLocations = computed<ManageableLocation[]>(() => manageableLocationsOf(user.value))
+  /** The session may open the Uploaders page: it manages at least one location. */
+  const canManageUploaders = computed(() => userMayManageUploaders(user.value))
+  /**
+   * The deployment's location mode (`/me`'s `locationMode`), fixed at deploy
+   * time: `single` keeps exactly one active location, `multi` allows any
+   * number. An answer without the field (an older server) reads as `single`.
+   */
+  const locationMode = computed<LocationMode>(() => locationModeOf(user.value))
+
+  /**
+   * Makes the user the server sent complete before it is stored: an answer
+   * from before `manageableLocations` existed has no list, and a store that
+   * hands out `undefined` would make every reader guard against it. `/me`
+   * always carries the list; the other calls that answer with the user
+   * (active study, profile, password) may not, and then the list the session
+   * already had stands, since it does not depend on the study or the profile.
+   * The location mode is kept the same way: it belongs to the deployment.
+   */
+  function adopt(me: AuthenticatedUser): AuthenticatedUser {
+    let adopted = me
+    if (!Array.isArray(me.manageableLocations)) {
+      adopted = { ...adopted, manageableLocations: manageableLocationsOf(user.value) }
+    }
+    const held = user.value?.locationMode
+    if (!isLocationMode(me.locationMode) && isLocationMode(held)) {
+      adopted = { ...adopted, locationMode: held }
+    }
+    return adopted
+  }
 
   /**
    * Boot the store on app load. Calls /me; on 401 we know the user is
@@ -133,7 +171,7 @@ export const useAuthStore = defineStore('auth', () => {
     const previousActiveOid = user.value?.activeStudy?.oid ?? null
     try {
       const me = await apiGet<AuthenticatedUser>('/pages/api/v1/me')
-      user.value = me
+      user.value = adopt(me)
       state.value = me.profileComplete ? 'authenticated' : 'profile-incomplete'
       const nextActiveOid = me.activeStudy?.oid ?? null
       if (previousActiveOid !== null && previousActiveOid !== nextActiveOid) {
@@ -211,14 +249,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function loadStudies(): Promise<void> {
+  /**
+   * Reads the studies the session may pick. Answers whether it did: an empty
+   * list is a list (the account holds no study role), a failed read is not,
+   * and the study picker acts on the first and never on the second.
+   */
+  async function loadStudies(): Promise<boolean> {
     try {
       availableStudies.value = await apiGet<StudyOption[]>('/pages/api/v1/studies')
+      return true
     } catch (e) {
       error.value = e instanceof ApiError ? e.message
         : e instanceof ApiNetworkError ? 'Backend unreachable.'
         : 'Failed to load studies.'
       availableStudies.value = []
+      return false
     }
   }
 
@@ -241,7 +286,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const refreshed = await apiPost<AuthenticatedUser>('/pages/api/v1/me/activeStudy', { oid })
       resetStudyScopedStores()
-      user.value = refreshed
+      user.value = adopt(refreshed)
       state.value = refreshed.profileComplete ? 'authenticated' : 'profile-incomplete'
     } catch (e) {
       error.value = e instanceof ApiError ? e.message
@@ -311,7 +356,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const refreshed = await apiPut<AuthenticatedUser>('/pages/api/v1/me/profile', patch)
-      user.value = refreshed
+      user.value = adopt(refreshed)
       state.value = refreshed.profileComplete ? 'authenticated' : 'profile-incomplete'
     } catch (e) {
       if (e instanceof ApiError && e.status === 400) {
@@ -346,7 +391,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const refreshed = await apiPost<AuthenticatedUser>('/pages/api/v1/me/password', req)
-      user.value = refreshed
+      user.value = adopt(refreshed)
       state.value = refreshed.profileComplete ? 'authenticated' : 'profile-incomplete'
     } catch (e) {
       if (e instanceof ApiError && e.status === 400) {
@@ -482,6 +527,9 @@ export const useAuthStore = defineStore('auth', () => {
     needsPasswordChange,
     isSysAdmin,
     isTechAdmin,
+    manageableLocations,
+    canManageUploaders,
+    locationMode,
     bootstrap,
     localLogin,
     loadStudies,
