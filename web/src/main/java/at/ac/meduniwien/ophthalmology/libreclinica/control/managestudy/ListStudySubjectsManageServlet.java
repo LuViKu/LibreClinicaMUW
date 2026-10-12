@@ -14,7 +14,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 
-import java.util.Locale;
 
 /**
  * @author ssachs
@@ -26,7 +25,6 @@ public class ListStudySubjectsManageServlet extends ListStudySubjectServlet {
 	 * 
 	 */
 	private static final long serialVersionUID = -7446704625107978787L;
-	Locale locale;
 
     // < ResourceBundleresexception,respage;
 

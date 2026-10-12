@@ -123,6 +123,7 @@ public class ExportExcelStudySubjectAuditLogServlet extends SecureController {
 		if (studySubId == 0) {
             addPageMessage(respage.getString("please_choose_a_subject_to_view"));
             forwardPage(Page.LIST_STUDY_SUBJECTS);
+            return;
         } else {
             studySubject = (StudySubjectBean) subdao.findByPK(studySubId);
             StudyBean study = (StudyBean) studydao.findByPK(studySubject.getStudyId());
