@@ -116,7 +116,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
     // the default; all crf ids should be > 0, tbh 8-29 :-)
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
-    public SpreadSheetTableRepeating(FileInputStream parseStream, UserAccountBean ub, String versionName, Locale locale, int studyId) throws IOException {
+    public SpreadSheetTableRepeating(FileInputStream parseStream, UserAccountBean ub, Locale locale, int studyId) throws IOException {
         // super();
 
         this.fs = new POIFSFileSystem(parseStream);
@@ -754,7 +754,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             if (labelWithType.containsKey(responseLabel)) {
                                 // make sure same responseLabels have same
                                 // datatype
-                                if (!dataType.equalsIgnoreCase(labelWithType.get(responseLabel).toString())) {
+                                if (!dataType.equalsIgnoreCase(labelWithType.get(responseLabel))) {
                                     errors.add(resPageMsg.getString("the") + " " + resPageMsg.getString("DATA_TYPE_column") + " "
                                         + resPageMsg.getString("does_not_match_the_item_data_type_with_the_same_response_label") + " " + k + ", "
                                         + resPageMsg.getString("items_worksheet_with_dot"));
@@ -770,10 +770,10 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                                             String st = s != null && s.length() > 0 ? s.trim() : "";
                                             if (st.length() > 0) {
                                                 try {
-                                                    Integer I = Integer.parseInt(st);
-                                                    // eg, s=2.3 => I=2,
+                                                    int parsed = Integer.parseInt(st);
+                                                    // eg, s=2.3 => parsed=2,
                                                     // but 2.3 is not integer
-                                                    if (!I.toString().equals(st)) {
+                                                    if (!Integer.toString(parsed).equals(st)) {
                                                         wrongType = true;
                                                     }
                                                 } catch (Exception e) {
@@ -1196,7 +1196,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
 
                         // YW << a response Label can not be used for more than
                         // one response type
-                        if (!resPairs.contains(responseLabel.toString().toLowerCase() + "_" + responseType.toString().toLowerCase())) {
+                        if (!resPairs.contains(responseLabel.toLowerCase() + "_" + responseType.toLowerCase())) {
                             // YW >>
                             if (!resNames.contains(responseLabel)) {
                                 queries.add(sql);
@@ -1216,7 +1216,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                                     + "\" for ResponseType \"" + responseType + "\" has been used for another ResponseType.  ");
                                 htmlErrors.put(j + "," + k + ",14", "INVALID FIELD");
                             }
-                            resPairs.add(responseLabel.toString().toLowerCase() + "_" + responseType.toString().toLowerCase());
+                            resPairs.add(responseLabel.toLowerCase() + "_" + responseType.toLowerCase());
                             // YW >>
                         }
 
@@ -1447,8 +1447,9 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                     SpreadSheetItemUtil.verifyUniqueItemPlacementInGroups(row_items, errors,  htmlErrors, j,resPageMsg, crfName, ds);
                   
         			instantValidator.validate();
-                    errors = (ArrayList<String>)instantValidator.getSheetErrors().addErrorsToSheet(errors);
-                    htmlErrors = (HashMap<String,String>)instantValidator.getSheetErrors().putHtmlErrorsToSheet(htmlErrors);
+                    // both collections are non-null and are filled in place
+                    instantValidator.getSheetErrors().addErrorsToSheet(errors);
+                    instantValidator.getSheetErrors().putHtmlErrorsToSheet(htmlErrors);
                 } else if (sheetName.equalsIgnoreCase("Groups")) {
                     logger.debug("read groups, ***comment added 5.14.07");
                     ArrayList<String> groupNames = new ArrayList<>();
@@ -1666,7 +1667,7 @@ public class SpreadSheetTableRepeating implements SpreadSheetTable {
                             }
                         } catch (NumberFormatException n2) {
                             logger.error("Error  message", n2);
-                            if ("".equals(groupRepeatMax)) {
+                            if (groupRepeatMax != null && groupRepeatMax.isEmpty()) {
                                 igMeta.setRepeatMax(40);
                             } else {
                                 errors.add(resPageMsg.getString("the") + " " + resPageMsg.getString("GROUP_REPEAT_MAX_column") + " "

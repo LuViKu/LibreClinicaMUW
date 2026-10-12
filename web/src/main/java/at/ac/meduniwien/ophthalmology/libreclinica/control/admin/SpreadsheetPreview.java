@@ -181,7 +181,7 @@ public final class SpreadsheetPreview implements Preview {
         case BOOLEAN:
             return Boolean.toString(cell.getBooleanCellValue());
         case FORMULA:
-            return cell.getCellFormula().toString();
+            return cell.getCellFormula();
         default:
             return "";
         }
@@ -236,7 +236,6 @@ public final class SpreadsheetPreview implements Preview {
                             val = Boolean.toString(cell.getBooleanCellValue());
                             break;
                         case FORMULA:
-                            cell.getCellFormula().toString();
                             break;
                         default:
                             break;

@@ -111,7 +111,7 @@ public class SetUserRoleServlet extends SecureController {
                     roleMap.put(role.getId(), role.getDescription());
             }
 
-            Boolean changeRoles = request.getParameter("changeRoles") == null ? false : Boolean.parseBoolean(request.getParameter("changeRoles"));
+            boolean changeRoles = Boolean.parseBoolean(request.getParameter("changeRoles"));
             int studyId = fp.getInt("studyId");
             if (changeRoles) {
                 StudyBean study = (StudyBean) sdao.findByPK(studyId);
