@@ -77,8 +77,8 @@ public final class SdRetinaNetReader {
     /** Artifact name the sidecar ships. */
     public static final String ARCHIVE = "sdretinanet.zip";
 
-    private static final Pattern LAYER_FILE = Pattern.compile("(?:^|/)layers/(\\d+)\\.yml$");
-    private static final Pattern LESION_FILE = Pattern.compile("(?:^|/)lesions/(\\d+)\\.png$");
+    private static final Pattern LAYER_FILE = Pattern.compile("(?:^|/)layers/(\\d{1,6})\\.yml$");
+    private static final Pattern LESION_FILE = Pattern.compile("(?:^|/)lesions/(\\d{1,6})\\.png$");
     private static final Pattern INFO_KV = Pattern.compile("^([A-Za-z0-9_]+)\\s*:\\s*(.+)$");
     private static final Pattern LAYER_DEF = Pattern.compile("^-\\s*([A-Za-z0-9_\\-]+):$");
     private static final Pattern LAYER_ROW = Pattern.compile("^-\\s*(values|confid|uncrtn):\\s*(.*)$");
