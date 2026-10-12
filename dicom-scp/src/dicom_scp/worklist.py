@@ -115,11 +115,21 @@ def filter_entries(entries: list[dict], query: Dataset) -> list[dict]:
 
 # --- data source ---------------------------------------------------------
 
-def fetch_entries(url: str, token: str, day_from: str, day_to: str, timeout_s: int) -> list[dict]:
-    """GET the app's internal worklist endpoint. Raises on non-2xx."""
+def fetch_entries(url: str, token: str, day_from: str, day_to: str, timeout_s: int,
+                  calling_ae: str | None = None) -> list[dict]:
+    """GET the app's internal worklist endpoint. Raises on non-2xx.
+
+    The calling AE title goes along (DR-040 phase 3): the app lists only the
+    visits at the camera's location. A multi-location app refuses a request
+    without it.
+    """
+    params = {"from": day_from, "to": day_to}
+    ae = (calling_ae or "").strip()
+    if ae:
+        params["callingAe"] = ae
     resp = requests.get(
         url,
-        params={"from": day_from, "to": day_to},
+        params=params,
         headers={"X-MUW-Dicom-Token": token, "Accept": "application/json"},
         timeout=timeout_s,
     )
