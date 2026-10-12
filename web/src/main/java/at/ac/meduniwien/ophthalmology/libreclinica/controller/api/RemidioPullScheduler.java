@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ClinicZone;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioDashboardClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.RemidioGatewayClient.RemidioException;
@@ -158,6 +159,26 @@ public class RemidioPullScheduler {
      * from {@code behindDays} ago to {@code aheadDays} ahead exists in
      * Remidio, with an exam per visit. Never throws.
      */
+    /**
+     * DR-040 phase 3 — the Remidio account's location, for the patient sync:
+     * the account's ingest source, named as the pull names it and made (as the
+     * pull would) when it does not exist yet, so it shows on System → Standorte
+     * → Quellen. Null when it has no location or cannot be named or read; the
+     * sync then applies the default location.
+     */
+    Integer accountLocationId() {
+        String key = RemidioPullService.accountKeyOf(RemidioGatewayClient.Settings.fromConfig());
+        try {
+            return new IngestSourceService(dataSource)
+                    .resolveAutoSource(IngestSourceService.KIND_REMIDIO, key, RemidioPullService.SOURCE_NAME)
+                    .locationId();
+        } catch (IngestSourceService.Refusal | IngestSourceService.Failure e) {
+            LOG.warn("Remidio patient sync: the account's source could not be read ({}); the default location "
+                    + "applies", e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
     public Optional<RemidioPatientSyncService.Summary> syncOnce() {
         RemidioDashboardClient.Settings settings = RemidioDashboardClient.Settings.fromConfig();
         if (!settings.isConfigured()) {
@@ -210,8 +231,8 @@ public class RemidioPullScheduler {
         LocalDate from = today.minusDays(syncBehindDays());
         LocalDate to = today.plusDays(syncAheadDays());
         try {
-            RemidioPatientSyncService.Summary s = new RemidioPatientSyncService(dataSource, syncClient)
-                    .sync(from, to, syncCreateExams());
+            RemidioPatientSyncService.Summary s = new RemidioPatientSyncService(dataSource, syncClient,
+                    accountLocationId()).sync(from, to, syncCreateExams());
             lastSyncSuccess = Instant.now();
             lastSyncError = null;
             boolean notable = s.patientsCreated() > 0 || s.examsCreated() > 0 || s.failed() > 0;

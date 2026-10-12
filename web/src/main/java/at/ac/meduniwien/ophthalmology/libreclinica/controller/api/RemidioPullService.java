@@ -471,7 +471,11 @@ final class RemidioPullService {
      * names no place, so it is only the fallback.
      */
     String accountKey() {
-        RemidioGatewayClient.Settings configured = client == null ? null : client.settings();
+        return accountKeyOf(client == null ? null : client.settings());
+    }
+
+    /** {@link #accountKey()} for given settings: the patient sync names the account the same way. */
+    static String accountKeyOf(RemidioGatewayClient.Settings configured) {
         if (configured == null) return SOURCE_KEY_FALLBACK;
         if (!configured.siteCustomId().isEmpty()) return configured.siteCustomId();
         return configured.clientName().isEmpty() ? SOURCE_KEY_FALLBACK : configured.clientName();
