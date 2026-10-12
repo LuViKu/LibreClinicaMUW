@@ -13121,6 +13121,7 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                callingAe?: string;
             };
             header?: {
                 "X-MUW-Dicom-Token"?: string;

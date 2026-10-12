@@ -617,7 +617,14 @@ lists (`core.remidio.siteCustomId`). The first file from either makes a source
 with no location in multi mode; in single mode it gets the one location and
 nothing needs doing. In multi mode assign each on **System → Standorte →
 Quellen**: until then what it sends waits for a system administrator, and
-assigning the source puts those files into that location's inbox at once. The DICOM receiver accepts any calling AE title when
+assigning the source puts those files into that location's inbox at once.
+Their schedules follow the same place (DR-040 phase 3): the camera worklist
+(C-FIND) offers a camera only the visits at its location, and the Remidio
+patient sync pushes only the subjects at the account's location. In multi mode
+an unassigned camera is offered an empty worklist and an unassigned account
+pushes nothing, and the dicom-scp receiver must be the same release as the app
+(an older one sends no calling AE title, and its worklist request is refused).
+The DICOM receiver accepts any calling AE title when
 `DICOM_SCP_ALLOWED_CALLING_AE_TITLES` is empty (its default), so the app makes
 **at most 200 DICOM sources** and files a title past that without one (one log
 line an hour says so). Set the allow-list to the cameras' AE titles and the
@@ -747,7 +754,9 @@ a patient list, so for the photographer to pick a subject instead of typing
 it, the subject must exist in Remidio's cloud as a patient with an exam. With
 `core.remidio.patientSync.enabled=true` every pass also takes the visits
 scheduled from yesterday to a week ahead (scope `core.dicom.worklist.studyOids`,
-as the DICOM/Optomed worklists) and creates what is missing: a patient with
+as the DICOM/Optomed worklists, and only at the Remidio account's location:
+the whole schedule in single-location mode, nothing in multi mode until the
+account is assigned on System → Standorte → Quellen) and creates what is missing: a patient with
 MRN = subject label and placeholder identity, and one exam per visit named
 `<label> <visit>` (e.g. `HAE-002 Baseline`). A capture made into that exam
 is filed against its visit directly. This goes through the web dashboard's

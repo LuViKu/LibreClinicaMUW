@@ -90,6 +90,28 @@ final class DeviceScope {
         return both;
     }
 
+    /**
+     * DR-040 phase 3 — the studies a device known by its place may be shown,
+     * for the camera worklist and the Remidio patient sync: the configured scope
+     * ({@code configKey}) narrowed to the studies at {@code locationId}, or, for
+     * a device without a place, at the default location. Empty, so nothing, when
+     * there is no place at all: in multi-location mode a camera or an account
+     * nobody has assigned is shown no schedule. Empty as well when the location
+     * cannot be read.
+     */
+    static Set<Integer> studiesAtPlace(DataSource dataSource, String configKey, Integer locationId) {
+        Set<Integer> configured = StudyScopeConfig.studyIdsFor(dataSource, configKey);
+        try (Connection c = dataSource.getConnection()) {
+            Integer place = locationId != null ? locationId : LocationScope.defaultLocationId(c);
+            if (place == null) return Set.of();
+            return narrow(configured, LocationScope.studyIdsAtLocation(c, place));
+        } catch (SQLException | RuntimeException e) {
+            LOG.error("could not read the studies at location {} — restricting to no studies: {}",
+                    locationId, e.getMessage());
+            return Set.of();
+        }
+    }
+
     /** True when the study is allowed: no narrowing at all, or it is in the set. */
     static boolean allows(Set<Integer> studies, int studyId) {
         return studies == null || studies.contains(studyId);

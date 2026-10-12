@@ -244,4 +244,110 @@ class DicomWorklistApiControllerDatabaseIT extends AbstractApiControllerDatabase
                 .andExpect(jsonPath("$.from").value(today))
                 .andExpect(jsonPath("$.to").value(today));
     }
+
+    /* ---------------- DR-040 phase 3: the camera's place ---------------- */
+
+    private static int intQuery(String sql) throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(sql);
+             java.sql.ResultSet rs = ps.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    private static void exec(String sql) throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.Statement st = c.createStatement()) {
+            st.executeUpdate(sql);
+        }
+    }
+
+    /** The visit ids a camera with this calling AE title is offered for the two November visits. */
+    private java.util.Set<Integer> offeredTo(String ae) throws Exception {
+        String body = mockMvc().perform(get("/api/v1/internal/dicom-worklist")
+                        .param("from", "2020-11-02").param("to", "2020-11-08").param("callingAe", ae)
+                        .header("X-MUW-Dicom-Token", TOKEN))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        java.util.Set<Integer> ids = new java.util.TreeSet<>();
+        at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json.mapper().readTree(body).get("entries")
+                .forEach(e -> ids.add(e.get("studyEventId").asInt()));
+        return ids;
+    }
+
+    @Test
+    void aCameraIsOfferedOnlyTheVisitsAtItsLocation() throws Exception {
+        int studyOf5 = intQuery("SELECT ss.study_id FROM study_event se JOIN study_subject ss "
+                + "ON ss.study_subject_id = se.study_subject_id WHERE se.study_event_id = 5");
+        int studyOf10 = intQuery("SELECT ss.study_id FROM study_event se JOIN study_subject ss "
+                + "ON ss.study_subject_id = se.study_subject_id WHERE se.study_event_id = 10");
+        int home = intQuery("SELECT location_id FROM location WHERE code = 'MUW-AUGEN'");
+        int before = intQuery("SELECT COALESCE(location_id, 0) FROM study WHERE study_id = " + studyOf5);
+        exec("INSERT INTO location (code, name, status_id, date_created) VALUES ('WL-B', 'Worklist B', 1, now())");
+        int locB = intQuery("SELECT location_id FROM location WHERE code = 'WL-B'");
+        at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.set(
+                at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.MULTI);
+        try {
+            exec("UPDATE study SET location_id = " + locB + " WHERE study_id = " + studyOf5);
+            exec("INSERT INTO ingest_source (kind, source_key, display_name, location_id, created_at) "
+                    + "VALUES ('dicom_ae', 'WL-IT-CAM-B', 'WL-IT-CAM-B', " + locB + ", now())");
+            exec("INSERT INTO ingest_source (kind, source_key, display_name, location_id, created_at) "
+                    + "VALUES ('dicom_ae', 'WL-IT-CAM-A', 'WL-IT-CAM-A', " + home + ", now())");
+
+            java.util.Set<Integer> atB = offeredTo("WL-IT-CAM-B");
+            java.util.Set<Integer> atA = offeredTo("WL-IT-CAM-A");
+            org.junit.jupiter.api.Assertions.assertTrue(atB.contains(5), "B's camera sees B's visit: " + atB);
+            org.junit.jupiter.api.Assertions.assertFalse(atA.contains(5), "A's camera never sees it: " + atA);
+            org.junit.jupiter.api.Assertions.assertEquals(studyOf10 == studyOf5, atB.contains(10),
+                    "visit 10 goes with its own study's location: " + atB);
+            org.junit.jupiter.api.Assertions.assertEquals(studyOf10 != studyOf5, atA.contains(10),
+                    "and is A's when its study stayed at A: " + atA);
+        } finally {
+            at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.set(
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.SINGLE);
+            exec("UPDATE study SET location_id = " + (before == 0 ? "NULL" : String.valueOf(before))
+                    + " WHERE study_id = " + studyOf5);
+            exec("DELETE FROM audit_log_event WHERE audit_table = 'ingest_source'");
+            exec("DELETE FROM ingest_source WHERE source_key LIKE 'WL-IT-%'");
+            exec("DELETE FROM location WHERE code = 'WL-B'");
+        }
+    }
+
+    @Test
+    void inMultiModeAnUnplacedCameraIsOfferedNothingAndBecomesASourceToAssign() throws Exception {
+        at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.set(
+                at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.MULTI);
+        try {
+            org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of(), offeredTo("WL-IT-NEW"));
+            org.junit.jupiter.api.Assertions.assertEquals(1, intQuery("SELECT count(*) FROM ingest_source "
+                    + "WHERE kind = 'dicom_ae' AND source_key = 'WL-IT-NEW' AND location_id IS NULL"),
+                    "the title is listed for an administrator to place");
+
+            // An older sidecar that sends no title cannot say whose schedule to show.
+            mockMvc().perform(get("/api/v1/internal/dicom-worklist")
+                            .param("from", "2020-11-02").param("to", "2020-11-08")
+                            .header("X-MUW-Dicom-Token", TOKEN))
+                    .andExpect(status().isBadRequest());
+        } finally {
+            at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.set(
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationMode.SINGLE);
+            exec("DELETE FROM audit_log_event WHERE audit_table = 'ingest_source'");
+            exec("DELETE FROM ingest_source WHERE source_key LIKE 'WL-IT-%'");
+        }
+    }
+
+    @Test
+    void inSingleModeEveryCameraIsOfferedTheWholeScheduleAsBefore() throws Exception {
+        try {
+            org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of(5, 10), offeredTo("WL-IT-ANY"));
+            org.junit.jupiter.api.Assertions.assertEquals(1, intQuery("SELECT count(*) FROM ingest_source "
+                    + "WHERE source_key = 'WL-IT-ANY' AND location_id = "
+                    + "(SELECT location_id FROM location WHERE code = 'MUW-AUGEN')"),
+                    "a new camera is at the one location");
+        } finally {
+            exec("DELETE FROM audit_log_event WHERE audit_table = 'ingest_source'");
+            exec("DELETE FROM ingest_source WHERE source_key LIKE 'WL-IT-%'");
+        }
+    }
 }

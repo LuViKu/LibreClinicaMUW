@@ -66,7 +66,7 @@ def _handle_find(event):
     try:
         entries = worklist.fetch_entries(
             settings.worklist_url, settings.ingest_token, day_from, day_to,
-            settings.worklist_timeout_s)
+            settings.worklist_timeout_s, calling_ae)
     except Exception as exc:  # noqa: BLE001 — never let a fetch error kill the SCP
         LOG.error("worklist fetch failed (%s) — answering C-FIND with failure", type(exc).__name__)
         yield 0xC000, None

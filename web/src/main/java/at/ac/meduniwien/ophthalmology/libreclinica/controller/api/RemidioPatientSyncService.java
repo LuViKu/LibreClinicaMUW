@@ -55,6 +55,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.remidio.Remidi
  * photographer ({@code HAE-002 Baseline}); the visit it stands for is kept
  * in {@code remidio_visit_exam}, and a capture made into that exam binds
  * straight to its visit in the pull, without going through label + date.
+ *
+ * <p>DR-040 phase 3 — the account's place. The Remidio account is an ingest
+ * source with a location; only the subjects of studies at that location are
+ * pushed (within {@code core.dicom.worklist.studyOids}). An account without a
+ * location falls back to the default one: in single-location mode the one
+ * location, so nothing changes; in multi mode none, and nothing is pushed until
+ * an administrator assigns the account on System → Standorte → Quellen. A
+ * patient in Remidio cannot be deleted, so the sync fails closed.
  */
 final class RemidioPatientSyncService {
 
@@ -75,10 +83,21 @@ final class RemidioPatientSyncService {
 
     private final DataSource dataSource;
     private final RemidioDashboardClient client;
+    /** The account's location; null when it has none or is not known (then the default location applies). */
+    private final Integer accountLocationId;
+
+    /** Logged at most once an hour: an unplaced account in multi mode is a standing state, not news every pass. */
+    private static final java.util.concurrent.atomic.AtomicLong UNPLACED_LOGGED_AT =
+            new java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE / 2);
 
     RemidioPatientSyncService(DataSource dataSource, RemidioDashboardClient client) {
+        this(dataSource, client, null);
+    }
+
+    RemidioPatientSyncService(DataSource dataSource, RemidioDashboardClient client, Integer accountLocationId) {
         this.dataSource = dataSource;
         this.client = client;
+        this.accountLocationId = accountLocationId;
     }
 
     /**
@@ -90,7 +109,18 @@ final class RemidioPatientSyncService {
      *                          failed and the pass goes on
      */
     Summary sync(LocalDate from, LocalDate to, boolean createExams) throws RemidioException {
-        Set<Integer> allowed = StudyScopeConfig.studyIdsFor(dataSource, StudyScopeConfig.WORKLIST_KEY);
+        Set<Integer> allowed = DeviceScope.studiesAtPlace(dataSource, StudyScopeConfig.WORKLIST_KEY, accountLocationId);
+        if (allowed.isEmpty()) {
+            long now = System.currentTimeMillis();
+            long last = UNPLACED_LOGGED_AT.get();
+            if (now - last >= 3_600_000L && UNPLACED_LOGGED_AT.compareAndSet(last, now)) {
+                LOG.warn("remidio sync: no study is at the Remidio account's location ({}), so no patient is "
+                        + "pushed. In multi-location mode assign the account on System > Standorte > Quellen. "
+                        + "(Logged at most once an hour.)",
+                        accountLocationId == null ? "the account has none" : "location id " + accountLocationId);
+            }
+            return new Summary(from, to, 0, 0, 0, 0, 0, 0);
+        }
         List<ScheduledVisitQuery.ScheduledVisit> visits;
         try {
             visits = ScheduledVisitQuery.query(dataSource, from, to, allowed, MAX_VISITS);

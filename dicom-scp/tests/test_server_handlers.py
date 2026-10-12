@@ -186,13 +186,16 @@ def test_find_passes_the_requested_window_to_the_app(monkeypatch, find_query):
     seen = {}
     monkeypatch.setattr(config.settings, "worklist_url", "http://app/worklist")
 
-    def fake_fetch(url, token, day_from, day_to, timeout):
+    def fake_fetch(url, token, day_from, day_to, timeout, calling_ae=None):
         seen["range"] = (day_from, day_to)
+        seen["ae"] = calling_ae
         return []
 
     monkeypatch.setattr(worklist, "fetch_entries", fake_fetch)
-    list(server._handle_find(_FindEvent(find_query)))
+    list(server._handle_find(_FindEvent(find_query, ae_title=" OPTOMEDLUMO ")))
     assert seen["range"] == ("2026-09-17", "2026-09-17")
+    # DR-040 phase 3: the app lists only the visits at the camera's location.
+    assert seen["ae"] == "OPTOMEDLUMO"
 
 
 # --- presentation contexts -------------------------------------------------
