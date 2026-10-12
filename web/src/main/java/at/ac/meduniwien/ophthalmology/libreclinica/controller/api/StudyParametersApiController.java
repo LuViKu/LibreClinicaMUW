@@ -73,9 +73,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <h2>Persistence</h2>
  * <p>Per-handle direct JDBC upsert against {@code study_parameter_value}
  * inside a single autocommit-OFF transaction. The legacy
- * {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterValueDAO#setParameterValue
- * StudyParameterValueDAO.setParameterValue} returns {@code false}
- * unconditionally (never implemented), and the create/update split
+ * StudyParameterValueDAO's former {@code setParameterValue} stub returned
+ * {@code false} unconditionally (never implemented, since removed), and the create/update split
  * leaks a race window. Inlining the upsert here mirrors the
  * {@link MeApiController#emitProfileAudit} / {@link StudiesApiController#writeStudyFieldAudit}
  * pattern other E.6 PUTs use, and lets the per-handle audit row carry

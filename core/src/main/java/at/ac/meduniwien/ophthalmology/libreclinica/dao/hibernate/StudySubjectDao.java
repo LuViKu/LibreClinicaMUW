@@ -129,7 +129,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
     public ArrayList<StudyEvent> fetchListSEs(String id) {
         String query = " from StudyEvent se where se.studySubject.ocOid = :id order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-        q.setParameter("id", id.toString());
+        q.setParameter("id", id);
 
         return new ArrayList<>(q.getResultList());
 

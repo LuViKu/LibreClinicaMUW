@@ -112,7 +112,7 @@ public class RuleSetRuleDAO extends AuditableEntityDAO<RuleSetRuleBean> {
 
     }
 
-    public void autoRemoveByRuleSet(RuleSetBean eb, UserAccountBean ub) {
+    public void autoRemoveByRuleSet(RuleSetBean eb) {
 
         RuleSetBean ruleSetBean = eb;
         HashMap<Integer, Object> variables = new HashMap<>();

@@ -220,7 +220,7 @@ public class MetadataUnit extends OdmUnit {
             this.collectIncludeFromParentInSameFile();
 
             // populate protocol
-            oedao.getUpdatedSiteMetadata(parentStudyId, studyId, metadata, this.odmBean.getODMVersion());
+            oedao.getUpdatedSiteMetadata(parentStudyId, studyId, metadata);
         } else {
             if (dataset != null) {
                 metadata.setOid(dataset.getODMMetaDataVersionOid());

@@ -69,7 +69,7 @@ public class AdminDataUnit extends OdmUnit {
                 odmAdminData.setMetaDataVersionOID("v1.0.0");
             }
         }
-        oedao.getAdminData(study, this.dataset, odmAdminData, this.odmBean.getODMVersion());
+        oedao.getAdminData(study, odmAdminData);
     }
 
     public OdmAdminDataBean getOdmAdminData() {

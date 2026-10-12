@@ -586,7 +586,7 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         return getCountByQuery(query, variables);
     }
 
-    public ArrayList<EventCRFBean> getWithFilterAndSort(int studyId, int parentStudyId, EventCRFSDVFilter filter, EventCRFSDVSort sort, int rowStart, int rowEnd) {
+    public ArrayList<EventCRFBean> getWithFilterAndSort(int studyId, int parentStudyId, EventCRFSDVFilter filter, int rowStart, int rowEnd) {
         ArrayList<EventCRFBean> eventCRFs = new ArrayList<>();
         setTypesExpected();
 
@@ -595,7 +595,6 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         variables.put(2, parentStudyId);
         String sql = digester.getQuery("getWithFilterAndSort");
         sql = sql + filter.execute("");
-        // sql = sql + sort.execute("");
         sql = sql + " order By  ec.date_created ASC "; // major hack
         sql = sql + " LIMIT " + (rowEnd - rowStart) + " OFFSET " + rowStart;
 
