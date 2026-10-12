@@ -191,10 +191,8 @@ def rewrite(path: Path, pseudonym: str | None, drop_private: bool = False,
         ds.save_as(str(tmp), enforce_file_format=True)
         os.replace(tmp, path)
     finally:
-        try:
-            tmp.unlink()
-        except FileNotFoundError:
-            pass
+        # missing_ok: after a successful os.replace the temp file is gone.
+        tmp.unlink(missing_ok=True)
     # Counts only: the values are exactly what must not reach a log.
     LOG.info("pseudonymised an uploaded DICOM (%d attribute(s) changed)", len(changed))
     return ds, changed

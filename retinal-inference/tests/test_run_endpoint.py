@@ -13,9 +13,6 @@ parser or runner subprocess; the focus is on the endpoint shell:
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
 

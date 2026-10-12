@@ -101,6 +101,12 @@ def _is_dicom(filename: str | None, body: bytes) -> bool:
     return len(body) >= 132 and body[128:132] == b"DICM"
 
 
+def _log_safe(value: str, limit: int = 64) -> str:
+    """Drop non-printable characters (CR/LF included) and truncate, for logging
+    a value read from an uploaded file."""
+    return "".join(c for c in value if c.isprintable())[:limit]
+
+
 def _check_device(task: str, body: bytes) -> None:
     """Refuse a DICOM whose device the task's model was not trained on (422).
 
@@ -130,7 +136,10 @@ def _check_device(task: str, body: bytes) -> None:
             },
         ) from e
     if not device_supported(task, manufacturer, model):  # type: ignore[arg-type]
-        LOG.warning("/run refused task=%s for device %r / %r", task, manufacturer, model)
+        LOG.warning(
+            "/run refused task=%s for device %r / %r",
+            task, _log_safe(manufacturer), _log_safe(model),
+        )
         raise HTTPException(
             status_code=422,
             detail={
@@ -327,7 +336,6 @@ async def _run_locked(
             # response so the Java side's RemoteRetinalInferenceClient
             # body capture (commit 0755bbc66) lands something actionable
             # in the application log.
-            import logging
             import traceback as _tb
             logging.getLogger(__name__).exception(
                 "/run unhandled exception for task=%s scan_index=%s",

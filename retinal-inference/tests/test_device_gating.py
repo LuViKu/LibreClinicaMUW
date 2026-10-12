@@ -146,3 +146,23 @@ def test_health_publishes_the_task_devices(app_client):
         "models": ["spectralis", "hra"],
         "model_required": False,
     }
+
+
+def test_refused_device_is_logged_without_control_characters(caplog) -> None:
+    """Manufacturer/model come from the uploaded file: CR/LF must not reach the log."""
+    from fastapi import HTTPException
+
+    body = make_opt(manufacturer="Evil\r\nINFO forged entry", model="M\nodel")
+    task = next(t for t in SUPPORTED_TASKS if not devices.device_supported(t, "Evil", "M"))
+    with caplog.at_level("WARNING", logger=run_module.LOG.name):
+        with pytest.raises(HTTPException) as exc:
+            run_module._check_device(task, body)
+    assert exc.value.status_code == 422
+    refused = [r.getMessage() for r in caplog.records if "refused" in r.getMessage()]
+    assert refused
+    assert all("\n" not in m and "\r" not in m for m in refused)
+    assert "Evil" in refused[0]
+
+
+def test_log_safe_truncates() -> None:
+    assert run_module._log_safe("a\nb" + "x" * 100) == ("ab" + "x" * 100)[:64]
