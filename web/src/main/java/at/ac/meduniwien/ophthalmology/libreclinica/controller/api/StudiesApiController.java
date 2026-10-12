@@ -28,6 +28,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.managestudy.MailNotificationType;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationScope;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -394,6 +395,20 @@ public class StudiesApiController {
                     List.of(fieldError("contactEmail",
                             "A contact e-mail is required while login e-mail notification is enabled"))));
         }
+        // DR-040 phase 4: the study's location, checked before anything is written.
+        Integer moveTo = null;
+        if (body.locationId() != null && body.locationId() != target.getLocationId()) {
+            if (target.getParentStudyId() > 0) {
+                return ResponseEntity.badRequest().body(new ValidationErrorBody("Validation failed",
+                        List.of(fieldError("locationId", "A site moves through its parent study's sites"))));
+            }
+            LocationChoice.Result where = LocationChoice.resolve(dataSource, me, body.locationId());
+            if (where.error() != null) {
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                        "Validation failed", List.of(where.error())));
+            }
+            moveTo = where.locationId();
+        }
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
 
@@ -488,9 +503,31 @@ public class StudiesApiController {
             }
         }
 
+        if (moveTo != null) {
+            java.util.Map<Integer, LocationScope.Place> places = LocationLabels.load(dataSource);
+            LocationScope.Place from = LocationLabels.of(places, target.getLocationId());
+            LocationScope.Place to = LocationLabels.of(places, moveTo);
+            writeStudyFieldAudit(auditDAO, me, target, "location", from == null ? "" : from.code(),
+                    to == null ? String.valueOf(moveTo) : to.code());
+        }
+
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         studyDao.update(target);
+        if (moveTo != null) {
+            // StudyDAO.update never writes the location; the move is its own statement.
+            try (java.sql.Connection c = dataSource.getConnection();
+                 java.sql.PreparedStatement ps = c.prepareStatement(
+                         "UPDATE study SET location_id = ? WHERE study_id = ?")) {
+                ps.setInt(1, moveTo);
+                ps.setInt(2, target.getId());
+                ps.executeUpdate();
+            } catch (java.sql.SQLException e) {
+                throw new IllegalStateException("could not set the location of study id " + target.getId()
+                        + " (SQLSTATE " + e.getSQLState() + ")", e);
+            }
+            target.setLocationId(moveTo);
+        }
         if (contactEmailChanged && target.getParentStudyId() == 0) {
             copyContactEmailToSites(target, me);
         }
@@ -1121,6 +1158,7 @@ public class StudiesApiController {
     private StudyIdentityDto toIdentityDto(StudyBean s, StudyDAO studyDao) {
         StudyBean parent = s.getParentStudyId() > 0
                 ? studyDao.findByPK(s.getParentStudyId()) : null;
+        LocationScope.Place place = LocationLabels.of(LocationLabels.load(dataSource), s.getLocationId());
         return new StudyIdentityDto(
                 s.getOid(),
                 nullToEmpty(s.getName()),
@@ -1141,7 +1179,10 @@ public class StudiesApiController {
                 s.getDatePlannedStart() == null ? null
                         : java.time.Instant.ofEpochMilli(s.getDatePlannedStart().getTime())
                                 .atZone(java.time.ZoneId.systemDefault())
-                                .toLocalDate().toString());
+                                .toLocalDate().toString(),
+                s.getLocationId() > 0 ? s.getLocationId() : null,
+                place == null ? null : place.code(),
+                place == null ? null : place.name());
     }
 
     private static String nullToEmpty(String s) {

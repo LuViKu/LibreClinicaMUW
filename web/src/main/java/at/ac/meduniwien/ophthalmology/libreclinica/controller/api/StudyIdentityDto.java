@@ -48,5 +48,13 @@ public record StudyIdentityDto(
          * planned start date next to PI + status. ISO yyyy-MM-dd
          * string (null when unset on the study row).
          */
-        String datePlannedStart
+        String datePlannedStart,
+        /*
+         * DR-040 phase 4 — the location: a site's own; a study's own when
+         * it has no sites; for a parent study with sites its coordinating
+         * location. All three null when there is none.
+         */
+        Integer locationId,
+        String locationCode,
+        String locationName
 ) {}

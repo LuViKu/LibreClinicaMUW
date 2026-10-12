@@ -116,7 +116,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     @Test
     void updateValidate_BlankNameRejected() {
         UpdateSiteRequest body =
-                new UpdateSiteRequest("   ", null, null, null, null, null, null, null, null, null, null, null);
+                new UpdateSiteRequest("   ", null, null, null, null, null, null, null, null, null, null, null, null);
         java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
@@ -126,7 +126,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     @Test
     void updateValidate_OmittedFieldsAreNoOps() {
         UpdateSiteRequest body =
-                new UpdateSiteRequest(null, null, null, null, null, null, null, null, null, null, null, null);
+                new UpdateSiteRequest(null, null, null, null, null, null, null, null, null, null, null, null, null);
         java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         org.junit.jupiter.api.Assertions.assertTrue(errors.isEmpty());

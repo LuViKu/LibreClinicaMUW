@@ -57,6 +57,7 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
             Map.entry("AdminApiController", "system administration (password policy, config, cluster); admin role, no site data"),
             Map.entry("AdminLocationsApiController", "system administration (global locations and their user assignments); sysadmin only, holds no site-owned record"),
             Map.entry("AdminIngestSourcesApiController", "system administration (ingest sources and their locations); sysadmin only, holds no site-owned record"),
+            Map.entry("LocationsApiController", "the locations a form may offer (DR-040 phase 4): id, code, name and address of the caller's own available locations; no study, site or patient data"),
             Map.entry("AdminMailApiController", "system administration (test e-mail); admin role"),
             Map.entry("AuthApiController", "logout; no record id"),
             Map.entry("BugReportApiController", "free-text report to the maintainers; no record id"),
