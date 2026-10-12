@@ -70,11 +70,11 @@ public class TriggerService {
         int hours = fp.getInt("hours");
         int minutes = fp.getInt("minutes");
         if (hours > 0) {
-            long hoursInt = hours * 3600000;
+            long hoursInt = hours * 3600000L;
             interval = interval + hoursInt;
         }
         if (minutes > 0) {
-            long minutesInt = minutes * 60000;
+            long minutesInt = minutes * 60000L;
             interval = interval + minutesInt;
         }
 
@@ -106,7 +106,7 @@ public class TriggerService {
         return trigger;
     }
 
-    public String generateSummaryStatsMessage(SummaryStatsBean ssBean, ResourceBundle respage) {
+    public String generateSummaryStatsMessage(SummaryStatsBean ssBean) {
         // NOTE: i18n
         StringBuffer sb = new StringBuffer();
         sb.append("<table border=\'0\' cellpadding=\'0\' cellspacing=\'0\' width=\'100%\'>");
@@ -255,7 +255,7 @@ public class TriggerService {
         v.addValidation(JOB_NAME, Validator.NO_LEADING_OR_TRAILING_SPACES);
         // need to be unique too
         v.addValidation(JOB_DESC, Validator.NO_BLANKS);
-        if (!"".equals(fp.getString(EMAIL))) {
+        if (!fp.getString(EMAIL).isEmpty()) {
             v.addValidation(EMAIL, Validator.IS_A_EMAIL);
         }
         // << tbh we are now allowing email to be optional
