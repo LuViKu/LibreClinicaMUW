@@ -139,7 +139,7 @@ public class DownloadRuleSetXmlServlet extends SecureController {
         String ruleSetRuleIds = request.getParameter("ruleSetRuleIds");
 
         String dir = SQLInitServlet.getField("filePath") + "rules" + File.separator;
-        Long time = System.currentTimeMillis();
+        long time = System.currentTimeMillis();
         File f = new File(dir + "rules" + currentStudy.getOid() + "-" + time + ".xml");
         try (OutputStream writer = new FileOutputStream(f)) {
             handleLoadCastor(writer, prepareRulesPostImportRuleSetRuleContainer(ruleSetRuleIds));
@@ -151,31 +151,15 @@ public class DownloadRuleSetXmlServlet extends SecureController {
 
         ServletOutputStream op = response.getOutputStream();
 
-        DataInputStream in = null;
-        try {
+        try (DataInputStream in = new DataInputStream(new FileInputStream(f)); ServletOutputStream out = op) {
             response.setContentType("text/xml");
             response.setHeader("Pragma", "public");
             response.setContentLength((int) f.length());
 
-            byte[] bbuf = new byte[(int) f.length()];
-            in = new DataInputStream(new FileInputStream(f));
-            int length;
-            while ((in != null) && ((length = in.read(bbuf)) != -1)) {
-                op.write(bbuf, 0, length);
-            }
-
-            in.close();
-            op.flush();
-            op.close();
+            in.transferTo(out);
+            out.flush();
         } catch (Exception ee) {
             logger.error("Unable to process the Input processRequest: ", ee);
-        } finally {
-            if (in != null) {
-                in.close();
-            }
-            if (op != null) {
-                op.close();
-            }
         }
 
     }

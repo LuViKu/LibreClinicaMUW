@@ -149,7 +149,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(DataEntryServlet.class);
 
-    Locale locale;
+    protected Locale locale;
     // < ResourceBundleresmessage,restext,resexception,respage;
 
     // these inputs come from the form, from another JSP via POST,
@@ -514,10 +514,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
             return;
         }
         // variable is used for fetching any null values like "not applicable"
-        int eventDefinitionCRFId = 0;
-        if (fp != null) {
-            eventDefinitionCRFId = fp.getInt("eventDefinitionCRFId");
-        }
+        int eventDefinitionCRFId = fp.getInt("eventDefinitionCRFId");
 
         StudyBean study = (StudyBean) session.getAttribute("study");
         // constructs the list of items used on UI
@@ -554,7 +551,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
             phase2 = Phase.ADMIN_EDITING;
         }
         logMe("Entering ruleSets::: CreateAndInitializeRuleSet:::"+Thread.currentThread());
-        logMe("Entering ruleSets::: CreateAndInitializeRuleSet:::"+Thread.currentThread()+"currentStudy?"+currentStudy+"studyEventDefinition"+studyEventDefinition+"crfVersionBean"+crfVersionBean+"studyEventBean"+studyEventBean+"ecb"+ecb);
       //  List<RuleSetBean> ruleSets = createAndInitializeRuleSet(currentStudy, studyEventDefinition, crfVersionBean, studyEventBean, ecb, true, request, response);
        // boolean shouldRunRules = getRuleSetService(request).shouldRunRulesForRuleSets(ruleSets, phase2);
         logMe("Entering getDisplayBean:::::Thread::::"+Thread.currentThread());
@@ -824,7 +820,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     }
 
                     dib.setChildren(children);
-                    diwg.setSingleItem(runDynamicsItemCheck(dib, null, request));
+                    diwg.setSingleItem(runDynamicsItemCheck(dib, request));
                     // logger.trace("just set single item on line 447:
                     // "+dib.getData().getValue());
                     // items.set(i, dib);
@@ -878,7 +874,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
             }
             logMe(" Validate and Loop end  "+System.currentTimeMillis());
             //JN:calling again here, for the items with simple conditional display and rules.
-            List<RuleSetBean>  ruleSets = createAndInitializeRuleSet(currentStudy, studyEventDefinition, crfVersionBean, studyEventBean, ecb, true, request, response,  itemBeansWithSCDShown);
+            List<RuleSetBean>  ruleSets = createAndInitializeRuleSet(currentStudy, studyEventDefinition, crfVersionBean, studyEventBean, ecb, true, request, itemBeansWithSCDShown);
             boolean shouldRunRules = getRuleSetService(request).shouldRunRulesForRuleSets(ruleSets, phase2);
 
             // this.getItemMetadataService().resetItemCounter();
@@ -934,7 +930,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     }
 
                     dib.setChildren(children);
-                    diwg.setSingleItem(runDynamicsItemCheck(dib, null, request));
+                    diwg.setSingleItem(runDynamicsItemCheck(dib, request));
                     LOGGER.debug(" I : " + i);
                     allItems.set(i, diwg);
                 }
@@ -1041,7 +1037,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                 ordinalSet.add(ordinal);
                                 itemOrdinals.put(itemId, ordinalSet);
                             }
-                            if (isChanged(displayItem, oldItemdata, attachedFilePath)) {
+                            if (isChanged(displayItem, oldItemdata)) {
                                 changedItems.add(itemName);
                                 changedItemsList.add(displayItem);
                                 String formName = displayItem.getItem().getName();
@@ -1074,7 +1070,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     ordinalset.add(1);
                     itemOrdinals.put(itemId, ordinalset);
                     scoreItemdata.put(itemId + "_" + 1, value);
-                    if (isChanged(idb, oldItemdata, dib, attachedFilePath)) {
+                    if (isChanged(dib, oldItemdata)) {
                         changedItems.add(itemName);
                         changedItemsList.add(dib);
                         // changedItemsMap.put(dib.getItem().getName(), new
@@ -1090,7 +1086,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                         cordinalset.add(1);
                         itemOrdinals.put(itemId, cordinalset);
                         scoreItemdata.put(cib.getId() + "_" + 1, child.getData().getValue());
-                        if (isChanged(child.getData(), oldItemdata, child, attachedFilePath)) {
+                        if (isChanged(child, oldItemdata)) {
                             changedItems.add(itemName);
                             changedItemsList.add(child);
                             // changedItemsMap.put(itemName, new
@@ -1144,7 +1140,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                     value = sc.doCalculation(displayItem, scoreItems, scoreItemdata, itemOrdinals, err, displayItem.getData().getOrdinal());
                                 }
                                 displayItem.loadFormValue(value);
-                                if (isChanged(displayItem, oldItemdata, attachedFilePath)) {
+                                if (isChanged(displayItem, oldItemdata)) {
                                     changedItems.add(displayItem.getItem().getName());
                                     changedItemsList.add(displayItem);
                                 }
@@ -1180,7 +1176,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                             value = sc.doCalculation(dib, scoreItems, scoreItemdata, itemOrdinals, err, 1);
                         }
                         dib.loadFormValue(value);
-                        if (isChanged(dib.getData(), oldItemdata, dib, attachedFilePath)) {
+                        if (isChanged(dib, oldItemdata)) {
                             changedItems.add(dib.getItem().getName());
                             changedItemsList.add(dib);
                             // changedItemsMap.put(dib.getItem().getName(), new
@@ -1217,7 +1213,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                 cvalue = sc.doCalculation(child, scoreItems, scoreItemdata, itemOrdinals, cerr, 1);
                             }
                             child.loadFormValue(cvalue);
-                            if (isChanged(child.getData(), oldItemdata, child, attachedFilePath)) {
+                            if (isChanged(child, oldItemdata)) {
                                 changedItems.add(child.getItem().getName());
                                 changedItemsList.add(child);
                                 // changedItemsMap.put(child.getItem().getName(),
@@ -1285,7 +1281,6 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 String error = respage.getString("reason_for_change_error");
                 // "Please enter a reason for change discrepancy note before saving."
                 // ;
-                int nonforcedChanges = 0;
                 // change everything here from changed items list to changed
                 // items map
                 if (changedItemsList.size() > 0) {
@@ -1324,7 +1319,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                                 // testFormName + " and " + formName2);
                                 if (testFormName.equals(formName2)) {
                                     formName = formName2;
-                                    this.setReasonForChangeError(  ecb,item_bean,idb, formName, error, request);
+                                    this.setReasonForChangeError(ecb, formName, error, request);
                                     changedItemsMap.remove(formName2);
                                     LOGGER.debug("form name changed: " + formName);
                                     break;
@@ -1335,14 +1330,11 @@ public abstract class DataEntryServlet extends CoreSecureController {
                             }
 
                         } else {
-                            this.setReasonForChangeError(  ecb,item_bean,idb, formName, error, request);
+                            this.setReasonForChangeError(ecb, formName, error, request);
                             LOGGER.debug("form name added: " + formName);
                         }
                     }
                     logMe("DisplayItemBean  Loop end  "+System.currentTimeMillis());
-                }
-                if (nonforcedChanges > 0) {
-                    // do smething here?
                 }
             }
             LOGGER.debug("errors here: " + errors.toString());
@@ -1359,7 +1351,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     @SuppressWarnings("unchecked")
 					Set<String> a = (Set<String>) session.getAttribute("rulesErrors");
                     Set<String> ba = h.keySet();
-                    Boolean showErrors = false;
+                    boolean showErrors = false;
                     for (Object key : ba) {
                         if (!a.contains(key)) {
                             showErrors = true;
@@ -2097,11 +2089,10 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
     /**
      * Changed by thickerson 05/2010
-     * @param idb
      * @param formName
      * @param error
      */
-    protected void setReasonForChangeError( EventCRFBean ecb, ItemBean item_bean, ItemDataBean idb, String formName, String error, HttpServletRequest request) {
+    protected void setReasonForChangeError( EventCRFBean ecb, String formName, String error, HttpServletRequest request) {
           HttpSession session = request.getSession();
             /*
              * Having existing notes is not enough to let it pass through after changing data. There has to be a DiscrepancyNote for the latest changed data
@@ -2542,7 +2533,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
                 formGroup.setItems(dibs);
                 formGroups.add(formGroup);
-            } else if (!(firstLoopOIDNew == null || firstLoopOIDNew.trim().isEmpty())) {
+            } else if (!firstLoopOIDNew.trim().isEmpty()) {
                 // ||
                 // (fp.getStartsWith(igb.getOid() + "_manual" + i + "input"))) {
                 // the ordinal is the number got from [ ] and submitted by
@@ -2909,7 +2900,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         return metadataBean;
     }
 
-    private DisplayItemBean runDynamicsItemCheck(DisplayItemBean dib, Object newParam, HttpServletRequest request) {
+    private DisplayItemBean runDynamicsItemCheck(DisplayItemBean dib, HttpServletRequest request) {
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
         try {
         	 LOGGER.debug("trying run dynamics item check: item id " + dib.getItem().getId() + " item data id " + dib.getData().getId());
@@ -3852,7 +3843,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                          dib.setNumDiscrepancyNotes(numNotes + notes.size());// + notes2.size());
                         dib.setDiscrepancyNoteStatus(getDiscrepancyNoteResolutionStatus(itemDataId, notes));
 
-                        dib =  setTotals(dib,itemDataId,notes, ecb.getId());
+                        dib =  setTotals(dib,itemDataId, ecb.getId());
                         LOGGER.debug("dib note size:" + dib.getNumDiscrepancyNotes() + " " + dib.getData().getId() + " " + inputName);
                         items.set(j, dib);
                     }
@@ -3880,7 +3871,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
                 discNotes.setNumExistingFieldNotes(inputFieldName, numNotes1);
                 dib.setNumDiscrepancyNotes(numNotes + discNotes.getNotes(inputFieldName).size());
                 dib.setDiscrepancyNoteStatus(getDiscrepancyNoteResolutionStatus(itemDataId, discNotes.getNotes(inputFieldName)));
-               dib =  setTotals(dib,itemDataId,discNotes.getNotes(inputFieldName), ecb.getId());
+               dib =  setTotals(dib,itemDataId, ecb.getId());
 
                 ArrayList<DisplayItemBean> childItems = dib.getChildren();
                 for (int j = 0; j < childItems.size(); j++) {
@@ -3894,11 +3885,11 @@ public abstract class DataEntryServlet extends CoreSecureController {
                     discNotes.setNumExistingFieldNotes(childInputFieldName, childNumNotes);
                     child.setNumDiscrepancyNotes(childNumNotes + discNotes.getNotes(childInputFieldName).size());
                     child.setDiscrepancyNoteStatus(getDiscrepancyNoteResolutionStatus(childItemDataId, discNotes.getNotes(childInputFieldName)));
-                    child = setTotals(child,childItemDataId,discNotes.getNotes(childInputFieldName), ecb.getId());
+                    child = setTotals(child,childItemDataId, ecb.getId());
                     childItems.set(j, child);
                 }
                 dib.setChildren(childItems);
-                itemWithGroup.setSingleItem(runDynamicsItemCheck(dib, null, request));
+                itemWithGroup.setSingleItem(runDynamicsItemCheck(dib, request));
             }
             // missing piece of the puzzle - reset the itemgroup into all items?
             allItems.set(k, itemWithGroup);
@@ -3947,9 +3938,8 @@ public abstract class DataEntryServlet extends CoreSecureController {
         /**
      * To set the totals of each resolution status on the DisplayItemBean for each item.
      * @param dib
-         * @param notes
      */
-    private DisplayItemBean setTotals(DisplayItemBean dib,int itemDataId,ArrayList<DiscrepancyNoteBean> notes, int ecbId)
+    private DisplayItemBean setTotals(DisplayItemBean dib,int itemDataId, int ecbId)
     {
         long t = System.currentTimeMillis();
         logMe("Method::::::setTotals"+t);
@@ -4465,7 +4455,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         for (int i = 0; i < items.size(); i++) {
             DisplayItemBean item = (DisplayItemBean) items.get(i);
             DisplayItemWithGroupBean newOne = new DisplayItemWithGroupBean();
-            newOne.setSingleItem(runDynamicsItemCheck(item, null, request));
+            newOne.setSingleItem(runDynamicsItemCheck(item, request));
             newOne.setOrdinal(item.getMetadata().getOrdinal());
             newOne.setInGroup(false);
             newOne.setPageNumberLabel(item.getMetadata().getPageNumberLabel());
@@ -4480,11 +4470,9 @@ public abstract class DataEntryServlet extends CoreSecureController {
             ArrayList<ItemDataBean> data = iddao.findAllBySectionIdAndEventCRFId(sb.getId(), ecb.getId());
             HashMap<String,ItemDataBean> dataMap = getAllActive(data);
 
-            if (data != null && data.size() > 0) {
+            if (!data.isEmpty()) {
                 session.setAttribute(HAS_DATA_FLAG, true);
             }
-            LOGGER.trace("found data: " + data.size());
-            LOGGER.trace("data.toString: " + data.toString());
 
             for (DisplayItemGroupBean itemGroup : dsb.getDisplayFormGroups()) {
                 LOGGER.debug("found one itemGroup");
@@ -4544,7 +4532,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
 
       for(ItemDataBean itBean:al){
           if(itBean!=null)
-          returnMap.put(new String(itBean.getItemId()+","+itBean.getOrdinal()), itBean);
+          returnMap.put(itBean.getItemId()+","+itBean.getOrdinal(), itBean);
       }
       return returnMap;
   }
@@ -4831,13 +4819,13 @@ public abstract class DataEntryServlet extends CoreSecureController {
         StudyBean currentStudy =    (StudyBean)  request.getSession().getAttribute("study");
         EventCRFBean ecb = (EventCRFBean)request.getAttribute(INPUT_EVENT_CRF);
         if (!currentStudy.getStudyParameterConfig().getInterviewerNameDefault().equals("blank")
-            && ("".equals(ecb.getInterviewerName()) || ecb.getInterviewerName() == null)) {
+            && (ecb.getInterviewerName() == null || ecb.getInterviewerName().isEmpty())) {
             // default will be event's owner name
             ecb.setInterviewerName(sEvent.getOwner().getName());
         }
 
         if (!currentStudy.getStudyParameterConfig().getInterviewDateDefault().equals("blank")
-            && (ecb.getDateInterviewed() == null || "".equals(ecb.getDateInterviewed().toString()))) {
+            && ecb.getDateInterviewed() == null) {
             if (sEvent.getDateStarted() != null) {
                 ecb.setDateInterviewed(sEvent.getDateStarted());// default date
             } else {
@@ -4929,7 +4917,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
             ArrayList<ItemDataBean> idbs = iddao.findAllActiveBySectionIdAndEventCRFId(section.getId(), ecb.getId());
             for (ItemDataBean idb : idbs) {
                 int itemId = idb.getItemId();
-                if (groupSizes != null && groupSizes.containsKey(itemId)) {
+                if (groupSizes.containsKey(itemId)) {
                     int groupsize = iddao.getGroupSize(itemId, ecb.getId());
                     groupsize = groupsize > 0 ? groupsize : 1;
                     groupSizes.put(itemId, groupsize);
@@ -4960,27 +4948,7 @@ public abstract class DataEntryServlet extends CoreSecureController {
         return itemdata;
     }
 
-    protected boolean isChanged(ItemDataBean idb, HashMap<Integer, String> oldItemdata) {
-        String value = idb.getValue();
-        if (!oldItemdata.containsKey(idb.getId()))
-            return true;
-        else {
-            String oldValue = oldItemdata.get(idb.getId());
-            if (oldValue != null) {
-                if (value == null)
-                    return true;
-                else if (!oldValue.equals(value))
-                    return true;
-            }else if(value.isEmpty())
-            {
-                return false;
-            } else if (value != null)
-                return true;
-        }
-        return false;
-    }
-
-    protected boolean isChanged(DisplayItemBean dib, HashMap<String, ItemDataBean> oldItemdata, String attachedFilePath) {
+    protected boolean isChanged(DisplayItemBean dib, HashMap<String, ItemDataBean> oldItemdata) {
         ItemDataBean idb = dib.getData();
         String value = idb.getValue();
         int ordinal = idb.getOrdinal();
@@ -5028,14 +4996,6 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
         return false;
     }
 
-    protected boolean isChanged(ItemDataBean idb, HashMap<String, ItemDataBean> oldItemdata, DisplayItemBean dib,String attachedFilePath) {
-        //if(dib.getMetadata().isConditionalDisplayItem() && !dib.getIsSCDtoBeShown()) {
-            //return false;
-
-        //} else {
-            return isChanged(dib, oldItemdata, attachedFilePath);
-        //}
-    }
     /**
      * Output, just logs all contents of the allItems list. tbh, 01/2010
      *
@@ -5245,7 +5205,7 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
             CRFVersionBean crfVersionBean,
             StudyEventBean studyEventBean,
             EventCRFBean eventCrfBean,
-            Boolean shouldRunRules, HttpServletRequest request, HttpServletResponse response, List<ItemBean> itemBeansWithSCDShown) {
+            Boolean shouldRunRules, HttpServletRequest request, List<ItemBean> itemBeansWithSCDShown) {
         if (shouldRunRules) {
             logMe("Current Thread:::"+Thread.currentThread());
             List<RuleSetBean> ruleSets = getRuleSetService(request).getRuleSetsByCrfStudyAndStudyEventDefinition(currentStudy, studyEventDefinition, crfVersionBean);
@@ -5349,7 +5309,7 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
         return success;
     }
 
-    class Container {
+    static class Container {
         HashMap<String, Integer> grouped;
         HashMap<String, String> variableAndValue;
 
@@ -5450,12 +5410,12 @@ String tempKey = idb.getItemId()+","+idb.getOrdinal();
                              intendedKey = ecb.getId()+"_"+ digb.getInputId() + getInputName(dib);
                              replacementKey = ecb.getId()+"_"+digb.getItemGroupBean().getOid() + "_" + j + getInputName(dib);
                             if (!replacementKey.equals(intendedKey) ){
-                            	if (noteSubmitted.containsKey(intendedKey)) {
+                            	if (noteSubmitted != null && noteSubmitted.containsKey(intendedKey)) {
 
 	                                noteSubmitted.put(replacementKey, Boolean.TRUE);
 	                                noteSubmitted.remove(intendedKey);
                             	}
-                            	if(  noteTree.getNotes(intendedKey) != null){
+                            	if(  noteTree != null && noteTree.getNotes(intendedKey) != null){
                             		 fieldNote = (ArrayList<DiscrepancyNoteBean>) noteTree.getNotes(intendedKey) ;
                             		 if ( fieldNote != null && fieldNote.size() > 0){
 	                            		  noteTree.getFieldNotes().put(replacementKey, fieldNote);

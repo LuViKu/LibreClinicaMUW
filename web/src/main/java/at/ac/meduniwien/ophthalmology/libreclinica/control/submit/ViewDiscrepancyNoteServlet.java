@@ -205,14 +205,14 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
             request.setAttribute(CAN_MONITOR, "0");
         }
 
-        Boolean fromBox = fp.getBoolean(FROM_BOX);
-        if (fromBox == null || !fromBox) {
+        boolean fromBox = fp.getBoolean(FROM_BOX);
+        if (!fromBox) {
             session.removeAttribute(BOX_TO_SHOW);
             session.removeAttribute(BOX_DN_MAP);
             session.removeAttribute(AUTOVIEWS);
         }
 
-        Boolean refresh = fp.getBoolean("refresh");
+        boolean refresh = fp.getBoolean("refresh");
         request.setAttribute("refresh", refresh + "");
         String ypos = fp.getString("y");
         if (ypos == null || ypos.length() == 0) {
@@ -674,13 +674,13 @@ public class ViewDiscrepancyNoteServlet extends SecureController {
 
         // audit log items (from ViewItemAuditLogServlet.java)
         AuditDAO adao = new AuditDAO(sm.getDataSource());
-        if (name.equalsIgnoreCase("studysub")) {
+        if ("studysub".equalsIgnoreCase(name)) {
             name = "study_subject";
-        } else if (name.equalsIgnoreCase("eventcrf")) {
+        } else if ("eventcrf".equalsIgnoreCase(name)) {
             name = "event_crf";
-        } else if (name.equalsIgnoreCase("studyevent")) {
+        } else if ("studyevent".equalsIgnoreCase(name)) {
             name = "study_event";
-        } else if (name.equalsIgnoreCase("itemdata")) {
+        } else if ("itemdata".equalsIgnoreCase(name)) {
             name = "item_data";
         }
         ArrayList<AuditBean> itemAuditEvents = adao.findItemAuditEvents(entityId, name);
