@@ -47,10 +47,9 @@ public class ViewPersistanceHandler {
     /**
      *
      * @param disBeans
-     * @param hasGroupedItems
      * @return
      */
-    public List<DisplayItemBean> loadDataIntoDisplayBeans(List<DisplayItemBean> disBeans, boolean hasGroupedItems) {
+    public List<DisplayItemBean> loadDataIntoDisplayBeans(List<DisplayItemBean> disBeans) {
 
         List<ItemDataBean> dataBeans = getItemDataBeans();
         if (dataBeans.isEmpty() || disBeans == null || disBeans.isEmpty()) {

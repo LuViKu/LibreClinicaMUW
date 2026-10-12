@@ -402,12 +402,11 @@ public class StudyInfoPanel {
                 this.setCreateDataset(false);
 
             } else if (page.equals(Page.GENERATE_DATASET_HTML)) {
-                DatasetBean db = (DatasetBean) request.getAttribute("dataset");
                 ExtractBean exbean = (ExtractBean) request.getAttribute("extractBean");
                 this.reset();
                 ArrayList<StudyInfoPanelLine> displayData = new ArrayList<>();
 
-                displayData = generateDatasetTree(exbean, db);
+                displayData = generateDatasetTree(exbean);
                 this.setUserOrderedData(displayData);
                 this.setStudyInfoShown(false);
                 this.setOrderedData(true);
@@ -764,7 +763,7 @@ public class StudyInfoPanel {
         return displayData;
     }
 
-    private ArrayList<StudyInfoPanelLine> generateDatasetTree(ExtractBean eb, DatasetBean db) {
+    private ArrayList<StudyInfoPanelLine> generateDatasetTree(ExtractBean eb) {
         ArrayList<StudyInfoPanelLine> displayData = new ArrayList<>();
 
         ArrayList<StudyEventDefinitionBean> seds = eb.getStudyEvents();

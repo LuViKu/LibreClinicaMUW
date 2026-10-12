@@ -20,7 +20,6 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import java.util.LinkedHashMap;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -409,12 +408,11 @@ public class SecurityConfig {
         // bounces to /app/login. The fix is to return a clean 401 for
         // /pages/api/** (SPA channel) while keeping the 302 redirect
         // for every other unauthenticated request (legacy JSP channel).
-        LinkedHashMap<RequestMatcher, AuthenticationEntryPoint> entryPoints = new LinkedHashMap<>();
-        entryPoints.put(pathPattern("/pages/api/**"),
-                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED));
-        DelegatingAuthenticationEntryPoint splitEntryPoint =
-                new DelegatingAuthenticationEntryPoint(entryPoints);
-        splitEntryPoint.setDefaultEntryPoint(authenticationEntryPoint);
+        AuthenticationEntryPoint splitEntryPoint = DelegatingAuthenticationEntryPoint.builder()
+                .addEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                        pathPattern("/pages/api/**"))
+                .defaultEntryPoint(authenticationEntryPoint)
+                .build();
 
         http
             .securityContext(sc -> sc.securityContextRepository(securityContextRepository))

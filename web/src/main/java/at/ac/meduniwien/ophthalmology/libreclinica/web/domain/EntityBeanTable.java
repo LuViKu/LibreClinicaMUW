@@ -449,7 +449,7 @@ public class EntityBeanTable {
             if (keywords != null) {
                 for (int j = 0; j < keywords.length; j++) {
                     String keyword = keywords[j];
-                    if (keyword == null || "".equals(keyword)) {
+                    if (keyword == null || keyword.isEmpty()) {
                         continue;
                     }
 

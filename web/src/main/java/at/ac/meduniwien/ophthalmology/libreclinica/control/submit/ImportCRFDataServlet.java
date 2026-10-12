@@ -270,7 +270,7 @@ public class ImportCRFDataServlet extends SecureController {
             // (and the event should be independent, ie not affected by other
             // events)
 
-            Boolean eventCRFStatusesValid = getImportCRFDataService().eventCRFStatusesValid(odmContainer, ub);
+            Boolean eventCRFStatusesValid = getImportCRFDataService().eventCRFStatusesValid(odmContainer);
             ImportCRFInfoContainer importCrfInfo = new ImportCRFInfoContainer(odmContainer, sm.getDataSource());
             // The eventCRFBeans list omits EventCRFs that don't match UpsertOn rules. If EventCRF did not exist and
             // doesn't match upsert, it won't be created.

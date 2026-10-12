@@ -87,7 +87,7 @@ public class HorizontalFormBuilder extends DefaultFormBuilder {
         // If the CRF is involved with ViewDataEntry and already has
         // data associated with it, pass on the responsibility to another object
         ViewPersistanceHandler persistanceHandler = new ViewPersistanceHandler();
-        if (isDataEntry) {
+        if (isDataEntry && sectionBean != null && eventCRFbean != null) {
             List<ItemDataBean> itemDataBeans;
             persistanceHandler = new ViewPersistanceHandler();
             itemDataBeans = persistanceHandler.fetchPersistedData(sectionBean.getId(), eventCRFbean.getId());
@@ -151,7 +151,7 @@ public class HorizontalFormBuilder extends DefaultFormBuilder {
             boolean unGroupedTable = displayItemGroup.getItemGroupBean().getName().equalsIgnoreCase(BeanFactory.UNGROUPED) || !displayItemGroup.getGroupMetaBean().isRepeatingGroup();
             // Load any database values into the DisplayItemBeans
             if (hasDbFormValues) {
-                currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems, (!unGroupedTable));
+                currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems);
                 /*
                  * The highest number ordinal represents how many repeated rows
                  * there are. If the ordinal in ItemDataBeans > 1, then we know

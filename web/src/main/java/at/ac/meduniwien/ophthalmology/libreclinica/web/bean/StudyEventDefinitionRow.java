@@ -97,7 +97,7 @@ public class StudyEventDefinitionRow extends EntityBeanRow<StudyEventDefinitionB
             break;
         case COL_CATEGORY:
         	String category = "ZZZZZZZZZ";
-        	if (!"".equals(thisDefinition.getCategory())) {
+        	if (thisDefinition.getCategory() == null || !thisDefinition.getCategory().isEmpty()) {
         		category = thisDefinition.getCategory();
         		// System.out.println("switched out ...");
         	}

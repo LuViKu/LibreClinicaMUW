@@ -210,7 +210,7 @@ public class ImportCRFDataService {
     /*
      * purpose: returns false if any of the forms/EventCRFs fail the UpsertOnBean rules.
      */
-    public boolean eventCRFStatusesValid(ODMContainer odmContainer, UserAccountBean ub) {
+    public boolean eventCRFStatusesValid(ODMContainer odmContainer) {
         EventCRFDAO eventCrfDAO = new EventCRFDAO(ds);
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(ds);
         StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(ds);
@@ -714,8 +714,8 @@ public class ImportCRFDataService {
             // mm/dd/yyyy
             if (displayItemBean.getItem().getDataType().equals(ItemDataType.DATE)) {
                 // pass it if it is blank, tbh
-                if (!"".equals(displayItemBean.getData().getValue())) {
-                    String dateValue = displayItemBean.getData().getValue();
+                String dateValue = displayItemBean.getData().getValue();
+                if (dateValue == null || !dateValue.isEmpty()) {
                     SimpleDateFormat sdf_sqldate = new SimpleDateFormat("yyyy-MM-dd");
                     try {
                         Date originalDate = sdf_sqldate.parse(dateValue);

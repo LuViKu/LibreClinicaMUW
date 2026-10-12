@@ -263,7 +263,7 @@ public class DiscrepancyNoteRow extends EntityBeanRow<DiscrepancyNoteBean, Discr
     public String getSearchString() {
         DiscrepancyNoteBean thisNote = bean;
         return thisNote.getSubjectName() + " " + thisNote.getDescription() + " " + thisNote.getEntityType() + " " + thisNote.getResStatus().getName() + " "
-            + thisNote.getEntityName() + " " + thisNote.getEntityValue() + " " + thisNote.getCrfName() + " " + thisNote.getEventName() + " " + getType();
+            + thisNote.getEntityName() + " " + thisNote.getEntityValue() + " " + thisNote.getCrfName() + " " + thisNote.getEventName() + " " + (getType() == null ? "" : getType().getName());
     }
 
 }
