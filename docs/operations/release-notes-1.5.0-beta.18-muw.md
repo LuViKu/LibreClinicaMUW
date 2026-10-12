@@ -69,7 +69,7 @@ Work through [Upgrading the app VM](#upgrading-the-app-vm) in order, then throug
 - **A token that cannot be checked** because the database is unreachable answers 503 with `Retry-After`. It is never treated as a pass.
 - **A signed-in browser session does not get past the token check** on the device endpoints.
 
-### Sites are "Prüfzentren" and sit at a location (phase 4, PR pending)
+### Sites are "Prüfzentren" and sit at a location (#420, DR-040 phase 4)
 
 - **Wording.** In German the per-study site is a **Prüfzentrum** (plural *Prüfzentren*): on the Sites page, its home card, the rails, System → Standorte and the manual. "Standort" means only the global place. English keeps "site" and "location".
 - **Creating a site** (`/sites`) requires a **Standort**. The facility name, city, postcode and country are copied from the location; the free facility name and city fields are gone, and the contact e-mail stays. The select is preselected when there is only one option. The site list shows each site's location.
