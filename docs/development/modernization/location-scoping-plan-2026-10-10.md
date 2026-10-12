@@ -104,6 +104,13 @@ A system administrator has every location. All of this is computed in one place,
 - **Senders without a credential (D2).** The DICOM hand-off's calling AE title and the Remidio account each become a source on first sight, unassigned, and stamp every file with `ingest_source_id` and, as its origin, the source's location. In single mode a new source gets the one location; in multi mode it has none and its files are administrator-only until the source is assigned, which then places them. A title that cannot be a source (none sent, an invalid one, or a new one past a limit of 200) gets the same default rule and no source; the hand-off is never refused for it. The limit exists because the receiver's calling-AE allow-list is empty by default, and an empty list accepts any title: without it anything that reaches the port could fill the table. The Remidio source is keyed by the screening site the pull lists (`core.remidio.siteCustomId`), not by the vendor's client name, which is the same for every integration. `GET /api/v1/admin/ingest-sources/anonymous-uploaders` (system administrators) counts the uploader programs seen in the last seven days that have never reported with a token and lists the newest 50: what stops working at a switch to multi mode.
 - **Not in phase 2:** the camera worklist by AE title (phase 3); a Remidio account per location (one account is one source for now); `portal` sources (the kind is in the schema, nothing makes one, so the public upload page is not a source yet); and the pixel-twin verdict across locations (a tokened upload of a picture already filed at another location still gets that location's duplicate/held verdict, without its ids).
 
+## Phase 3 as built (2026-10-12)
+
+- **Camera worklist.** The dicom-scp receiver passes the calling AE title (`callingAe`) to `GET /internal/dicom-worklist`; the app resolves it to its `dicom_ae` source (made on first sight, like the image hand-off's, within the 200-source limit) and lists only the visits of studies at that source's location, intersected with `core.dicom.worklist.studyOids` (`DeviceScope.studiesAtPlace`). A camera without a place falls back to the default location: the one location in single mode, none in multi mode (an empty worklist). Without a calling AE title the request is served as before in single mode and refused (400) in multi mode.
+- **Remidio patient sync.** The scheduler resolves the account's `remidio` source (keyed like the pull, `core.remidio.siteCustomId`) and the sync pushes only the subjects of studies at its location, with the same fallback: in multi mode an unassigned account pushes nothing, logged once an hour.
+- **Optomed worklist:** by the bridge's token since phase 2.
+- **Not in phase 3:** a Remidio account per location (one account is one source).
+
 ## Phase 4 as built (2026-10-12)
 
 - **Where a study or site is.** `GET /api/v1/locations` lists the locations the caller may place a study or site at (a system administrator: every available one; anyone else: the available locations in their own scope, the rule `LocationChoice` checks). `StudyIdentityDto` carries `locationId`, `locationCode` and `locationName`.
@@ -111,7 +118,7 @@ A system administrator has every location. All of this is computed in one place,
 - **Studies.** Create (system administrators) and edit (also study directors) take `locationId`: the study's own location, or with sites its coordinating one; the SPA shows the select in multi mode. A site cannot be moved through the study edit.
 - **Legacy pages.** In multi mode `/CreateStudy` and `/CreateSubStudy` answer 410 for everyone, the `/legacy/` alias included: they cannot ask where a study is.
 - **Wording.** German "Prüfzentrum" for the per-study site across the SPA (51 keys) and both manuals; "Standort" only for the global place. The in-app and app manuals gained sections on *Standorte* and *Uploader und Tokens*; the release notes draft is `docs/operations/release-notes-1.5.0-beta.18-muw.md`.
-- **Not in phase 4:** phase 3 (worklist and Remidio sync by location); a list of studies without a location for an administrator to place (in multi mode only imports or data fixes make one now).
+- **Not in phase 4:** a list of studies without a location for an administrator to place (in multi mode only imports or data fixes make one now).
 
 ## Phases
 

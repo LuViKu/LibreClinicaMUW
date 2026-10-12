@@ -78,6 +78,14 @@ Work through [Upgrading the app VM](#upgrading-the-app-vm) in order, then throug
 - **The legacy JSP pages `CreateStudy` and `CreateSubStudy` answer 410 in multi mode**, because they cannot choose a location. Single mode is unchanged.
 - **API:** new `GET /api/v1/locations` returns the locations the caller may place a study or site at. `StudyIdentityDto` gains `locationId`, `locationCode` and `locationName`. `PUT /api/v1/studies/{parentOid}/sites/{siteOid}` and `PUT /api/v1/studies/{studyOid}` take an optional `locationId`.
 
+### Schedules by location: camera worklist and Remidio sync (DR-040 phase 3)
+
+- **The camera worklist (DICOM MWL C-FIND) is the camera's location's.** The dicom-scp receiver now passes the calling AE title to the app, which lists only the visits of studies at that title's location (still within `core.dicom.worklist.studyOids`). A worklist query also makes the title a source, so a camera that only queries shows on *Quellen* too.
+- **The Remidio patient sync pushes only the subjects at the account's location.**
+- **Single mode:** both see the whole schedule, as before.
+- **Multi mode:** an unassigned camera is offered an empty worklist, an unassigned Remidio account pushes nothing, and a worklist request without a calling AE title (an older receiver) is refused. **Upgrade the dicom-scp receiver together with the app** (same tag, as always).
+- The Optomed worklist already follows the bridge's uploader token (phase 2).
+
 ### Uploader scripts: Export Watcher 2026-10-12.2, Optomed Bridge 2026-10-12.1
 
 - **A token setting.** Both scripts take a token in their settings dialog (tray icon → *Settings...* → *Uploader-Token*). It is DPAPI-protected and never passed on a command line. They send it on every request when it is set, and behave as before while it is not.
@@ -201,10 +209,7 @@ Stop the service and start the previous image tag (set `--image-tag` back to the
 ## Still open at this release
 
 - **CI results and test counts:** to be filled in.
-- **DR-040 phase 3 is not in this release:**
-  - the camera worklist (DICOM MWL) is not yet filtered by the calling AE title's location;
-  - the Remidio patient sync is not yet filtered by location;
-  - one Remidio account is one source.
+- **One Remidio account is one source:** a second clinic on Remidio would need a second account (not supported yet).
 - **Not yet sources:** the public upload page without a token (the `portal` kind exists in the schema, but nothing creates one).
 - **Duplicate pictures across locations.** A tokened upload of a picture already filed at another location still gets that location's duplicate or held verdict, without its ids.
 - **Multi mode has not run in production.** Before a second location goes live:

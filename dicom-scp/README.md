@@ -13,8 +13,8 @@ integration is worklist-driven — the camera pulls the scheduled patient/exam
 from us, then C-STOREs the study carrying our accession (`LC<study_event_id>`)
 and a deterministic StudyInstanceUID, so the ingest endpoint **auto-binds** it
 to that visit (no reconciliation needed). Worklist entries come from the app's
-`GET /pages/api/v1/internal/dicom-worklist?from=&to=` (scheduled `study_event`
-rows). The Remidio FOP (an iPhone + browser) has no DICOM and uses the separate
+`GET /pages/api/v1/internal/dicom-worklist?from=&to=&callingAe=` (scheduled
+`study_event` rows at the camera's location, see below). The Remidio FOP (an iPhone + browser) has no DICOM and uses the separate
 upload page instead.
 
 ## Configuration (`DICOM_SCP_*`)
@@ -34,9 +34,19 @@ upload page instead.
 
 The receiver hands the calling AE title (trimmed of padding) to the app as
 `sourceAeTitle`. The app files each title as an **ingest source**: the first
-file from a title makes a source with no location, which an administrator
-assigns on System → Standorte → Quellen; every file is stamped with its source
-and, as its origin, the source's location. A title is 1 to 16 of letters,
+file (or worklist query) from a title makes a source, at the one location in
+single-location mode and with no location in multi mode, where an
+administrator assigns it on System → Standorte → Quellen; every file is
+stamped with its source and, as its origin, the source's location.
+
+**The worklist is the camera's location's (DR-040 phase 3).** A C-FIND passes
+the calling AE title to the app as `callingAe`, and the app lists only the
+visits of studies at that title's location (within
+`core.dicom.worklist.studyOids`). In single-location mode that is the whole
+schedule, as before. In multi mode a camera whose title has no location yet is
+offered an empty worklist until it is assigned, and a request without a title
+(a receiver older than this) is refused, so the receiver and the app are
+upgraded together. A title is 1 to 16 of letters,
 digits, space, `.`, `_`, `-`; anything else, or no title, files without a
 source. Because an **empty allow-list accepts any title**, the app makes at most
 200 sources and files a title past that without one (one warning an hour), so
