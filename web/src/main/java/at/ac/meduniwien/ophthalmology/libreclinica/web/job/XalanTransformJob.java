@@ -61,14 +61,13 @@ public class XalanTransformJob extends QuartzJobBean {
             // Use the TransformerFactory to instantiate a Transformer that will work with  
             // the stylesheet you specify. This method call also processes the stylesheet
             // into a compiled Templates object.
-            try (java.io.InputStream in = new java.io.FileInputStream(dataMap.getString(XSL_FILE_PATH));
-                    FileOutputStream out = new FileOutputStream(dataMap.getString(SQL_FILE_PATH))) {
-                // tFactory.setAttribute("use-classpath", Boolean.TRUE);
-                // tFactory.setErrorListener(new ListingErrorHandler());
-                Transformer transformer = tFactory.newTransformer(new StreamSource(in));
-
-                // Use the Transformer to apply the associated Templates object to an XML document
-                // (foo.xml) and write the output to a file (foo.out).
+            Transformer transformer;
+            try (java.io.InputStream in = new java.io.FileInputStream(dataMap.getString(XSL_FILE_PATH))) {
+                transformer = tFactory.newTransformer(new StreamSource(in));
+            }
+            // The output file is created only once the stylesheet has compiled, so a bad
+            // stylesheet leaves no empty output behind.
+            try (FileOutputStream out = new FileOutputStream(dataMap.getString(SQL_FILE_PATH))) {
                 transformer.transform(new StreamSource(dataMap.getString(XML_FILE_PATH)),
                         new StreamResult(out));
             }

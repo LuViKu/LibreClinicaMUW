@@ -87,7 +87,12 @@ public class HorizontalFormBuilder extends DefaultFormBuilder {
         // If the CRF is involved with ViewDataEntry and already has
         // data associated with it, pass on the responsibility to another object
         ViewPersistanceHandler persistanceHandler = new ViewPersistanceHandler();
-        if (isDataEntry && sectionBean != null && eventCRFbean != null) {
+        if (isDataEntry) {
+            if (sectionBean == null || eventCRFbean == null) {
+                // Rendering data entry without its section or event CRF would show empty
+                // fields that look like missing data; fail instead.
+                throw new IllegalStateException("Data entry form built without its section or event CRF");
+            }
             List<ItemDataBean> itemDataBeans;
             persistanceHandler = new ViewPersistanceHandler();
             itemDataBeans = persistanceHandler.fetchPersistedData(sectionBean.getId(), eventCRFbean.getId());
