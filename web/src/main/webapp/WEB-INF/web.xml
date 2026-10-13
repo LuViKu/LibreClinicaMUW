@@ -64,15 +64,16 @@
           Tomcat connector ignores multipart bodies and @RequestPart
           arrives as null on the CRF file-upload endpoint.
 
-          Caps are intentionally generous (200 MiB request/file, 0 KB
-          threshold so everything streams to a temp file): per-item
+          Caps are intentionally generous (2 GiB request/file, 0 KB
+          threshold so everything streams to a temp file; a multimodal
+          Spectralis .e2e is uploaded once, DR-041): per-item
           enforcement lives in CrfFileStorageService.checkSize() so
           we can return 413 with a structured error code instead of
           letting Tomcat reject the request with a bare 500.
         -->
         <multipart-config>
-            <max-file-size>209715200</max-file-size>
-            <max-request-size>209715200</max-request-size>
+            <max-file-size>2147483648</max-file-size>
+            <max-request-size>2147483648</max-request-size>
             <file-size-threshold>0</file-size-threshold>
         </multipart-config>
     </servlet>

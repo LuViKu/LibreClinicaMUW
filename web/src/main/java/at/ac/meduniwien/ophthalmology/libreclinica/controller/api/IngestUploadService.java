@@ -547,8 +547,11 @@ final class IngestUploadService {
             LOG.error("undo DELETE failed for ingest_item {}: {}", ingestItemId, e.getMessage());
             return new Rejected(500, "could not remove the upload");
         }
-        deleteQuietly(storedPath);
-        if (previewPath != null && !previewPath.equals(storedPath)) deleteQuietly(previewPath);
+        // DR-041 - the series of one multimodal .e2e share a stored file: it goes with the last of them.
+        if (!stillReferenced(storedPath)) deleteQuietly(storedPath);
+        if (previewPath != null && !previewPath.equals(storedPath) && !stillReferenced(previewPath)) {
+            deleteQuietly(previewPath);
+        }
         LOG.info("upload: ingest_item {} taken back within the undo window", ingestItemId);
         return new Undone(ingestItemId);
     }
@@ -840,6 +843,25 @@ final class IngestUploadService {
         deleteQuietly(stored == null ? null : stored.toString());
         if (preview != null) deleteQuietly(preview);
         return outcome;
+    }
+
+    /** True when another row or job still names the file (or when that cannot be checked). */
+    private boolean stillReferenced(String path) {
+        if (path == null || path.isBlank()) return false;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT EXISTS (SELECT 1 FROM ingest_item WHERE stored_path = ? OR preview_png_path = ?) "
+                             + "    OR EXISTS (SELECT 1 FROM retinal_inference_job WHERE e2e_path = ?)")) {
+            ps.setString(1, path);
+            ps.setString(2, path);
+            ps.setString(3, path);
+            try (ResultSet rs = ps.executeQuery()) {
+                return !rs.next() || rs.getBoolean(1);
+            }
+        } catch (SQLException e) {
+            LOG.warn("could not check whether a stored file is still referenced: {}", e.getMessage());
+            return true;
+        }
     }
 
     private static void deleteQuietly(String path) {

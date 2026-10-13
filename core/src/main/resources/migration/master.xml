@@ -138,5 +138,6 @@
   <include  file="migration/lc-muw-2026-10-12-ingest-source.xml"/>
   <include  file="migration/lc-muw-2026-10-12-audit-types-ingest-sources.xml"/>
   <include  file="migration/lc-muw-2026-10-13-location-mode.xml"/>
+  <include  file="migration/lc-muw-2026-10-13-e2e-series.xml"/>
 </databaseChangeLog>
 

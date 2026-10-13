@@ -44,7 +44,9 @@ public class OctVolumesTest {
     @Test
     public void onlyE2eAndClassifiedDicomVolumesAreAnalysable() {
         assertTrue(OctVolumes.isAnalysable("e2e", null));
-        assertTrue(OctVolumes.isAnalysable("E2E", Boolean.FALSE));
+        assertTrue(OctVolumes.isAnalysable("E2E", Boolean.TRUE));
+        assertFalse("DR-041: a non-OCT series of a split .e2e is stored with oct_volume FALSE",
+                OctVolumes.isAnalysable("E2E", Boolean.FALSE));
         assertTrue(OctVolumes.isAnalysable("dicom", Boolean.TRUE));
         assertFalse(OctVolumes.isAnalysable("dicom", Boolean.FALSE));
         assertFalse("unclassified is not analysable", OctVolumes.isAnalysable("dicom", null));

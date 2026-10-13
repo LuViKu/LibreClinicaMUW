@@ -214,7 +214,7 @@ public class ApiExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(new ValidationErrorBody(
-                        "Upload exceeds the maximum allowed size.",
+                        "Upload exceeds the maximum allowed size (2 GiB).",
                         List.of()));
     }
 

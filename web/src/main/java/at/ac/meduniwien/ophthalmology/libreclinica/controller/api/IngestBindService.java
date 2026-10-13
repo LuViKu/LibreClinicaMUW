@@ -180,6 +180,10 @@ public final class IngestBindService {
             }
             if (updated == 0) return existsState(c, ingestItemId);
 
+            // DR-041 - a series of a split .e2e reaches its catalogue entry by the
+            // entry's e2e_series token, in the study the visit belongs to.
+            resolveSeriesModality(c, ingestItemId, studyEventId, eventCrfId);
+
             writeBindAudit(ingestItemId,
                     studyEventId != null ? studyEventId : visitOfCrf(c, eventCrfId),
                     matchPolicy, actor, dateCheck);
@@ -274,7 +278,9 @@ public final class IngestBindService {
                     "UPDATE ingest_item SET status='UNBOUND', match_policy=NULL, "
                             + "bound_study_subject_id=NULL, bound_study_event_id=NULL, "
                             + "bound_event_crf_id=NULL, bound_item_id=NULL, "
-                            + "bound_by_user_id=NULL, bound_at=NULL "
+                            + "bound_by_user_id=NULL, bound_at=NULL, "
+                            + "imaging_modality_id = CASE WHEN series_modality IS NOT NULL THEN NULL "
+                            + "ELSE imaging_modality_id END "
                             + " WHERE ingest_item_id=? AND status='BOUND'")) {
                 ps.setLong(1, ingestItemId);
                 updated = ps.executeUpdate();
@@ -439,6 +445,42 @@ public final class IngestBindService {
      * The visit a BOUND file is filed against, or null: its own visit, else
      * the visit of the CRF it is filed to.
      */
+    /**
+     * Sets {@code imaging_modality_id} of a split-.e2e series that has none,
+     * from the {@code e2e_series} token of the bound study's catalogue. No match
+     * (or several) leaves it as it was. Never fails the bind.
+     */
+    private static void resolveSeriesModality(Connection c, long ingestItemId, Integer studyEventId,
+                                              Integer eventCrfId) {
+        try {
+            String series;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT series_modality FROM ingest_item "
+                            + " WHERE ingest_item_id = ? AND series_modality IS NOT NULL "
+                            + "   AND imaging_modality_id IS NULL")) {
+                ps.setLong(1, ingestItemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return;
+                    series = rs.getString(1);
+                }
+            }
+            Integer studyId = VisitImagingPlan.studyOfBinding(c, eventCrfId, studyEventId);
+            if (studyId == null) return;
+            Integer modality = VisitImagingPlan.modalityByE2eSeries(c, studyId, series);
+            if (modality == null) return;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE ingest_item SET imaging_modality_id = ? "
+                            + " WHERE ingest_item_id = ? AND imaging_modality_id IS NULL")) {
+                ps.setInt(1, modality);
+                ps.setLong(2, ingestItemId);
+                ps.executeUpdate();
+            }
+        } catch (SQLException | RuntimeException e) {
+            LOG.warn("ingest_item {}: could not resolve the series' catalogue entry: {}",
+                    ingestItemId, e.getMessage());
+        }
+    }
+
     private static Integer boundVisit(Connection c, long ingestItemId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT COALESCE(ii.bound_study_event_id, ec.study_event_id) "

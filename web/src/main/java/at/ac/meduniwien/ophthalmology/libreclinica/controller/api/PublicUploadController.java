@@ -168,9 +168,15 @@ public class PublicUploadController {
     @GetMapping(value = "/preflight", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> preflightUpload(@RequestParam("sha256") String sha256,
                                        @RequestParam(value = "scanIndex", required = false) Integer scanIndex,
+                                       @RequestParam(value = "split", defaultValue = "false") boolean split,
                                        HttpServletRequest servletRequest) {
         if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
             return ResponseEntity.badRequest().body(Map.of("message", "sha256 must be 64 hex characters"));
+        }
+        if (split) {
+            // DR-041 - a multimodal .e2e that was already split into one item per series.
+            return ResponseEntity.ok(oct.preflightSplit(sha256,
+                    DeviceScope.itemsOf(dataSource, UploaderSources.of(servletRequest))));
         }
         // A tokened request hears only of files that arrived at its own location.
         return ResponseEntity.ok(uploads.preflight(sha256, scanIndex,
@@ -201,6 +207,8 @@ public class PublicUploadController {
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
             @RequestParam(value = "park", defaultValue = "false") boolean park,
             @RequestParam(value = "device", required = false) String device,
+            // DR-041 - a multimodal .e2e is split on the server into one item per series.
+            @RequestParam(value = "split", defaultValue = "false") boolean split,
             @RequestParam(value = "disambiguated", defaultValue = "false") boolean disambiguated,
             @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount,
             HttpServletRequest servletRequest) {
@@ -231,9 +239,20 @@ public class PublicUploadController {
                 Integer se = UploadRoute.studyEventIdForEventCrf(dataSource, eventCrfId);
                 if (se != null && visitAtLocation(atLocation, se)) pid = UploadRoute.subjectLabelForStudyEvent(dataSource, se);
             }
+            if (split) {
+                if (!UploadRoute.isBlank(date) || !UploadRoute.isBlank(laterality)) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "message", "scanDate and laterality are taken from the file with split=true"));
+                }
+                return UploadRoute.asE2e(oct.commitSplitFrom(source, file, pid, studyEventId, eventCrfId, park));
+            }
             return UploadRoute.asE2e(oct.commitFrom(source, file, pid == null ? "" : pid, date == null ? "" : date,
                     laterality == null ? "" : laterality, scanIndex, eventCrfId, studyEventId, park,
                     disambiguated, candidateCount));
+        }
+
+        if (split) {
+            return ResponseEntity.badRequest().body(Map.of("message", "split=true is only for .e2e files"));
         }
 
         // The image and DICOM routes file against a visit; an open CRF the
