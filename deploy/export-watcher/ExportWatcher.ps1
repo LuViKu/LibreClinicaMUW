@@ -25,16 +25,17 @@
                Raw Data object stamped with the export time. Only the
                photograph is an image; the other two are set aside in
                _skipped\ (never deleted) unless UploadNonImage is on.
-               .e2e (DR-041): the header is NOT read. The subject is the
-               folder: <WatchFolder>\...\<subject>\x.e2e - the folder that
-               directly contains the file. An .e2e directly in the watch
-               folder has no subject: it is not uploaded, it is counted
-               ("without subject folder" in the sweep summary, the coded
-               problem no-subject-folder in the heartbeat). One file holds a
-               whole multimodal session (both eyes, OCT, IR, autofluorescence,
-               angiography ...); the platform splits it into one item per
-               series, and parks them all when the header's patient id
-               differs from the folder name.
+               .e2e (DR-041): the header is NOT read here. The platform takes
+               the subject from the study label in the file's own header
+               (the surname slot). Exports may sit in one shared watch
+               folder (any number of patients, flat) or in patient folders.
+               A file directly in the watch folder is uploaded without a
+               patientId. A file in a sub-folder is uploaded with
+               patientId=<the folder that directly contains it>, and the
+               platform parks it when that folder name differs from the
+               label in the header. One file holds a whole multimodal
+               session (both eyes, OCT, IR, autofluorescence, angiography
+               ...); the platform splits it into one item per series.
 
     resolve    .dcm only: ONE POST /resolve for every scan found in the sweep,
                not one per file: the public front door budgets lookups at 30
@@ -49,8 +50,8 @@
                to _failed\ so a bad file cannot burn the budget forever.
                .e2e: SHA-256 of the file (streamed), GET /preflight?sha256=..
                &split=true - already there -> _uploaded\ without a byte sent -
-               else ONE streamed POST /commit (split=true, patientId=<folder>,
-               device) for the whole file, up to 2 GiB, never read into
+               else ONE streamed POST /commit (split=true, device, and patientId=<folder>
+               only for a file in a sub-folder) for the whole file, up to 2 GiB, never read into
                memory; the deadline is sized from the file. 201 and 409 move
                it to _uploaded\, the rest is retried and ends in _failed\ as
                above. A file over 2 GiB goes to _failed\ unsent.
@@ -74,9 +75,9 @@
 
   The convention this relies on is the one every device ingress here uses:
   the patient id the photographer types into the device IS the study subject
-  label. Clarus: the DICOM PatientID. Spectralis: the name of the patient's
-  export folder (the header's patient id is empty or different often enough
-  that it cannot be relied on - the platform only compares it).
+  label. Clarus: the DICOM PatientID. Spectralis: the study label in the
+  .e2e header's surname slot, which the platform reads (a patient folder, when
+  there is one, must carry the same name or the file is parked).
 
   Runs at login as a tray icon (see Install-ExportWatcher.ps1). Right-click:
   enable/disable, sweep now, settings, open log, exit. One instance per PC;
@@ -107,8 +108,9 @@
 
 .PARAMETER SelfTest
   Headless: read -File and print what this script would send for it. A .dcm:
-  label, date, laterality. An .e2e: the subject taken from its folder and its
-  SHA-256 (the header is not read). Nothing is uploaded. Lets the rules be
+  label, date, laterality. An .e2e: the folder it would send as patientId (none
+  for a file directly in the watch folder) and its SHA-256 (the header is not
+  read). Nothing is uploaded. Lets the rules be
   checked on a real export before the watcher is switched on.
 
 .PARAMETER Heartbeat
@@ -651,14 +653,16 @@ function Get-FileScans([pscustomobject]$cfg, [IO.FileInfo]$f) {
 # ----------------------------------------------------------------------------
 # Spectralis .e2e (DR-041) - uploaded whole, split into series by the platform
 #
-# The header is not read here any more. The folder the file sits in is the
-# subject: <WatchFolder>\...\<subject>\x.e2e. The platform compares the header's
-# patient id with it and parks the file's series when they differ.
+# The header is not read here. The platform takes the subject from the study
+# label in the header (surname slot). A file in a sub-folder also sends that
+# folder as patientId, <WatchFolder>\...\<folder>\x.e2e; the platform parks the
+# file when the folder name differs from the header's label. A file directly in
+# the watch folder sends no patientId.
 # ----------------------------------------------------------------------------
 function Test-IsE2e([IO.FileInfo]$f) { $f.Extension -ieq '.e2e' }
 
 # The name of the folder that directly contains the file (its immediate parent), or
-# $null for a file that sits directly in the watch folder (no subject: not uploaded).
+# $null for a file that sits directly in the watch folder (no patientId is sent).
 function Get-E2eSubject([string]$root, [IO.FileInfo]$f) {
     $rootFull = [IO.Path]::GetFullPath($root).TrimEnd('\', '/')
     $dir = [IO.Path]::GetFullPath($f.DirectoryName).TrimEnd('\', '/')
@@ -705,13 +709,16 @@ function Get-E2ePreflight([pscustomobject]$cfg, [string]$sha256) {
 # ReadAllBytes. No scanDate / laterality / scanIndex / studyEventId / park:
 # the platform splits the file and decides (DR-041 Contract 2).
 function Send-E2eCommit([pscustomobject]$cfg, [IO.FileInfo]$f, [string]$subject) {
+    # $subject: the immediate parent folder, or $null/'' for a file directly in the watch folder.
     $fs = [IO.File]::Open($f.FullName, 'Open', 'Read', 'Read')
     $mp = New-Object System.Net.Http.MultipartFormDataContent
     try {
         $fc = New-Object System.Net.Http.StreamContent($fs, 81920)
         $fc.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/octet-stream')
         $mp.Add($fc, 'file', 'scan.e2e')      # neutral name: an export is often named after the patient
-        $fields = [ordered]@{ split = 'true'; patientId = $subject; device = [string]$cfg.DeviceE2e }
+        $fields = [ordered]@{ split = 'true' }
+        if ($subject) { $fields['patientId'] = $subject }
+        $fields['device'] = [string]$cfg.DeviceE2e
         foreach ($k in $fields.Keys) { $mp.Add((New-Object System.Net.Http.StringContent([string]$fields[$k])), $k) }
         $client = New-UploadClient (Get-UploadTimeoutSec $f.Length)
         try {
@@ -743,7 +750,7 @@ function Get-E2eCommitCounts([string]$body) {
     [pscustomobject]@{ Items = $items; Bound = $bound; Parked = $parked }
 }
 
-# Uploads the settled .e2e files of a sweep (each has a subject folder). Each
+# Uploads the settled .e2e files of a sweep (in a sub-folder or directly in the watch folder). Each
 # one: SHA-256 (streamed), preflight, and - if the platform does not have it -
 # one streamed commit. 201 and 409 move the file to _uploaded\; a 401 ends the
 # round with the refused file (and every later one) untouched; anything else is
@@ -784,7 +791,7 @@ function Invoke-E2eUploads([pscustomobject]$cfg, [object[]]$files) {
                         $r.Failed++; $outcome = 'failed'
                         Add-Problem $(if ($c.Status -eq 429) { 'rate-limited' } else { 'upload-failed' })
                         $why = ($c.Body -replace '\s+', ' ')
-                        Write-Log ("upload: HTTP {0} for label '{1}' ({2})" -f $c.Status, $subject, $why.Substring(0, [Math]::Min(120, $why.Length))) 'WARN'
+                        Write-Log ("upload: HTTP {0} for an .e2e file ({1})" -f $c.Status, $why.Substring(0, [Math]::Min(120, $why.Length))) 'WARN'
                     }
                 }
             }
@@ -960,8 +967,6 @@ function Invoke-Sweep([pscustomobject]$cfg) {
     finally { $script:LastActivityUtc = [datetime]::UtcNow }
 }
 
-$script:NoSubjectLogged = -1      # the "no subject folder" count last written to the log; a repeat is not (the sweep runs every 20 s)
-
 function Invoke-SweepCore([pscustomobject]$cfg) {
     $root = $cfg.WatchFolder
     if (-not (Test-Path $root)) {
@@ -970,28 +975,19 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
         return 'watch folder missing'
     }
     try { Invoke-Retention $cfg } catch { Write-Log "retention: $($_.Exception.Message)" 'WARN' }
-    $all = @((Get-WatchedFiles $root).Pending)
-
-    # An .e2e directly in the watch folder has no subject (the folder name is
-    # the subject label): it is not uploaded, only counted. Coded problem and a
-    # count in the log - never a name.
-    $noSubject = @($all | Where-Object { (Test-IsE2e $_) -and $null -eq (Get-E2eSubject $root $_) })
-    if ($noSubject.Count -gt 0) { Add-Problem 'no-subject-folder' }
-    if ($noSubject.Count -ne $script:NoSubjectLogged) {
-        $script:NoSubjectLogged = $noSubject.Count
-        if ($noSubject.Count -gt 0) { Write-Log ("sweep: {0} .e2e file(s) directly in the watch folder - not uploaded, they need a patient folder" -f $noSubject.Count) 'WARN' }
-    }
-    $files = @($all | Where-Object { -not (Test-IsE2e $_) -or $null -ne (Get-E2eSubject $root $_) })
-    $tail = $(if ($noSubject.Count -gt 0) { ', {0} without subject folder' -f $noSubject.Count } else { '' })
-    if ($files.Count -eq 0) { return ('nothing to upload' + $tail) }
+    # An .e2e is uploaded wherever it sits: directly in the watch folder (no
+    # patientId, the platform reads the label from the file) or in a sub-folder
+    # (patientId = that folder).
+    $files = @((Get-WatchedFiles $root).Pending)
+    if ($files.Count -eq 0) { return 'nothing to upload' }
     $ready = @($files | Where-Object { Test-Settled $_ })
-    if ($ready.Count -eq 0) { return ('{0} file(s) still being written' -f $files.Count) + $tail }
+    if ($ready.Count -eq 0) { return ('{0} file(s) still being written' -f $files.Count) }
     $readyE2e = @($ready | Where-Object { Test-IsE2e $_ })
     $readyDcm = @($ready | Where-Object { -not (Test-IsE2e $_) })
 
     $dicomSummary = $null
     if ($readyDcm.Count -gt 0) { $dicomSummary = Invoke-DicomSweep $cfg $readyDcm }     # throws on a refused token
-    if ($readyE2e.Count -eq 0) { return ([string]$dicomSummary + $tail) }
+    if ($readyE2e.Count -eq 0) { return [string]$dicomSummary }
 
     $e = Invoke-E2eUploads $cfg $readyE2e
     if ($e.TokenProblem) {
@@ -999,7 +995,7 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
         throw (New-TokenRefusal $e.TokenProblem)
     }
     $script:TokenLogged = ''      # the platform took the token: a refusal after this is news again
-    $summary = 'uploaded {0} files -> {1} series ({2} bound, {3} parked), {4} already there, {5} failed, {6} without subject folder' -f $e.Files, $e.Series, $e.Bound, $e.Parked, $e.Already, $e.Failed, $noSubject.Count
+    $summary = 'uploaded {0} files -> {1} series ({2} bound, {3} parked), {4} already there, {5} failed' -f $e.Files, $e.Series, $e.Bound, $e.Parked, $e.Already, $e.Failed
     Write-Log "sweep: $summary"
     if ($dicomSummary) { $summary = $summary + '; DICOM: ' + $dicomSummary }
     $summary
@@ -1108,18 +1104,17 @@ if ($SelfTest) {
     $f = Get-Item -LiteralPath $File
     Write-Host ("{0} ({1:N0} bytes)" -f $f.Extension, $f.Length)
     if (Test-IsE2e $f) {
-        # Nothing is read from the header (the platform splits the file): the
-        # subject is the folder, the SHA-256 is what the preflight would ask.
+        # Nothing is read from the header (the platform reads the label and splits
+        # the file): a file in a sub-folder sends that folder as patientId, one
+        # directly in the watch folder sends none. The SHA-256 is what the
+        # preflight would ask.
         $subject = Get-E2eSubject $cfg.WatchFolder $f
-        $where = 'folder that directly contains the file'
-        if (-not $subject) {
-            # the file is not in a sub-folder of the watch folder: show what the
-            # rule gives for it if it were - the folder it sits in
-            $subject = Split-Path -Leaf $f.DirectoryName
-            $where = 'its own folder (the file is not below the watch folder)'
-        }
         if ($f.Length -gt $script:MaxE2eBytes) { Write-Host '  over 2 GiB: would be moved to _failed, not uploaded' }
-        Write-Host ("  subject (patientId) = '{0}' [{1}]; device={2}; split=true" -f $subject, $where, $cfg.DeviceE2e)
+        if ($subject) {
+            Write-Host ("  patientId = '{0}' (the folder that directly contains the file); device={1}; split=true" -f $subject, $cfg.DeviceE2e)
+        } else {
+            Write-Host ("  no patientId (the file is directly in the watch folder; the platform reads the label from its header); device={0}; split=true" -f $cfg.DeviceE2e)
+        }
         Write-Host ("  sha256 = {0}" -f (Get-FileSha256 $f.FullName))
         exit 0
     }

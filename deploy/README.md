@@ -447,8 +447,9 @@ upload front door the page uses (DR-029), so nothing changes server-side:
 - **sweep** every 20 s; a file counts as finished when its size has not
   changed since the last sweep and it can be opened without sharing;
 - **identify** `.dcm` from the header (PatientID, StudyDate, laterality —
-  the Optomed bridge's reader). An `.e2e` is **not read** at all: the folder
-  it sits in is its subject (see below);
+  the Optomed bridge's reader). An `.e2e` is **not read** by the watcher: the
+  platform takes its subject from the study label in the file's header, and a
+  patient folder, if there is one, must agree (see below);
 - **`.dcm`: one `/resolve` per sweep** for every scan found, because lookups
   on the public front door are budgeted at 30 per hour per client; exactly
   one subject with exactly one visit that day → bound on arrival, otherwise
@@ -457,12 +458,13 @@ upload front door the page uses (DR-029), so nothing changes server-side:
   watcher computes the file's SHA-256 (streamed), asks
   `GET /public/upload/preflight?sha256=…&split=true` and, if the platform
   does not have it yet, sends the whole file in **one streamed**
-  `POST /public/upload/commit` (`split=true`, `patientId` = the folder name,
-  `device`), up to **2 GiB**; the file is never read into memory. The
-  platform splits it into one item per series (OCT volume, OCT line scan, IR,
-  BAF, BR, IRAF, qAF, ICGA, FA, per eye), binds them when it can and parks
-  them in the inbox when the header's patient id differs from the folder
-  name or no visit can be found. The request's time limit is sized from the
+  `POST /public/upload/commit` (`split=true`, `device`, and `patientId` = the
+  folder name only for a file in a sub-folder), up to **2 GiB**; the file is
+  never read into memory. The platform splits it into one item per series
+  (OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA, FA, per eye),
+  binds them when it can and parks them in the inbox when the header's label
+  differs from the folder name, the file carries no usable label and has no
+  folder, the label names no single subject, or no visit can be found. The request's time limit is sized from the
   file (10 minutes plus the file at 1 MiB/s: about 44 minutes for 2 GiB);
 - `201` and `409` (already there) move the file to `_uploaded\` — a
   preflight hit does too, without a byte sent; anything else is retried on
@@ -479,30 +481,31 @@ Clarus PC it runs beside the Optomed bridge, on the Spectralis PC alone.
 The convention is the one every device ingress here uses — **the patient id
 typed into the device is the study subject label** (Clarus: PatientID).
 
-**Spectralis: one folder per patient.** HEYEX exports each patient as a
-folder of `.E2E` files, and the header's patient id is empty or different
-often enough that it cannot be relied on. The watcher therefore takes the
-**subject from the folder**: the name of the folder that directly contains the
-file (its immediate parent), however deep it sits below the watch folder.
+**Spectralis: the label in the file, folders optional.** The subject of an
+`.E2E` is the study label in the **surname slot** of the file's patient
+record, which the platform reads. The first-name and patient-id slots can hold
+a clinic number, so they are never used, sent or stored. Exports may sit in
+one shared watch folder (any number of patients, flat) or in one folder per
+patient:
 
 ```
 D:\LibreClinica-Export\            <- watch folder
-    EIAMD005\                      <- subject label EIAMD005
-        EIAMD01D.E2E               <- uploaded as subject EIAMD005
-        EIAMD02D.E2E
-    EIAMD006\ ...
-    stray.E2E                      <- directly in the watch folder: NOT uploaded
+    EIAMD01D.E2E                   <- uploaded, no patientId: the platform reads the label
+    EIAMD02D.E2E
+    EIAMD005\                      <- patient folder
+        EIAMD03D.E2E               <- uploaded with patientId=EIAMD005
 ```
 
-An `.E2E` directly in the watch folder has no subject: it is left where it
-is and reported — "N without subject folder" in the sweep summary and the
-coded problem `no-subject-folder` on the System Status page — until someone
-moves it into a patient folder. Uploaded files are filed in an `_uploaded\`
-(or `_failed\`) folder **inside the patient folder**; the retention setting
-reaches those as well. If the header's patient id is present and differs from
-the folder name, the platform parks every series of the file in the inbox for
-a person to decide; if it is empty or equal, the series are bound by label
-and date as for any other upload.
+A file **directly in the watch folder** is uploaded without a `patientId`. A
+file in a sub-folder is uploaded with `patientId` = the name of the folder
+that directly contains it (however deep it sits below the watch folder), and
+the platform parks every series of it in the inbox when that name differs from
+the label in the header. A file whose header carries no usable label takes the
+folder name as its label; with neither, it is parked with no subject. A label
+read from the file is stored only when it names exactly one visible subject;
+an unmatched one is dropped. Uploaded files are filed in an `_uploaded\` (or
+`_failed\`) folder **next to the file** (the watch folder itself, or the
+patient folder); the retention setting reaches those as well.
 
 ```powershell
 # On each acquisition PC, as the user who exports. Copy deploy/export-watcher/
@@ -525,8 +528,9 @@ Before switching it on, check the rules on a real export:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTest -File D:\LibreClinica-Export\some.E2E
 # .dcm: one line with label, date, laterality (a Clarus Raw Data object prints
 #       "[non-image object: set aside]")
-# .E2E: the subject taken from its folder and the file's SHA-256 - the header
-#       is not read. Nothing is uploaded either way.
+# .E2E: the folder it would send as patientId (none for a file directly in the
+#       watch folder) and the file's SHA-256 - the header is not read.
+#       Nothing is uploaded either way.
 ```
 
 Like the bridge, the watcher reports to the **System Status** page every two
