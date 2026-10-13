@@ -49,17 +49,14 @@ final class IngestSourceQueries {
      * every uploader when {@code locationIds} is null (a system administrator).
      */
     static List<UploaderDto> uploaders(Connection c, Set<Integer> locationIds) throws SQLException {
-        String where = "";
-        if (locationIds != null) {
-            if (locationIds.isEmpty()) return List.of();
-            int n = locationIds.size();
-            where = " AND s.location_id IN (?" + ", ?".repeat(n - 1) + ")";
-        }
+        if (locationIds != null && locationIds.isEmpty()) return List.of();
         List<UploaderDto> out = new ArrayList<>();
-        try (PreparedStatement ps = c.prepareStatement(UPLOADER_SELECT + where + UPLOADER_ORDER)) {
-            int i = 1;
+        // Two constant statements; the locations go in as one array parameter.
+        try (PreparedStatement ps = c.prepareStatement(locationIds == null
+                ? UPLOADER_SELECT + UPLOADER_ORDER
+                : UPLOADER_SELECT + " AND s.location_id = ANY(?)" + UPLOADER_ORDER)) {
             if (locationIds != null) {
-                for (Integer id : locationIds) ps.setInt(i++, id);
+                ps.setArray(1, c.createArrayOf("integer", locationIds.toArray(new Integer[0])));
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) out.add(uploaderOf(rs));
