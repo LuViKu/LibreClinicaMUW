@@ -37,6 +37,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eDeidentificationVerifier;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
@@ -286,37 +287,55 @@ public class PublicOctUploadController {
 
     /** DR-041 — nullable (hand-built controllers): without it a split upload answers 503. */
     private E2eSidecarClient e2eSidecar;
+    /** DR-041 - the DICOM sidecar a converted series is described by; defaults to the configured one. */
+    private DicomDescribeClient dicomDescribe;
 
     @Autowired(required = false)
     void setE2eSidecar(E2eSidecarClient e2eSidecar) {
         this.e2eSidecar = e2eSidecar;
     }
 
-    private E2eSplitUpload split() {
-        return new E2eSplitUpload(dataSource, this,
-                e2eSidecar != null ? e2eSidecar : new E2eSidecarClient(), remoteClient, inferenceController);
+    /** Test seam (and wiring): the client used to describe and pseudonymise the converted DICOMs. */
+    @Autowired(required = false)
+    void setDicomDescribe(DicomDescribeClient dicomDescribe) {
+        this.dicomDescribe = dicomDescribe;
     }
 
-    /** The account-less split commit (DR-041); closed when de-identification is required, like {@link #commitFrom}. */
-    ResponseEntity<?> commitSplitFrom(IngestSourceService.Source source, MultipartFile file, String patientId,
-                                      Integer studyEventId, Integer eventCrfId, boolean park) {
+    private E2eSplitUpload split() {
+        return new E2eSplitUpload(dataSource, this,
+                e2eSidecar != null ? e2eSidecar : new E2eSidecarClient(),
+                dicomDescribe != null ? dicomDescribe : new DicomDescribeClient(),
+                new IngestArtifactStore(), remoteClient, inferenceController);
+    }
+
+    /**
+     * The account-less split commit (DR-041); closed when de-identification is required, like
+     * {@link #commitFrom}.
+     *
+     * @throws SplitUploadRejection for every outcome but the 201
+     */
+    E2eSplitCommitResponse commitSplitFrom(IngestSourceService.Source source, MultipartFile file, String patientId,
+                                           Integer studyEventId, Integer eventCrfId, boolean park,
+                                           String excludeSeries) {
         if (DeidentificationPolicy.required(deidPolicy)) {
-            return DeidUploadGate.accountlessClosed();
+            throw SplitUploadRejection.from(DeidUploadGate.accountlessClosed());
         }
-        return split().commit(file, patientId, studyEventId, eventCrfId, park,
+        return split().commit(file, patientId, studyEventId, eventCrfId, park, excludeSeries,
                 DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, source),
-                DeviceScope.itemsOf(dataSource, source), source);
+                DeviceScope.itemsOf(dataSource, source), source, IngestBindService.Actor.system());
     }
 
     /** The staff split commit; {@code resolveScope} is what the session may see, {@code visible} its items. */
-    ResponseEntity<?> commitSplitStaff(MultipartFile file, String patientId, Integer studyEventId,
-                                       Integer eventCrfId, boolean park, Set<Integer> resolveScope,
-                                       java.util.function.LongPredicate visible) {
-        return split().commit(file, patientId, studyEventId, eventCrfId, park, resolveScope, visible, null);
+    E2eSplitCommitResponse commitSplitStaff(MultipartFile file, String patientId, Integer studyEventId,
+                                            Integer eventCrfId, boolean park, String excludeSeries,
+                                            Set<Integer> resolveScope, java.util.function.LongPredicate visible,
+                                            IngestBindService.Actor actor) {
+        return split().commit(file, patientId, studyEventId, eventCrfId, park, excludeSeries, resolveScope,
+                visible, null, actor);
     }
 
     /** DR-041 preflight: is a file with this digest already split? */
-    Map<String, Object> preflightSplit(String sha256, java.util.function.LongPredicate visible) {
+    E2eSplitPreflightResponse preflightSplit(String sha256, java.util.function.LongPredicate visible) {
         return E2eSplitUpload.preflight(dataSource, sha256, visible);
     }
 

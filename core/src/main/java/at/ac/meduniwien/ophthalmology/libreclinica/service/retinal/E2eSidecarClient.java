@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,18 +28,21 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 
 /**
  * DR-041 — the app's client for the converter sidecar's E2E endpoints
- * ({@code POST /e2e/describe}, {@code GET /e2e/series-image}), which sit on
+ * ({@code POST /e2e/describe}, {@code POST /e2e/convert}), which sit on
  * the service that serves {@code /preprocess} and take the same token.
+ * (The sidecar also has {@code GET /e2e/series-image}; the app does not use it
+ * since the browser renders the previews and a series item is a DICOM.)
  *
  * <p>The file is not sent: the sidecar reads it from the E2E upload directory
- * it mounts, so a request names the stored file by its bare name only. The only
+ * it mounts, so a request names the stored file by its bare name only. A
+ * conversion writes its DICOMs below {@link #convertRoot()}, which the app and
+ * the sidecar both mount read-write. The only
  * identifying-looking value the sidecar returns is {@code headerLabel}, the study
  * label in the E2E patient chunk's surname slot (never the first-name or
  * patient-id slot, a name or a birth date). It is a candidate subject label, and
@@ -56,7 +60,9 @@ public class E2eSidecarClient {
 
     /** A describe parses a whole multimodal file (up to 2 GiB): minutes, not seconds. */
     public static final Duration DEFAULT_DESCRIBE_TIMEOUT = Duration.ofMinutes(10);
-    public static final Duration DEFAULT_IMAGE_TIMEOUT = Duration.ofMinutes(2);
+    /** Converting a whole export decodes every kept series: a few minutes for 600 MB. */
+    public static final Duration DEFAULT_CONVERT_TIMEOUT = Duration.ofMinutes(15);
+    public static final String DEFAULT_CONVERT_PATH = "/var/lib/libreclinica/e2e-convert";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
 
     /** The sidecar accepts exactly this shape (the app stores {@code <uuid>.e2e}). */
@@ -77,6 +83,16 @@ public class E2eSidecarClient {
             series = series == null ? List.of() : List.copyOf(series);
         }
     }
+
+    /**
+     * One converted series: a DICOM {@code file} (bare name) below the conversion directory, its
+     * digest and size, and, for an OCT volume, the {@code geometryFile} companion.
+     */
+    public record ConvertedFile(String seriesKey, String file, String sha256, Long bytes, Integer frames,
+                                String sopClassUid, String geometryFile) {}
+
+    /** The files of one conversion, and the directory they are in. */
+    public record Conversion(Path directory, List<ConvertedFile> files) {}
 
     /** A sidecar call that did not give a usable answer. */
     public static class SidecarException extends RuntimeException {
@@ -144,34 +160,60 @@ public class E2eSidecarClient {
     }
 
     /**
-     * The series' picture as PNG, or null when the sidecar has no such series
-     * or frame (404).
+     * Converts the given series of a stored file, in one pass, into one DICOM each.
+     *
+     * @param storedName the bare name of a file in the E2E upload directory
+     * @param label      the only identity written into the DICOMs (PatientID and PatientName); null or
+     *                   blank gives blank ones
+     * @param seriesKeys the series to keep
+     * @return the directory the sidecar wrote to ({@code <convertRoot>/<name without .e2e>}) and the
+     *         files in it; the caller imports them and removes the directory
      */
-    public byte[] seriesImage(String storedName, String seriesKey, int frame) {
+    public Conversion convert(String storedName, String label, List<String> seriesKeys) {
         requireConfigured();
         requireStoredName(storedName);
-        if (blank(seriesKey)) throw new SidecarException(502, "seriesKey is required.");
-        URI uri = UriComponentsBuilder.fromUriString(baseUrl().replaceAll("/+$", "") + "/e2e/series-image")
-                .queryParam("storedName", storedName)
-                .queryParam("seriesKey", seriesKey)
-                .queryParam("frame", frame)
-                .build().encode().toUri();
+        if (seriesKeys == null || seriesKeys.isEmpty()) {
+            throw new SidecarException(502, "No series to convert.");
+        }
+        String endpoint = baseUrl().replaceAll("/+$", "") + "/e2e/convert";
+        HttpHeaders headers = authHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("storedName", storedName);
+        if (!blank(label)) body.put("label", label);
+        body.put("seriesKeys", seriesKeys);
+        Path dir = convertRoot().resolve(storedName.substring(0, storedName.length() - ".e2e".length()));
         try {
-            ResponseEntity<byte[]> resp = rest(imageTimeout()).exchange(
-                    uri, HttpMethod.GET, new HttpEntity<>(authHeaders()), byte[].class);
-            byte[] png = resp.getBody();
-            if (png == null || png.length == 0) {
-                throw new SidecarException(502, "The image converter returned an empty picture.");
+            ResponseEntity<String> resp = rest(convertTimeout()).exchange(
+                    URI.create(endpoint), HttpMethod.POST,
+                    new HttpEntity<>(Json.mapper().writeValueAsString(body), headers), String.class);
+            String text = resp.getBody();
+            if (text == null || text.isBlank()) {
+                throw new SidecarException(502, "The image converter returned an empty answer for the conversion.");
             }
-            return png;
+            tools.jackson.databind.JsonNode root = Json.mapper().readTree(text);
+            List<ConvertedFile> files = new java.util.ArrayList<>();
+            for (tools.jackson.databind.JsonNode n : root.path("files")) {
+                files.add(Json.mapper().treeToValue(n, ConvertedFile.class));
+            }
+            if (files.isEmpty()) {
+                throw new SidecarException(502, "The image converter's conversion answer listed no files.");
+            }
+            return new Conversion(dir, List.copyOf(files));
+        } catch (SidecarException e) {
+            throw e;
         } catch (HttpStatusCodeException e) {
-            if (e.getStatusCode().value() == 404) return null;
-            LOG.warn("E2E series-image refused with HTTP {}", e.getStatusCode().value());
-            throw new SidecarException(502, "The image converter could not render the series (HTTP "
+            // Status only: the body is remote content and may quote the file.
+            LOG.warn("E2E convert refused with HTTP {}", e.getStatusCode().value());
+            throw new SidecarException(502, "The image converter could not convert the E2E file (HTTP "
                     + e.getStatusCode().value() + ").");
         } catch (ResourceAccessException e) {
-            LOG.warn("E2E series-image: converter unreachable or timed out: {}", e.getClass().getSimpleName());
-            throw new SidecarException(503, "The image converter is not reachable or took too long.");
+            LOG.warn("E2E convert: converter unreachable or timed out: {}", e.getClass().getSimpleName());
+            throw new SidecarException(503,
+                    "The image converter is not reachable or took too long to convert the E2E file.");
+        } catch (RuntimeException e) {
+            LOG.warn("E2E convert: unreadable answer: {}", e.getClass().getSimpleName());
+            throw new SidecarException(502, "The image converter's conversion answer could not be read.");
         }
     }
 
@@ -222,8 +264,13 @@ public class E2eSidecarClient {
         return secs("core.retinalInference.e2eDescribeTimeoutSecs", DEFAULT_DESCRIBE_TIMEOUT);
     }
 
-    protected Duration imageTimeout() {
-        return secs("core.retinalInference.e2eImageTimeoutSecs", DEFAULT_IMAGE_TIMEOUT);
+    protected Duration convertTimeout() {
+        return secs("core.retinalInference.e2eConvertTimeoutSecs", DEFAULT_CONVERT_TIMEOUT);
+    }
+
+    /** {@code core.retinalInference.e2eConvertPath}: where the sidecar writes the converted series. */
+    protected Path convertRoot() {
+        return Path.of(read("core.retinalInference.e2eConvertPath", DEFAULT_CONVERT_PATH));
     }
 
     private static Duration secs(String key, Duration fallback) {

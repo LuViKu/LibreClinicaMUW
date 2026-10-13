@@ -41,7 +41,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.E2eSidecarClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
@@ -122,14 +121,6 @@ public class IngestInboxApiController {
     /** DR-035 — nullable; without them a bind attaches existing jobs but starts none. */
     private final RemoteRetinalInferenceClient remoteClient;
     private final RetinalInferenceApiController inferenceController;
-
-    /** DR-041 - nullable (hand-built controllers): without it a series preview answers 503. */
-    private E2eSidecarClient e2eSidecar;
-
-    @Autowired(required = false)
-    void setE2eSidecar(E2eSidecarClient e2eSidecar) {
-        this.e2eSidecar = e2eSidecar;
-    }
 
     private StudyResourceAccess access;
     private RetinalJobFollower follower;
@@ -624,82 +615,6 @@ public class IngestInboxApiController {
         return null;
     }
 
-    // ----- GET /{id}/series-image -----
-
-    /**
-     * DR-041 - the picture of one series of a split multimodal {@code .e2e},
-     * rendered by the converter sidecar from the stored file: an en-face
-     * series gives its frame, a line scan its B-scan, an OCT volume its IR
-     * localizer. Visible exactly as {@link #preview}: an unbound item to the
-     * reconcile role within the inbox's visibility, a bound one under study
-     * visibility.
-     *
-     * @param frame zero-based frame of a time sequence; 0 for the rest
-     */
-    @GetMapping("/{id:[0-9]+}/series-image")
-    public ResponseEntity<?> seriesImage(@PathVariable("id") long id,
-                                         @RequestParam(value = "frame", defaultValue = "0") int frame,
-                                         HttpSession session) {
-        ResponseEntity<?> guard = access().guardSession(session);
-        if (guard != null) return guard;
-        if (frame < 0) {
-            return ResponseEntity.badRequest().body(Map.of("message", "frame must not be negative"));
-        }
-
-        String storedPath;
-        String seriesKey;
-        Integer boundSubjectId = null;
-        try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT stored_path, e2e_series_key, bound_study_subject_id "
-                             + "  FROM ingest_item WHERE ingest_item_id = ?")) {
-            ps.setLong(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) {
-                    return ResponseEntity.status(404).body(Map.of("message", "no ingest_item " + id));
-                }
-                storedPath = rs.getString("stored_path");
-                seriesKey = rs.getString("e2e_series_key");
-                int ss = rs.getInt("bound_study_subject_id");
-                if (!rs.wasNull()) boundSubjectId = ss;
-            }
-        } catch (SQLException e) {
-            LOG.error("series-image lookup failed for {}: {}", id, e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("message", "preview lookup failed"));
-        }
-        if (boundSubjectId != null) {
-            ResponseEntity<?> vis = access().guardStudyVisibility(subjectStudyId(boundSubjectId), session,
-                    "This file belongs to a study you cannot access");
-            if (vis != null) return vis;
-        } else {
-            ResponseEntity<?> role = guards(session);
-            if (role != null) return role;
-            ResponseEntity<?> item = guardItem(id, session);
-            if (item != null) return item;
-        }
-        if (seriesKey == null || seriesKey.isBlank() || storedPath == null || storedPath.isBlank()) {
-            return ResponseEntity.status(404).body(Map.of("message", "no series preview for file " + id));
-        }
-        Path target = ARTIFACT_STORE.resolveConfined(storedPath).orElse(null);
-        if (target == null || target.getFileName() == null) {
-            return ResponseEntity.status(404).body(Map.of("message", "file missing for " + id));
-        }
-        try {
-            E2eSidecarClient client = e2eSidecar != null ? e2eSidecar : new E2eSidecarClient();
-            byte[] png = client.seriesImage(target.getFileName().toString(), seriesKey, frame);
-            if (png == null) {
-                return ResponseEntity.status(404).body(Map.of("message", "no such series or frame for file " + id));
-            }
-            return ResponseEntity.ok()
-                    .contentType(MediaType.IMAGE_PNG)
-                    .header(HttpHeaders.CACHE_CONTROL,
-                            CacheControl.maxAge(Duration.ofHours(1)).cachePrivate().getHeaderValue())
-                    .body(png);
-        } catch (E2eSidecarClient.SidecarException e) {
-            return ResponseEntity.status(e.httpStatus()).body(Map.of("message", e.getMessage()));
-        }
-    }
-
     // ----- POST /{id}/bind -----
 
     @PostMapping(value = "/{id:[0-9]+}/bind", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -1122,10 +1037,8 @@ public class IngestInboxApiController {
                 sizeNull ? null : size,
                 scanNull ? null : scan,
                 received != null ? received.toInstant().toString() : null,
-                seriesModality != null
-                        ? "/pages/api/v1/ingest/" + id + "/series-image"
-                        : "/pages/api/v1/ingest/" + id + "/preview",
-                rs.getString("preview_png_path") != null || seriesModality != null,
+                "/pages/api/v1/ingest/" + id + "/preview",
+                rs.getString("preview_png_path") != null,
                 buildSuggestion(patientId, acquisitionDate, visible),
                 twin,
                 RetinalJobFollower.isAnalysable(kind, octVolume),

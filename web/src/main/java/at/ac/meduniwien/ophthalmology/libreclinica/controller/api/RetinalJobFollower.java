@@ -122,8 +122,7 @@ public final class RetinalJobFollower {
 
     /** The SQL form of {@link #isAnalysable}, over an {@code ingest_item} alias. */
     static String analysablePredicate(String alias) {
-        return "((lower(" + alias + ".kind) = 'e2e' AND " + alias + ".oct_volume IS NOT FALSE) "
-                + "OR (lower(" + alias + ".kind) = 'dicom' AND "
+        return "(lower(" + alias + ".kind) = 'e2e' OR (lower(" + alias + ".kind) = 'dicom' AND "
                 + alias + ".oct_volume IS TRUE))";
     }
 

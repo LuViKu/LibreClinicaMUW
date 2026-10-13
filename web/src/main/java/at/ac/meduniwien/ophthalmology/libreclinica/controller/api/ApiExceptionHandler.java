@@ -81,6 +81,16 @@ public class ApiExceptionHandler {
     /** What a client is told when the request body cannot be read. */
     static final String UNREADABLE_BODY_MESSAGE = "The request body is missing or is not valid JSON of the expected shape.";
 
+    /**
+     * DR-041 - the split upload answers its 201 as a typed DTO; every other outcome is thrown as a
+     * {@link SplitUploadRejection} and written here with its own status and body (the duplicate
+     * body, or {@code {message}}).
+     */
+    @ExceptionHandler(SplitUploadRejection.class)
+    public ResponseEntity<Object> handleSplitUploadRejection(SplitUploadRejection e) {
+        return ResponseEntity.status(e.status()).body(e.body());
+    }
+
     /** Malformed request body / missing required param / wrong type. */
     @ExceptionHandler({
             MissingServletRequestParameterException.class,

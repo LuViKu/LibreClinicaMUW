@@ -1192,7 +1192,18 @@ The header patient ID of these exports is unreliable: empty in 13 of the first 2
 
 - Every series in an export is visible in the inbox and can tick its own "performed" item once the study is configured.
 - The three readers no longer have to agree on volume numbering for this path, because the server is the only one that splits.
-- Several items now share one stored file, so retention deletes the file only when the last item referencing it is gone.
+- ~~Several items now share one stored file, so retention deletes the file only when the last item referencing it is gone.~~ Superseded by the amendment of 2026-10-13 (b), below.
+
+**Amendment 2026-10-13 (b) - one DICOM per series; the `.E2E` becomes a time-limited source copy.** The server converts the kept series of an upload, in one pass, into one DICOM each (OCT volumes and line scans through the existing Ophthalmic Tomography writer, everything else as Ophthalmic Photography 8 bit), and files each as an ordinary DICOM item with its own stored file. The client may leave series out (`excludeSeries`); the server checks every key against its own listing.
+
+Consequences, replacing the one above:
+
+- Items no longer share a stored file. The existing dismissed-item retention and the undo delete an item's own DICOM with its row; the shared-file logic stays only for rows of the first layout.
+- OCT volumes are analysed through the DICOM OCT path (DR-039), like any DICOM OCT upload. The sidecar no longer reads the `.E2E` for `/preprocess`.
+- The original `.E2E` is kept in `core.retinalInference.e2eSourcePath` (not served, not analysed, mounted by the app only) for `core.retinalInference.e2eSourceRetentionDays` (default 90) and then deleted by a nightly job. This is a deliberate retention decision: the source holds the patient chunk, so keeping it is bounded in time, audited (type 209), and the app alone can read it. Every item keeps `e2e_source_sha256`, so a duplicate upload is still refused after the source is gone.
+- The DICOMs carry the study label as `PatientID`/`PatientName` and nothing else about the person (the E2E's first-name and patient-ID slots are never read); the DICOM sidecar then replaces even that with the matched subject's label, or blanks it while the file is parked.
+- Converting uses one series' worth of memory instead of the whole file decoded (a real 600 MB export: 0.4 GB resident against 2.1 GB for one `read_oct_volume()`), and uses each series' own B-scan geometry, which the old path took from the file's first volume.
+- The split commit and preflight answer with typed DTOs, so the SPA's `api.ts` is generated from them.
 
 ## Future decisions (open)
 

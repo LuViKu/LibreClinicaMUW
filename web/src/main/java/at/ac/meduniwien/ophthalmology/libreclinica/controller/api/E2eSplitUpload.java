@@ -9,9 +9,14 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -19,18 +24,18 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.LongPredicate;
 import java.util.regex.Pattern;
 
@@ -38,48 +43,52 @@ import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eSourceRetentionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.OctVolumes;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.E2eSidecarClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
- * DR-041 — one upload of a multimodal Spectralis {@code .e2e}, split on the
- * server into one {@code ingest_item} per series.
+ * DR-041 (amendment 2026-10-13 b) - one upload of a multimodal Spectralis {@code .e2e}, converted on
+ * the server into one DICOM per series, each an ordinary DICOM {@code ingest_item}.
  *
- * <p>The file is streamed to the E2E upload directory once, with its SHA-256
- * taken on the way. The converter sidecar then lists the file's series
- * ({@link E2eSidecarClient#describe}); each series becomes a row of kind
- * {@code e2e} that shares the stored path and the digest and is told apart by
- * {@code e2e_series_key}. Only OCT volumes get retinal-inference jobs, through
- * the visit's imaging plan and the {@code /preprocess} path with the series'
- * {@code scan_index}.
+ * <p>The file is streamed to the E2E upload directory once (digest on the way), and the converter
+ * sidecar lists its series ({@link E2eSidecarClient#describe}). The client may leave series out
+ * ({@code excludeSeries}): every key is checked against that listing, an unknown key or an
+ * exclusion of everything is a 400 and nothing is stored. The kept series are converted by the
+ * sidecar in one pass ({@link E2eSidecarClient#convert}); each resulting DICOM is stored in the
+ * DICOM ingest store, described and pseudonymised by the DICOM sidecar like any uploaded DICOM, and
+ * filed as a row of kind {@code dicom} that keeps {@code e2e_series_key}, {@code series_modality},
+ * {@code series_frames} and {@code e2e_source_sha256}. OCT volumes get their analyses through the
+ * DICOM OCT path ({@link RetinalJobFollower#ensure}, DR-039), exactly as a DICOM OCT upload does.
  *
- * <p>The subject is the study label in the E2E patient chunk's surname slot
- * ({@code headerLabel} of the sidecar's answer). The optional {@code patientId}
- * is the folder the client found the file in: when both exist they must agree,
- * and when the file carries no usable label the folder is the label. The
- * first-name and patient-id slots are never read, so they cannot reach this
- * class.
+ * <p>The original {@code .e2e} is not kept in the upload directory: after the rows are committed it
+ * moves to the time-limited source area ({@link E2eSourceRetentionService}), and a nightly job
+ * deletes it after {@code core.retinalInference.e2eSourceRetentionDays}. The converted temp
+ * directory is removed after the import. Duplicate detection and the preflight use
+ * {@code e2e_source_sha256}, so they work after the source file is gone.
  *
- * <p>Binding: a header label that differs from the folder, an explicit
- * {@code park}, no label at all, or a label that resolves to no single visible
- * subject parks every item. Otherwise {@code studyEventId} binds every item to
- * that visit, and without one each series resolves its own visit from label and
- * date; a series with no visit on its date is parked on its own.
+ * <p>The subject is the study label in the E2E patient chunk's surname slot ({@code headerLabel} of
+ * the sidecar's answer). The optional {@code patientId} is the folder the client found the file in:
+ * when both exist they must agree, and when the file carries no usable label the folder is the
+ * label. The first-name and patient-id slots are never read, so they cannot reach this class. The
+ * DICOMs carry the matched subject's label as their only identity, or none while parked.
  *
- * <p>A label read from the file is stored, audited and logged only when it
- * resolves to exactly one visible subject (then as that subject's own label).
- * An unmatched header label is dropped: it can be a clinic number or another
- * person's identifier.
+ * <p>Binding: a header label that differs from the folder, an explicit {@code park}, no label at
+ * all, or a label that resolves to no single visible subject parks every item. Otherwise
+ * {@code studyEventId} binds every item to that visit, and without one each series resolves its own
+ * visit from label and date; a series with no visit on its date is parked on its own.
+ *
+ * <p>A label read from the file is stored, audited and logged only when it resolves to exactly one
+ * visible subject (then as that subject's own label). An unmatched header label is dropped: it can
+ * be a clinic number or another person's identifier.
  */
 final class E2eSplitUpload {
 
@@ -87,40 +96,54 @@ final class E2eSplitUpload {
 
     static final String MESSAGE_DUPLICATE = "Diese .e2e-Datei wurde bereits hochgeladen.";
 
+    /** {@code ingest_item.source_kind} of the split items (the OCT upload route's). */
+    static final String SOURCE_KIND = "portal-oct";
+
     private static final Pattern SERIES_KEY = Pattern.compile("[A-Za-z0-9_.-]{1,32}");
+    private static final Pattern CONVERTED_NAME = Pattern.compile("[A-Za-z0-9_.-]{1,40}\\.dcm");
+    private static final Pattern SHA256 = Pattern.compile("[0-9a-fA-F]{64}");
     private static final Set<String> HEADER_STATES = Set.of("none", "empty", "matches", "differs");
     /** A study label as the converter vets it: printable ASCII, no space, 1-24 characters. */
     private static final Pattern LABEL_TOKEN = Pattern.compile("[\\x21-\\x7E]{1,24}");
     private static final Set<String> SERIES_KINDS =
             Set.of("OCT", "OCT_LINE", "IR", "BAF", "BR", "IRAF", "QAF", "ICGA", "FA", "OTHER");
+    private static final int MAX_EXCLUDED = 2000;
 
     private final DataSource dataSource;
     private final PublicOctUploadController oct;
     private final E2eSidecarClient sidecar;
-    private final RemoteRetinalInferenceClient remoteClient;
-    private final RetinalInferenceApiController inferenceController;
+    private final DicomDescribeClient dicom;
+    private final IngestArtifactStore store;
+    private final RetinalJobFollower follower;
 
     E2eSplitUpload(DataSource dataSource, PublicOctUploadController oct, E2eSidecarClient sidecar,
+                   DicomDescribeClient dicom, IngestArtifactStore store,
                    RemoteRetinalInferenceClient remoteClient, RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
         this.oct = oct;
         this.sidecar = sidecar;
-        this.remoteClient = remoteClient;
-        this.inferenceController = inferenceController;
+        this.dicom = dicom;
+        this.store = store;
+        this.follower = new RetinalJobFollower(dataSource, remoteClient, inferenceController);
     }
 
     /* ------------------------------------------------------------------ */
     /* preflight                                                           */
     /* ------------------------------------------------------------------ */
 
-    /** The items already made from a file with this digest, ids only. */
+    /**
+     * The items already made from an export with this digest, ids only. Items of the previous
+     * layout (one stored file, digest in {@code sha256}) count too.
+     */
     static List<Long> existingItems(DataSource dataSource, String sha256) {
         List<Long> ids = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id FROM ingest_item "
-                             + " WHERE sha256 = ? AND e2e_series_key IS NOT NULL ORDER BY ingest_item_id")) {
+                             + " WHERE e2e_source_sha256 = ? OR (sha256 = ? AND e2e_series_key IS NOT NULL) "
+                             + " ORDER BY ingest_item_id")) {
             ps.setString(1, sha256);
+            ps.setString(2, sha256);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) ids.add(rs.getLong(1));
             }
@@ -131,17 +154,13 @@ final class E2eSplitUpload {
     }
 
     /**
-     * Preflight for a split file: is it already here? Only items the caller may
-     * name are listed ({@code visible} null = all); {@code exists} is true when
-     * any item exists, so a hidden duplicate still stops the upload.
+     * Preflight for a split file: is it already here? Only items the caller may name are listed
+     * ({@code visible} null = all); {@code exists} is true when any item exists, so a hidden
+     * duplicate still stops the upload.
      */
-    static Map<String, Object> preflight(DataSource dataSource, String sha256, LongPredicate visible) {
+    static E2eSplitPreflightResponse preflight(DataSource dataSource, String sha256, LongPredicate visible) {
         List<Long> all = existingItems(dataSource, sha256);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("exists", !all.isEmpty());
-        body.put("split", true);
-        body.put("existingIngestItemIds", visibleOnly(all, visible));
-        return body;
+        return new E2eSplitPreflightResponse(!all.isEmpty(), true, visibleOnly(all, visible));
     }
 
     private static List<Long> visibleOnly(List<Long> ids, LongPredicate visible) {
@@ -155,340 +174,449 @@ final class E2eSplitUpload {
     /* commit                                                              */
     /* ------------------------------------------------------------------ */
 
-    /** What one series turned into. */
-    private record Planned(E2eSidecarClient.Series series, String key, String kind, LocalDate date,
-                           String laterality, Integer scanIndex, String pixelSha256, boolean park,
+    /** What one kept series turned into. */
+    private record Planned(E2eSidecarClient.Series series, E2eSidecarClient.ConvertedFile converted,
+                           IngestArtifactStore.Stored stored, DicomDescribeClient.Description desc,
+                           String key, String kind, LocalDate date, String laterality, boolean park,
                            Integer studyEventId, Integer eventCrfId, Integer subjectId,
-                           IngestTwins.Twin twin, Integer modalityId, List<String> tasks) {}
+                           IngestTwins.Twin twin, Integer modalityId) {}
 
     /**
-     * @param resolveScope studies the label may resolve against, null for all
-     * @param visible      which existing items a duplicate answer may name, null for all
-     * @param source       the uploader's source for a tokened request, else null
+     * @param excludeSeries comma-separated seriesKeys to leave out (null or blank: none)
+     * @param resolveScope  studies the label may resolve against, null for all
+     * @param visible       which existing items a duplicate answer may name, null for all
+     * @param source        the uploader's source for a tokened request, else null
+     * @param actor         who the follow-up work (analyses) is audited as
+     * @throws SplitUploadRejection for every outcome that is not the 201
      */
-    ResponseEntity<?> commit(MultipartFile file, String patientId, Integer studyEventId, Integer eventCrfId,
-                             boolean park, Set<Integer> resolveScope, LongPredicate visible,
-                             IngestSourceService.Source source) {
+    E2eSplitCommitResponse commit(MultipartFile file, String patientId, Integer studyEventId, Integer eventCrfId,
+                                  boolean park, String excludeSeries, Set<Integer> resolveScope,
+                                  LongPredicate visible, IngestSourceService.Source source,
+                                  IngestBindService.Actor actor) {
         if (file == null || file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
+            throw SplitUploadRejection.of(400, "file part is required");
         }
         // The folder the file was found in; absent for a file in a shared watch folder.
         String folder = patientId == null || patientId.isBlank() ? null : patientId.trim();
         if (eventCrfId != null) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", "eventCrfId is not supported with split=true; send studyEventId or park"));
+            throw SplitUploadRejection.of(400, "eventCrfId is not supported with split=true; send studyEventId or park");
         }
         if (park && studyEventId != null) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", "park and studyEventId are mutually exclusive"));
+            throw SplitUploadRejection.of(400, "park and studyEventId are mutually exclusive");
         }
+        Set<String> excluded = parseExcluded(excludeSeries);
 
         Set<Integer> atLocation = DeviceScope.atLocation(dataSource, source);
         Integer pickedSubject = null;
         if (studyEventId != null) {
             pickedSubject = oct.resolveStudySubjectFromStudyEvent(studyEventId);
             if (pickedSubject == null || !oct.subjectAtLocation(atLocation, pickedSubject)) {
-                return ResponseEntity.status(404).body(Map.of("message", "No study_event with id " + studyEventId));
+                throw SplitUploadRejection.of(404, "No study_event with id " + studyEventId);
             }
         }
 
-        // ---- 1. store once, digest on the way ----
-        Path saved;
+        // ---- 1. stage once, digest on the way ----
+        Path staged;
         String sha256;
         try {
             Path dir = Paths.get(PublicOctUploadController.uploadsDir());
             Files.createDirectories(dir);
-            saved = dir.resolve(UUID.randomUUID() + ".e2e");
+            staged = dir.resolve(UUID.randomUUID() + ".e2e");
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            try (var in = file.getInputStream(); var dis = new DigestInputStream(in, md)) {
-                Files.copy(dis, saved);
+            try (InputStream in = file.getInputStream(); DigestInputStream dis = new DigestInputStream(in, md)) {
+                Files.copy(dis, staged);
             }
             sha256 = HexFormat.of().formatHex(md.digest());
         } catch (IOException | NoSuchAlgorithmException e) {
-            LOG.error("Failed to persist a split E2E upload: {}", e.getClass().getSimpleName());
-            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to persist E2E"));
+            LOG.error("Failed to stage a split E2E upload: {}", e.getClass().getSimpleName());
+            throw SplitUploadRejection.of(500, "Failed to persist E2E");
         }
 
-        // ---- 2. already split? ----
-        List<Long> existing = existingItems(dataSource, sha256);
-        if (!existing.isEmpty()) {
-            discard(saved);
-            return duplicate(visibleOnly(existing, visible));
-        }
-
-        // ---- 3. describe ----
-        E2eSidecarClient.Description described;
+        // The staged file, the stored DICOMs and the conversion directory belong to this request until
+        // the rows are committed; whatever happens before that, none of them may be left behind.
+        List<Path> written = new ArrayList<>();
+        Path convertDir = null;
+        boolean committed = false;
         try {
-            described = sidecar.describe(saved.getFileName().toString(), folder);
-        } catch (E2eSidecarClient.SidecarException e) {
-            discard(saved);
-            return ResponseEntity.status(e.httpStatus()).body(Map.of("message", e.getMessage()));
-        }
-        String problem = validate(described);
-        if (problem != null) {
-            discard(saved);
-            LOG.warn("Split E2E upload refused: {}", problem);
-            return ResponseEntity.status(502).body(Map.of("message", "The image converter's answer was not usable: " + problem));
-        }
-        if (described.series().isEmpty()) {
-            discard(saved);
-            return ResponseEntity.unprocessableEntity().body(Map.of(
-                    "message", "Die .e2e-Datei enthaelt keine Bildserie."));
-        }
-
-        // ---- 4. plan: who binds where ----
-        // The file's label against the folder: a disagreement parks everything and names no subject.
-        String headerLabel = described.headerLabel();
-        boolean differs = "differs".equals(described.headerPatient())
-                || (folder != null && headerLabel != null && !headerLabel.equalsIgnoreCase(folder));
-        String headerPatient = differs ? "differs" : described.headerPatient();
-        // The label the subject is looked up by: the file's own, else the folder's.
-        String label = differs ? null : (headerLabel != null ? headerLabel : folder);
-
-        IngestResolutionService.ResolveCandidate matched = label == null ? null
-                : oct.resolution().resolve(label, (LocalDate) null, resolveScope).single().orElse(null);
-        boolean allParked = park || differs || label == null
-                || (studyEventId == null && matched == null)
-                // a visit picked for another subject than the label names is not guessed at
-                || (pickedSubject != null && matched != null && matched.studySubjectId() != pickedSubject);
-        Integer labelSubject = pickedSubject != null ? pickedSubject
-                : matched == null ? null : matched.studySubjectId();
-        // What may be written down. A label the file supplied is kept only when it names a visible
-        // subject; the folder is the client's own word and is kept as before.
-        String pid = matched != null ? matched.subjectLabel() : folder;
-        String subjectLabel = matched != null ? matched.subjectLabel()
-                : pickedSubject != null && !allParked ? UploadRoute.subjectLabelForStudyEvent(dataSource, studyEventId)
-                : null;
-
-        Map<Integer, String> fingerprints = Map.of();
-        boolean anyOct = described.series().stream().anyMatch(s -> "OCT".equals(s.seriesModality()));
-        if (anyOct) {
-            try {
-                fingerprints = ImageFingerprint.ofE2e(saved);
-            } catch (IOException | RuntimeException e) {
-                LOG.warn("Split E2E upload - could not fingerprint the volumes: {}", e.getClass().getSimpleName());
+            // ---- 2. already split? (also after the source file was deleted) ----
+            List<Long> existing = existingItems(dataSource, sha256);
+            if (!existing.isEmpty()) {
+                throw SplitUploadRejection.duplicate(MESSAGE_DUPLICATE, visibleOnly(existing, visible));
             }
-        }
 
-        List<Planned> plan = new ArrayList<>();
-        try (Connection c = dataSource.getConnection()) {
-            Map<LocalDate, IngestResolutionService.Resolution> byDate = new HashMap<>();
+            // ---- 3. describe, then check what the client wants left out ----
+            E2eSidecarClient.Description described = describe(staged, folder);
+            String problem = validate(described);
+            if (problem != null) {
+                LOG.warn("Split E2E upload refused: {}", problem);
+                throw SplitUploadRejection.of(502, "The image converter's answer was not usable: " + problem);
+            }
+            if (described.series().isEmpty()) {
+                throw SplitUploadRejection.of(422, "Die .e2e-Datei enthaelt keine Bildserie.");
+            }
+            Set<String> known = new HashSet<>();
+            for (E2eSidecarClient.Series s : described.series()) known.add(s.seriesKey());
+            for (String key : excluded) {
+                if (!known.contains(key)) {
+                    throw SplitUploadRejection.of(400, "excludeSeries names a series the file does not have");
+                }
+            }
+            List<E2eSidecarClient.Series> kept = new ArrayList<>();
             for (E2eSidecarClient.Series s : described.series()) {
-                String kind = s.seriesModality();
-                LocalDate date = dateOf(s.acquiredAt());
-                String lat = lateralityOf(s.laterality());
-                boolean hasVolume = ("OCT".equals(kind) || "OCT_LINE".equals(kind)) && s.octVolumeIndex() != null;
-                Integer scanIndex = hasVolume ? s.octVolumeIndex() : null;
-                String pixel = "OCT".equals(kind) && scanIndex != null ? fingerprints.get(scanIndex) : null;
+                if (!excluded.contains(s.seriesKey())) kept.add(s);
+            }
+            if (kept.isEmpty()) {
+                throw SplitUploadRejection.of(400, "excludeSeries leaves out every series; nothing to upload");
+            }
 
-                IngestTwins.Twin twin = IngestTwins.find(c, pixel);
-                boolean parkThis = allParked || twin != null;
-                Integer seriesEvent = null;
-                Integer seriesCrf = null;
-                Integer seriesSubject = labelSubject;
-                if (!parkThis) {
-                    if (studyEventId != null) {
-                        seriesEvent = studyEventId;
-                    } else {
-                        IngestResolutionService.Resolution r = byDate.computeIfAbsent(date,
-                                d -> oct.resolution().resolve(label, d, resolveScope));
-                        if (r.isSuggested() && r.single().isPresent()
-                                && r.single().get().matchingEvent() != null) {
-                            var ev = r.single().get().matchingEvent();
-                            seriesEvent = ev.studyEventId();
-                            seriesCrf = ev.eventCrfId();
-                            seriesSubject = r.single().get().studySubjectId();
-                        } else {
-                            parkThis = true;
+            // ---- 4. who the file belongs to ----
+            // The file's label against the folder: a disagreement parks everything and names no subject.
+            String headerLabel = described.headerLabel();
+            boolean differs = "differs".equals(described.headerPatient())
+                    || (folder != null && headerLabel != null && !headerLabel.equalsIgnoreCase(folder));
+            String headerPatient = differs ? "differs" : described.headerPatient();
+            // The label the subject is looked up by: the file's own, else the folder's.
+            String label = differs ? null : (headerLabel != null ? headerLabel : folder);
+
+            IngestResolutionService.ResolveCandidate matched = label == null ? null
+                    : oct.resolution().resolve(label, (LocalDate) null, resolveScope).single().orElse(null);
+            boolean allParked = park || differs || label == null
+                    || (studyEventId == null && matched == null)
+                    // a visit picked for another subject than the label names is not guessed at
+                    || (pickedSubject != null && matched != null && matched.studySubjectId() != pickedSubject);
+            Integer labelSubject = pickedSubject != null ? pickedSubject
+                    : matched == null ? null : matched.studySubjectId();
+            // What may be written down. A label the file supplied is kept only when it names a visible
+            // subject; the folder is the client's own word and is kept as before.
+            String pid = matched != null ? matched.subjectLabel() : folder;
+            String subjectLabel = matched != null ? matched.subjectLabel()
+                    : pickedSubject != null && !allParked ? UploadRoute.subjectLabelForStudyEvent(dataSource, studyEventId)
+                    : null;
+            // The only identity a DICOM carries: the matched subject's label; blank while the file is parked.
+            String pseudonym = allParked ? null : subjectLabel;
+
+            // ---- 5. convert the kept series in one pass, import each DICOM ----
+            List<String> keptKeys = new ArrayList<>();
+            for (E2eSidecarClient.Series s : kept) keptKeys.add(s.seriesKey());
+            E2eSidecarClient.Conversion conversion = convert(staged, pseudonym, keptKeys);
+            convertDir = conversion.directory();
+            Map<String, E2eSidecarClient.ConvertedFile> convertedByKey = checkConversion(conversion, keptKeys);
+
+            List<Planned> plan = new ArrayList<>();
+            try (Connection c = dataSource.getConnection()) {
+                Map<LocalDate, IngestResolutionService.Resolution> byDate = new HashMap<>();
+                for (E2eSidecarClient.Series s : kept) {
+                    E2eSidecarClient.ConvertedFile cf = convertedByKey.get(s.seriesKey());
+                    IngestArtifactStore.Stored stored = importConverted(conversion.directory(), cf, written);
+                    DicomDescribeClient.Description desc = describeDicom(stored.path(), pseudonym, written);
+                    if (desc.sopInstanceUid() != null) {
+                        Long dup = findBySopInstanceUid(c, desc.sopInstanceUid());
+                        if (dup != null) {
+                            throw SplitUploadRejection.duplicate(MESSAGE_DUPLICATE, visibleOnly(List.of(dup), visible));
                         }
                     }
-                }
 
-                Integer modalityId = null;
-                List<String> tasks = List.of();
-                if (!parkThis) {
-                    Integer studyId = VisitImagingPlan.studyOfBinding(c, seriesCrf, seriesEvent);
-                    if (studyId != null) {
-                        modalityId = VisitImagingPlan.modalityByE2eSeries(c, studyId, kind);
-                        if (modalityId == null && "OCT".equals(kind)) {
-                            modalityId = VisitImagingPlan.e2eModalityOf(c, studyId);
-                        }
-                        if ("OCT".equals(kind) && scanIndex != null && lat != null) {
-                            if (!new StudySettingService(dataSource)
-                                    .isEnabled(studyId, StudySettingService.INFERENCE_ENABLED)) {
-                                LOG.info("Split E2E upload - inference is switched off for study {}", studyId);
+                    String kind = s.seriesModality();
+                    LocalDate date = dateOf(s.acquiredAt());
+                    String lat = lateralityOf(s.laterality());
+                    IngestTwins.Twin twin = IngestTwins.find(c, desc.pixelSha256());
+                    boolean parkThis = allParked || twin != null;
+                    Integer seriesEvent = null;
+                    Integer seriesCrf = null;
+                    Integer seriesSubject = labelSubject;
+                    if (!parkThis) {
+                        if (studyEventId != null) {
+                            seriesEvent = studyEventId;
+                        } else {
+                            IngestResolutionService.Resolution r = byDate.computeIfAbsent(date,
+                                    d -> oct.resolution().resolve(label, d, resolveScope));
+                            if (r.isSuggested() && r.single().isPresent()
+                                    && r.single().get().matchingEvent() != null) {
+                                var ev = r.single().get().matchingEvent();
+                                seriesEvent = ev.studyEventId();
+                                seriesCrf = ev.eventCrfId();
+                                seriesSubject = r.single().get().studySubjectId();
                             } else {
-                                tasks = VisitImagingPlan.tasksFor(c, seriesCrf, seriesEvent, modalityId).tasks();
+                                parkThis = true;
                             }
                         }
                     }
+
+                    Integer modalityId = null;
+                    if (!parkThis) {
+                        Integer studyId = VisitImagingPlan.studyOfBinding(c, seriesCrf, seriesEvent);
+                        if (studyId != null) {
+                            modalityId = VisitImagingPlan.modalityByE2eSeries(c, studyId, kind);
+                            if (modalityId == null && "OCT".equals(kind)) {
+                                modalityId = VisitImagingPlan.octModalityOf(c, studyId, "dicom", deviceOf(desc));
+                                if (modalityId == null) modalityId = VisitImagingPlan.e2eModalityOf(c, studyId);
+                            }
+                        }
+                    }
+                    plan.add(new Planned(s, cf, stored, desc, s.seriesKey(), kind, date, lat, parkThis,
+                            seriesEvent, seriesCrf, seriesSubject, twin, modalityId));
                 }
-                plan.add(new Planned(s, s.seriesKey(), kind, date, lat, scanIndex, pixel, parkThis,
-                        seriesEvent, seriesCrf, seriesSubject, twin, modalityId, tasks));
+            } catch (SQLException e) {
+                LOG.error("Split E2E upload - planning failed: {}", e.getMessage());
+                throw SplitUploadRejection.of(500, "Failed to plan the upload");
             }
-        } catch (SQLException e) {
-            discard(saved);
-            LOG.error("Split E2E upload - planning failed: {}", e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to plan the upload"));
-        }
 
-        // ---- 5. write: items and jobs in one transaction ----
-        boolean remoteConfigured = remoteClient != null && remoteClient.isConfigured();
-        boolean dispatchToRemote = remoteConfigured && inferenceController != null;
-        String jobStatus = dispatchToRemote ? "remote_pending" : RetinalInferenceJobStatus.QUEUED.dbValue();
-        String absolutePath = saved.toString();
-        long size = PublicOctUploadController.fileSize(saved);
-        String originalName = file.getOriginalFilename();
-
-        List<Long> itemIds = new ArrayList<>();
-        List<List<Map<String, Object>>> jobsPerItem = new ArrayList<>();
-        try (Connection c = dataSource.getConnection()) {
-            c.setAutoCommit(false);
-            try {
-                for (Planned p : plan) {
-                    DeviceScope.Origin origin = DeviceScope.Origin.of(c, source);
-                    var item = IngestItemRepository
-                            .newItem(IngestArtifactStore.Kind.E2E, "portal-oct", absolutePath)
-                            .originalFilename(originalName)
-                            .contentType("application/octet-stream")
-                            .digest(sha256, size)
-                            .pixelSha256(p.pixelSha256())
-                            .scanIndex(p.scanIndex())
-                            .e2eSeriesKey(p.key())
-                            .seriesModality(p.kind())
-                            .seriesFrames(p.series().frames())
-                            // The analysable test: an .e2e row is an OCT volume unless it says it is not.
-                            .octVolume("OCT".equals(p.kind()))
-                            .laterality(p.laterality())
-                            .acquisitionDate(p.date())
-                            .acquisitionDateSource(p.date() == null ? null : IngestItemRepository.ACQ_SOURCE_FILE)
-                            .patientId(pid)
-                            .imagingModalityId(p.modalityId())
-                            .candidateStudySubjectId(p.subjectId())
-                            .originLocationId(origin.locationId())
-                            .ingestSourceId(origin.ingestSourceId());
-                    if (!p.park()) {
-                        ImageIngestBinding.EventTarget target =
-                                PublicOctUploadController.resolveBindTarget(c, p.eventCrfId(), p.studyEventId());
-                        if (target != null) {
-                            item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(),
-                                    IngestBindService.POLICY_VISIT_PICKED);
+            // ---- 6. write: the items in one transaction ----
+            List<Long> itemIds = new ArrayList<>();
+            try (Connection c = dataSource.getConnection()) {
+                c.setAutoCommit(false);
+                try {
+                    for (Planned p : plan) {
+                        DeviceScope.Origin origin = DeviceScope.Origin.of(c, source);
+                        var item = IngestItemRepository
+                                .newItem(IngestArtifactStore.Kind.DICOM, SOURCE_KIND, p.stored().path().toString())
+                                .previewPngPath(p.desc().previewPngPath())
+                                // The E2E's own file name is derived from the patient's name: not kept.
+                                .originalFilename(seriesFileName(p))
+                                .contentType("application/dicom")
+                                .digest(p.stored().sha256(), p.stored().byteSize())
+                                .pixelSha256(p.desc().pixelSha256())
+                                .e2eSourceSha256(sha256)
+                                .e2eSeriesKey(p.key())
+                                .seriesModality(p.kind())
+                                .seriesFrames(p.series().frames())
+                                .device(deviceOf(p.desc()))
+                                .sopInstanceUid(p.desc().sopInstanceUid())
+                                .sopClassUid(p.desc().sopClassUid())
+                                .studyInstanceUid(p.desc().studyInstanceUid())
+                                .seriesInstanceUid(p.desc().seriesInstanceUid())
+                                .modality(p.desc().modality())
+                                // DR-039 - an OCT volume is analysed whatever its format.
+                                .octVolume(OctVolumes.of(p.desc()))
+                                .manufacturer(p.desc().manufacturer(), p.desc().manufacturerModelName())
+                                .deidentifiedAt(p.desc().identityRemoved() ? Instant.now() : null)
+                                .laterality(p.laterality())
+                                .acquisitionDate(p.date())
+                                .acquisitionDateSource(p.date() == null ? null : IngestItemRepository.ACQ_SOURCE_FILE)
+                                .patientId(pid)
+                                .imagingModalityId(p.modalityId())
+                                .candidateStudySubjectId(p.subjectId())
+                                .originLocationId(origin.locationId())
+                                .ingestSourceId(origin.ingestSourceId());
+                        if (!p.park()) {
+                            ImageIngestBinding.EventTarget target =
+                                    PublicOctUploadController.resolveBindTarget(c, p.eventCrfId(), p.studyEventId());
+                            if (target != null) {
+                                item.boundTo(target.studySubjectId(), target.studyEventId(), target.eventCrfId(),
+                                        IngestBindService.POLICY_VISIT_PICKED);
+                            }
                         }
+                        itemIds.add(item.insert(c));
                     }
-                    long id = item.insert(c);
-                    itemIds.add(id);
-                    List<Map<String, Object>> jobs = new ArrayList<>();
-                    if (!p.park()) {
-                        for (String task : p.tasks()) {
-                            long jid = oct.insertJob(c, p.eventCrfId(), p.studyEventId(), task, absolutePath,
-                                    p.laterality(), jobStatus, p.scanIndex(), sha256, id);
-                            Map<String, Object> info = new LinkedHashMap<>();
-                            info.put("jobId", jid);
-                            info.put("task", task);
-                            info.put("status", jobStatus);
-                            jobs.add(info);
-                        }
-                    }
-                    jobsPerItem.add(jobs);
+                    c.commit();
+                    committed = true;
+                } catch (SQLException | RuntimeException e) {
+                    c.rollback();
+                    throw e;
                 }
-                c.commit();
-            } catch (SQLException | RuntimeException e) {
-                c.rollback();
+            } catch (SQLException e) {
+                if ("23505".equals(e.getSQLState())) {
+                    throw SplitUploadRejection.duplicate(MESSAGE_DUPLICATE,
+                            visibleOnly(existingItems(dataSource, sha256), visible));
+                }
+                LOG.error("Split E2E upload - could not write the items: {}", e.getMessage());
+                throw SplitUploadRejection.of(500, "Failed to file the upload");
+            } catch (SplitUploadRejection e) {
                 throw e;
+            } catch (RuntimeException e) {
+                LOG.error("Split E2E upload - could not write the items: {}", e.getClass().getSimpleName());
+                throw SplitUploadRejection.of(500, "Failed to file the upload");
             }
-        } catch (SQLException e) {
-            discard(saved);
-            if ("23505".equals(e.getSQLState())) {
-                return duplicate(visibleOnly(existingItems(dataSource, sha256), visible));
-            }
-            LOG.error("Split E2E upload - could not write the items: {}", e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to file the upload"));
-        } catch (RuntimeException e) {
-            discard(saved);
-            LOG.error("Split E2E upload - could not write the items: {}", e.getClass().getSimpleName());
-            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to file the upload"));
-        }
 
-        // ---- 6. audit, held-back trail, response ----
-        List<Map<String, Object>> items = new ArrayList<>();
-        boolean anyBound = false;
-        for (int i = 0; i < plan.size(); i++) {
-            Planned p = plan.get(i);
-            long id = itemIds.get(i);
-            List<Map<String, Object>> jobs = jobsPerItem.get(i);
-            String status = p.park() ? "UNBOUND" : "BOUND";
-            anyBound |= !p.park();
-            if (jobs.isEmpty()) {
+            // ---- 7. audit, held-back trail, analyses, response ----
+            List<E2eSplitItemDto> items = new ArrayList<>();
+            boolean anyBound = false;
+            for (int i = 0; i < plan.size(); i++) {
+                Planned p = plan.get(i);
+                long id = itemIds.get(i);
+                String status = p.park() ? "UNBOUND" : "BOUND";
+                anyBound |= !p.park();
                 oct.writePublicOctUploadAuditRow("ingest_item", id, p.subjectId(), pid == null ? "" : pid,
                         p.laterality(), status);
+                if (p.twin() != null) IngestTwins.writeHeldAudit(dataSource, id, p.twin(), pid, null, SOURCE_KIND);
+                List<E2eSplitJobDto> jobs = startAnalyses(id, p, actor);
+                boolean held = p.twin() != null;
+                Long same = held && (visible == null || visible.test(p.twin().ingestItemId()))
+                        ? p.twin().ingestItemId() : null;
+                items.add(new E2eSplitItemDto(id, p.key(), p.kind(), p.laterality(),
+                        p.date() == null ? null : p.date().toString(), p.series().frames(), p.modalityId(),
+                        status, jobs, held, same));
+            }
+            LOG.info("Split E2E upload - {} item(s) from one file, {} left out, headerPatient={}, bound={}",
+                    plan.size(), excluded.size(), headerPatient, anyBound);
+
+            return new E2eSplitCommitResponse(sha256, headerPatient, subjectLabel, !anyBound, items,
+                    new ArrayList<>(excluded), "e2e", "e2e");
+        } finally {
+            if (convertDir != null) deleteTree(convertDir);
+            if (committed) {
+                // The original moves to the time-limited source area; it is not kept where the sidecar reads.
+                if (E2eSourceRetentionService.moveIn(staged, E2eSourceRetentionService.sourceRoot()) == null) {
+                    discard(staged);
+                }
             } else {
-                for (Map<String, Object> j : jobs) {
-                    oct.writePublicOctUploadAuditRow(((Number) j.get("jobId")).longValue(), p.subjectId(),
-                            pid == null ? "" : pid, p.laterality(), jobStatus);
-                }
-            }
-            if (p.twin() != null) IngestTwins.writeHeldAudit(dataSource, id, p.twin(), pid, null, "portal-oct");
-
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("ingestItemId", id);
-            m.put("seriesKey", p.key());
-            m.put("seriesModality", p.kind());
-            m.put("laterality", p.laterality());
-            m.put("acquisitionDate", p.date() == null ? null : p.date().toString());
-            m.put("frames", p.series().frames());
-            m.put("imagingModalityId", p.modalityId());
-            m.put("status", status);
-            m.put("jobs", jobs);
-            if (p.twin() != null) {
-                m.put("heldBack", true);
-                m.put("sameImageAs", p.twin().ingestItemId());
-            }
-            items.add(m);
-        }
-        LOG.info("Split E2E upload - {} item(s) from one file, headerPatient={}, bound={}",
-                plan.size(), headerPatient, anyBound);
-
-        // ---- 7. start what the plans want, off the request thread ----
-        List<Planned> withJobs = new ArrayList<>();
-        List<List<Map<String, Object>>> jobsForRun = new ArrayList<>();
-        for (int i = 0; i < plan.size(); i++) {
-            if (!jobsPerItem.get(i).isEmpty()) {
-                withJobs.add(plan.get(i));
-                jobsForRun.add(jobsPerItem.get(i));
+                discard(staged);
+                for (Path p : written) discard(p);
             }
         }
-        if (!withJobs.isEmpty()) {
-            final Path path = saved;
-            final String name = originalName;
-            CompletableFuture.runAsync(() -> {
-                try {
-                    runJobs(withJobs, jobsForRun, path, name, dispatchToRemote);
-                } catch (Exception ex) {
-                    LOG.warn("Split E2E post-commit pipeline threw: {}", ex.getClass().getSimpleName());
-                }
-            });
-        }
+    }
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("sha256", sha256);
-        body.put("headerPatient", headerPatient);
-        // The matched subject's own label, never the raw header value.
-        body.put("subjectLabel", subjectLabel);
-        body.put("parked", !anyBound);
-        body.put("items", items);
-        return ResponseEntity.status(201).body(body);
+    /* ------------------------------------------------------------------ */
+    /* sidecars                                                            */
+    /* ------------------------------------------------------------------ */
+
+    private E2eSidecarClient.Description describe(Path staged, String folder) {
+        try {
+            return sidecar.describe(staged.getFileName().toString(), folder);
+        } catch (E2eSidecarClient.SidecarException e) {
+            throw SplitUploadRejection.of(e.httpStatus(), e.getMessage());
+        }
+    }
+
+    private E2eSidecarClient.Conversion convert(Path staged, String pseudonym, List<String> keys) {
+        try {
+            return sidecar.convert(staged.getFileName().toString(), pseudonym, keys);
+        } catch (E2eSidecarClient.SidecarException e) {
+            throw SplitUploadRejection.of(e.httpStatus(), e.getMessage());
+        }
+    }
+
+    /** The conversion must hold exactly the kept series, each once, under plain names. */
+    private static Map<String, E2eSidecarClient.ConvertedFile> checkConversion(
+            E2eSidecarClient.Conversion conversion, List<String> keptKeys) {
+        Map<String, E2eSidecarClient.ConvertedFile> byKey = new HashMap<>();
+        for (E2eSidecarClient.ConvertedFile f : conversion.files()) {
+            if (f == null || f.seriesKey() == null || f.file() == null || f.sha256() == null
+                    || !CONVERTED_NAME.matcher(f.file()).matches() || !SHA256.matcher(f.sha256()).matches()
+                    || byKey.put(f.seriesKey(), f) != null) {
+                LOG.warn("Split E2E upload refused: the converter listed an unusable file");
+                throw SplitUploadRejection.of(502, "The image converter's conversion answer was not usable.");
+            }
+        }
+        if (!byKey.keySet().equals(new HashSet<>(keptKeys))) {
+            LOG.warn("Split E2E upload refused: the converter did not return exactly the kept series");
+            throw SplitUploadRejection.of(502, "The image converter did not return the requested series.");
+        }
+        return byKey;
+    }
+
+    /** Copies one converted DICOM into the ingest store and checks it is the file the converter wrote. */
+    private IngestArtifactStore.Stored importConverted(Path dir, E2eSidecarClient.ConvertedFile cf, List<Path> written) {
+        Path src = dir.resolve(cf.file()).normalize();
+        if (!src.startsWith(dir.normalize()) || !Files.isRegularFile(src, LinkOption.NOFOLLOW_LINKS)) {
+            LOG.warn("Split E2E upload refused: a converted file is missing or outside its directory");
+            throw SplitUploadRejection.of(502, "The image converter's output could not be read.");
+        }
+        IngestArtifactStore.Stored stored;
+        try (InputStream in = Files.newInputStream(src)) {
+            stored = store.store(IngestArtifactStore.Kind.DICOM, in, cf.file());
+        } catch (IOException e) {
+            LOG.error("Split E2E upload - could not store a converted DICOM: {}", e.getClass().getSimpleName());
+            throw SplitUploadRejection.of(500, "could not store the file");
+        }
+        written.add(stored.path());
+        if (!stored.sha256().equalsIgnoreCase(cf.sha256()) || (cf.bytes() != null && cf.bytes() != stored.byteSize())) {
+            LOG.warn("Split E2E upload refused: a converted file changed on its way into the store");
+            throw SplitUploadRejection.of(502, "The image converter's output did not arrive intact.");
+        }
+        return stored;
+    }
+
+    /** The DICOM sidecar's description of a stored DICOM; it also rewrites the file's identity in place. */
+    private DicomDescribeClient.Description describeDicom(Path stored, String pseudonym, List<Path> written) {
+        try {
+            DicomDescribeClient.Description desc = dicom.describe(stored, pseudonym);
+            if (desc.previewPngPath() != null) written.add(Path.of(desc.previewPngPath()));
+            return desc;
+        } catch (DicomDescribeClient.DescribeException e) {
+            LOG.warn("Split E2E upload - the DICOM service refused a converted file: {}", e.reason());
+            switch (e.reason()) {
+                case UNCONFIGURED, UNREACHABLE -> throw SplitUploadRejection.of(503,
+                        "DICOM uploads are not available right now - the DICOM service is not reachable");
+                case NOT_DICOM -> throw SplitUploadRejection.of(502, "The converter wrote a file that is not DICOM.");
+                default -> throw SplitUploadRejection.of(502, "the DICOM service could not process the file");
+            }
+        }
     }
 
     /* ------------------------------------------------------------------ */
     /* helpers                                                             */
     /* ------------------------------------------------------------------ */
 
-    private ResponseEntity<?> duplicate(List<Long> ids) {
-        Map<String, Object> dup = new LinkedHashMap<>();
-        dup.put("message", MESSAGE_DUPLICATE);
-        dup.put("duplicate", true);
-        dup.put("existingIngestItemIds", ids);
-        return ResponseEntity.status(409).body(dup);
+    /**
+     * Starts what the visit's imaging plan wants for a bound OCT volume, through the DICOM OCT path
+     * (the same call a DICOM OCT upload and an inbox bind make); returns the jobs it created.
+     * An OCT volume with no eye in the file gets none: the preprocess step needs the eye.
+     */
+    private List<E2eSplitJobDto> startAnalyses(long itemId, Planned p, IngestBindService.Actor actor) {
+        if (p.park() || !"OCT".equals(p.kind()) || p.laterality() == null
+                || !Boolean.TRUE.equals(OctVolumes.of(p.desc()))) {
+            return List.of();
+        }
+        try {
+            RetinalJobFollower.Ensured e = follower.ensure(itemId, actor, false);
+            LOG.info("Split E2E upload - ingest_item {} is a DICOM OCT volume: {} analysis(es) started{}",
+                    itemId, e.started(), e.skippedBecause() == null ? "" : " (" + e.skippedBecause() + ")");
+        } catch (SQLException | RuntimeException e) {
+            LOG.error("Split E2E upload - ingest_item {} is filed, but its analyses could not start: {}",
+                    itemId, e.getMessage());
+        }
+        List<E2eSplitJobDto> jobs = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT job_id, task, status FROM retinal_inference_job "
+                             + " WHERE ingest_item_id = ? AND status <> 'cancelled' ORDER BY job_id")) {
+            ps.setLong(1, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) jobs.add(new E2eSplitJobDto(rs.getLong(1), rs.getString(2), rs.getString(3)));
+            }
+        } catch (SQLException e) {
+            LOG.warn("Split E2E upload - could not list the jobs of ingest_item {}: {}", itemId, e.getMessage());
+        }
+        return jobs;
+    }
+
+    private Long findBySopInstanceUid(Connection c, String sop) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT ingest_item_id FROM ingest_item WHERE sop_instance_uid = ? LIMIT 1")) {
+            ps.setString(1, sop);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : null;
+            }
+        }
+    }
+
+    /** The catalogue's device key for a described DICOM; the export is a Spectralis one when it says nothing. */
+    private static String deviceOf(DicomDescribeClient.Description desc) {
+        String key = IngestUploadService.deviceKeyFromModel(desc.manufacturerModelName(), desc.manufacturer());
+        return key != null ? key : "spectralis";
+    }
+
+    private static String seriesFileName(Planned p) {
+        return p.kind() + "_" + (p.laterality() == null ? "NA" : p.laterality()) + "_" + p.key() + ".dcm";
+    }
+
+    /** {@code excludeSeries}: comma-separated keys; a malformed one is a 400 before anything is stored. */
+    static Set<String> parseExcluded(String raw) {
+        Set<String> out = new LinkedHashSet<>();
+        if (raw == null || raw.isBlank()) return out;
+        for (String part : raw.split(",")) {
+            String key = part.trim();
+            if (key.isEmpty()) continue;
+            if (!SERIES_KEY.matcher(key).matches()) {
+                throw SplitUploadRejection.of(400, "excludeSeries holds a malformed series key");
+            }
+            out.add(key);
+            if (out.size() > MAX_EXCLUDED) {
+                throw SplitUploadRejection.of(400, "excludeSeries names too many series");
+            }
+        }
+        return out;
     }
 
     private static void discard(Path p) {
@@ -496,6 +624,28 @@ final class E2eSplitUpload {
             Files.deleteIfExists(p);
         } catch (IOException ignored) {
             // an orphan file is harmless; ops can clear it
+        }
+    }
+
+    /** Depth-first delete of the conversion directory; never follows a link. */
+    private static void deleteTree(Path dir) {
+        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) return;
+        try {
+            Files.walkFileTree(dir, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Files.delete(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path d, IOException exc) throws IOException {
+                    Files.delete(d);
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            LOG.warn("could not remove a conversion directory: {}", e.getClass().getSimpleName());
         }
     }
 
@@ -534,45 +684,5 @@ final class E2eSplitUpload {
         if (raw == null) return null;
         String l = raw.trim().toUpperCase(Locale.ROOT);
         return "OD".equals(l) || "OS".equals(l) ? l : null;
-    }
-
-    /**
-     * Preprocess each OCT volume that has jobs (the sidecar converts one
-     * {@code scan_index} per call, streaming the stored file), then hand the
-     * jobs to the GPU host. Soft-failing, as the per-volume path is.
-     */
-    private void runJobs(List<Planned> planned, List<List<Map<String, Object>>> jobs, Path saved,
-                         String originalName, boolean dispatchToRemote) {
-        String uuid = RetinalJobAccess.artifactKey(saved.toString());
-        for (int i = 0; i < planned.size(); i++) {
-            Planned p = planned.get(i);
-            List<Map<String, Object>> js = jobs.get(i);
-            long primary = ((Number) js.get(0).get("jobId")).longValue();
-            if (remoteClient != null) {
-                try {
-                    var prep = remoteClient.preprocessUploadFile(primary,
-                            originalName != null ? originalName : saved.getFileName().toString(),
-                            saved, p.laterality(), uuid, p.scanIndex());
-                    if (prep == null) {
-                        LOG.warn("Preprocess returned nothing for split upload (primary job {})", primary);
-                    }
-                } catch (Exception e) {
-                    LOG.warn("Preprocess threw for split upload (primary job {}): {}", primary,
-                            e.getClass().getSimpleName());
-                }
-            }
-            if (dispatchToRemote && inferenceController != null) {
-                for (Map<String, Object> info : js) {
-                    long jid = ((Number) info.get("jobId")).longValue();
-                    try {
-                        inferenceController.handleRemote(jid, String.valueOf(info.get("task")), saved.toString(),
-                                p.laterality(), p.scanIndex(), p.eventCrfId());
-                    } catch (Exception e) {
-                        LOG.warn("Remote dispatch threw for split upload job {}: {}", jid,
-                                e.getClass().getSimpleName());
-                    }
-                }
-            }
-        }
     }
 }

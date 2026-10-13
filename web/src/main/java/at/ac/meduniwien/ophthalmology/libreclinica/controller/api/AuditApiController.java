@@ -945,6 +945,8 @@ public class AuditApiController {
                  AuditTypeIds.LOCATION_ADMIN_GRANTED, AuditTypeIds.LOCATION_ADMIN_REVOKED,
             // Rows placed at the one location by a single-mode start (208).
                  AuditTypeIds.LOCATION_BACKFILLED,
+            // E2E source copies deleted by the retention pass (209).
+                 AuditTypeIds.E2E_SOURCE_DELETED,
             // CRF name / description edit (142) and a batch move of event
             // CRFs to another CRF version (143, one row per run).
                  AuditTypeIds.CRF_FIELD_UPDATED, AuditTypeIds.EVENT_CRF_BATCH_MIGRATION -> "admin";

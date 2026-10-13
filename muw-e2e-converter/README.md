@@ -83,6 +83,28 @@ png = render_series_png(Path("/uploads/3f2b8c1e.e2e"), "s3", frame=0)  # bytes
   OCT line scan; the IR localizer of an OCT volume. 8-bit greyscale PNG with no text or other
   ancillary chunks. Raises `KeyError` (unknown series key) or `IndexError` (frame out of range).
 
+## One DICOM per series: `convert_series`
+
+```python
+from muw_e2e_converter import convert_series
+
+files = convert_series(Path("/uploads/3f2b8c1e.e2e"), "EIAMD005", ["s0", "s4"], Path("/convert/3f2b8c1e"))
+# [{"seriesKey": "s0", "file": "s0.dcm", "sha256": "...", "bytes": 98700000, "frames": 97,
+#   "sopClassUid": "1.2.840.10008.5.1.4.1.1.77.1.5.4", "seriesModality": "OCT",
+#   "geometryFile": "s0.geometry.json"}, ...]
+```
+
+Walks the chunk index once and decodes each requested series once, one at a time (memory stays near
+one volume's raw words; `read_oct_volume()`, which holds every volume decoded, is not used). An OCT
+volume or line scan is written by `write_bscan_dcm` with the pixel values `read_e2e_volume` gives; the scale
+`65535 / max` is taken from the set of distinct raw values, so no float64 volume is held. An OCT volume also
+gets `<seriesKey>.geometry.json` (`build_geometry`, from the series' own B-scan records). Everything else
+becomes an Ophthalmic Photography 8 Bit image (MONOCHROME2, uncompressed, multi-frame for several images).
+`PatientID`/`PatientName` are the label and nothing else; UIDs derive from the file's SHA-256 and the series
+key (re-converting gives identical bytes). Each written file is read back and checked. `KeyError` for an
+unknown key (nothing written), `ValueError` for a malformed or empty key list. HTTP form:
+`retinal-inference` `POST /e2e/convert`.
+
 ## Deployment
 
 ```sh

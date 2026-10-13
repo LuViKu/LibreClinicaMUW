@@ -8,7 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -33,19 +32,18 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * DR-041 - the client for the converter sidecar's /e2e/describe and
- * /e2e/series-image: what it sends, what it makes of the answer, and which
+ * /e2e/convert: what it sends, what it makes of the answer, and which
  * status each kind of failure maps to.
  */
 public class E2eSidecarClientTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final byte[] PNG = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
 
     private HttpServer server;
     private volatile int status = 200;
     private volatile String body = "";
     private final AtomicReference<JsonNode> request = new AtomicReference<>();
-    private final AtomicReference<String> query = new AtomicReference<>();
+    private final AtomicReference<JsonNode> convertRequest = new AtomicReference<>();
     private final AtomicReference<String> token = new AtomicReference<>();
 
     private String baseUrl;
@@ -59,10 +57,10 @@ public class E2eSidecarClientTest {
             token.set(ex.getRequestHeaders().getFirst("X-MUW-Inference-Token"));
             reply(ex, status, body.getBytes(StandardCharsets.UTF_8));
         });
-        server.createContext("/e2e/series-image", ex -> {
-            query.set(ex.getRequestURI().getRawQuery());
+        server.createContext("/e2e/convert", ex -> {
+            convertRequest.set(JSON.readTree(ex.getRequestBody()));
             token.set(ex.getRequestHeaders().getFirst("X-MUW-Inference-Token"));
-            reply(ex, status, status == 200 ? PNG : new byte[0]);
+            reply(ex, status, body.getBytes(StandardCharsets.UTF_8));
         });
         server.start();
         baseUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/";
@@ -89,7 +87,8 @@ public class E2eSidecarClientTest {
             @Override protected String baseUrl() { return baseUrl; }
             @Override protected String token() { return configuredToken; }
             @Override protected Duration describeTimeout() { return Duration.ofSeconds(5); }
-            @Override protected Duration imageTimeout() { return Duration.ofSeconds(5); }
+            @Override protected Duration convertTimeout() { return Duration.ofSeconds(5); }
+            @Override protected java.nio.file.Path convertRoot() { return java.nio.file.Path.of("/convert-root"); }
         };
     }
 
@@ -193,36 +192,86 @@ public class E2eSidecarClientTest {
                 assertEquals(bad, 502, e.httpStatus());
             }
             try {
-                client().seriesImage(bad, "s1", 0);
+                client().convert(bad, "X", List.of("s1"));
                 fail(bad);
             } catch (E2eSidecarClient.SidecarException e) {
                 assertEquals(bad, 502, e.httpStatus());
             }
         }
         assertNull("nothing reached the sidecar", request.get());
+        assertNull("nothing reached the sidecar", convertRequest.get());
     }
 
     @Test
-    public void seriesImageReturnsThePngAndEncodesItsQuery() {
-        byte[] png = client().seriesImage("3f2b-aa.e2e", "s 3&x", 2);
-        assertArrayEquals(PNG, png);
+    public void convertSendsTheNameLabelAndKeysAndReadsTheFiles() {
+        body = "{\"files\":[{\"seriesKey\":\"s3\",\"file\":\"s3.dcm\",\"sha256\":\"" + "ab".repeat(32)
+                + "\",\"bytes\":1234,\"frames\":97,\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.4\","
+                + "\"geometryFile\":\"s3.geometry.json\",\"somethingNew\":1},"
+                + "{\"seriesKey\":\"s4\",\"file\":\"s4.dcm\",\"sha256\":\"" + "cd".repeat(32)
+                + "\",\"bytes\":99,\"frames\":1,\"sopClassUid\":\"1.2.840.10008.5.1.4.1.1.77.1.5.1\"}]}";
+
+        E2eSidecarClient.Conversion c = client().convert("3f2b8c1e-aa.e2e", "EIAMD005", List.of("s3", "s4"));
+
+        assertEquals("3f2b8c1e-aa.e2e", convertRequest.get().path("storedName").asText());
+        assertEquals("EIAMD005", convertRequest.get().path("label").asText());
+        assertEquals("s3", convertRequest.get().path("seriesKeys").get(0).asText());
+        assertEquals(2, convertRequest.get().path("seriesKeys").size());
         assertEquals("tok", token.get());
-        String q = query.get();
-        assertTrue(q, q.contains("storedName=3f2b-aa.e2e"));
-        assertTrue(q, q.contains("seriesKey=s%203%26x"));
-        assertTrue(q, q.contains("frame=2"));
+        assertEquals(java.nio.file.Path.of("/convert-root/3f2b8c1e-aa"), c.directory());
+        assertEquals(2, c.files().size());
+        E2eSidecarClient.ConvertedFile f = c.files().get(0);
+        assertEquals("s3", f.seriesKey());
+        assertEquals("s3.dcm", f.file());
+        assertEquals(Long.valueOf(1234), f.bytes());
+        assertEquals(Integer.valueOf(97), f.frames());
+        assertEquals("s3.geometry.json", f.geometryFile());
+        assertNull(c.files().get(1).geometryFile());
     }
 
     @Test
-    public void anUnknownSeriesIsNullAndAFailureIs502() {
-        status = 404;
-        assertNull(client().seriesImage("a.e2e", "nope", 0));
-        status = 500;
+    public void convertWithoutALabelLeavesItOut() {
+        body = "{\"files\":[{\"seriesKey\":\"s1\",\"file\":\"s1.dcm\",\"sha256\":\"x\",\"bytes\":1,\"frames\":1}]}";
+        client().convert("a.e2e", null, List.of("s1"));
+        assertFalse(convertRequest.get().has("label"));
+    }
+
+    @Test
+    public void convertFailuresAreMappedLikeDescribe() {
+        status = 400; // unknown series
         try {
-            client().seriesImage("a.e2e", "s1", 0);
+            client().convert("a.e2e", "X", List.of("s1"));
             fail();
         } catch (E2eSidecarClient.SidecarException e) {
             assertEquals(502, e.httpStatus());
+            assertTrue(e.getMessage().contains("400"));
+        }
+        status = 200;
+        body = "{\"files\":[]}";
+        try {
+            client().convert("a.e2e", "X", List.of("s1"));
+            fail("a conversion without files is not a usable answer");
+        } catch (E2eSidecarClient.SidecarException e) {
+            assertEquals(502, e.httpStatus());
+        }
+        body = "nope";
+        try {
+            client().convert("a.e2e", "X", List.of("s1"));
+            fail();
+        } catch (E2eSidecarClient.SidecarException e) {
+            assertEquals(502, e.httpStatus());
+        }
+        try {
+            client().convert("a.e2e", "X", List.of());
+            fail();
+        } catch (E2eSidecarClient.SidecarException e) {
+            assertEquals(502, e.httpStatus());
+        }
+        baseUrl = "http://127.0.0.1:1/";
+        try {
+            client().convert("a.e2e", "X", List.of("s1"));
+            fail();
+        } catch (E2eSidecarClient.SidecarException e) {
+            assertEquals(503, e.httpStatus());
         }
     }
 }

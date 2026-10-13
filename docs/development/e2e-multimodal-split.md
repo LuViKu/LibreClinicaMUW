@@ -1,6 +1,6 @@
 # Multimodal Spectralis exports: one upload, one item per series
 
-**Status:** in progress, 2026-10-13 (server side implemented, see below). Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
+**Status:** in progress, 2026-10-14. Server side implemented, including the amendment (b) storage model (one DICOM per series, `excludeSeries`, typed responses; see "Implemented (amendment b)" at the end). The browser preview is built separately. Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
 
 ## Why
 
@@ -177,6 +177,8 @@ Response `201`:
 
 ### Implemented (server side, 2026-10-13)
 
+> **Superseded in part by amendment (b), below.** Items are now DICOM rows with their own file, not `e2e` rows sharing one stored path; there are no `/preprocess` calls on the `.e2e`; the `series-image` proxy is gone; `scan_index` is not set. Rules 1, 3, 6, 8 and 9 above and the bullets "Analysable", "Jobs", "Inbox" and "Retention and undo" below describe the first build; "Implemented (amendment b)" has the current behaviour. Binding, parking, modality tokens, limits and the failure statuses are unchanged.
+
 Built as specified, with these details worth knowing:
 
 - **Entry points.** `split=true` on `POST …/public/upload/commit` and `POST …/ingest/upload/commit`, and `?sha256=…&split=true` on both preflights (`{exists, split:true, existingIngestItemIds:[…]}`). `eventCrfId`, `scanDate` and `laterality` are refused with 400 in split mode (use `studyEventId` or `park`). On the staff route `split=true` answers 400 while de-identification is required (that path keeps its per-volume behaviour).
@@ -263,3 +265,52 @@ These are maintainer decisions taken after the first build. They change the stor
 - The Python suite and the SPA suite both assert their parser against these files, so the browser and the server cannot drift apart.
 
 **Typed responses.** The split commit and preflight return typed DTOs, so `api.ts` generates their types and the SPA uses the generated ones.
+
+### Implemented (amendment b, server side, 2026-10-14)
+
+**Sidecar.** `muw_e2e_converter.convert_series(path, label, series_keys, out_dir)` and `POST /e2e/convert` (`retinal-inference`, same gating as `/e2e/describe`; contract in [`retinal-inference/docs/e2e-series-endpoints.md`](../../retinal-inference/docs/e2e-series-endpoints.md)). The chunk index is built once per file (cached; `describe` and `convert` share it) and each requested series is decoded once, one at a time.
+
+- **OCT.** `write_bscan_dcm` writes the volume or line scan, 16-bit, with exactly the pixel values `read_e2e_volume` gives (a test compares every voxel). The scale `65535 / max` comes from the set of distinct raw values, so the volume is never held as float64: a 97 x 496 x 1024 volume costs about 100 MB of raw words. A volume also gets `<seriesKey>.geometry.json`.
+- **En-face.** A new Ophthalmic Photography 8 Bit writer (pydicom): MONOCHROME2, uncompressed, multi-frame when the series has several images.
+- **Identity.** `PatientID` and `PatientName` are the label; birth date, sex and age are blank; the E2E's first-name and patient-ID slots are never read. Laterality, acquisition date/time and Manufacturer come from the series. UIDs derive from the file's SHA-256 and the series key, so re-converting gives byte-identical files. Every written file is read back and its frame count, size and pixel digest checked.
+- **Finding.** The old path took the B-scan geometry records of the whole file (`read_all_metadata()['bscan_data']`) for every volume, so the second and later volumes of a file got the first volume's lateral and slice spacing. `convert_series` uses the series' own records. On the real export below, the slice spacing of the four volumes was 0.0619-0.0629 mm against 0.0654 mm from the old path (the 6 x 6 mm cube the geometry notes describe gives about 0.062); axial spacing is identical. The pixels are identical.
+
+**Server** (`E2eSplitUpload`, both controllers, `split=true`):
+
+1. The `.e2e` is streamed to `e2eUploadsPath/<uuid>.e2e` (digest on the way). A digest already in `ingest_item.e2e_source_sha256` (or an item of the first layout) is a `409` before anything else.
+2. `describe`. Then `excludeSeries` (comma-separated keys, validated for shape first) is checked against that list: an unknown key is a `400`, excluding every series is a `400`, and in both cases nothing was converted, stored or itemised.
+3. The label rule is unchanged (header surname, folder must agree, only a label that resolves to one visible subject is written down). The label handed to the converter, and later to the DICOM sidecar, is the matched subject's own label, or none while the file is parked.
+4. `POST /e2e/convert` for the kept series. The app copies each file into the DICOM ingest store (`IngestArtifactStore`, digest checked against the converter's), has the DICOM sidecar describe and pseudonymise it in place (the existing DICOM upload step: preview PNG, SOP UIDs, pixel digest, OCT classification), and files it as an ordinary `kind='dicom'` row. The row keeps `e2e_series_key`, `series_modality`, `series_frames`, and the new `e2e_source_sha256`. `original_filename` is `<kind>_<eye>_<key>.dcm`: the E2E's own name derives from the patient's name and is not kept. `scan_index` is not set.
+5. The rows are written in one transaction. Same-picture detection (DR-036) now runs for every series, on the DICOM sidecar's pixel digest; a series whose picture is already here is parked and audited as held back. The unique index `(e2e_source_sha256, e2e_series_key)` refuses two concurrent uploads of one export.
+6. **OCT through the DICOM path (DR-039).** A bound OCT volume with an eye is handed to `RetinalJobFollower.ensure`, exactly as a DICOM OCT upload and an inbox bind do: the study's inference switch and the visit plan decide the tasks, the job names the item's own DICOM, `/preprocess` receives that DICOM, and `handleRemote` follows. `IR`, `FA`, line scans and parked items start nothing. The response lists the jobs under their item.
+7. After the commit the `.e2e` moves to `core.retinalInference.e2eSourcePath` (its modification time set to the move, so the retention window starts at the upload) and the convert directory is removed. On any failure before the commit the staged file, the stored DICOMs and their previews, and the convert directory are all removed. A converter or DICOM sidecar that is not configured or reachable is a `503`, an error or an unusable answer a `502`.
+
+**Response** (`201`, `E2eSplitCommitResponse`): `sha256` (of the `.e2e`), `headerPatient`, `subjectLabel`, `parked`, `items[]` (`ingestItemId`, `seriesKey`, `seriesModality`, `laterality`, `acquisitionDate`, `frames`, `imagingModalityId`, `status`, `jobs[]`, `heldBack`, `sameImageAs`), `excluded[]` (the left-out `seriesKey`s), and `kind`/`format` = `e2e`. `409` is `E2eSplitDuplicateResponse` (`message`, `duplicate`, `existingIngestItemIds`). The preflight (`?sha256=&split=true`) is `E2eSplitPreflightResponse` (`exists`, `split`, `existingIngestItemIds`) and also finds an export whose source copy has been deleted.
+
+**Typed responses.** The split commit and the split preflight are their own handler methods on both controllers (`params = "split=true"`), returning the DTO records directly; every other outcome is thrown as `SplitUploadRejection` and written by `ApiExceptionHandler` with the same status and body as before. `api.ts` generates the types from the OpenAPI spec.
+
+**Previews.** A series item is an ordinary DICOM item, so the inbox uses the existing `/ingest/{id}/preview` (the DICOM sidecar's PNG). `GET /ingest/{id}/series-image`, its sidecar client method and the `previewUrl` special case are removed. The sidecar's `GET /e2e/series-image` stays (diagnostics, parity tests); the app does not use it, and the browser renders its own thumbnails before upload.
+
+**Retention.** `E2eSourceRetentionService` and a nightly Quartz job (03:45) delete `<uuid>.e2e` files in `e2eSourcePath` older than `core.retinalInference.e2eSourceRetentionDays` (default 90) by modification time, one audit row (type 209 `e2e_source_deleted`) per pass that deleted something. Only regular `<uuid>.e2e` files directly in that directory are touched. The items stay. The shared-stored-file logic (retention of dismissed items, undo) is kept for rows of the first layout; new items have a file of their own, which the existing dismissed-item sweep and the undo delete with the row.
+
+**Migration** `lc-muw-2026-10-14-e2e-source.xml`: `ingest_item.e2e_source_sha256`, unique `(e2e_source_sha256, e2e_series_key)` where set, audit type 209; each with a rollback.
+
+**Directories.** `e2e-convert` (app and sidecar, read-write) and `e2e-source` (app only) in `compose.yaml`, `deploy/compose.production.yaml`, `setup-ubuntu-host.sh` (and the nightly backup list), `.gitignore`; settings `core.retinalInference.e2eConvertPath`, `e2eSourcePath`, `e2eSourceRetentionDays` in `datainfo.properties`. See [deploy/README.md](../../deploy/README.md).
+
+**Real export, checked read-only** (one 599 MB export, 38 series, in a container, nothing printed that identifies anyone):
+
+| Series kind | Series | Frames | DICOM bytes |
+|---|---|---|---|
+| OCT volume | 4 | 388 | 394.2 MB (largest 98.5 MB) |
+| OCT line scan | 4 | 4 | 4.6 MB |
+| IR | 2 | 2 | 4.7 MB |
+| BAF | 2 | 2 | 4.7 MB |
+| BR | 2 | 2 | 4.7 MB |
+| IRAF | 2 | 2 | 4.7 MB |
+| qAF | 8 | 96 | 56.6 MB |
+| ICGA | 14 | 26 | 61.4 MB |
+| **Total** | **38** | | **535.6 MB** |
+
+`convert_series` for all 38 took 16.1 s with a peak of 397 MB resident (417 MB after a second conversion of three series, which gave identical digests); the `describe` step took 8.2 s on its first read through the container's bind mount. `read_oct_volume()` for one volume takes 7 s and 2.1 GB. Every file re-read with the frame, row and column counts that `describe` gave. The four OCT DICOMs went through `read_dicom_oct` and the de-identification check and matched the `.e2e` path: frames (97), dimensions (496 x 1024), eye, acquisition date, spacing order `standard`, axial spacing and every pixel; lateral spacing differs by at most 1.5 % and slice spacing by about 5 % for the reason under "Finding".
+
+**Deviations.** `excluded` is a list of keys, not objects. `original_filename` is a generated name. Same-picture detection no longer matches an earlier `.e2e`-fingerprinted row (a different digest algorithm). A dense OCT scan whose lateral spacing is also about 3.9 um is refused by `/preprocess` as `spacing_ambiguous` (the DICOM path decides the axial value physically and does not trust the file's own writer mark, by design); the real exports have 5.7-5.8 um.

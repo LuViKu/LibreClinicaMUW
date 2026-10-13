@@ -144,7 +144,7 @@ above for the host-hardening scope split.
    stay on the build host where they belong — a few MB instead of
    ~150 MB on disk). Seeds `/opt/libreclinica/config/` from
    `docker/config/`. Creates
-   `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference,retinal-artifacts,dicom-ingest,ingest}` and
+   `/var/lib/libreclinica/{postgres,e2e-uploads,e2e-convert,e2e-source,retinal-inference,retinal-artifacts,dicom-ingest,ingest}` and
    `/var/backups/libreclinica/`. The sparse-checkout pattern is
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.
@@ -1035,9 +1035,37 @@ rate limits (login 20/min, `RequestAccount`/`Contact` 6/min, 50 r/s overall, 100
 and a `default_server` that refuses an unknown `Host` / TLS SNI (the DMZ proxy must send the public name
 as both).
 
+### Multimodal Spectralis exports: one DICOM per series, the `.E2E` as a time-limited source copy
+
+An `.E2E` upload (watcher or browser, `split=true`) is converted on the server into **one DICOM per series**
+(DR-041, [the design](../docs/development/e2e-multimodal-split.md)). The directories involved, all under
+`/var/lib/libreclinica/` and created by `setup-ubuntu-host.sh`:
+
+| Directory | Who mounts it | What is in it |
+|---|---|---|
+| `e2e-uploads` | app (read-write), `retinal-inference` (read-only) | The uploaded `.E2E` while it is described and converted (seconds to minutes). Empty in normal operation: a successful upload moves the file to `e2e-source`, a failed one deletes it. |
+| `e2e-convert` | app **and** `retinal-inference`, both read-write | `<upload uuid>/<seriesKey>.dcm` (+ `.geometry.json` for an OCT volume) written by `POST /e2e/convert`. The app imports the files into the ingest store and removes the directory; a failed conversion removes it too. |
+| `e2e-source` | **app only** | The original `.E2E` of each split upload, kept for `core.retinalInference.e2eSourceRetentionDays`. Nothing serves or analyses it. Mode `0700`. |
+| `ingest/dicom` | app, `dicom-scp` | The converted DICOMs, as for any DICOM upload (the DICOM sidecar pseudonymises each in place and renders its preview). |
+
+**Retention of the source copy.** `core.retinalInference.e2eSourceRetentionDays` (in
+`/opt/libreclinica/config/datainfo.properties`, default **90**) is how long the original `.E2E` is kept. A nightly
+job (03:45) deletes `<uuid>.e2e` files in `e2e-source` older than that (by modification time, which the
+move into the directory sets to the upload time) and writes one audit row per pass (type `e2e_source_deleted`,
+visible in the system audit log). The **items made from the file stay**: each is a DICOM with its own
+stored file and its own retention (a dismissed item is removed after `core.ingest.retention.dismissedDays`),
+and each keeps the file's SHA-256 (`ingest_item.e2e_source_sha256`), so uploading the same export again is still
+answered `409` and the watcher's preflight still finds it. To keep source copies longer, raise the setting before the
+window passes; a deleted source cannot be recovered except from a backup (`e2e-source` is in the nightly file
+archive). `core.retinalInference.e2eSourcePath` and `core.retinalInference.e2eConvertPath` move the directories
+(the compose binds and the sidecar's `RETINAL_INFERENCE_E2E_CONVERT_PATH` must follow).
+
+An orphan `<uuid>.e2e` in `e2e-uploads` or a leftover directory in `e2e-convert` can only come from a crash in the
+middle of an upload; both are safe to delete when no upload is running.
+
 ### Backups
 
-- Nightly 03:00: database dump **and** the file stores (`e2e-uploads`, `retinal-artifacts`,
+- Nightly 03:00: database dump **and** the file stores (`e2e-uploads`, `e2e-source`, `retinal-artifacts`,
   `retinal-inference`, `ingest`, `dicom-ingest`, `app-data`), each encrypted to `BACKUP_AGE_RECIPIENT`
   (`libreclinica-<stamp>.sql.gz.age`, `libreclinica-files-<stamp>.tar.gz.age`). Nothing is written in clear.
 - A **full** archive of the file stores each night: size it accordingly (OCT volumes are large). Retention

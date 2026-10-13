@@ -51,15 +51,11 @@ public final class OctVolumes {
     /**
      * Whether a file of this kind can be analysed: an {@code .e2e}, or a
      * DICOM classified as an OCT volume. An unclassified DICOM is not.
-     *
-     * <p>DR-041 — one series of a split multimodal {@code .e2e} (IR, FA, an OCT
-     * line scan, ...) is stored as kind {@code e2e} with {@code oct_volume}
-     * FALSE; it is not analysable. A legacy {@code .e2e} row has NULL.
      */
     public static boolean isAnalysable(String kind, Boolean octVolume) {
         if (kind == null) return false;
         String k = kind.trim().toLowerCase(Locale.ROOT);
-        if ("e2e".equals(k)) return !Boolean.FALSE.equals(octVolume);
+        if ("e2e".equals(k)) return true;
         return "dicom".equals(k) && Boolean.TRUE.equals(octVolume);
     }
 }

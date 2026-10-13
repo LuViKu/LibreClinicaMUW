@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,8 +34,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -169,19 +175,33 @@ public class IngestUploadApiController {
     @GetMapping(value = "/preflight", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> preflightStaffUpload(@RequestParam("sha256") String sha256,
                                        @RequestParam(value = "scanIndex", required = false) Integer scanIndex,
-                                       @RequestParam(value = "split", defaultValue = "false") boolean split,
                                        HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
         if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
             return ResponseEntity.badRequest().body(Map.of("message", "sha256 must be 64 hex characters"));
         }
-        if (split) {
-            return ResponseEntity.ok(oct.preflightSplit(sha256, visibility().visibleTo(session)));
-        }
         // Only files this session may see count as "already there"; a file of
         // a site the caller has no access to would otherwise be named by id.
         return ResponseEntity.ok(uploads.preflight(sha256, scanIndex, visibility().visibleTo(session)));
+    }
+
+    /**
+     * DR-041 - is this multimodal {@code .e2e} already split into one item per series? Only items this
+     * session may see are named; {@code exists} is true when any item exists.
+     */
+    @GetMapping(value = "/preflight", params = "split=true", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(operationId = "preflightSplitStaffUpload",
+            summary = "Is this multimodal .e2e already split into one item per series?")
+    public E2eSplitPreflightResponse preflightSplitStaffUpload(@RequestParam("sha256") String sha256,
+                                                               @RequestParam("split") boolean split,
+                                                               HttpSession session) {
+        ResponseEntity<?> guard = guards(session);
+        if (guard != null) throw SplitUploadRejection.from(guard);
+        if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
+            throw SplitUploadRejection.of(400, "sha256 must be 64 hex characters");
+        }
+        return oct.preflightSplit(sha256, visibility().visibleTo(session));
     }
 
     /* ---------------- the upload ---------------- */
@@ -199,8 +219,6 @@ public class IngestUploadApiController {
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
             @RequestParam(value = "park", defaultValue = "false") boolean park,
             @RequestParam(value = "device", required = false) String device,
-            // DR-041 - a multimodal .e2e is split on the server into one item per series.
-            @RequestParam(value = "split", defaultValue = "false") boolean split,
             // Required de-identification (libreclinica.ingest.deidentification.required):
             // the browser's confirmation that it stripped the file, and the
             // SHA-256 of the bytes it sent, which the server checks.
@@ -255,29 +273,6 @@ public class IngestUploadApiController {
                             violations, pass.sha256(), "staff"));
         }
 
-        if (split) {
-            // The browser de-identification path keeps its per-volume behaviour.
-            if (deidRequired) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "message", "split=true is not available while de-identification is required"));
-            }
-            if (sniffed.kind() != IngestArtifactStore.Kind.E2E) {
-                return ResponseEntity.badRequest().body(Map.of("message", "split=true is only for .e2e files"));
-            }
-            if (!UploadRoute.isBlank(date) || !UploadRoute.isBlank(laterality)) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "message", "scanDate and laterality are taken from the file with split=true"));
-            }
-            String pid = patientId;
-            if (UploadRoute.isBlank(pid) && visit != null) {
-                pid = UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
-            }
-            ResponseEntity<?> r = oct.commitSplitStaff(file, pid == null ? "" : pid, studyEventId, eventCrfId,
-                    park, access().visibleStudyIds(session), visibility().visibleTo(session));
-            attributeOctUpload(r, actor);
-            return UploadRoute.asE2e(r);
-        }
-
         if (sniffed.kind() == IngestArtifactStore.Kind.E2E) {
             String pid = patientId;
             if (deid == null && UploadRoute.isBlank(pid) && visit != null) {
@@ -305,6 +300,87 @@ public class IngestUploadApiController {
             }
         }
         return UploadRoute.respond(outcome);
+    }
+
+    /**
+     * DR-041 - a multimodal Spectralis {@code .e2e}, uploaded once and converted on the server into one
+     * DICOM per series (see {@link E2eSplitUpload}); the staff page's batch visit is {@code studyEventId}.
+     * {@code excludeSeries} is a comma-separated list of the {@code seriesKey}s to leave out. The browser
+     * de-identification path keeps its per-volume behaviour: while de-identification is required this
+     * answers 400.
+     */
+    @PostMapping(value = "/commit", params = "split=true", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(operationId = "commitSplitStaffUpload",
+            summary = "Upload a multimodal .e2e once; it is converted to one DICOM per series",
+            responses = {
+                @ApiResponse(responseCode = "201", description = "One item per kept series."),
+                @ApiResponse(responseCode = "400", description = "Unknown or malformed excludeSeries key, or every series excluded; nothing stored.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "404", description = "The visit does not exist (or is not visible).",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "409", description = "An export with this SHA-256 was already split.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitDuplicateResponse.class))),
+                @ApiResponse(responseCode = "422", description = "The file holds no image series.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "502", description = "The converter or the DICOM service answered with an error.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "503", description = "The converter or the DICOM service is not configured or not reachable.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class)))})
+    public E2eSplitCommitResponse commitSplitStaffUpload(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam("split") boolean split,
+            @RequestParam(value = "patientId", required = false) String patientId,
+            @RequestParam(value = "scanDate", required = false) String scanDate,
+            @RequestParam(value = "studyDate", required = false) String studyDate,
+            @RequestParam(value = "laterality", required = false) String laterality,
+            @RequestParam(value = "eventCrfId", required = false) Integer eventCrfId,
+            @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
+            @RequestParam(value = "park", defaultValue = "false") boolean park,
+            @RequestParam(value = "excludeSeries", required = false) String excludeSeries,
+            HttpSession session) {
+        ResponseEntity<?> guard = guards(session);
+        if (guard != null) throw SplitUploadRejection.from(guard);
+        if (file == null || file.isEmpty()) {
+            throw SplitUploadRejection.of(400, "file is required");
+        }
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            throw SplitUploadRejection.of(400, "split=true is not available while de-identification is required");
+        }
+        FileKindSniffer.Sniffed sniffed = UploadRoute.sniff(file);
+        if (sniffed == null) {
+            throw SplitUploadRejection.of(400, UploadRoute.UNSUPPORTED_MESSAGE);
+        }
+        if (sniffed.kind() != IngestArtifactStore.Kind.E2E) {
+            throw SplitUploadRejection.of(400, "split=true is only for .e2e files");
+        }
+        if (!UploadRoute.isBlank(scanDate) || !UploadRoute.isBlank(studyDate) || !UploadRoute.isBlank(laterality)) {
+            throw SplitUploadRejection.of(400, "scanDate and laterality are taken from the file with split=true");
+        }
+        // Whatever the kind, the visit has to be one this session may see.
+        Integer visit = studyEventId;
+        if (visit == null && eventCrfId != null) {
+            visit = UploadRoute.studyEventIdForEventCrf(dataSource, eventCrfId);
+            if (visit == null) {
+                throw SplitUploadRejection.of(404, "No event_crf with id " + eventCrfId);
+            }
+        }
+        if (visit != null) {
+            ResponseEntity<?> vis = guardVisit(visit, session);
+            if (vis != null) throw SplitUploadRejection.from(vis);
+        }
+        IngestBindService.Actor actor = actor(session);
+        String pid = patientId;
+        if (UploadRoute.isBlank(pid) && visit != null) {
+            pid = UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
+        }
+        E2eSplitCommitResponse r = oct.commitSplitStaff(file, pid == null ? "" : pid, studyEventId, eventCrfId,
+                park, excludeSeries, access().visibleStudyIds(session), visibility().visibleTo(session), actor);
+        for (E2eSplitItemDto item : r.items()) {
+            attributeOctItem(item.ingestItemId(), item.status(), actor);
+        }
+        return r;
     }
 
     /** Keep the browser's confirmation with the row the OCT route created. */
@@ -407,15 +483,6 @@ public class IngestUploadApiController {
     private void attributeOctUpload(ResponseEntity<?> r, IngestBindService.Actor actor) {
         if (!r.getStatusCode().is2xxSuccessful() || actor.isSystem()) return;
         if (!(r.getBody() instanceof Map<?, ?> body)) return;
-        if (body.get("items") instanceof java.util.List<?> items) {
-            // DR-041 - a split upload made one item per series.
-            for (Object it : items) {
-                if (it instanceof Map<?, ?> m && m.get("ingestItemId") instanceof Number num) {
-                    attributeOctItem(num.longValue(), String.valueOf(m.get("status")), actor);
-                }
-            }
-            return;
-        }
         Object idRaw = body.get("ingestItemId");
         if (!(idRaw instanceof Number n)) return;
         attributeOctItem(n.longValue(), String.valueOf(body.get("status")), actor);

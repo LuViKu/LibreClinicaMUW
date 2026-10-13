@@ -325,6 +325,15 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
                 at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LocationModeStartup.AUDIT_LOCATION_BACKFILLED);
     }
 
+    /** 209: the E2E source retention pass is an admin row, and core writes the same id. */
+    @Test
+    void variantForTheE2eSourceRetentionAndCoreAgreeOnItsId() {
+        assertEquals(209, AuditTypeIds.E2E_SOURCE_DELETED);
+        assertEquals("admin", AuditApiController.variantForType(AuditTypeIds.E2E_SOURCE_DELETED, null));
+        assertEquals(AuditTypeIds.E2E_SOURCE_DELETED,
+                at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eSourceRetentionService.AUDIT_TYPE_E2E_SOURCE_DELETED);
+    }
+
     /**
      * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
      * the filter parameter and reaches the SQL try-block. With the mock

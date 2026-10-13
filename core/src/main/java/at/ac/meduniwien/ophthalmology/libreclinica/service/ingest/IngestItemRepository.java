@@ -166,6 +166,11 @@ public final class IngestItemRepository {
         public Builder seriesModality(String v) { return set("series_modality", v, Types.VARCHAR); }
         /** DR-041 — number of frames in the series. */
         public Builder seriesFrames(Integer v) { return set("series_frames", v, Types.INTEGER); }
+        /**
+         * DR-041 (amendment b) — SHA-256 of the multimodal .E2E this row was converted from. Kept
+         * after the source file is deleted, so the same export is still refused as a duplicate.
+         */
+        public Builder e2eSourceSha256(String v) { return set("e2e_source_sha256", v, Types.VARCHAR); }
 
         /**
          * DR-036 — the digest of the picture the file shows, independent of
