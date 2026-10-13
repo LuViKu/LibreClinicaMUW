@@ -41,7 +41,7 @@ Before this change:
    - When it differs, every item of that file is parked in the inbox.
 4. **The drusen study is not configured yet.** Items park in the inbox until the study exists. The design must still bind them by modality once it does.
 
-> **Amended 2026-10-13 (subject rule).** Exports can land in one shared watch folder, so the folder cannot be relied on. The subject is the study label in the header's **surname** slot. The first-name and patient-ID slots can hold a clinic number and are never used. When the file sits in a patient folder, that folder must agree with the label; otherwise the file is parked. See [heidelberg-e2e-format-notes.md](heidelberg-e2e-format-notes.md). This supersedes decision 3 and the folder rules in Contract 3 below.
+> **Amended 2026-10-13 (subject rule).** Exports can land in one shared watch folder, so the folder cannot be relied on. The subject is the study label in the header's **surname** slot. The first-name and patient-ID slots can hold a clinic number and are never used, returned, sent, stored or logged. When the file sits in a patient folder, that folder must agree with the label; otherwise the file is parked. See [heidelberg-e2e-format-notes.md](heidelberg-e2e-format-notes.md). This supersedes decision 3; the contracts below are written to the amended rule (implemented 2026-10-13).
 
 ## Series kinds
 
@@ -67,14 +67,15 @@ Files are not uploaded again. The sidecar reads the stored file from the E2E upl
 Request (JSON):
 
 ```json
-{ "storedName": "3f2b8c1e-....e2e", "expectedLabel": "EIAMD005" }
+{ "storedName": "3f2b8c1e-....e2e", "expectedLabel": "EIAMD005" }   // expectedLabel is optional
 ```
 
 Response:
 
 ```json
 {
-  "headerPatient": "empty | matches | differs",
+  "headerPatient": "none | empty | matches | differs",
+  "headerLabel": "EIAMD005",
   "series": [
     {
       "seriesKey": "s3",
@@ -92,7 +93,7 @@ Response:
 }
 ```
 
-- **No identifying data.** The response never carries a name, a patient ID or a birth date. `headerPatient` compares the header ID with `expectedLabel` inside the sidecar.
+- **The label, and nothing else from the patient record.** `headerLabel` is the surname slot (chunk type 9, offset 31, 51 bytes) when every patient chunk in the file carries the same non-empty surname and it is a printable-ASCII token of 1 to 24 characters without spaces; otherwise `null`. `headerPatient` compares `expectedLabel` with the surname only: `none` when no `expectedLabel` was sent, else `empty`, `matches` (case-insensitive) or `differs`. The response never carries the first name, the patient ID slot or the birth date, and the sidecar never logs `headerLabel`.
 - **`seriesKey`** is stable for a given file: the same bytes always give the same keys. It is opaque to the app, and it is unique within the file.
 - **`octVolumeIndex`** is the index into `oct-converter`'s `read_oct_volume()`. It is the `scan_index` that the existing `/preprocess` call takes. It is `null` for en-face series.
 - **`laterality`** is `OD`, `OS` or `null`.
@@ -117,7 +118,7 @@ Multipart fields:
 
 - `file`: the whole `.E2E`, streamed.
 - `split=true`
-- `patientId`: the subject label, taken from the folder name.
+- `patientId` (optional): the folder the client found the file in, the immediate parent folder. Left out for a file in a shared watch folder. The subject comes from the file's own header label; see the server rules.
 - `device=spectralis`
 - Optionally `studyEventId`, to bind every series to one visit (the staff page's batch visit), or `park=true`.
 
@@ -128,7 +129,8 @@ Response `201`:
 ```json
 {
   "sha256": "…",
-  "headerPatient": "empty | matches | differs",
+  "headerPatient": "none | empty | matches | differs",
+  "subjectLabel": "EIAMD005",
   "parked": true,
   "items": [
     {
@@ -152,7 +154,7 @@ Response `201`:
 ### Server rules
 
 1. **Store once.** The file is streamed to `e2eUploadsPath/<uuid>.e2e` once, and the SHA-256 is computed while it streams.
-2. **Describe.** The server calls `/e2e/describe` with the folder label.
+2. **Describe.** The server calls `/e2e/describe` with the folder name as `expectedLabel`, when there is one. The answer is checked: `headerLabel` must be null or a plain token.
 3. **Create one item per series.** Each `ingest_item` row has:
    - kind `e2e`, the same stored path and SHA-256;
    - `e2e_series_key`, `series_modality` and `series_frames` (new columns);
@@ -161,7 +163,9 @@ Response `201`:
 
    Deduplication is unique on `(sha256, e2e_series_key)`. The existing `(sha256, scan_index)` uniqueness is kept for non-split rows.
 4. **Bind or park.**
-   - If `headerPatient` is `differs`, every item is parked.
+   - The label is the header label; if a folder was sent and the header label is non-null and differs, every item is parked (`headerPatient=differs`). If the file has no usable header label the folder is the label; with neither, every item is parked with no subject.
+   - The label must name exactly one visible subject, else every item is parked.
+   - A label read from the header is stored, audited and logged only when it resolves to exactly one visible subject (stored as that subject's own label). An unmatched header label is stored nowhere: not in `ingest_item`, not in the audit trail, not in a log. `subjectLabel` in the response is the matched subject's label, else `null`.
    - If `park=true` was sent, or no visit can be resolved, every item is parked.
    - Otherwise, when `studyEventId` was sent, every item is bound to that visit.
    - Otherwise each series resolves its own visit from label and date, using the existing resolution.
@@ -181,7 +185,7 @@ Built as specified, with these details worth knowing:
 - **Binding.** The label alone must name exactly one visible subject, else the whole file is parked. A series with no visit on its date is parked on its own; the rest of the file is bound. `headerPatient=differs` or `park=true` parks everything. A series whose OCT volume has the same picture as an earlier item is parked on its own with the usual held-back audit row (the per-volume route refuses a same-label twin instead; refusing one volume of a split file would drop the others).
 - **Modality.** Looked up by `imaging_modality.e2e_series` in the bound study, only if exactly one active entry carries the token. An OCT volume with no token entry falls back to the study's single `e2e`-accepting entry, as the per-volume route does. Binding from the inbox sets the modality the same way; unbinding clears it for a series row.
 - **Jobs.** Only `OCT` volumes with a laterality get jobs (visit plan, inference switch as before). Preprocessing streams the stored file (`RemoteRetinalInferenceClient.preprocessUploadFile`, JDK HTTP client) once per OCT volume with its `scan_index`; the acquisition date comes from `/e2e/describe`, not from `/preprocess`.
-- **Failure of the sidecar.** The stored file is deleted and nothing is filed: 503 when the converter is not configured or unreachable, 502 for an error or an unusable answer (duplicate or malformed `seriesKey`, unknown `seriesModality`, `headerPatient` outside `empty|matches|differs`), 422 for a file without series.
+- **Failure of the sidecar.** The stored file is deleted and nothing is filed: 503 when the converter is not configured or unreachable, 502 for an error or an unusable answer (duplicate or malformed `seriesKey`, unknown `seriesModality`, `headerPatient` outside `none|empty|matches|differs`, a `headerLabel` that is not a plain token), 422 for a file without series.
 - **Inbox.** Rows carry `seriesModality`, `seriesFrames`, `seriesKey`; `GET /api/v1/ingest/{id}/series-image?frame=0` proxies `/e2e/series-image` under the same visibility rules as the other previews. `previewUrl` of a series row points at it.
 - **Retention and undo.** The retention sweep already kept a file while another row names it; the undo endpoints now do the same (they used to unlink the file unconditionally).
 - **Limits.** `web.xml` multipart 2 GiB; nginx 2048m, unbuffered request, 30-minute send/read timeouts on the public, ingest-upload and event-CRF OCT upload locations. The Tomcat connector has no custom settings in this repository (`maxPostSize` only concerns form-urlencoded bodies; `maxSwallowSize` only an aborted upload).
@@ -190,15 +194,15 @@ Built as specified, with these details worth knowing:
 
 **Export Watcher** (`deploy/export-watcher/ExportWatcher.ps1`):
 
-- **Subject.** The subject is the name of the folder that directly contains the file. Both clients use this rule. An E2E file directly under the watch folder has no subject: it is skipped and reported.
+- **Subject.** The platform reads the subject from the file. A file directly in the watch folder is uploaded without `patientId`. A file in a sub-folder is uploaded with `patientId` = the folder that directly contains it. Nothing is skipped for lack of a folder; the coded problem `no-subject-folder` no longer exists. `file-too-large` remains.
 - **Upload.** For each settled file, the watcher checks the preflight by a streamed SHA-256, then makes one streamed commit with `split=true`. The upload uses `StreamContent` and a timeout sized for 2 GiB. The watcher no longer loops over volumes, and no file is read whole into memory.
 - **Moving files.** A `201` or `409` moves the file to `_uploaded`, as before.
 
 **Browser upload** (`UploadWorkbench`):
 
-- **Selecting files.** A folder picker and folder drag-and-drop. For an E2E file, the subject is the folder that directly contains it, as in the watcher. A file picked on its own has no subject, and the user searches for one.
+- **Selecting files.** A folder picker and folder drag-and-drop. For an E2E file in a folder, `patientId` is the folder that directly contains it, as in the watcher. A file picked on its own is committed without `patientId`: the row is ready to send, and after the commit it shows the server's `subjectLabel` or "no subject, parked in the inbox".
 - **Hashing.** The SHA-256 is computed in chunks, never by reading the whole file into memory. Large files are processed one at a time.
-- **Rows.** One row per E2E file, showing the subject from the folder. After commit, the row lists its series items (modality, eye, frames, status).
+- **Rows.** One row per E2E file, showing the folder label when there is one and, after commit, the matched subject. After commit, the row lists its series items (modality, eye, frames, status).
 - **Size.** Files over 2 GiB are refused in the browser before upload.
 - **De-identification.** The browser de-identification path used on internet-facing deployments keeps its current per-volume behaviour. Split mode applies where the browser does not de-identify.
 

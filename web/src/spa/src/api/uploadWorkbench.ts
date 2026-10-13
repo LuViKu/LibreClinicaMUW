@@ -293,8 +293,11 @@ export interface SplitItem {
   jobs?: Array<{ jobId: number; task: string; status: string }>
 }
 
-/** How the file header's patient ID compares with the folder name; the ID itself never leaves the server. */
-export type HeaderPatient = 'empty' | 'matches' | 'differs'
+/**
+ * How the label in the file header compares with the folder name: `none` when
+ * the file was sent without a folder. The label itself never reaches the browser.
+ */
+export type HeaderPatient = 'none' | 'empty' | 'matches' | 'differs'
 
 export interface CommitResponse {
   /** Absent for a split upload: it has {@link items}. */
@@ -320,6 +323,8 @@ export interface CommitResponse {
   /** Split upload only. */
   sha256?: string
   headerPatient?: HeaderPatient
+  /** Split upload only: the matched subject's label, else null (the file named no subject this caller may see). */
+  subjectLabel?: string | null
   /** Split upload only: every item went to the inbox. */
   parked?: boolean
   items?: SplitItem[]

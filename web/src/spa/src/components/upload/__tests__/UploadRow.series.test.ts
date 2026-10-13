@@ -53,6 +53,25 @@ describe('UploadRow series list', () => {
     expect(w.find('[data-testid="series-parked"]').exists()).toBe(true)
   })
 
+  it('shows the subject the server matched, not the folder', () => {
+    const w = render(row({ patientId: '', subjectLabel: 'EIAMD005', headerPatient: 'none', parked: false }))
+    expect(w.find('[data-testid="row-label"]').text()).toBe('EIAMD005')
+    expect(w.find('[data-testid="series-no-subject"]').exists()).toBe(false)
+  })
+
+  it('says "no subject - parked in the inbox" when the server matched none, and shows no label', () => {
+    const w = render(row({ patientId: '', subjectLabel: null, headerPatient: 'none', parked: true }))
+    expect(w.find('[data-testid="series-no-subject"]').text()).toContain('No subject')
+    expect(w.find('[data-testid="series-no-subject"]').text()).toContain('parked in the inbox')
+    expect(w.find('[data-testid="row-label"]').exists()).toBe(false)
+  })
+
+  it('a folder that differs is explained as before, not as "no subject"', () => {
+    const w = render(row({ subjectLabel: null, headerPatient: 'differs', parked: true }))
+    expect(w.find('[data-testid="series-header-differs"]').exists()).toBe(true)
+    expect(w.find('[data-testid="series-no-subject"]').exists()).toBe(false)
+  })
+
   it('shows nothing for a row that has not been sent', () => {
     const w = render(row({ state: 'suggested', items: undefined }))
     expect(w.find('[data-testid="series-list-r1"]').exists()).toBe(false)

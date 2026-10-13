@@ -37,7 +37,13 @@ const emit = defineEmits<{
 
 const candidate = computed(() => props.row.selectedCandidate)
 const studyName = computed(() => candidate.value?.studyName ?? '')
-const subjectLabel = computed(() => candidate.value?.subjectLabel ?? props.row.patientId ?? '')
+// A committed split row shows the subject the server matched, never a typed or folder value.
+const subjectLabel = computed(() =>
+  props.row.split && props.row.state === 'committed'
+    ? (props.row.subjectLabel ?? '')
+    : (candidate.value?.subjectLabel ?? props.row.patientId ?? ''))
+/** A split file in no folder, not yet sent: the server reads the label from the file. */
+const flatSplit = computed(() => props.row.split === true && !props.row.selectedCandidate && !props.row.patientId)
 const eventLabel = computed(() => props.row.selectedEvent?.definitionLabel ?? '')
 const isOct = computed(() => props.row.kind === 'e2e')
 
@@ -82,7 +88,11 @@ const withoutVisitLabel = computed(() =>
 <template>
   <div class="flex items-center gap-4 flex-1 min-w-0">
     <div class="flex-1 min-w-0">
-      <template v-if="props.row.state === 'suggested'">
+      <template v-if="props.row.state === 'suggested' && flatSplit">
+        <div class="text-[12px] text-slate-600" data-testid="row-split-fromfile">{{ t('uploadPortal.split.labelFromFile') }}</div>
+      </template>
+
+      <template v-else-if="props.row.state === 'suggested'">
         <div class="flex items-center gap-2 mb-1.5 flex-wrap">
           <StudyChip v-if="studyName" :name="studyName" />
           <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">

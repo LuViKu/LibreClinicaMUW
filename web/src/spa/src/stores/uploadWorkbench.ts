@@ -88,8 +88,13 @@ export interface UploadRow {
   relativePath?: string | null
   /** Split rows, after the upload: the series the server made of the file. */
   items?: SplitItem[]
-  /** Split rows, after the upload: the header patient compared with the folder (the ID itself never reaches the browser). */
+  /** Split rows, after the upload: how the file's header label compared with the folder (the value itself never reaches the browser). */
   headerPatient?: HeaderPatient
+  /**
+   * Split rows, after the upload: the label of the subject the server matched,
+   * else null (the file named no subject this page may see: it is in the inbox).
+   */
+  subjectLabel?: string | null
   /** Split rows, after the upload: every item is in the inbox. */
   parked?: boolean
   /** OCT rows (de-identifying deployment): the parsed volume. One file yields one row per volume. */
@@ -497,7 +502,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     if (awaiting.length === 0) return
     const headerless = awaiting.filter((r) => !r.patientId.trim())
     const targets = awaiting.filter((r) => r.patientId.trim().length > 0)
-    for (const r of headerless) patch(r.rowId, { state: 'nopatient', candidates: [] })
+    for (const r of headerless) {
+      // A split file in no folder is not stuck: the server reads the subject from
+      // the file's own header, or parks it. It goes out without a patientId.
+      if (r.split) patch(r.rowId, { state: 'suggested', candidates: [], selectedCandidate: undefined, selectedEvent: null })
+      else patch(r.rowId, { state: 'nopatient', candidates: [] })
+    }
     if (targets.length === 0) return
 
     const payload: ResolveRowRequest[] = targets.map((r) => ({
@@ -621,8 +631,8 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     if (!label) return
     let touched = false
     for (const r of rows.value) {
-      // A split row takes the typed label only when its folder gave none.
-      const takesHint = r.kind !== 'e2e' || (r.split === true && r.state === 'nopatient' && !r.patientId)
+      // An .E2E row never takes the typed label: its subject is its folder or the file's own header.
+      const takesHint = r.kind !== 'e2e'
       if (takesHint && (r.state === 'nopatient' || r.state === 'novisit' || r.state === 'suggested' || r.state === 'ambiguous')
           && r.patientId !== label && !batchVisit.value) {
         patch(r.rowId, { patientId: label, state: 'parsing', candidates: undefined, selectedCandidate: undefined, selectedEvent: undefined })
@@ -727,6 +737,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
           state: 'committed',
           items,
           headerPatient: splitRes.headerPatient,
+          subjectLabel: splitRes.subjectLabel ?? null,
           parked: splitRes.parked,
           ingestItemId: items[0]?.ingestItemId,
           committedAt: new Date(),
@@ -808,8 +819,8 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
         return
       }
       patch(rowId, {
-        state: row.selectedCandidate ? 'suggested' : 'nopatient',
-        items: undefined, headerPatient: undefined, parked: undefined,
+        state: row.selectedCandidate || !row.patientId ? 'suggested' : 'nopatient',
+        items: undefined, headerPatient: undefined, subjectLabel: undefined, parked: undefined,
         ingestItemId: undefined, committedAt: undefined, error: undefined,
       })
       return

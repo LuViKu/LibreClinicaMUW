@@ -56,6 +56,14 @@ const kindTone = computed(() => {
   }
 })
 
+/**
+ * The label in the row's label column. A sent split row shows the subject the
+ * server matched (nothing when it matched none); every other row what it is
+ * resolved by.
+ */
+const shownLabel = computed(() =>
+  props.row.split && props.row.state === 'committed' ? (props.row.subjectLabel ?? '') : props.row.patientId)
+
 /** DR-041 — what the server made of a split file: one item per series. */
 const items = computed(() => props.row.items ?? [])
 
@@ -125,7 +133,7 @@ function onLateralityChange(e: Event): void {
     </div>
 
     <div class="md:w-[110px] shrink-0 relative z-10">
-      <span v-if="props.row.patientId" class="font-mono text-[12px] font-medium text-slate-700">{{ props.row.patientId }}</span>
+      <span v-if="shownLabel" class="font-mono text-[12px] font-medium text-slate-700" data-testid="row-label">{{ shownLabel }}</span>
       <span v-else class="text-slate-500">—</span>
     </div>
 
@@ -181,6 +189,11 @@ function onLateralityChange(e: Event): void {
         class="mt-1 text-[12px] text-amber-800"
         data-testid="series-header-differs"
       >{{ t('uploadPortal.split.headerDiffers') }}</p>
+      <p
+        v-else-if="props.row.state === 'committed' && props.row.subjectLabel === null"
+        class="mt-1 text-[12px] text-amber-800"
+        data-testid="series-no-subject"
+      >{{ t('uploadPortal.split.noSubject') }}</p>
       <p
         v-else-if="props.row.parked"
         class="mt-1 text-[12px] text-slate-600"

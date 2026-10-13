@@ -99,14 +99,27 @@ describe('split mode: selecting and classifying', () => {
     expect(store.rows[0].selectedEvent).toBeNull()
   })
 
-  it('takes the folder from webkitRelativePath of a plain File too, and gives a file without one no subject', async () => {
+  it('takes the folder from webkitRelativePath of a plain File too; a file without one is sent without a patientId', async () => {
     const inFolder = e2e('a.E2E')
     Object.defineProperty(inFolder, 'webkitRelativePath', { value: 'EIAMD005/a.E2E' })
     const loose = new File([E2E_BYTES, new Uint8Array([1])], 'loose.E2E')
     const store = useUploadWorkbenchStore()
     await store.addFiles([inFolder, loose])
     expect(store.rows.map((r) => r.patientId)).toEqual(['EIAMD005', ''])
-    expect(store.rows[1].state).toBe('nopatient') // the user searches the subject
+    // No folder: not stuck. The server reads the label from the file, or parks it.
+    expect(store.rows[1].state).toBe('suggested')
+    expect(store.rows[1].state).not.toBe('nopatient')
+    expect(store.rows[1].selectedCandidate).toBeUndefined()
+    expect(api.resolveRows).toHaveBeenCalledWith('public', [{ patientId: 'EIAMD005', scanDate: null, laterality: null }])
+  })
+
+  it('a typed patient label does not turn into the folder of a split row', async () => {
+    const store = useUploadWorkbenchStore()
+    await store.addFiles([e2e('loose.E2E')])
+    store.setPatientIdHint('HAE-001')
+    await store.applyPatientIdHint()
+    expect(store.rows[0].patientId).toBe('')
+    expect(store.rows[0].state).toBe('suggested')
   })
 
   it('reads only the first bytes of the file to classify it', async () => {
@@ -219,6 +232,45 @@ describe('split mode: commit, series and undo', () => {
     expect(store.rows[0].state).toBe('committed')
     expect(store.rows[0].items?.map((i) => i.ingestItemId)).toEqual([12])
     expect(store.rows[0].error).toBe('window over')
+  })
+
+  it('commits a file without a folder with no patientId and shows the subject the server matched', async () => {
+    api.commitFile.mockResolvedValue({
+      sha256: 'x', headerPatient: 'none', subjectLabel: 'EIAMD005', parked: false, kind: 'e2e', format: 'e2e',
+      status: 'BOUND', ingestItemId: 0, jobId: null, items: ITEMS,
+    })
+    const store = useUploadWorkbenchStore()
+    await store.addFiles([e2e('loose.E2E')])
+    expect(store.rows[0].state).toBe('suggested')
+    await store.confirm(store.rows[0].rowId)
+    const req = api.commitFile.mock.calls[0][1] as Record<string, unknown>
+    expect(req).toEqual({
+      file: store.rows[0].file, patientId: null, split: true, device: 'spectralis', studyEventId: null, park: false,
+    })
+    expect(store.rows[0].state).toBe('committed')
+    expect(store.rows[0].subjectLabel).toBe('EIAMD005')
+    expect(store.rows[0].headerPatient).toBe('none')
+  })
+
+  it('a file the server could not match to a subject is committed with subjectLabel null', async () => {
+    api.commitFile.mockResolvedValue({
+      sha256: 'x', headerPatient: 'none', subjectLabel: null, parked: true, kind: 'e2e', format: 'e2e',
+      status: 'UNBOUND', ingestItemId: 0, jobId: null, items: ITEMS,
+    })
+    const store = useUploadWorkbenchStore()
+    await store.addFiles([e2e('loose.E2E')])
+    await store.confirm(store.rows[0].rowId)
+    expect(store.rows[0].subjectLabel).toBeNull()
+    expect(store.rows[0].parked).toBe(true)
+  })
+
+  it('undo of a file without a folder puts it back ready to send, not stuck', async () => {
+    const store = useUploadWorkbenchStore()
+    await store.addFiles([e2e('loose.E2E')])
+    await store.confirm(store.rows[0].rowId)
+    await store.undo(store.rows[0].rowId)
+    expect(store.rows[0].state).toBe('suggested')
+    expect(store.rows[0].subjectLabel).toBeUndefined()
   })
 
   it('a loose file is parked on request, not bound', async () => {

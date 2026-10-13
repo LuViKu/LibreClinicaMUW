@@ -419,17 +419,23 @@ visits offered are those of the studies you can see.
    a visit can go to the Eingang with **Ohne Visite hochladen**; a sent row can be
    taken back with **Rückgängig** for a minute.
 
-### Spectralis exports: one folder per patient, every series an item
+### Spectralis exports: the label is read from the file, every series an item
 
 A Spectralis `.E2E` file holds a whole multimodal session for both eyes (DR-041).
 Upload it once and the server splits it:
 
 - **Select a folder.** Use **Ordner wählen**, or drag a folder onto the page.
   Sub-folders are read too. **Dateien wählen** still picks single files.
-- **The folder is the subject.** The folder that directly contains the `.E2E`
-  file is the patient label: `iAMD/EIAMD005/EIAMD01D.E2E` belongs to `EIAMD005`,
-  and so does `EIAMD005/EIAMD01D.E2E`. A file with no folder has no label; use
-  **Patient suchen** on its row (or the label field above the list).
+- **The file names its subject.** The server reads the study label from the
+  file's own header (the surname field of the patient record), so one shared
+  folder with many patients works, and so do patient folders. A file in a folder
+  such as `iAMD/EIAMD005/EIAMD01D.E2E` is sent together with the folder that
+  directly contains it (`EIAMD005`); that name must equal the label in the file,
+  otherwise all its series wait in the Eingang. A file in no folder is sent
+  without one and the server uses the label in the file. The first-name and
+  patient-ID fields of the header are never used. The row shows the subject the
+  server found after **Bestätigen**, or *no subject, parked in the inbox* when
+  the label belongs to nobody you may see (that label is not stored).
 - **One row per file.** The browser reads no header and does not load the file
   into memory: it computes the checksum in 8 MiB slices, one file at a time, and
   asks the server whether the file is already there (**Bereits hochgeladen**).
@@ -440,9 +446,10 @@ Upload it once and the server splits it:
 - **Visit.** With a batch visit set, every series is filed against it. Without
   one, the server assigns each series by label and date, or leaves it in the
   Eingang.
-- **Header ID differs.** If the patient ID inside the file differs from the folder
+- **Label differs.** If the label inside the file differs from the folder
   name, the row says so and **all** its series wait in the Eingang for you to
-  assign them. An empty header ID is normal and does not park the file.
+  assign them. A file whose header has no usable label takes its folder name as
+  the label; with neither, it is parked.
 - **Undo.** **Rückgängig** within a minute deletes all items of the file.
 
 On an installation that de-identifies in the browser (internet-facing

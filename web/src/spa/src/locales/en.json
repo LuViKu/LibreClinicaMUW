@@ -335,6 +335,7 @@
         "rateLimited": "the platform asked it to slow down (HTTP 429)",
         "uploadFailed": "the last upload round had failures",
         "unreadableFiles": "has files it cannot read",
+        "fileTooLarge": "has an .E2E file over 2 GiB, which cannot be uploaded (moved to _failed)",
         "watchFolderMissing": "the export folder does not exist",
         "worklistNotImported": "the Optomed Client did not import the last worklist",
         "worklistFailed": "the worklist could not be fetched",
@@ -3919,7 +3920,7 @@
       "heroBrowse": "choose files",
       "heroOr": "or",
       "browseFolder": "choose a folder",
-      "folderHelp": "One folder per patient: the folder that directly contains the .E2E file is the patient label (for example EIAMD005/file.E2E). You can drop folders here too. Every series in an .E2E file becomes its own item.",
+      "folderHelp": "The patient label is read from the .E2E file itself, so one shared folder works. If a file sits in a patient folder (for example EIAMD005/file.E2E), that folder name must match the label in the file, otherwise the file goes to the inbox. You can drop folders here too. Every series in an .E2E file becomes its own item.",
       "heroNote": "several files at once · headers are read locally in the browser",
       "slimDropMore": "Drop more files here",
       "browse": "Browse"
@@ -3928,7 +3929,9 @@
       "summary": "{count} series",
       "frames": "{n} frames",
       "autoVisit": "The server assigns the visit per series; a series without one goes to the inbox.",
-      "headerDiffers": "The ID in the file header differs from the folder name — every series is in the inbox and must be assigned by hand.",
+      "labelFromFile": "The patient is read from the file when it is sent; a file without a known patient goes to the inbox.",
+      "noSubject": "No subject — parked in the inbox. The file's patient label is unknown here, or none was found.",
+      "headerDiffers": "The label in the file differs from the folder name — every series is in the inbox and must be assigned by hand.",
       "parked": "Every series is in the inbox.",
       "tooLarge": "{file} is larger than 2 GiB and cannot be uploaded.",
       "modality": {

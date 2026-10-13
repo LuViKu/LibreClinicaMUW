@@ -111,7 +111,7 @@ describe('uploadWorkbench store', () => {
     expect(oct.split).toBe(true)
     expect(oct.scan).toBeUndefined()
     expect(oct.patientId).toBe('')
-    expect(oct.state).toBe('nopatient')
+    expect(oct.state).toBe('suggested') // no folder: sent without a patientId, the server reads the label
   })
 
   it('shows an unsupported file refused rather than dropping it silently', async () => {

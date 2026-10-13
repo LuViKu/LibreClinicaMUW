@@ -335,6 +335,7 @@
         "rateLimited": "die Plattform hat gebremst (HTTP 429)",
         "uploadFailed": "die letzte Upload-Runde hatte Fehler",
         "unreadableFiles": "hat Dateien, die es nicht lesen kann",
+        "fileTooLarge": "hat eine .E2E-Datei über 2 GiB, die nicht hochgeladen werden kann (nach _failed verschoben)",
         "watchFolderMissing": "der Exportordner fehlt",
         "worklistNotImported": "der Optomed Client hat die letzte Worklist nicht übernommen",
         "worklistFailed": "die Worklist konnte nicht abgerufen werden",
@@ -3919,7 +3920,7 @@
       "heroBrowse": "Dateien wählen",
       "heroOr": "oder",
       "browseFolder": "Ordner wählen",
-      "folderHelp": "Ein Ordner pro Patient: Der Ordner, der die .E2E-Datei unmittelbar enthält, ist das Patientenkürzel (z. B. EIAMD005/Datei.E2E). Ordner können auch hierher gezogen werden. Jede Serie einer .E2E-Datei wird ein eigener Eintrag.",
+      "folderHelp": "Das Patientenkürzel wird aus der .E2E-Datei selbst gelesen, ein gemeinsamer Ordner genügt also. Liegt eine Datei in einem Patientenordner (z. B. EIAMD005/Datei.E2E), muss der Ordnername zum Kürzel in der Datei passen, sonst landet die Datei im Eingang. Ordner können auch hierher gezogen werden. Jede Serie einer .E2E-Datei wird ein eigener Eintrag.",
       "heroNote": "mehrere Dateien gleichzeitig · Header werden lokal im Browser gelesen",
       "slimDropMore": "Weitere Dateien hierher ziehen",
       "browse": "Durchsuchen"
@@ -3928,7 +3929,9 @@
       "summary": "{count} Serien",
       "frames": "{n} Bilder",
       "autoVisit": "Die Visite wird je Serie vom Server zugeordnet; sonst landet die Serie im Eingang.",
-      "headerDiffers": "Die Kennung im Dateikopf weicht vom Ordnernamen ab — alle Serien liegen im Eingang und müssen von Hand zugeordnet werden.",
+      "labelFromFile": "Der Patient wird beim Senden aus der Datei gelesen; eine Datei ohne bekannten Patienten landet im Eingang.",
+      "noSubject": "Kein Patient — im Eingang abgelegt. Das Patientenkürzel der Datei ist hier unbekannt oder fehlt.",
+      "headerDiffers": "Das Kürzel in der Datei weicht vom Ordnernamen ab — alle Serien liegen im Eingang und müssen von Hand zugeordnet werden.",
       "parked": "Alle Serien liegen im Eingang.",
       "tooLarge": "{file} ist größer als 2 GiB und kann nicht hochgeladen werden.",
       "modality": {
