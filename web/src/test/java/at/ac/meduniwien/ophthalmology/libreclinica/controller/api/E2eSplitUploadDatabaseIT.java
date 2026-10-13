@@ -576,9 +576,6 @@ class E2eSplitUploadDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void aSplitRequestIsChecked() throws Exception {
-        // patientId is required
-        publicMvc().perform(multipart(BASE + "/commit").file(file(8)).param("split", "true").param("park", "true"))
-                .andExpect(status().isBadRequest());
         // scanDate / laterality belong to the file in split mode
         publicMvc().perform(multipart(BASE + "/commit").file(file(8)).param("split", "true")
                 .param("patientId", "M-001").param("park", "true").param("laterality", "OD"))
@@ -825,14 +822,178 @@ class E2eSplitUploadDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void validateAndDateOfAreStrict() {
-        assertNull(E2eSplitUpload.validate(new E2eSidecarClient.Description("matches", List.of())));
-        assertEquals("headerPatient", E2eSplitUpload.validate(new E2eSidecarClient.Description("maybe", List.of())));
-        assertEquals("seriesKey", E2eSplitUpload.validate(new E2eSidecarClient.Description("empty", List.of(
+        assertNull(E2eSplitUpload.validate(new E2eSidecarClient.Description("matches", null, List.of())));
+        assertEquals("headerPatient", E2eSplitUpload.validate(new E2eSidecarClient.Description("maybe", null, List.of())));
+        assertEquals("seriesKey", E2eSplitUpload.validate(new E2eSidecarClient.Description("empty", null, List.of(
                 new E2eSidecarClient.Series("../x", "IR", null, null, null, null, 1, null, null, null)))));
-        assertEquals("seriesModality", E2eSplitUpload.validate(new E2eSidecarClient.Description("empty", List.of(
+        assertEquals("seriesModality", E2eSplitUpload.validate(new E2eSidecarClient.Description("empty", null, List.of(
                 new E2eSidecarClient.Series("k", "XX", null, null, null, null, 1, null, null, null)))));
         assertEquals(java.time.LocalDate.of(2026, 9, 30), E2eSplitUpload.dateOf("2026-09-30T10:12:03"));
         assertNull(E2eSplitUpload.dateOf("garbage"));
         assertNull(E2eSplitUpload.dateOf(null));
+        // the header label must be a plain token
+        assertNull(E2eSplitUpload.validate(new E2eSidecarClient.Description("none", "EIAMD005", List.of())));
+        assertEquals("headerLabel", E2eSplitUpload.validate(new E2eSidecarClient.Description("none", "has space", List.of())));
+        assertEquals("headerLabel", E2eSplitUpload.validate(new E2eSidecarClient.Description("none", "", List.of())));
+        assertEquals("headerLabel", E2eSplitUpload.validate(
+                new E2eSidecarClient.Description("none", "A".repeat(25), List.of())));
+        assertEquals("headerLabel", E2eSplitUpload.validate(
+                new E2eSidecarClient.Description("none", "Mueller\u00e4", List.of())));
+    }
+
+    /* ---------------- the subject is the header's surname label (maintainer rule 2026-10-13) ---------------- */
+
+    private static final String UNMATCHED = "CLINIC-4711";
+
+    private static Map<String, Object> answerWithLabel(String header, String label, List<Map<String, Object>> series) {
+        Map<String, Object> m = answer(header, series);
+        m.put("headerLabel", label);
+        return m;
+    }
+
+    /** A split commit with no patientId: a file from a shared watch folder. */
+    private MvcResult flatCommit(int salt, String... extraParams) throws Exception {
+        var req = multipart(BASE + "/commit").file(file(salt)).param("device", "spectralis").param("split", "true");
+        for (int i = 0; i < extraParams.length; i += 2) req = req.param(extraParams[i], extraParams[i + 1]);
+        return publicMvc().perform(req).andReturn();
+    }
+
+    /** How many rows of how many tables mention the needle, anywhere in any column. */
+    private static Map<String, Integer> rowsMentioning(String needle) throws Exception {
+        Map<String, Integer> hits = new LinkedHashMap<>();
+        List<String> tables = new ArrayList<>();
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT table_name FROM information_schema.tables "
+                     + "WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) tables.add(rs.getString(1));
+        }
+        try (Connection c = DATA_SOURCE.getConnection()) {
+            for (String t : tables) {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT count(*) FROM \"" + t.replace("\"", "\"\"") + "\" x WHERE x::text LIKE ?")) {
+                    ps.setString(1, "%" + needle + "%");
+                    try (ResultSet rs = ps.executeQuery()) {
+                        rs.next();
+                        if (rs.getInt(1) > 0) hits.put(t, rs.getInt(1));
+                    }
+                }
+            }
+        }
+        return hits;
+    }
+
+    @Test
+    void aFileInAFlatFolderBindsBySpeakingItsOwnHeaderLabel() throws Exception {
+        describeAnswer = answerWithLabel("none", "M-001", sixSeries("2021-01-04"));
+        MvcResult r = flatCommit(20);
+        assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+        JsonNode body = json(r);
+        assertEquals("none", body.path("headerPatient").asText());
+        assertEquals("M-001", body.path("subjectLabel").asText());
+        assertFalse(body.path("parked").asBoolean());
+        assertEquals("", DESCRIBE_CALLS.get(0).get("expectedLabel"), "no folder: no expected label sent");
+        String sha = sha256(e2e(20));
+        Map<String, Object> s0 = item(sha, "s0");
+        assertEquals("BOUND", s0.get("status"));
+        assertEquals(3, s0.get("bound_study_event_id"));
+        assertEquals("M-001", s0.get("patient_id"));
+    }
+
+    @Test
+    void aFolderThatAgreesWithTheHeaderLabelBinds() throws Exception {
+        describeAnswer = answerWithLabel("matches", "M-001", sixSeries("2021-01-04"));
+        MvcResult r = splitCommit(21);
+        assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+        JsonNode body = json(r);
+        assertEquals("matches", body.path("headerPatient").asText());
+        assertEquals("M-001", body.path("subjectLabel").asText());
+        assertEquals("M-001", DESCRIBE_CALLS.get(0).get("expectedLabel"));
+        assertEquals("BOUND", item(sha256(e2e(21)), "s0").get("status"));
+    }
+
+    @Test
+    void aFolderThatDiffersFromTheHeaderLabelParksEverythingAndNamesNoSubject() throws Exception {
+        describeAnswer = answerWithLabel("differs", UNMATCHED, sixSeries("2021-01-04"));
+        MvcResult r = splitCommit(22);
+        assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+        JsonNode body = json(r);
+        assertEquals("differs", body.path("headerPatient").asText());
+        assertTrue(body.path("subjectLabel").isNull());
+        assertTrue(body.path("parked").asBoolean());
+        String sha = sha256(e2e(22));
+        assertEquals(6, count("sha256 = '" + sha + "' AND status = 'UNBOUND' AND bound_study_event_id IS NULL "
+                + "AND candidate_study_subject_id IS NULL"));
+        assertFalse(r.getResponse().getContentAsString().contains(UNMATCHED));
+        assertEquals(Map.of(), rowsMentioning(UNMATCHED), "the file's label is stored nowhere");
+    }
+
+    @Test
+    void theServerChecksTheFolderAgainstTheLabelItselfWhateverTheSidecarSays() throws Exception {
+        // A sidecar that claims "matches" for a different label does not get the file bound.
+        describeAnswer = answerWithLabel("matches", "M-002", sixSeries("2021-01-04"));
+        MvcResult r = splitCommit(23);
+        assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+        assertEquals("differs", json(r).path("headerPatient").asText());
+        assertTrue(json(r).path("parked").asBoolean());
+    }
+
+    @Test
+    void aFileWithNoLabelAnywhereIsParkedWithNothingStored() throws Exception {
+        describeAnswer = answerWithLabel("none", null, sixSeries("2021-01-04"));
+        MvcResult r = flatCommit(24);
+        assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+        JsonNode body = json(r);
+        assertTrue(body.path("parked").asBoolean());
+        assertTrue(body.path("subjectLabel").isNull());
+        String sha = sha256(e2e(24));
+        assertEquals(6, count("sha256 = '" + sha + "' AND status = 'UNBOUND' AND patient_id IS NULL "
+                + "AND candidate_study_subject_id IS NULL"));
+    }
+
+    @Test
+    void aFolderLabelIsTheSubjectWhenTheFileCarriesNone() throws Exception {
+        describeAnswer = answerWithLabel("empty", null, sixSeries("2021-01-04"));
+        MvcResult r = splitCommit(25);
+        assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+        assertEquals("M-001", json(r).path("subjectLabel").asText());
+        assertEquals("BOUND", item(sha256(e2e(25)), "s0").get("status"));
+    }
+
+    @Test
+    void anUnmatchedHeaderLabelParksTheFileAndIsStoredNowhere() throws Exception {
+        ch.qos.logback.classic.Logger root =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        root.addAppender(logs);
+        try {
+            describeAnswer = answerWithLabel("none", UNMATCHED, sixSeries("2021-01-04"));
+            MvcResult r = flatCommit(26);
+            assertEquals(201, r.getResponse().getStatus(), r.getResponse().getContentAsString());
+            JsonNode body = json(r);
+            assertTrue(body.path("parked").asBoolean());
+            assertTrue(body.path("subjectLabel").isNull());
+            assertFalse(r.getResponse().getContentAsString().contains(UNMATCHED));
+            String sha = sha256(e2e(26));
+            assertEquals(6, count("sha256 = '" + sha + "' AND status = 'UNBOUND' AND patient_id IS NULL "
+                    + "AND candidate_study_subject_id IS NULL"));
+            // ingest_item, audit_log_event and every other table: the value is nowhere.
+            assertEquals(Map.of(), rowsMentioning(UNMATCHED));
+            for (var e : logs.list) {
+                assertFalse(e.getFormattedMessage().contains(UNMATCHED), "logged: " + e.getFormattedMessage());
+            }
+        } finally {
+            root.detachAppender(logs);
+        }
+    }
+
+    @Test
+    void aHeaderLabelThatIsNotAPlainTokenIsRefusedAsAnUnusableAnswer() throws Exception {
+        describeAnswer = answerWithLabel("none", "Mustermann Max", sixSeries("2021-01-04"));
+        assertEquals(502, flatCommit(27).getResponse().getStatus());
+        assertEquals(0, filesIn(E2E_ROOT));
+        assertEquals(0, count("source_kind = 'portal-oct'"));
     }
 }

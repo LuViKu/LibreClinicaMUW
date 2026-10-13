@@ -63,11 +63,23 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingSer
  * the visit's imaging plan and the {@code /preprocess} path with the series'
  * {@code scan_index}.
  *
- * <p>Binding: a header patient id that differs from the folder label, an
- * explicit {@code park}, or a label that resolves to no single subject parks
- * every item. Otherwise {@code studyEventId} binds every item to that visit,
- * and without one each series resolves its own visit from label and date; a
- * series with no visit on its date is parked on its own.
+ * <p>The subject is the study label in the E2E patient chunk's surname slot
+ * ({@code headerLabel} of the sidecar's answer). The optional {@code patientId}
+ * is the folder the client found the file in: when both exist they must agree,
+ * and when the file carries no usable label the folder is the label. The
+ * first-name and patient-id slots are never read, so they cannot reach this
+ * class.
+ *
+ * <p>Binding: a header label that differs from the folder, an explicit
+ * {@code park}, no label at all, or a label that resolves to no single visible
+ * subject parks every item. Otherwise {@code studyEventId} binds every item to
+ * that visit, and without one each series resolves its own visit from label and
+ * date; a series with no visit on its date is parked on its own.
+ *
+ * <p>A label read from the file is stored, audited and logged only when it
+ * resolves to exactly one visible subject (then as that subject's own label).
+ * An unmatched header label is dropped: it can be a clinic number or another
+ * person's identifier.
  */
 final class E2eSplitUpload {
 
@@ -76,7 +88,9 @@ final class E2eSplitUpload {
     static final String MESSAGE_DUPLICATE = "Diese .e2e-Datei wurde bereits hochgeladen.";
 
     private static final Pattern SERIES_KEY = Pattern.compile("[A-Za-z0-9_.-]{1,32}");
-    private static final Set<String> HEADER_STATES = Set.of("empty", "matches", "differs");
+    private static final Set<String> HEADER_STATES = Set.of("none", "empty", "matches", "differs");
+    /** A study label as the converter vets it: printable ASCII, no space, 1-24 characters. */
+    private static final Pattern LABEL_TOKEN = Pattern.compile("[\\x21-\\x7E]{1,24}");
     private static final Set<String> SERIES_KINDS =
             Set.of("OCT", "OCT_LINE", "IR", "BAF", "BR", "IRAF", "QAF", "ICGA", "FA", "OTHER");
 
@@ -158,10 +172,8 @@ final class E2eSplitUpload {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
         }
-        String pid = patientId == null ? "" : patientId.trim();
-        if (pid.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "patientId is required"));
-        }
+        // The folder the file was found in; absent for a file in a shared watch folder.
+        String folder = patientId == null || patientId.isBlank() ? null : patientId.trim();
         if (eventCrfId != null) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "eventCrfId is not supported with split=true; send studyEventId or park"));
@@ -207,7 +219,7 @@ final class E2eSplitUpload {
         // ---- 3. describe ----
         E2eSidecarClient.Description described;
         try {
-            described = sidecar.describe(saved.getFileName().toString(), pid);
+            described = sidecar.describe(saved.getFileName().toString(), folder);
         } catch (E2eSidecarClient.SidecarException e) {
             discard(saved);
             return ResponseEntity.status(e.httpStatus()).body(Map.of("message", e.getMessage()));
@@ -225,21 +237,28 @@ final class E2eSplitUpload {
         }
 
         // ---- 4. plan: who binds where ----
-        boolean differs = "differs".equals(described.headerPatient());
-        boolean allParked = park || differs;
-        Integer labelSubject = pickedSubject;
-        if (studyEventId == null && !allParked) {
-            // The label alone must name exactly one subject, or nobody is guessed at.
-            IngestResolutionService.Resolution byLabel = oct.resolution().resolve(pid, (LocalDate) null, resolveScope);
-            if (byLabel.single().isPresent()) {
-                labelSubject = byLabel.single().get().studySubjectId();
-            } else {
-                allParked = true;
-            }
-        } else if (studyEventId == null) {
-            labelSubject = oct.resolution().resolve(pid, (LocalDate) null, resolveScope).single()
-                    .map(IngestResolutionService.ResolveCandidate::studySubjectId).orElse(null);
-        }
+        // The file's label against the folder: a disagreement parks everything and names no subject.
+        String headerLabel = described.headerLabel();
+        boolean differs = "differs".equals(described.headerPatient())
+                || (folder != null && headerLabel != null && !headerLabel.equalsIgnoreCase(folder));
+        String headerPatient = differs ? "differs" : described.headerPatient();
+        // The label the subject is looked up by: the file's own, else the folder's.
+        String label = differs ? null : (headerLabel != null ? headerLabel : folder);
+
+        IngestResolutionService.ResolveCandidate matched = label == null ? null
+                : oct.resolution().resolve(label, (LocalDate) null, resolveScope).single().orElse(null);
+        boolean allParked = park || differs || label == null
+                || (studyEventId == null && matched == null)
+                // a visit picked for another subject than the label names is not guessed at
+                || (pickedSubject != null && matched != null && matched.studySubjectId() != pickedSubject);
+        Integer labelSubject = pickedSubject != null ? pickedSubject
+                : matched == null ? null : matched.studySubjectId();
+        // What may be written down. A label the file supplied is kept only when it names a visible
+        // subject; the folder is the client's own word and is kept as before.
+        String pid = matched != null ? matched.subjectLabel() : folder;
+        String subjectLabel = matched != null ? matched.subjectLabel()
+                : pickedSubject != null && !allParked ? UploadRoute.subjectLabelForStudyEvent(dataSource, studyEventId)
+                : null;
 
         Map<Integer, String> fingerprints = Map.of();
         boolean anyOct = described.series().stream().anyMatch(s -> "OCT".equals(s.seriesModality()));
@@ -272,7 +291,7 @@ final class E2eSplitUpload {
                         seriesEvent = studyEventId;
                     } else {
                         IngestResolutionService.Resolution r = byDate.computeIfAbsent(date,
-                                d -> oct.resolution().resolve(pid, d, resolveScope));
+                                d -> oct.resolution().resolve(label, d, resolveScope));
                         if (r.isSuggested() && r.single().isPresent()
                                 && r.single().get().matchingEvent() != null) {
                             var ev = r.single().get().matchingEvent();
@@ -400,11 +419,12 @@ final class E2eSplitUpload {
             String status = p.park() ? "UNBOUND" : "BOUND";
             anyBound |= !p.park();
             if (jobs.isEmpty()) {
-                oct.writePublicOctUploadAuditRow("ingest_item", id, p.subjectId(), pid, p.laterality(), status);
+                oct.writePublicOctUploadAuditRow("ingest_item", id, p.subjectId(), pid == null ? "" : pid,
+                        p.laterality(), status);
             } else {
                 for (Map<String, Object> j : jobs) {
-                    oct.writePublicOctUploadAuditRow(((Number) j.get("jobId")).longValue(), p.subjectId(), pid,
-                            p.laterality(), jobStatus);
+                    oct.writePublicOctUploadAuditRow(((Number) j.get("jobId")).longValue(), p.subjectId(),
+                            pid == null ? "" : pid, p.laterality(), jobStatus);
                 }
             }
             if (p.twin() != null) IngestTwins.writeHeldAudit(dataSource, id, p.twin(), pid, null, "portal-oct");
@@ -426,7 +446,7 @@ final class E2eSplitUpload {
             items.add(m);
         }
         LOG.info("Split E2E upload - {} item(s) from one file, headerPatient={}, bound={}",
-                plan.size(), described.headerPatient(), anyBound);
+                plan.size(), headerPatient, anyBound);
 
         // ---- 7. start what the plans want, off the request thread ----
         List<Planned> withJobs = new ArrayList<>();
@@ -451,7 +471,9 @@ final class E2eSplitUpload {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sha256", sha256);
-        body.put("headerPatient", described.headerPatient());
+        body.put("headerPatient", headerPatient);
+        // The matched subject's own label, never the raw header value.
+        body.put("subjectLabel", subjectLabel);
         body.put("parked", !anyBound);
         body.put("items", items);
         return ResponseEntity.status(201).body(body);
@@ -481,6 +503,9 @@ final class E2eSplitUpload {
     static String validate(E2eSidecarClient.Description d) {
         if (d == null || d.headerPatient() == null || !HEADER_STATES.contains(d.headerPatient())) {
             return "headerPatient";
+        }
+        if (d.headerLabel() != null && !LABEL_TOKEN.matcher(d.headerLabel()).matches()) {
+            return "headerLabel";
         }
         Set<String> keys = new HashSet<>();
         for (E2eSidecarClient.Series s : d.series()) {

@@ -38,8 +38,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * the service that serves {@code /preprocess} and take the same token.
  *
  * <p>The file is not sent: the sidecar reads it from the E2E upload directory
- * it mounts, so a request names the stored file by its bare name only. Nothing
- * the sidecar returns carries a name, a patient id or a birth date.
+ * it mounts, so a request names the stored file by its bare name only. The only
+ * identifying-looking value the sidecar returns is {@code headerLabel}, the study
+ * label in the E2E patient chunk's surname slot (never the first-name or
+ * patient-id slot, a name or a birth date). It is a candidate subject label, and
+ * the caller must not store or log it unless it resolves to a subject.
  *
  * <p>Failures are {@link SidecarException}s with a message fit to show an
  * operator and the HTTP status the API should answer: 503 when the sidecar is
@@ -64,8 +67,12 @@ public class E2eSidecarClient {
                          String laterality, String acquiredAt, Integer frames, Integer width, Integer height,
                          Integer octVolumeIndex) {}
 
-    /** {@code headerPatient} is {@code empty}, {@code matches} or {@code differs}. */
-    public record Description(String headerPatient, List<Series> series) {
+    /**
+     * {@code headerPatient} is {@code none} (no expected label was sent), {@code empty},
+     * {@code matches} or {@code differs}, comparing the expected label with the surname slot.
+     * {@code headerLabel} is that surname when it is a plain label token, else null.
+     */
+    public record Description(String headerPatient, String headerLabel, List<Series> series) {
         public Description {
             series = series == null ? List.of() : List.copyOf(series);
         }
@@ -94,7 +101,8 @@ public class E2eSidecarClient {
 
     /**
      * @param storedName    the bare name of a file in the E2E upload directory
-     * @param expectedLabel the subject label (folder name) the header patient is compared with
+     * @param expectedLabel the subject label (folder name) the header surname is compared with;
+     *                      null or blank when the file has no folder (the field is then left out)
      */
     public Description describe(String storedName, String expectedLabel) {
         requireConfigured();
@@ -104,7 +112,7 @@ public class E2eSidecarClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("storedName", storedName);
-        body.put("expectedLabel", expectedLabel == null ? "" : expectedLabel);
+        if (!blank(expectedLabel)) body.put("expectedLabel", expectedLabel);
         try {
             ResponseEntity<String> resp = rest(describeTimeout()).exchange(
                     URI.create(endpoint), HttpMethod.POST,

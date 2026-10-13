@@ -95,7 +95,7 @@ public class E2eSidecarClientTest {
 
     @Test
     public void describeSendsTheStoredNameAndLabelWithTheTokenAndReadsTheSeries() {
-        body = "{\"headerPatient\":\"empty\",\"series\":[{\"seriesKey\":\"s3\",\"seriesModality\":\"OCT\","
+        body = "{\"headerPatient\":\"empty\",\"headerLabel\":\"EIAMD005\",\"series\":[{\"seriesKey\":\"s3\",\"seriesModality\":\"OCT\","
                 + "\"deviceModality\":\"IR\",\"scanPattern\":\"OCT ART Volume\",\"laterality\":\"OD\","
                 + "\"acquiredAt\":\"2026-09-30T10:12:03\",\"frames\":97,\"width\":1024,\"height\":496,"
                 + "\"octVolumeIndex\":0,\"somethingNew\":true},"
@@ -106,6 +106,7 @@ public class E2eSidecarClientTest {
         assertEquals("EIAMD005", request.get().path("expectedLabel").asText());
         assertEquals("tok", token.get());
         assertEquals("empty", d.headerPatient());
+        assertEquals("EIAMD005", d.headerLabel());
         assertEquals(2, d.series().size());
         E2eSidecarClient.Series s = d.series().get(0);
         assertEquals("s3", s.seriesKey());
@@ -115,6 +116,17 @@ public class E2eSidecarClientTest {
         assertEquals(Integer.valueOf(0), s.octVolumeIndex());
         assertNull(d.series().get(1).octVolumeIndex());
         assertNull(d.series().get(1).laterality());
+    }
+
+    @Test
+    public void describeWithoutAFolderLabelLeavesExpectedLabelOut() {
+        body = "{\"headerPatient\":\"none\",\"headerLabel\":null,\"series\":[]}";
+        E2eSidecarClient.Description d = client().describe("3f2b8c1e-aa.e2e", null);
+        assertFalse(request.get().has("expectedLabel"));
+        assertEquals("none", d.headerPatient());
+        assertNull(d.headerLabel());
+        client().describe("3f2b8c1e-aa.e2e", "  ");
+        assertFalse(request.get().has("expectedLabel"));
     }
 
     @Test
