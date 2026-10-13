@@ -25,9 +25,16 @@
     - the bridge's worklist call keeps the last good worklist on a 401 and
       writes no empty one;
     - a 429, a 500 and the give-up after 5 attempts behave as they did;
-    - (watcher, regression) a file with several scans - a two-volume .e2e - reaches the
-      lookup and one commit per scan, each with its own scanIndex, and is filed as
-      uploaded instead of being set aside as a non-image; a Raw Data object still is;
+    - (watcher, DR-041) an .e2e is uploaded whole and split by the platform: the
+      subject is the folder that directly contains the file (an .e2e directly in the watch folder is
+      not uploaded, only counted: summary and coded problem no-subject-folder, no
+      file name in the log); per file a streamed SHA-256, GET preflight
+      ?sha256=..&split=true (a hit goes to _uploaded without a commit), else ONE
+      commit with the fields file/split/patientId/device only, the file as a
+      StreamContent (no ReadAllBytes, no header parse, no resolve); 201 counts
+      files, series, bound and parked, 409 is "already there", a 401 ends the round
+      untouched, other answers are retried and end in _failed after 5; DICOM is
+      unchanged (and the .dcm tests above still pass);
     - a refusal that persists is logged once, and the token never appears in
       the log or the heartbeat body.
 
@@ -36,7 +43,7 @@
   failed upload, counted as an attempt, local moves done before the platform
   answered, a request sent without the header).
 
-  Run it with PowerShell 7, once per script. On a Mac, from the repository root
+  Run it with PowerShell 7 or Windows PowerShell 5.1 (powershell.exe -NoProfile -ExecutionPolicy Bypass -File ...), once per script. On a Mac, from the repository root
   (--platform linux/amd64 is required, the default arm64 image resolves to a
   32-bit build that hangs; the environment variable works around a crash of
   .NET under x86 emulation on Apple Silicon):
@@ -165,7 +172,7 @@ Check ($null -eq $got) 'an ordinary error is no refusal'
 # ----------------------------------------------------------------------------
 # a fake platform behind the HTTP client
 # ----------------------------------------------------------------------------
-Add-Type -TypeDefinition @'
+Add-Type -ReferencedAssemblies System.Net.Http -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -181,6 +188,8 @@ public class FakePlatform : HttpMessageHandler
     public Dictionary<string, Queue<HttpResponseMessage>> Replies = new Dictionary<string, Queue<HttpResponseMessage>>();
     public List<string> Seen = new List<string>();
     public List<string> Fields = new List<string>();
+    public List<string> Queries = new List<string>();     // parallel to Seen: "METHOD ?query"
+    public List<string> FileParts = new List<string>();   // per upload: "<part class>:<bytes read>:<sha256 of them>"
     public int Unexpected = 0;
     public void Enqueue(string endpoint, HttpResponseMessage reply)
     {
@@ -195,6 +204,7 @@ public class FakePlatform : HttpMessageHandler
         string path = request.RequestUri.AbsolutePath;
         string endpoint = path.Substring(path.LastIndexOf('/') + 1);
         Seen.Add(endpoint + " up=" + up + " old=" + old);
+        Queries.Add(request.Method.Method + " " + request.RequestUri.Query);
         string fields = "";
         MultipartFormDataContent mp = request.Content as MultipartFormDataContent;
         if (mp != null)
@@ -204,7 +214,19 @@ public class FakePlatform : HttpMessageHandler
                 ContentDispositionHeaderValue cd = part.Headers.ContentDisposition;
                 if (cd == null || cd.Name == null) continue;
                 string name = cd.Name.Trim('"');
-                if (cd.FileName != null) { fields += name + "=<file>;"; continue; }
+                if (cd.FileName != null)
+                {
+                    fields += name + "=<file>;";
+                    using (System.IO.Stream s = part.ReadAsStreamAsync().Result)
+                    using (System.Security.Cryptography.HashAlgorithm sha = System.Security.Cryptography.SHA256.Create())
+                    {
+                        long n = 0; byte[] buf = new byte[65536]; int r;
+                        while ((r = s.Read(buf, 0, buf.Length)) > 0) { sha.TransformBlock(buf, 0, r, null, 0); n += r; }
+                        sha.TransformFinalBlock(buf, 0, 0);
+                        FileParts.Add(part.GetType().Name + ":" + n + ":" + BitConverter.ToString(sha.Hash).Replace("-", "").ToLowerInvariant());
+                    }
+                    continue;
+                }
                 fields += name + "=" + part.ReadAsStringAsync().Result + ";";
             }
         }
@@ -223,7 +245,7 @@ public class FakePlatform : HttpMessageHandler
 }
 '@
 function New-Reply([int]$status, [string]$body = '') {
-    $r = New-Object System.Net.Http.HttpResponseMessage ([System.Net.HttpStatusCode]$status)
+    $r = New-Object System.Net.Http.HttpResponseMessage ([Enum]::ToObject([System.Net.HttpStatusCode], $status))   # not a cast: 5.1 has no name for 429
     $r.Content = New-Object System.Net.Http.StringContent($body, [Text.Encoding]::UTF8, 'application/json')
     $r
 }
@@ -268,26 +290,27 @@ if ($Target -eq 'watcher') {
         [pscustomobject]@{ PatientId = $label; ScanDate = '2026-10-12'; Laterality = 'OD'; ScanIndex = $index
                            Device = $(if ($kind -eq 'e2e') { 'spectralis' } else { 'clarus' }); Kind = $kind; NonImage = $nonImage }
     }
-    # Stands in for the DICOM and .e2e readers and returns the REAL SHAPE: the scans of every file wrapped as
+    # Stands in for the DICOM reader (an .e2e is no longer read) and returns the REAL SHAPE: the scans of every file wrapped as
     # ,@(...), whether there is one or several - which is what the real Get-FileScans does, and what the sweep
     # must cope with (it once called it as @(Get-FileScans ...), which keeps two or more scans nested in one
-    # element; see the regression scenarios below). c*.e2e has two volumes (ScanIndex 0 and 1), one*.e2e one
-    # volume, raw* is a Raw Data object (NonImage), bad* cannot be read.
+    # element). raw* is a Raw Data object (NonImage), bad* cannot be read.
     function Get-FileScans([pscustomobject]$cfg, [IO.FileInfo]$f) {
         if ($f.Name -like 'bad*') { throw 'unreadable test file' }
         if ($f.Name -like 'raw*') { return ,@(New-Scan 'PRAW' 0 'dicom' $true) }
-        if ($f.Name -like 'one*.e2e') { return ,@(New-Scan ('P' + $f.BaseName) 0 'e2e' $false) }
-        if ($f.Extension -eq '.e2e') { return ,@((New-Scan ('P' + $f.BaseName) 0 'e2e' $false), (New-Scan ('P' + $f.BaseName) 1 'e2e' $false)) }
         return ,@(New-Scan ('P' + $f.BaseName) 0 'dicom' $false)
     }
     function Reset-Watcher {
         Reset-Fakes
-        $script:SizeSeen = @{}; $script:Attempts = @{}; $script:SweepProblems = @{}; $script:TokenLogged = ''
+        $script:SizeSeen = @{}; $script:Attempts = @{}; $script:SweepProblems = @{}; $script:TokenLogged = ''; $script:NoSubjectLogged = -1
     }
     function New-Folder([string[]]$names) {
         $dir = Join-Path $tmp ([guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Force $dir | Out-Null
-        foreach ($n in $names) { [IO.File]::WriteAllBytes((Join-Path $dir $n), [byte[]](1..40)) }
+        foreach ($n in $names) {
+            $p = Join-Path $dir $n
+            New-Item -ItemType Directory -Force (Split-Path -Parent $p) | Out-Null
+            [IO.File]::WriteAllBytes($p, [byte[]](1..40))
+        }
         $dir
     }
     function New-Cfg([string]$dir, [string]$token) {
@@ -308,56 +331,209 @@ if ($Target -eq 'watcher') {
         }
     }
 
-    Section 'watcher: a file with several scans is uploaded once per scan (regression: it was set aside as a non-image)'
-    Reset-Watcher
-    $dir = New-Folder @('c.e2e'); $cfg = New-Cfg $dir $TOK
-    $volumes = @(foreach ($v in (Get-FileScans $cfg (Get-Item (Join-Path $dir 'c.e2e')))) { $v.ScanIndex })
-    Check (($volumes -join ',') -eq '0,1') 'the -SelfTest loop, foreach over (Get-FileScans ...), sees both volumes'
-    $script:Fake.Enqueue('resolve', (New-ResolveReply 2)); Add-Commits $script:Fake 201, 201
-    $result = Invoke-TwoSweeps $cfg
-    Check ($result -ceq 'uploaded 2 (2 bound), 0 already there, 0 failed, 0 non-image set aside') 'both volumes are uploaded, none is set aside'
-    Check ((Get-Names $dir '_uploaded') -eq 'c.e2e' -and (Get-Names $dir '_skipped') -eq '(none)' -and (Get-Names $dir) -eq '') 'the file is filed as uploaded, not in _skipped'
-    Check ($script:Fake.Seen.Count -eq 3 -and $script:Fake.Seen[0] -like 'resolve *' -and $script:Fake.Unexpected -eq 0) 'one lookup and two commits'
-    Check (([regex]::Matches($script:Fake.Fields[0], 'patientId')).Count -eq 2) 'the lookup asked about both volumes'
-    Check ((@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pc:0,Pc:1') 'each commit carries its own scanIndex (0 and 1)'
-    Assert-NoSecret 'several scans'
-
-    Section 'watcher: a single-volume .e2e, a single DICOM and a Raw Data object in one sweep'
-    Reset-Watcher
-    $dir = New-Folder @('one.e2e'); $cfg = New-Cfg $dir $TOK
-    $script:Fake.Enqueue('resolve', (New-ResolveReply 1)); Add-Commits $script:Fake 201
-    $result = Invoke-TwoSweeps $cfg
-    Check ($result -ceq 'uploaded 1 (1 bound), 0 already there, 0 failed, 0 non-image set aside' -and (Get-Names $dir '_uploaded') -eq 'one.e2e' -and (@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pone:0') 'a single-volume .e2e alone: one commit, scanIndex 0, filed as uploaded'
-    Reset-Watcher
-    $dir = New-Folder @('a.dcm', 'c.e2e', 'one.e2e', 'raw.dcm'); $cfg = New-Cfg $dir $TOK
-    $script:Fake.Enqueue('resolve', (New-ResolveReply 4)); Add-Commits $script:Fake 201, 201, 201, 201
-    $result = Invoke-TwoSweeps $cfg
-    Check ($result -ceq 'uploaded 4 (4 bound), 0 already there, 0 failed, 1 non-image set aside') 'four scans uploaded, one non-image set aside'
-    Check ((Get-Names $dir '_uploaded') -eq 'a.dcm,c.e2e,one.e2e') 'the DICOM, the single-volume and the two-volume .e2e are filed as uploaded'
-    Check ((Get-Names $dir '_skipped') -eq 'raw.dcm' -and (Get-Names $dir) -eq '') 'only the Raw Data object is set aside'
-    Check ((@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pa:0,Pc:0,Pc:1,Pone:0') 'one commit per scan, each with its own scanIndex'
-    Check (([regex]::Matches($script:Fake.Fields[0], 'patientId')).Count -eq 4) 'one lookup for the whole sweep, with all four scans in it'
-
-    Section 'watcher: a two-volume .e2e put back from _skipped, where the old sweep left it'
-    foreach ($case in @(
-        @{ Name = 'neither volume is on the platform'; Commits = (201, 201); Result = 'uploaded 2 (2 bound), 0 already there, 0 failed, 0 non-image set aside' },
-        @{ Name = 'volume 0 is there already (409)';   Commits = (409, 201); Result = 'uploaded 1 (1 bound), 1 already there, 0 failed, 0 non-image set aside' },
-        @{ Name = 'both volumes are there already';    Commits = (409, 409); Result = 'uploaded 0 (0 bound), 2 already there, 0 failed, 0 non-image set aside' }
-    )) {
-        $n = $case.Name
-        Reset-Watcher
-        $dir = New-Folder @('c.e2e'); $cfg = New-Cfg $dir $TOK
-        New-Item -ItemType Directory -Force (Join-Path $dir '_skipped') | Out-Null
-        Move-Item (Join-Path $dir 'c.e2e') (Join-Path $dir '_skipped/c.e2e')
-        Invoke-TwoSweeps $cfg | Out-Null
-        Check ((Get-Names $dir '_skipped') -eq 'c.e2e' -and $script:Fake.Seen.Count -eq 0) "$n : a file in _skipped is left alone, nothing is sent"
-        Move-Item (Join-Path $dir '_skipped/c.e2e') (Join-Path $dir 'c.e2e')
-        $script:Fake.Enqueue('resolve', (New-ResolveReply 2)); Add-Commits $script:Fake @($case.Commits)
-        $result = Invoke-TwoSweeps $cfg
-        Check ($result -ceq $case.Result) "$n : put back, it is processed like a new file ($($case.Result))"
-        Check ((Get-Names $dir '_uploaded') -eq 'c.e2e' -and (Get-Names $dir) -eq '' -and (Get-Names $dir '_skipped') -eq '') "$n : and filed as uploaded - a 409 (already there) is harmless"
-        Check ((@(Get-CommitScans $script:Fake) -join ',') -ceq 'Pc:0,Pc:1') "$n : both volumes were sent, each with its own scanIndex"
+    # ------------------------------------------------------------------------
+    # DR-041: an .e2e is uploaded whole - subject from the folder, SHA-256 and
+    # preflight, one streamed split commit
+    # ------------------------------------------------------------------------
+    $script:UploadTimeouts = New-Object Collections.ArrayList
+    function New-UploadClient([int]$timeoutSec) {       # the upload client of the script, over the fake platform
+        [void]$script:UploadTimeouts.Add($timeoutSec)
+        New-Object System.Net.Http.HttpClient -ArgumentList $script:Fake, $false
     }
+    function Get-ExpectedSha([string]$path) {            # independent of the script's own hashing: read whole, hash, hex
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { (($sha.ComputeHash([IO.File]::ReadAllBytes($path)) | ForEach-Object { $_.ToString('x2') }) -join '') } finally { $sha.Dispose() }
+    }
+    function New-SplitBody([string[]]$statuses, [bool]$parked) {
+        $items = @(for ($i = 0; $i -lt $statuses.Count; $i++) {
+            '{"ingestItemId":' + (100 + $i) + ',"seriesKey":"s' + $i + '","seriesModality":"IR","laterality":"OD","frames":1,"status":"' + $statuses[$i] + '","jobs":[]}'
+        })
+        '{"sha256":"x","headerPatient":"empty","parked":' + $(if ($parked) { 'true' } else { 'false' }) + ',"items":[' + ($items -join ',') + ']}'
+    }
+    function Add-Preflight($fake, [bool]$exists) { $fake.Enqueue('preflight', (New-Reply 200 ('{"exists":' + $(if ($exists) { 'true' } else { 'false' }) + ',"ingestItemId":null,"jobId":null}'))) }
+    function Get-EndpointList($fake) { @($fake.Seen | ForEach-Object { ($_ -split ' ')[0] }) -join ',' }
+
+    Section 'e2e subject: the folder that directly contains the file'
+    $root = Join-Path $tmp 'subject-root'
+    New-Item -ItemType Directory -Force (Join-Path $root 'EIAMD005/session/deeper') | Out-Null
+    New-Item -ItemType Directory -Force (Join-Path $tmp 'subject-root2/X') | Out-Null
+    foreach ($rel in 'top.e2e', 'EIAMD005/a.e2e', 'EIAMD005/session/b.e2e', 'EIAMD005/session/deeper/c.E2E') { [IO.File]::WriteAllBytes((Join-Path $root $rel), [byte[]](1..4)) }
+    [IO.File]::WriteAllBytes((Join-Path $tmp 'subject-root2/X/d.e2e'), [byte[]](1..4))
+    Check ($null -eq (Get-E2eSubject $root (Get-Item (Join-Path $root 'top.e2e')))) 'directly in the watch folder: no subject'
+    Check ((Get-E2eSubject $root (Get-Item (Join-Path $root 'EIAMD005/a.e2e'))) -ceq 'EIAMD005') 'one level down: the folder name'
+    Check ((Get-E2eSubject $root (Get-Item (Join-Path $root 'EIAMD005/session/b.e2e'))) -ceq 'session') 'deeper: the immediate parent, not the first folder below the watch folder'
+    Check ((Get-E2eSubject $root (Get-Item (Join-Path $root 'EIAMD005/session/deeper/c.E2E'))) -ceq 'deeper') 'much deeper, upper-case extension: the immediate parent'
+    Check ((Get-E2eSubject ($root + '\') (Get-Item (Join-Path $root 'EIAMD005/a.e2e'))) -ceq 'EIAMD005') 'a watch folder given with a trailing separator'
+    Check ($null -eq (Get-E2eSubject $root (Get-Item (Join-Path $tmp 'subject-root2/X/d.e2e')))) 'a sibling folder that starts with the same text is not below the watch folder'
+    Check ((Test-IsE2e (Get-Item (Join-Path $root 'EIAMD005/session/deeper/c.E2E')))) 'the extension test is case-insensitive'
+
+    Section 'e2e: a root-level file is not uploaded, only counted'
+    Reset-Watcher
+    $dir = New-Folder @('root.e2e'); $cfg = New-Cfg $dir $TOK
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'nothing to upload, 1 without subject folder') 'summary says so'
+    Check ($script:Fake.Seen.Count -eq 0) 'no request at all: no preflight, no hash lookup, no commit'
+    Check ((Get-Names $dir) -eq 'root.e2e' -and (Get-Names $dir '_uploaded') -eq '(none)' -and (Get-Names $dir '_failed') -eq '(none)') 'the file stays where it is'
+    Check ($script:Attempts.Count -eq 0) 'no attempt counted'
+    Check ($script:SweepProblems.ContainsKey('no-subject-folder')) 'coded problem no-subject-folder'
+    $hb = Get-HeartbeatBody $cfg $true ''
+    Check (@($hb.problems) -contains 'no-subject-folder' -and $hb.pendingFiles -eq 1) 'the heartbeat carries the code and still counts the file as waiting'
+    Check ((Get-LogCount 'directly in the watch folder') -eq 1 -and -not (Get-LogText).Contains('root.e2e')) 'one log line with a count, no file name'
+    Invoke-Sweep $cfg | Out-Null
+    Check ((Get-LogCount 'directly in the watch folder') -eq 1) 'the same count is not logged again at every sweep'
+
+    Section 'e2e: a root-level file beside a patient folder'
+    Reset-Watcher
+    $dir = New-Folder @('root.e2e', 'EIAMD005/a.e2e'); $cfg = New-Cfg $dir $TOK
+    $sha = Get-ExpectedSha (Join-Path $dir 'EIAMD005/a.e2e')
+    Add-Preflight $script:Fake $false
+    $script:Fake.Enqueue('commit', (New-Reply 201 (New-SplitBody @('UNBOUND', 'UNBOUND', 'BOUND') $false)))
+    $script:UploadTimeouts.Clear()
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 1 files -> 3 series (1 bound, 2 parked), 0 already there, 0 failed, 1 without subject folder') "summary: $result"
+    Check ((Get-Names $dir) -eq 'root.e2e' -and (Get-Names (Join-Path $dir 'EIAMD005') '_uploaded') -eq 'a.e2e' -and (Get-Names $dir 'EIAMD005') -eq '') 'the patient file is filed in its own _uploaded folder, the root file stays'
+    Check ((Get-EndpointList $script:Fake) -eq 'preflight,commit' -and $script:Fake.Unexpected -eq 0) 'preflight then commit - no resolve, one commit for the whole file'
+    Check ($script:Fake.Queries[0] -ceq "GET ?sha256=$sha&split=true") "preflight is GET ?sha256=<streamed hash>&split=true"
+    Check ($script:Fake.Fields[1] -ceq 'file=<file>;split=true;patientId=EIAMD005;device=spectralis;') "commit field set is exactly file, split, patientId, device: $($script:Fake.Fields[1])"
+    Check ($script:Fake.Fields[1] -notmatch 'scanDate|laterality|scanIndex|studyEventId|park') 'no scanDate, laterality, scanIndex, studyEventId or park'
+    Check ($script:Fake.FileParts.Count -eq 1 -and $script:Fake.FileParts[0] -ceq "StreamContent:40:$sha") 'the file part is a StreamContent and the platform receives all 40 bytes, hash intact'
+    Check ($script:Fake.Seen[0] -ceq "preflight up=$TOK old=-" -and $script:Fake.Seen[1] -ceq "commit up=$TOK old=-") 'preflight and commit both carry the uploader token'
+    Check ($script:UploadTimeouts.Count -eq 1 -and $script:UploadTimeouts[0] -eq (Get-UploadTimeoutSec 40)) 'the upload runs on a client with the size-based deadline'
+    Check ((Get-UploadTimeoutSec 2GB) -ge 2400 -and (Get-UploadTimeoutSec 2GB) -le 7200 -and (Get-UploadTimeoutSec 1) -ge 600) 'deadline: at least 10 minutes, about 44 minutes for 2 GiB'
+    Check ($script:UploadedToday -ge 1) 'counted as uploaded today for the heartbeat'
+    Check (-not (Get-LogText).Contains('a.e2e') -and -not (Get-LogText).Contains('root.e2e')) 'the log names no file'
+    Assert-NoSecret 'e2e upload'
+
+    Section 'e2e: the sweep summary counts files, series, bound and parked'
+    foreach ($case in @(
+        @{ Name = 'all parked by the platform'; Body = (New-SplitBody @('UNBOUND', 'UNBOUND') $true); Result = 'uploaded 1 files -> 2 series (0 bound, 2 parked), 0 already there, 0 failed, 0 without subject folder' },
+        @{ Name = 'every series bound';         Body = (New-SplitBody @('BOUND', 'BOUND', 'BOUND', 'BOUND') $false); Result = 'uploaded 1 files -> 4 series (4 bound, 0 parked), 0 already there, 0 failed, 0 without subject folder' },
+        @{ Name = 'a body that cannot be read'; Body = 'not json'; Result = 'uploaded 1 files -> 0 series (0 bound, 0 parked), 0 already there, 0 failed, 0 without subject folder' }
+    )) {
+        Reset-Watcher
+        $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+        Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 201 $case.Body))
+        $result = Invoke-TwoSweeps $cfg
+        Check ($result -ceq $case.Result -and (Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'a.e2e') "$($case.Name) : $result"
+    }
+
+    Section 'e2e: already on the platform - preflight hit, 409'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+    Add-Preflight $script:Fake $true
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 0 files -> 0 series (0 bound, 0 parked), 1 already there, 0 failed, 0 without subject folder') "preflight hit: $result"
+    Check ((Get-EndpointList $script:Fake) -eq 'preflight' -and $script:Fake.FileParts.Count -eq 0) 'no commit, no byte of the file sent'
+    Check ((Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'a.e2e' -and (Get-Names $dir 'P1') -eq '') 'moved to _uploaded'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+    Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 409 '{"duplicate":true,"existingIngestItemIds":[1,2]}'))
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 0 files -> 0 series (0 bound, 0 parked), 1 already there, 0 failed, 0 without subject folder' -and (Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'a.e2e') "409 on commit: $result - moved to _uploaded"
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+    $script:Fake.Enqueue('preflight', (New-Reply 500 'boom')); $script:Fake.Enqueue('commit', (New-Reply 201 (New-SplitBody @('UNBOUND') $false)))
+    $result = Invoke-TwoSweeps $cfg
+    Check ((Get-EndpointList $script:Fake) -eq 'preflight,commit' -and (Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'a.e2e') 'a preflight that fails is no reason not to try the commit (its 409 is the authority)'
+
+    Section 'e2e: one patient folder per file, two patients'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e', 'P2/b.e2e'); $cfg = New-Cfg $dir $TOK
+    foreach ($i in 1, 2) { Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 201 (New-SplitBody @('UNBOUND') $false))) }
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 2 files -> 2 series (0 bound, 2 parked), 0 already there, 0 failed, 0 without subject folder') "summary: $result"
+    Check ((@($script:Fake.Fields | Where-Object { $_ -like 'file=*' } | ForEach-Object { [regex]::Match($_, 'patientId=([^;]*);').Groups[1].Value })) -join ',' -ceq 'P1,P2') 'each commit names its own folder as patientId'
+
+    Section 'e2e: failures are retried, then given up'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+    Invoke-Sweep $cfg | Out-Null
+    for ($i = 1; $i -le 5; $i++) {
+        Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 500 'boom'))
+        $result = Invoke-Sweep $cfg
+        if ($i -lt 5) { Check ((Get-Names $dir 'P1') -eq 'a.e2e') "attempt $i : the file waits for the next sweep" }
+    }
+    Check ((Get-Names (Join-Path $dir 'P1') '_failed') -eq 'a.e2e' -and (Get-Names $dir 'P1') -eq '') 'after 5 attempts it goes to _failed'
+    Check ($result -ceq 'uploaded 0 files -> 0 series (0 bound, 0 parked), 0 already there, 1 failed, 0 without subject folder' -and $script:SweepProblems.ContainsKey('upload-failed')) 'last sweep: 1 failed, coded upload-failed'
+    Check ($script:Fake.Unexpected -eq 0) 'no stray requests'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+    Invoke-Sweep $cfg | Out-Null
+    Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 500 'boom'))
+    Invoke-Sweep $cfg | Out-Null
+    Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 201 (New-SplitBody @('UNBOUND') $false)))
+    Invoke-Sweep $cfg | Out-Null
+    Check ((Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'a.e2e' -and $script:Attempts.Count -eq 0) 'a retry that works files it as uploaded and forgets the failed attempt'
+
+    Section 'e2e: a file over 2 GiB is not sent'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e'); $cfg = New-Cfg $dir $TOK
+    $keep = $script:MaxE2eBytes; $script:MaxE2eBytes = 10
+    try { $result = Invoke-TwoSweeps $cfg } finally { $script:MaxE2eBytes = $keep }
+    Check ($script:Fake.Seen.Count -eq 0 -and (Get-Names (Join-Path $dir 'P1') '_failed') -eq 'a.e2e') 'no request; moved to _failed at once'
+    Check ($script:SweepProblems.ContainsKey('file-too-large') -and $result -like '*1 failed*') 'coded file-too-large, counted as failed'
+
+    Section 'e2e: a 401 leaves the file and everything after it where it is'
+    foreach ($case in @(
+        @{ Name = 'on the preflight'; Pre = (New-Reply 401 $REJECTED); Code = 'token-rejected'; Seen = 1 },
+        @{ Name = 'on the commit';    Pre = (New-Reply 200 '{"exists":false}'); Commit = (New-Reply 401 $REQUIRED); Code = 'token-required'; Seen = 2 }
+    )) {
+        Reset-Watcher
+        $dir = New-Folder @('P1/a.e2e', 'P2/b.e2e'); $cfg = New-Cfg $dir $(if ($case.Code -eq 'token-required') { '' } else { $TOK })
+        $script:Fake.Enqueue('preflight', $case.Pre); if ($case.ContainsKey('Commit')) { $script:Fake.Enqueue('commit', $case.Commit) }
+        $result = Invoke-TwoSweeps $cfg
+        Check ($result -ceq $(if ($case.Code -eq 'token-required') { $TEXT_REQUIRED } else { $TEXT_REJECTED })) "$($case.Name) : the German text"
+        Check ((Get-Names $dir 'P1') -eq 'a.e2e' -and (Get-Names $dir 'P2') -eq 'b.e2e') "$($case.Name) : both files still where they were"
+        Check ((Get-Names (Join-Path $dir 'P1') '_uploaded') -eq '(none)' -and (Get-Names (Join-Path $dir 'P1') '_failed') -eq '(none)') "$($case.Name) : nothing filed"
+        Check ($script:Attempts.Count -eq 0 -and $script:SweepProblems.ContainsKey($case.Code)) "$($case.Name) : no attempt counted, coded $($case.Code)"
+        Check ($script:Fake.Seen.Count -eq $case.Seen -and $script:Fake.Unexpected -eq 0) "$($case.Name) : the round ended at the refusal ($($case.Seen) request(s))"
+    }
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e', 'P2/b.e2e'); $cfg = New-Cfg $dir $TOK
+    Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 201 (New-SplitBody @('UNBOUND') $false)))
+    $script:Fake.Enqueue('preflight', (New-Reply 401 $REJECTED))
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq $TEXT_REJECTED -and (Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'a.e2e' -and (Get-Names $dir 'P2') -eq 'b.e2e') 'a 401 on the second file: the first is filed (accepted before), the second stays'
+    Check ((Get-LogCount 'then the platform refused') -eq 1) 'the log says how many went before'
+
+    Section 'e2e: a 429 on the preflight ends the round without an attempt'
+    Reset-Watcher
+    $dir = New-Folder @('P1/a.e2e', 'P2/b.e2e'); $cfg = New-Cfg $dir $TOK
+    $script:Fake.Enqueue('preflight', (New-Reply 429))
+    Invoke-TwoSweeps $cfg | Out-Null
+    Check ($script:Fake.Seen.Count -eq 1 -and $script:Attempts.Count -eq 0 -and $script:SweepProblems.ContainsKey('rate-limited')) 'one request, no attempt, coded rate-limited'
+
+    Section 'e2e beside DICOM in one sweep'
+    Reset-Watcher
+    $dir = New-Folder @('a.dcm', 'P1/x.e2e'); $cfg = New-Cfg $dir $TOK
+    $script:Fake.Enqueue('resolve', (New-ResolveReply 1)); Add-Commits $script:Fake 201
+    Add-Preflight $script:Fake $false; $script:Fake.Enqueue('commit', (New-Reply 201 (New-SplitBody @('UNBOUND', 'UNBOUND') $false)))
+    $result = Invoke-TwoSweeps $cfg
+    Check ($result -ceq 'uploaded 1 files -> 2 series (0 bound, 2 parked), 0 already there, 0 failed, 0 without subject folder; DICOM: uploaded 1 (1 bound), 0 already there, 0 failed, 0 non-image set aside') "summary: $result"
+    Check ((Get-EndpointList $script:Fake) -eq 'resolve,commit,preflight,commit' -and $script:Fake.Unexpected -eq 0) 'DICOM keeps its resolve + commit; the .e2e adds only preflight + commit'
+    Check ((Get-Names $dir '_uploaded') -eq 'a.dcm' -and (Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'x.e2e') 'both filed'
+    Check ($script:Fake.Fields[0] -notmatch 'x\b' -and ([regex]::Matches($script:Fake.Fields[0], 'patientId')).Count -eq 1) 'the resolve asks about the DICOM only'
+
+    Section 'e2e: no whole-file read on the .e2e path'
+    foreach ($fn in 'Get-E2eSubject', 'Get-FileSha256', 'Get-E2ePreflight', 'Send-E2eCommit', 'Get-E2eCommitCounts', 'Invoke-E2eUploads', 'Invoke-SweepCore') {
+        $body = (Get-Command $fn -CommandType Function).ScriptBlock.ToString()
+        Check ($body -notmatch 'ReadAllBytes|ReadAllText|ByteArrayContent|Read-E2eScans|Resolve-Batch|Get-FileScans') "$fn : no ReadAllBytes, ByteArrayContent, header parse or resolve"
+    }
+    Check ((Get-Command Send-E2eCommit -CommandType Function).ScriptBlock.ToString() -match 'StreamContent') 'Send-E2eCommit uses StreamContent'
+    Check ((Get-Command Get-FileSha256 -CommandType Function).ScriptBlock.ToString() -match 'ComputeHash\(\$fs\)') 'Get-FileSha256 hashes the stream'
+    Check (([regex]::Matches($source, 'ReadAllBytes')).Count -eq 2) 'the script reads whole files in exactly one place (DICOM Send-Commit; the other match is the comment in Send-E2eCommit)'
+    Check (-not ($source -match 'Read-E2eScans')) 'the header reader is gone from the script'
+    Check ((Get-FileSha256 (Join-Path $root 'EIAMD005/a.e2e')) -ceq (Get-ExpectedSha (Join-Path $root 'EIAMD005/a.e2e'))) 'the streamed SHA-256 equals the whole-file one'
+
+    Section 'e2e: retention reaches the _uploaded folders inside patient folders'
+    Reset-Watcher
+    $dir = New-Folder @('P1/_uploaded/old.e2e', 'P1/_uploaded/new.e2e', '_uploaded/oldtop.dcm', 'P1/_failed/keep.e2e'); $cfg = New-Cfg $dir $TOK
+    $cfg.DeleteUploaded = $true; $cfg.DeleteUploadedAfterDays = 1
+    foreach ($p in 'P1/_uploaded/old.e2e', '_uploaded/oldtop.dcm', 'P1/_failed/keep.e2e') { (Get-Item (Join-Path $dir $p)).LastWriteTimeUtc = [datetime]::UtcNow.AddDays(-5) }
+    $script:LastRetentionUtc = [datetime]::MinValue
+    Invoke-Retention $cfg
+    Check ((Get-Names (Join-Path $dir 'P1') '_uploaded') -eq 'new.e2e' -and (Get-Names $dir '_uploaded') -eq '') 'old files in both kinds of _uploaded are deleted, the new one stays'
+    Check ((Get-Names (Join-Path $dir 'P1') '_failed') -eq 'keep.e2e') '_failed is never touched'
 
     Section 'watcher: a 401 on the lookup leaves every file where it is'
     foreach ($case in @(
@@ -368,12 +544,12 @@ if ($Target -eq 'watcher') {
     )) {
         $n = $case.Name
         Reset-Watcher
-        $dir = New-Folder @('a.dcm', 'b.dcm', 'c.e2e', 'raw.dcm')
+        $dir = New-Folder @('a.dcm', 'b.dcm', 'c.dcm', 'raw.dcm')
         $cfg = New-Cfg $dir $case.Token
         $script:Fake.Enqueue('resolve', (New-Reply 401 $case.Body))
         $result = Invoke-TwoSweeps $cfg
         Check ($result -ceq $case.Text) "$n : the sweep's result is the German text"
-        Check ((Get-Names $dir) -eq 'a.dcm,b.dcm,c.e2e,raw.dcm') "$n : every file is still in the watch folder"
+        Check ((Get-Names $dir) -eq 'a.dcm,b.dcm,c.dcm,raw.dcm') "$n : every file is still in the watch folder"
         Check ((Get-Names $dir '_uploaded') -eq '(none)' -and (Get-Names $dir '_failed') -eq '(none)' -and (Get-Names $dir '_skipped') -eq '(none)') "$n : nothing moved to _uploaded / _failed / _skipped (the folders were not even made)"
         Check ($script:Attempts.Count -eq 0) "$n : no attempt counted against any file"
         Check ($script:SweepProblems.ContainsKey($case.Code) -and -not $script:SweepProblems.ContainsKey('server-unreachable')) "$n : coded problem $($case.Code), not server-unreachable"
@@ -387,14 +563,14 @@ if ($Target -eq 'watcher') {
 
     Section 'watcher: a 401 on a commit after a successful lookup'
     Reset-Watcher
-    $dir = New-Folder @('a.dcm', 'b.dcm', 'c.e2e', 'raw.dcm')
+    $dir = New-Folder @('a.dcm', 'b.dcm', 'c.dcm', 'raw.dcm')
     $cfg = New-Cfg $dir $TOK
     $script:Fake.Enqueue('resolve', (New-ResolveReply 4))
     $script:Fake.Enqueue('commit', (New-Reply 201)); $script:Fake.Enqueue('commit', (New-Reply 401 $REJECTED))
     $result = Invoke-TwoSweeps $cfg
     Check ($result -ceq $TEXT_REJECTED) 'the result is the German text'
     Check ((Get-Names $dir '_uploaded') -eq 'a.dcm') 'what the platform accepted before the refusal is filed'
-    Check ((Get-Names $dir) -eq 'b.dcm,c.e2e,raw.dcm') 'the refused file, the files after it and the Raw Data object stay where they are'
+    Check ((Get-Names $dir) -eq 'b.dcm,c.dcm,raw.dcm') 'the refused file, the files after it and the Raw Data object stay where they are'
     Check ((Get-Names $dir '_failed') -eq '(none)' -and (Get-Names $dir '_skipped') -eq '(none)') 'nothing moved to _failed or _skipped'
     Check ($script:Attempts.Count -eq 0) 'no attempt counted'
     Check ($script:Fake.Seen.Count -eq 3 -and $script:Fake.Unexpected -eq 0) 'lookup, commit, commit - and no commit after the refusal'
@@ -402,21 +578,13 @@ if ($Target -eq 'watcher') {
     Check ((Get-LogCount 'then the platform refused') -eq 1) 'the log says how many went before (a count, no names)'
 
     Section 'watcher: the next sweep after a refusal'
-    $script:Fake.Enqueue('resolve', (New-ResolveReply 3)); Add-Commits $script:Fake 201, 201, 201
+    $script:Fake.Enqueue('resolve', (New-ResolveReply 2)); Add-Commits $script:Fake 201, 201
     $result = Invoke-Sweep $cfg
-    Check ($result -ceq 'uploaded 3 (3 bound), 0 already there, 0 failed, 1 non-image set aside') 'the platform takes the token: everything goes through'
-    Check ((Get-Names $dir '_uploaded') -eq 'a.dcm,b.dcm,c.e2e' -and (Get-Names $dir '_skipped') -eq 'raw.dcm' -and (Get-Names $dir) -eq '') 'files filed, the Raw Data object set aside, the folder empty'
+    Check ($result -ceq 'uploaded 2 (2 bound), 0 already there, 0 failed, 1 non-image set aside') 'the platform takes the token: everything goes through'
+    Check ((Get-Names $dir '_uploaded') -eq 'a.dcm,b.dcm,c.dcm' -and (Get-Names $dir '_skipped') -eq 'raw.dcm' -and (Get-Names $dir) -eq '') 'files filed, the Raw Data object set aside, the folder empty'
     Check (-not $script:SweepProblems.ContainsKey('token-rejected') -and $script:TokenLogged -eq '') 'the problem is gone, and a later refusal will be logged again'
     Assert-Header $script:Fake $TOK 'refusal and retry'
     Assert-NoSecret 'refusal and retry'
-
-    Section 'watcher: a 401 on the second scan of one .e2e'
-    Reset-Watcher
-    $dir = New-Folder @('c.e2e'); $cfg = New-Cfg $dir $TOK
-    $script:Fake.Enqueue('resolve', (New-ResolveReply 2)); $script:Fake.Enqueue('commit', (New-Reply 201)); $script:Fake.Enqueue('commit', (New-Reply 401 $REJECTED))
-    $result = Invoke-TwoSweeps $cfg
-    Check ((Get-Names $dir) -eq 'c.e2e' -and (Get-Names $dir '_uploaded') -eq '(none)') 'a file of which only one scan was taken is not filed as uploaded'
-    Check ($script:Attempts.Count -eq 0 -and $result -ceq $TEXT_REJECTED) 'no attempt counted, German text'
 
     Section 'watcher: a refusal that persists'
     Reset-Watcher

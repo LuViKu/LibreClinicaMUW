@@ -447,17 +447,27 @@ upload front door the page uses (DR-029), so nothing changes server-side:
 - **sweep** every 20 s; a file counts as finished when its size has not
   changed since the last sweep and it can be opened without sharing;
 - **identify** `.dcm` from the header (PatientID, StudyDate, laterality —
-  the Optomed bridge's reader) and `.e2e` from the Heidelberg chunk
-  directory (patient id, acquisition date and laterality per OCT volume —
-  a port of the page's own reader), one upload per volume;
-- **one `/resolve` per sweep** for every scan found, because lookups on the
-  public front door are budgeted at 30 per hour per client; exactly one
-  subject with exactly one visit that day → bound on arrival, otherwise the
-  reconciliation inbox with label and date as hints (an `.e2e` without a
-  visit is *parked*: no inference until somebody binds it);
-- `201` and `409` (already there) move the file to `_uploaded\`; anything
-  else is retried on later sweeps and after five attempts moved to
-  `_failed\`. Nothing is ever deleted.
+  the Optomed bridge's reader). An `.e2e` is **not read** at all: the folder
+  it sits in is its subject (see below);
+- **`.dcm`: one `/resolve` per sweep** for every scan found, because lookups
+  on the public front door are budgeted at 30 per hour per client; exactly
+  one subject with exactly one visit that day → bound on arrival, otherwise
+  the reconciliation inbox with label and date as hints;
+- **`.e2e` (DR-041): one upload per file, split on the platform.** The
+  watcher computes the file's SHA-256 (streamed), asks
+  `GET /public/upload/preflight?sha256=…&split=true` and, if the platform
+  does not have it yet, sends the whole file in **one streamed**
+  `POST /public/upload/commit` (`split=true`, `patientId` = the folder name,
+  `device`), up to **2 GiB**; the file is never read into memory. The
+  platform splits it into one item per series (OCT volume, OCT line scan, IR,
+  BAF, BR, IRAF, qAF, ICGA, FA, per eye), binds them when it can and parks
+  them in the inbox when the header's patient id differs from the folder
+  name or no visit can be found. The request's time limit is sized from the
+  file (10 minutes plus the file at 1 MiB/s: about 44 minutes for 2 GiB);
+- `201` and `409` (already there) move the file to `_uploaded\` — a
+  preflight hit does too, without a byte sent; anything else is retried on
+  later sweeps and after five attempts moved to `_failed\`. A file over
+  2 GiB goes to `_failed\` at once, unsent. Nothing is ever deleted.
 - A Clarus export is **three objects per capture**: the photograph, a Raw
   Data object with the vendor's sensor data (about 8 MB) and a small OT Raw
   Data object stamped with the export time. Only the photograph is an image
@@ -467,8 +477,32 @@ upload front door the page uses (DR-029), so nothing changes server-side:
 **One watcher per PC**, each pointed at that PC's own export folder: on the
 Clarus PC it runs beside the Optomed bridge, on the Spectralis PC alone.
 The convention is the one every device ingress here uses — **the patient id
-typed into the device is the study subject label** (Clarus: PatientID; HEYEX:
-the patient id, or after anonymisation the surname slot, where MUW keeps it).
+typed into the device is the study subject label** (Clarus: PatientID).
+
+**Spectralis: one folder per patient.** HEYEX exports each patient as a
+folder of `.E2E` files, and the header's patient id is empty or different
+often enough that it cannot be relied on. The watcher therefore takes the
+**subject from the folder**: the name of the folder that directly contains the
+file (its immediate parent), however deep it sits below the watch folder.
+
+```
+D:\LibreClinica-Export\            <- watch folder
+    EIAMD005\                      <- subject label EIAMD005
+        EIAMD01D.E2E               <- uploaded as subject EIAMD005
+        EIAMD02D.E2E
+    EIAMD006\ ...
+    stray.E2E                      <- directly in the watch folder: NOT uploaded
+```
+
+An `.E2E` directly in the watch folder has no subject: it is left where it
+is and reported — "N without subject folder" in the sweep summary and the
+coded problem `no-subject-folder` on the System Status page — until someone
+moves it into a patient folder. Uploaded files are filed in an `_uploaded\`
+(or `_failed\`) folder **inside the patient folder**; the retention setting
+reaches those as well. If the header's patient id is present and differs from
+the folder name, the platform parks every series of the file in the inbox for
+a person to decide; if it is empty or equal, the series are bound by label
+and date as for any other upload.
 
 ```powershell
 # On each acquisition PC, as the user who exports. Copy deploy/export-watcher/
@@ -485,12 +519,14 @@ uploader token, which every PC needs in multi-location mode (see "Uploader
 tokens and locations" below). Settings are in
 `%ProgramData%\LibreClinica\export-watcher.json`, the log beside them (counts
 and pseudonymous labels only, never names or filenames).
-Before switching it on, check the readers on a real export:
+Before switching it on, check the rules on a real export:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTest -File D:\LibreClinica-Export\some.E2E
-# prints one line per volume: label, date, laterality — nothing is uploaded
-# (a Clarus Raw Data object prints "[non-image object: set aside]")
+# .dcm: one line with label, date, laterality (a Clarus Raw Data object prints
+#       "[non-image object: set aside]")
+# .E2E: the subject taken from its folder and the file's SHA-256 - the header
+#       is not read. Nothing is uploaded either way.
 ```
 
 Like the bridge, the watcher reports to the **System Status** page every two

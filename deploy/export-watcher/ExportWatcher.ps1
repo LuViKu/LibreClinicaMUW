@@ -25,23 +25,35 @@
                Raw Data object stamped with the export time. Only the
                photograph is an image; the other two are set aside in
                _skipped\ (never deleted) unless UploadNonImage is on.
-               .e2e: patient id, acquisition date and laterality per OCT
-               volume out of the Heidelberg chunk directory - a port of the
-               upload page's own reader (web/src/spa/src/lib/e2eParser.ts;
-               keep the two in step). A file with several volumes is
-               uploaded once per volume, as the page does.
+               .e2e (DR-041): the header is NOT read. The subject is the
+               folder: <WatchFolder>\...\<subject>\x.e2e - the folder that
+               directly contains the file. An .e2e directly in the watch
+               folder has no subject: it is not uploaded, it is counted
+               ("without subject folder" in the sweep summary, the coded
+               problem no-subject-folder in the heartbeat). One file holds a
+               whole multimodal session (both eyes, OCT, IR, autofluorescence,
+               angiography ...); the platform splits it into one item per
+               series, and parks them all when the header's patient id
+               differs from the folder name.
 
-    resolve    ONE POST /resolve for every scan found in the sweep, not one
-               per file: the public front door budgets lookups at 30 per
-               hour per client, and a Clarus session is easily 40 files.
+    resolve    .dcm only: ONE POST /resolve for every scan found in the sweep,
+               not one per file: the public front door budgets lookups at 30
+               per hour per client, and a Clarus session is easily 40 files.
                Exactly one subject with exactly one visit on that day ->
                bound on arrival; anything else -> the reconciliation inbox,
                with the label and date as hints.
 
-    commit     POST /commit per scan. 201 and 409 (already there, by
+    commit     .dcm: POST /commit per scan. 201 and 409 (already there, by
                content hash) both move the file into _uploaded\. Any other
                answer leaves it for the next sweep; after 5 attempts it goes
                to _failed\ so a bad file cannot burn the budget forever.
+               .e2e: SHA-256 of the file (streamed), GET /preflight?sha256=..
+               &split=true - already there -> _uploaded\ without a byte sent -
+               else ONE streamed POST /commit (split=true, patientId=<folder>,
+               device) for the whole file, up to 2 GiB, never read into
+               memory; the deadline is sized from the file. 201 and 409 move
+               it to _uploaded\, the rest is retried and ends in _failed\ as
+               above. A file over 2 GiB goes to _failed\ unsent.
 
     token      (DR-040) When an uploader token is set in Settings, EVERY
                request - resolve, commit, heartbeat - carries it in the header
@@ -62,9 +74,9 @@
 
   The convention this relies on is the one every device ingress here uses:
   the patient id the photographer types into the device IS the study subject
-  label. Clarus: the DICOM PatientID. Spectralis: the HEYEX patient id -
-  or, after HEYEX anonymisation, whatever sits in the surname slot, which is
-  where MUW keeps the label (the page reads it the same way).
+  label. Clarus: the DICOM PatientID. Spectralis: the name of the patient's
+  export folder (the header's patient id is empty or different often enough
+  that it cannot be relied on - the platform only compares it).
 
   Runs at login as a tray icon (see Install-ExportWatcher.ps1). Right-click:
   enable/disable, sweep now, settings, open log, exit. One instance per PC;
@@ -94,8 +106,9 @@
   and for testing the whole chain without a desktop session.
 
 .PARAMETER SelfTest
-  Headless: read -File and print what this script would send for it (label,
-  date, laterality, volumes) - nothing is uploaded. Lets the readers be
+  Headless: read -File and print what this script would send for it. A .dcm:
+  label, date, laterality. An .e2e: the subject taken from its folder and its
+  SHA-256 (the header is not read). Nothing is uploaded. Lets the rules be
   checked on a real export before the watcher is switched on.
 
 .PARAMETER Heartbeat
@@ -138,7 +151,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 $script:AppName     = 'Export Watcher'
 # Shown on the System Status page beside this PC's name. Bump with every
 # change to this script, so a PC still running an old copy stands out.
-$script:Version     = '2026-10-12.2'
+$script:Version     = '2026-10-13.1'
 $script:Kind        = 'export-watcher'
 $script:StateDir    = Split-Path -Parent $ConfigPath
 $script:LogPath     = Join-Path $script:StateDir 'export-watcher.log'
@@ -242,11 +255,27 @@ function Unprotect-Token([string]$protected) {
 }
 
 # ----------------------------------------------------------------------------
-# HTTP - one client; long timeout because an .e2e is tens of megabytes
+# HTTP - one client for the small requests; an .e2e upload gets its own (below)
 # ----------------------------------------------------------------------------
 Add-Type -AssemblyName System.Net.Http
 $script:Http = New-Object System.Net.Http.HttpClient
 $script:Http.Timeout = [TimeSpan]::FromMinutes(15)
+# An .e2e is up to 2 GiB, so its upload gets a client of its own whose deadline
+# is sized from the file (HttpClient.Timeout cannot change after the first
+# request): this long for the handshake and the server's work, plus the file at
+# no less than 1 MiB/s (a 2 GiB file: about 44 minutes). The tests replace
+# New-UploadClient.
+$script:UploadBaseTimeoutSec = 600
+$script:UploadMinBytesPerSec = 1048576
+$script:MaxE2eBytes = 2GB
+function Get-UploadTimeoutSec([int64]$bytes) {
+    [int]($script:UploadBaseTimeoutSec + [Math]::Ceiling([double]$bytes / $script:UploadMinBytesPerSec))
+}
+function New-UploadClient([int]$timeoutSec) {
+    $c = New-Object System.Net.Http.HttpClient
+    $c.Timeout = [TimeSpan]::FromSeconds($timeoutSec)
+    $c
+}
 
 function Get-ApiUrl([pscustomobject]$cfg, [string]$path) {
     $cfg.BaseUrl.TrimEnd('/') + '/pages' + $path
@@ -350,7 +379,7 @@ function Get-TokenRefusalCode($errorRecord) {
 # coded problems; never a label, a filename or anything about a patient.
 # ----------------------------------------------------------------------------
 # Its own client with a short timeout: a heartbeat that hangs must not hold
-# the tray for the fifteen minutes an .e2e upload is allowed.
+# the tray for the up-to-an-hour an .e2e upload may take.
 $script:HbHttp = New-Object System.Net.Http.HttpClient
 $script:HbHttp.Timeout = [TimeSpan]::FromSeconds(10)
 $script:HbLastCode = -1           # the last heartbeat's HTTP status; a change is logged, a repeat is not
@@ -603,134 +632,6 @@ function ConvertTo-IsoDate([string]$da) {
     if ($da -match '^(\d{4})(\d{2})(\d{2})') { '{0}-{1}-{2}' -f $Matches[1], $Matches[2], $Matches[3] } else { $null }
 }
 
-# ----------------------------------------------------------------------------
-# Spectralis .e2e reader - a port of web/src/spa/src/lib/e2eParser.ts
-#
-# Chunk directory walk, then per chunk: type 9 (patient id: canonical slot,
-# else the surname slot where MUW keeps the label after anonymisation, else
-# first name), 10004 (B-scan metadata: acquisition time as Windows FILETIME,
-# one volume per patient_db_id/study_id/series_id), 10 (session date as an
-# OLE Automation date - the fallback for fundus-only exports), 3 and 11
-# (laterality). Offsets are the ones in the TypeScript file; change both.
-# ----------------------------------------------------------------------------
-function Read-E2eScans {
-    param([string]$Path)
-    $b = [IO.File]::ReadAllBytes($Path)
-    $skip = 0
-    $mv = 'E2EMultipleVolumeFile'
-    if ($b.Length -ge $mv.Length -and [Text.Encoding]::GetEncoding(28591).GetString($b, 0, $mv.Length) -eq $mv) { $skip = 64 }
-    if ($b.Length -lt $skip + 36 + 52) { throw 'too short for an .e2e header' }
-    $magic0 = $b[$skip]
-    if ($magic0 -lt 0x20 -or $magic0 -ge 0x7f) { throw 'not a Spectralis .e2e file (header magic)' }
-
-    # directory linked list: first main directory sits right after the 36-byte file header
-    $dirs = New-Object Collections.ArrayList
-    $first = $skip + 36
-    $current = [BitConverter]::ToUInt32($b, $first + 40)
-    $guard = 0
-    while ($current -ne 0 -and $guard -lt 100000) {
-        $abs = [long]$current + $skip
-        if ($abs + 52 -gt $b.Length) { break }
-        [void]$dirs.Add($abs)
-        $prev = [BitConverter]::ToUInt32($b, [int]$abs + 44)
-        if ($prev -eq $current) { break }
-        $current = $prev; $guard++
-    }
-
-    # sub-directory entries -> chunk starts
-    $starts = New-Object Collections.ArrayList
-    foreach ($d in $dirs) {
-        $n = [BitConverter]::ToUInt32($b, [int]$d + 36)
-        $e = [int]$d + 52
-        for ($i = 0; $i -lt $n; $i++) {
-            if ($e + 44 -gt $b.Length) { break }
-            $pos = [BitConverter]::ToUInt32($b, $e); $start = [BitConverter]::ToUInt32($b, $e + 4)
-            if ($start -gt $pos -and $start -gt 0) { [void]$starts.Add($start) }
-            $e += 44
-        }
-    }
-
-    $latin1 = [Text.Encoding]::GetEncoding(28591)
-    function Get-Str([byte[]]$buf, [int]$off, [int]$len) {
-        $end = $off + $len; while ($end -gt $off -and $buf[$end - 1] -eq 0) { $end-- }
-        $latin1.GetString($buf, $off, $end - $off).Trim()
-    }
-    $volumes = [ordered]@{}
-    $patientIds = @{}
-    $fileDate = $null
-    foreach ($s in $starts) {
-        $c = [long]$s + $skip
-        if ($c + 60 -gt $b.Length) { continue }
-        $c = [int]$c
-        $pdb = [BitConverter]::ToUInt32($b, $c + 32); $sid = [BitConverter]::ToUInt32($b, $c + 36); $ser = [BitConverter]::ToUInt32($b, $c + 40)
-        $type = [BitConverter]::ToUInt32($b, $c + 52)
-        $p = $c + 60
-        $key = "$pdb`_$sid`_$ser"
-        switch ($type) {
-            9 {
-                if ($p + 102 + 25 -gt $b.Length) { break }
-                $id = Get-Str $b ($p + 102) 25
-                if ($id.Length -eq 0) { $id = Get-Str $b ($p + 31) 51 }
-                if ($id.Length -eq 0) { $id = Get-Str $b $p 31 }
-                if ($id.Length -gt 0) { $patientIds[[string]$pdb] = $id }
-            }
-            10 {
-                if ($null -ne $fileDate -or $p + 6 + 8 -gt $b.Length) { break }
-                $days = [BitConverter]::ToDouble($b, $p + 6)
-                if ([double]::IsNaN($days) -or $days -lt 30000 -or $days -gt 80000) { break }
-                $fileDate = [DateTime]::FromOADate($days)
-            }
-            3 {
-                if ($p + 5 -gt $b.Length) { break }
-                $lat = ConvertTo-Laterality ([string][char]$b[$p + 4])
-                if ($lat) {
-                    if (-not $volumes.Contains($key)) { $volumes[$key] = @{ Laterality = $null; Ticks = 0; NumImages = 0; PatientDb = [string]$pdb } }
-                    $volumes[$key].Laterality = $lat
-                }
-            }
-            11 {
-                if ($p + 15 -gt $b.Length) { break }
-                $lat = ConvertTo-Laterality ([string][char]$b[$p + 14])
-                if ($lat) {
-                    if (-not $volumes.Contains($key)) { $volumes[$key] = @{ Laterality = $null; Ticks = 0; NumImages = 0; PatientDb = [string]$pdb } }
-                    if ($null -eq $volumes[$key].Laterality) { $volumes[$key].Laterality = $lat }
-                }
-            }
-            10004 {
-                if ($p + 88 + 8 -gt $b.Length) { break }
-                if (-not $volumes.Contains($key)) { $volumes[$key] = @{ Laterality = $null; Ticks = 0; NumImages = 0; PatientDb = [string]$pdb } }
-                $n = [BitConverter]::ToUInt32($b, $p + 64)
-                if ($n -gt $volumes[$key].NumImages) { $volumes[$key].NumImages = $n }
-                $ticks = [BitConverter]::ToUInt64($b, $p + 88)
-                if ($volumes[$key].Ticks -eq 0 -and $ticks -gt 0) { $volumes[$key].Ticks = $ticks }
-            }
-        }
-    }
-
-    $out = New-Object Collections.ArrayList
-    $idx = 0
-    foreach ($k in $volumes.Keys) {
-        $v = $volumes[$k]
-        # ($pid is PowerShell's read-only process id; a label is what this is.)
-        $label = ''
-        if ($patientIds.ContainsKey($v.PatientDb)) { $label = $patientIds[$v.PatientDb] }
-        $date = $null
-        if ($v.Ticks -gt 0 -and $v.Ticks -lt 9223372036854775807) {
-            try { $date = [DateTime]::FromFileTimeUtc([long]$v.Ticks).ToLocalTime() } catch { $date = $null }
-        }
-        if ($null -eq $date -and $null -ne $fileDate) { $date = $fileDate }
-        $lat = 'OD'; if ($v.Laterality) { $lat = $v.Laterality }
-        [void]$out.Add([pscustomobject]@{
-            PatientId  = $label
-            ScanDate   = $(if ($date) { $date.ToString('yyyy-MM-dd') } else { $null })
-            Laterality = $lat
-            ScanIndex  = $idx
-            NumImages  = [int]$v.NumImages
-        })
-        $idx++
-    }
-    ,$out.ToArray()
-}
 
 # ----------------------------------------------------------------------------
 # what a file would send
@@ -744,12 +645,165 @@ function Get-FileScans([pscustomobject]$cfg, [IO.FileInfo]$f) {
         $nonImage = [bool]@($script:NonImageSopPrefixes | Where-Object { $t.SOPClassUID.StartsWith($_) })
         return ,@([pscustomobject]@{ PatientId = $t.PatientID; ScanDate = (ConvertTo-IsoDate $t.StudyDate); Laterality = $lat; ScanIndex = 0; Device = $cfg.DeviceDicom; Kind = 'dicom'; NonImage = $nonImage })
     }
-    $scans = Read-E2eScans $f.FullName
-    if ($scans.Count -eq 0) {
-        # a file with no volume chunk at all: send it once, undated, so the inbox gets it
-        return ,@([pscustomobject]@{ PatientId = ''; ScanDate = $null; Laterality = $null; ScanIndex = 0; Device = $cfg.DeviceE2e; Kind = 'e2e'; NonImage = $false })
+    throw 'Get-FileScans reads DICOM only; an .e2e is uploaded whole and split by the platform (Invoke-E2eUploads)'
+}
+
+# ----------------------------------------------------------------------------
+# Spectralis .e2e (DR-041) - uploaded whole, split into series by the platform
+#
+# The header is not read here any more. The folder the file sits in is the
+# subject: <WatchFolder>\...\<subject>\x.e2e. The platform compares the header's
+# patient id with it and parks the file's series when they differ.
+# ----------------------------------------------------------------------------
+function Test-IsE2e([IO.FileInfo]$f) { $f.Extension -ieq '.e2e' }
+
+# The name of the folder that directly contains the file (its immediate parent), or
+# $null for a file that sits directly in the watch folder (no subject: not uploaded).
+function Get-E2eSubject([string]$root, [IO.FileInfo]$f) {
+    $rootFull = [IO.Path]::GetFullPath($root).TrimEnd('\', '/')
+    $dir = [IO.Path]::GetFullPath($f.DirectoryName).TrimEnd('\', '/')
+    if ($dir.Length -le $rootFull.Length) { return $null }
+    if (-not $dir.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+    $next = $dir[$rootFull.Length]
+    if ($next -ne '\' -and $next -ne '/') { return $null }      # a sibling such as <root>2, not a folder below it
+    $last = Split-Path -Leaf $dir      # the folder that directly contains the file
+    if ($last) { $last } else { $null }
+}
+
+# SHA-256 of a file, streamed (the file is never held in memory). Lower-case hex.
+function Get-FileSha256([string]$path) {
+    $fs = [IO.File]::Open($path, 'Open', 'Read', 'Read')
+    try {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $hash = $sha.ComputeHash($fs) } finally { $sha.Dispose() }
+    } finally { $fs.Dispose() }
+    -join ($hash | ForEach-Object { $_.ToString('x2') })
+}
+
+# A property of a parsed JSON object, or $null (strict mode throws on a missing one).
+function Get-JsonProp($obj, [string]$name) {
+    if ($null -ne $obj -and $obj.PSObject.Properties[$name]) { return $obj.$name }
+    $null
+}
+
+# GET preflight: is this file (by content) already split on the platform?
+# -> @{ Status; Body; Exists }. Only a clean 200 {"exists":true} is a hit;
+# anything else goes on to the commit, whose 409 is the authority.
+function Get-E2ePreflight([pscustomobject]$cfg, [string]$sha256) {
+    $resp = Send-DeviceRequest $script:Http $cfg 'GET' ('/api/v1/public/upload/preflight?sha256={0}&split=true' -f $sha256)
+    $status = [int]$resp.StatusCode
+    $exists = $false
+    $body = Read-ResponseText $resp
+    if ($status -eq 200) {
+        try { $exists = ((Get-JsonProp ($body | ConvertFrom-Json) 'exists') -eq $true) } catch { $exists = $false }
     }
-    ,@($scans | ForEach-Object { [pscustomobject]@{ PatientId = $_.PatientId; ScanDate = $_.ScanDate; Laterality = $_.Laterality; ScanIndex = $_.ScanIndex; Device = $cfg.DeviceE2e; Kind = 'e2e'; NonImage = $false } })
+    [pscustomobject]@{ Status = $status; Body = $body; Exists = $exists }
+}
+
+# POST commit, split mode: ONE streamed multipart request for the whole file.
+# The file travels as a StreamContent over a read-only FileStream - never
+# ReadAllBytes. No scanDate / laterality / scanIndex / studyEventId / park:
+# the platform splits the file and decides (DR-041 Contract 2).
+function Send-E2eCommit([pscustomobject]$cfg, [IO.FileInfo]$f, [string]$subject) {
+    $fs = [IO.File]::Open($f.FullName, 'Open', 'Read', 'Read')
+    $mp = New-Object System.Net.Http.MultipartFormDataContent
+    try {
+        $fc = New-Object System.Net.Http.StreamContent($fs, 81920)
+        $fc.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/octet-stream')
+        $mp.Add($fc, 'file', 'scan.e2e')      # neutral name: an export is often named after the patient
+        $fields = [ordered]@{ split = 'true'; patientId = $subject; device = [string]$cfg.DeviceE2e }
+        foreach ($k in $fields.Keys) { $mp.Add((New-Object System.Net.Http.StringContent([string]$fields[$k])), $k) }
+        $client = New-UploadClient (Get-UploadTimeoutSec $f.Length)
+        try {
+            $resp = Send-DeviceRequest $client $cfg 'POST' '/api/v1/public/upload/commit' $mp
+            [pscustomobject]@{ Status = [int]$resp.StatusCode; Body = (Read-ResponseText $resp) }
+        } finally { $client.Dispose() }
+    } finally {
+        $mp.Dispose()      # disposes the StreamContent and with it the FileStream
+        $fs.Dispose()
+    }
+}
+
+# What a 201 says about the file: how many series became items, and of those
+# how many were bound and how many parked. @{ Items; Bound; Parked }.
+# "parked": true means every item went to the inbox; otherwise an item still
+# UNBOUND is in the inbox, any other status is bound.
+function Get-E2eCommitCounts([string]$body) {
+    $items = 0; $bound = 0; $parked = 0
+    try {
+        $j = $body | ConvertFrom-Json
+        $list = @(Get-JsonProp $j 'items')
+        $allParked = ((Get-JsonProp $j 'parked') -eq $true)
+        foreach ($it in $list) {
+            if ($null -eq $it) { continue }
+            $items++
+            if ($allParked -or [string](Get-JsonProp $it 'status') -ceq 'UNBOUND') { $parked++ } else { $bound++ }
+        }
+    } catch { }
+    [pscustomobject]@{ Items = $items; Bound = $bound; Parked = $parked }
+}
+
+# Uploads the settled .e2e files of a sweep (each has a subject folder). Each
+# one: SHA-256 (streamed), preflight, and - if the platform does not have it -
+# one streamed commit. 201 and 409 move the file to _uploaded\; a 401 ends the
+# round with the refused file (and every later one) untouched; anything else is
+# retried at the next sweep and goes to _failed\ after MaxAttempts.
+# -> counts, and TokenProblem (a code, or $null).
+function Invoke-E2eUploads([pscustomobject]$cfg, [object[]]$files) {
+    $r = [pscustomobject]@{ Files = 0; Series = 0; Bound = 0; Parked = 0; Already = 0; Failed = 0; TokenProblem = $null }
+    foreach ($f in $files) {
+        $subject = Get-E2eSubject $cfg.WatchFolder $f
+        $outcome = $null      # 'ok' | 'failed'
+        if ($f.Length -gt $script:MaxE2eBytes) {
+            # over what the platform takes: not worth five attempts of two gigabytes
+            Add-Problem 'file-too-large'; $r.Failed++
+            Write-Log 'upload: an .e2e file is over 2 GiB - moved to _failed' 'ERROR'
+            try { Move-Aside $f $script:FailedDir } catch { Add-Problem 'unreadable-files' }
+            continue
+        }
+        try {
+            $sha = Get-FileSha256 $f.FullName
+            $pre = Get-E2ePreflight $cfg $sha
+            $refused = Get-TokenProblemCode $pre.Status $pre.Body
+            if ($refused) { $r.TokenProblem = $refused; break }
+            if ($pre.Status -eq 429) { Add-Problem 'rate-limited'; Write-Log 'upload: preflight HTTP 429 - the rest waits for the next sweep' 'WARN'; break }
+            if ($pre.Exists) {
+                $r.Already++; $outcome = 'ok'
+            } else {
+                $c = Send-E2eCommit $cfg $f $subject
+                $refused = Get-TokenProblemCode $c.Status $c.Body
+                if ($refused) { $r.TokenProblem = $refused; break }
+                switch ($c.Status) {
+                    201 {
+                        $n = Get-E2eCommitCounts $c.Body
+                        $r.Files++; $r.Series += $n.Items; $r.Bound += $n.Bound; $r.Parked += $n.Parked
+                        $outcome = 'ok'; Add-Uploaded
+                    }
+                    409 { $r.Already++; $outcome = 'ok' }
+                    default {
+                        $r.Failed++; $outcome = 'failed'
+                        Add-Problem $(if ($c.Status -eq 429) { 'rate-limited' } else { 'upload-failed' })
+                        $why = ($c.Body -replace '\s+', ' ')
+                        Write-Log ("upload: HTTP {0} for label '{1}' ({2})" -f $c.Status, $subject, $why.Substring(0, [Math]::Min(120, $why.Length))) 'WARN'
+                    }
+                }
+            }
+        } catch {
+            $r.Failed++; $outcome = 'failed'
+            Add-Problem 'server-unreachable'
+            Write-Log "upload: $($_.Exception.Message)" 'ERROR'
+        }
+        if ($outcome -eq 'ok') { Move-Aside $f $script:UploadedDir }
+        elseif ($outcome -eq 'failed') {
+            $n = 1 + [int]$script:Attempts[$f.FullName]; $script:Attempts[$f.FullName] = $n
+            if ($n -ge $script:MaxAttempts) {
+                Write-Log ("upload: giving up on an .e2e file after {0} attempts - moved to {1}" -f $n, $script:FailedDir) 'ERROR'
+                Move-Aside $f $script:FailedDir
+            }
+        }
+        Start-Sleep -Milliseconds 500     # the public front door is rate-limited per client
+    }
+    $r
 }
 
 # ----------------------------------------------------------------------------
@@ -792,22 +846,13 @@ function Resolve-Batch([pscustomobject]$cfg, [object[]]$scans) {
 }
 
 function Send-Commit([pscustomobject]$cfg, [IO.FileInfo]$f, [pscustomobject]$scan, $studyEventId) {
+    # DICOM only (a Clarus object is a few megabytes); an .e2e goes through Send-E2eCommit.
     $mp = New-Object System.Net.Http.MultipartFormDataContent
     $fc = New-Object System.Net.Http.ByteArrayContent(,[IO.File]::ReadAllBytes($f.FullName))
-    if ($scan.Kind -eq 'dicom') {
-        $fc.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/dicom')
-        $mp.Add($fc, 'file', 'image.dcm')     # neutral names: the real one may carry the patient's
-    } else {
-        $fc.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/octet-stream')
-        $mp.Add($fc, 'file', 'scan.e2e')      # the sniffer's .e2e concession keys on this extension
-    }
+    $fc.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/dicom')
+    $mp.Add($fc, 'file', 'image.dcm')     # neutral names: the real one may carry the patient's
     $fields = @{ patientId = $scan.PatientId; scanDate = $scan.ScanDate; laterality = $scan.Laterality
                  scanIndex = $scan.ScanIndex; device = $scan.Device; studyEventId = $studyEventId }
-    # An .e2e must name its visit or be parked: the OCT route refuses a
-    # scan with neither (400), because a scan on a visit starts inference and
-    # one without must not. Parked = the reconciliation inbox, no job until
-    # somebody binds it - the same place an unresolved photo lands.
-    if ($scan.Kind -eq 'e2e' -and -not $studyEventId) { $fields['park'] = 'true' }
     foreach ($k in $fields.Keys) {
         if ($null -ne $fields[$k] -and "$($fields[$k])" -ne '') { $mp.Add((New-Object System.Net.Http.StringContent("$($fields[$k])")), $k) }
     }
@@ -856,8 +901,9 @@ function Move-SetAside($skipped, $failed) {
 # ----------------------------------------------------------------------------
 # retention of uploaded exports (2026-09-28)
 # ----------------------------------------------------------------------------
-# With DeleteUploaded on, deletes the files in _uploaded\ that were uploaded
-# more than DeleteUploadedAfterDays ago: only that folder, only its top level,
+# more than DeleteUploadedAfterDays ago: only _uploaded folders (the watch
+# folder's and, since DR-041, each patient folder's), only their top level,
+# more than DeleteUploadedAfterDays ago: only the _uploaded folders (the watch folder's and each patient folder's), only their top level,
 # only .dcm and .e2e files. The upload time is the copy's modification time,
 # which Move-Aside stamps; a copy from before this version carries the
 # export's own time, which is earlier, so it goes no later than it should.
@@ -871,13 +917,25 @@ function Invoke-Retention([pscustomobject]$cfg) {
     $now = [datetime]::UtcNow
     if (($now - $script:LastRetentionUtc).TotalMinutes -lt $script:RetentionEveryMinutes) { return }
     $script:LastRetentionUtc = $now
-    $dir = Join-Path $cfg.WatchFolder $script:UploadedDir
-    if (-not (Test-Path -LiteralPath $dir)) { return }
     $cutoff = $now.AddDays(-$days)
     $deleted = 0; $failed = 0; $kept = 0
-    foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '^\.(dcm|e2e)$' })) {
-        if ($f.LastWriteTimeUtc -ge $cutoff) { $kept++; continue }
-        try { Remove-Item -LiteralPath $f.FullName -Force; $deleted++ } catch { $failed++ }
+    # Every _uploaded\ folder: the one in the watch folder and, since DR-041, the
+    # one inside each patient folder (Move-Aside files a file next to where it was).
+    $uploadedDirs = New-Object Collections.ArrayList
+    $stack = New-Object Collections.Stack
+    $stack.Push($cfg.WatchFolder)
+    while ($stack.Count -gt 0) {
+        $d = $stack.Pop()
+        foreach ($e in @(Get-ChildItem -LiteralPath $d -Directory -ErrorAction SilentlyContinue)) {
+            if ($e.Name -eq $script:UploadedDir) { [void]$uploadedDirs.Add($e.FullName) }
+            elseif ($e.Name -ne $script:FailedDir -and $e.Name -ne $script:SkippedDir) { $stack.Push($e.FullName) }
+        }
+    }
+    foreach ($dir in $uploadedDirs) {
+        foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '^\.(dcm|e2e)$' })) {
+            if ($f.LastWriteTimeUtc -ge $cutoff) { $kept++; continue }
+            try { Remove-Item -LiteralPath $f.FullName -Force; $deleted++ } catch { $failed++ }
+        }
     }
     if ($deleted -gt 0 -or $failed -gt 0) {
         Write-Log ("retention: deleted {0} uploaded export(s) older than {1} day(s); {2} kept, {3} could not be deleted" -f $deleted, $days, $kept, $failed)
@@ -902,6 +960,8 @@ function Invoke-Sweep([pscustomobject]$cfg) {
     finally { $script:LastActivityUtc = [datetime]::UtcNow }
 }
 
+$script:NoSubjectLogged = -1      # the "no subject folder" count last written to the log; a repeat is not (the sweep runs every 20 s)
+
 function Invoke-SweepCore([pscustomobject]$cfg) {
     $root = $cfg.WatchFolder
     if (-not (Test-Path $root)) {
@@ -910,9 +970,44 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
         return 'watch folder missing'
     }
     try { Invoke-Retention $cfg } catch { Write-Log "retention: $($_.Exception.Message)" 'WARN' }
-    $files = @((Get-WatchedFiles $root).Pending)
-    if ($files.Count -eq 0) { return 'nothing to upload' }
+    $all = @((Get-WatchedFiles $root).Pending)
+
+    # An .e2e directly in the watch folder has no subject (the folder name is
+    # the subject label): it is not uploaded, only counted. Coded problem and a
+    # count in the log - never a name.
+    $noSubject = @($all | Where-Object { (Test-IsE2e $_) -and $null -eq (Get-E2eSubject $root $_) })
+    if ($noSubject.Count -gt 0) { Add-Problem 'no-subject-folder' }
+    if ($noSubject.Count -ne $script:NoSubjectLogged) {
+        $script:NoSubjectLogged = $noSubject.Count
+        if ($noSubject.Count -gt 0) { Write-Log ("sweep: {0} .e2e file(s) directly in the watch folder - not uploaded, they need a patient folder" -f $noSubject.Count) 'WARN' }
+    }
+    $files = @($all | Where-Object { -not (Test-IsE2e $_) -or $null -ne (Get-E2eSubject $root $_) })
+    $tail = $(if ($noSubject.Count -gt 0) { ', {0} without subject folder' -f $noSubject.Count } else { '' })
+    if ($files.Count -eq 0) { return ('nothing to upload' + $tail) }
     $ready = @($files | Where-Object { Test-Settled $_ })
+    if ($ready.Count -eq 0) { return ('{0} file(s) still being written' -f $files.Count) + $tail }
+    $readyE2e = @($ready | Where-Object { Test-IsE2e $_ })
+    $readyDcm = @($ready | Where-Object { -not (Test-IsE2e $_) })
+
+    $dicomSummary = $null
+    if ($readyDcm.Count -gt 0) { $dicomSummary = Invoke-DicomSweep $cfg $readyDcm }     # throws on a refused token
+    if ($readyE2e.Count -eq 0) { return ([string]$dicomSummary + $tail) }
+
+    $e = Invoke-E2eUploads $cfg $readyE2e
+    if ($e.TokenProblem) {
+        if (($e.Files + $e.Already) -gt 0) { Write-Log ("sweep: uploaded {0} file(s) -> {1} series, {2} already there, then the platform refused the uploader token" -f $e.Files, $e.Series, $e.Already) }
+        throw (New-TokenRefusal $e.TokenProblem)
+    }
+    $script:TokenLogged = ''      # the platform took the token: a refusal after this is news again
+    $summary = 'uploaded {0} files -> {1} series ({2} bound, {3} parked), {4} already there, {5} failed, {6} without subject folder' -f $e.Files, $e.Series, $e.Bound, $e.Parked, $e.Already, $e.Failed, $noSubject.Count
+    Write-Log "sweep: $summary"
+    if ($dicomSummary) { $summary = $summary + '; DICOM: ' + $dicomSummary }
+    $summary
+}
+
+# The DICOM part of a sweep: read the headers, ONE /resolve for all of them,
+# one commit per file. Unchanged since before DR-041.
+function Invoke-DicomSweep([pscustomobject]$cfg, [object[]]$ready) {
     if ($ready.Count -eq 0) { return ('{0} file(s) still being written' -f $files.Count) }
 
     # identify everything first, so one /resolve covers the sweep
@@ -1010,8 +1105,24 @@ function Invoke-SweepCore([pscustomobject]$cfg) {
 if ($SelfTest) {
     if (-not $File) { throw 'SelfTest needs -File <path to a .dcm or .e2e>' }
     $cfg = Read-Config
-    $f = Get-Item $File
+    $f = Get-Item -LiteralPath $File
     Write-Host ("{0} ({1:N0} bytes)" -f $f.Extension, $f.Length)
+    if (Test-IsE2e $f) {
+        # Nothing is read from the header (the platform splits the file): the
+        # subject is the folder, the SHA-256 is what the preflight would ask.
+        $subject = Get-E2eSubject $cfg.WatchFolder $f
+        $where = 'folder that directly contains the file'
+        if (-not $subject) {
+            # the file is not in a sub-folder of the watch folder: show what the
+            # rule gives for it if it were - the folder it sits in
+            $subject = Split-Path -Leaf $f.DirectoryName
+            $where = 'its own folder (the file is not below the watch folder)'
+        }
+        if ($f.Length -gt $script:MaxE2eBytes) { Write-Host '  over 2 GiB: would be moved to _failed, not uploaded' }
+        Write-Host ("  subject (patientId) = '{0}' [{1}]; device={2}; split=true" -f $subject, $where, $cfg.DeviceE2e)
+        Write-Host ("  sha256 = {0}" -f (Get-FileSha256 $f.FullName))
+        exit 0
+    }
     foreach ($s in (Get-FileScans $cfg $f)) {
         $note = $(if ($s.NonImage) { ' [non-image object: set aside]' } else { '' })
         Write-Host ("  scan {0}: label='{1}' date={2} laterality={3} device={4}{5}" -f $s.ScanIndex, $s.PatientId, $(if ($s.ScanDate) { $s.ScanDate } else { '-' }), $(if ($s.Laterality) { $s.Laterality } else { '-' }), $s.Device, $note)
