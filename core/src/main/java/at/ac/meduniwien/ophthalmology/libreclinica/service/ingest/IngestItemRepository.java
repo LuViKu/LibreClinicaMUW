@@ -160,6 +160,13 @@ public final class IngestItemRepository {
         /** Which scan within a multi-scan file; absent for single artifacts. */
         public Builder scanIndex(Integer v) { return set("scan_index", v, Types.INTEGER); }
 
+        /** DR-041 — which series of a split multimodal .e2e this row is (opaque key from the converter). */
+        public Builder e2eSeriesKey(String v) { return set("e2e_series_key", v, Types.VARCHAR); }
+        /** DR-041 — the series kind (OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA, OTHER). */
+        public Builder seriesModality(String v) { return set("series_modality", v, Types.VARCHAR); }
+        /** DR-041 — number of frames in the series. */
+        public Builder seriesFrames(Integer v) { return set("series_frames", v, Types.INTEGER); }
+
         /**
          * DR-036 — the digest of the picture the file shows, independent of
          * its metadata ({@link ImageFingerprint}; the DICOM sidecar's

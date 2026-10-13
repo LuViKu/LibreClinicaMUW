@@ -365,6 +365,40 @@ public class RemoteRetinalInferenceClient {
     }
 
     /**
+     * DR-041 — as {@link #preprocessUpload}, for a stored file: the request
+     * body is streamed from disk, so a file of up to 2 GiB is not held in
+     * memory (an .e2e is never DICOM, so no sniffing is needed).
+     */
+    public PreprocessResult preprocessUploadFile(long jobId,
+                                                 String e2eName,
+                                                 Path file,
+                                                 String laterality,
+                                                 String e2eUuid,
+                                                 int scanIndex) {
+        String prepUrl = preprocessUrl();
+        if (prepUrl == null || prepUrl.isBlank()) {
+            return null;
+        }
+        // The JDK client streams the request body; SimpleClientHttpRequestFactory would buffer a 2 GiB file.
+        long timeoutMs = remoteTimeout().toMillis();
+        org.springframework.http.client.JdkClientHttpRequestFactory rf =
+                new org.springframework.http.client.JdkClientHttpRequestFactory(
+                        java.net.http.HttpClient.newBuilder()
+                                .connectTimeout(Duration.ofMillis(timeoutMs)).build());
+        rf.setReadTimeout(Duration.ofMillis(timeoutMs));
+        RestTemplate rest = Json.restTemplate(rf);
+        org.springframework.core.io.Resource part = new org.springframework.core.io.FileSystemResource(file) {
+            @Override public String getFilename() { return e2eName; }
+        };
+        try {
+            return preprocessToDicom(rest, prepUrl, jobId, part, laterality, e2eUuid, scanIndex);
+        } catch (RetinalRunRefused refused) {
+            LOG.info("Eager preprocess refused for job {}: {}", jobId, refused.code());
+            return null;
+        }
+    }
+
+    /**
      * 2026-06-22 — post-inference derivation. The cluster /run only ships
      * the raw segmentation (e.g. fluidseg.npz) — projection PNGs +
      * per-slice overlays are computed app-VM-side from the persisted
@@ -483,16 +517,24 @@ public class RemoteRetinalInferenceClient {
                                                String laterality,
                                                String e2eUuid,
                                                int scanIndex) {
+        return preprocessToDicom(rest, prepUrl, jobId, new ByteArrayResource(e2eBytes) {
+            @Override public String getFilename() { return e2eName; }
+        }, laterality, e2eUuid, scanIndex);
+    }
+
+    private PreprocessResult preprocessToDicom(RestTemplate rest,
+                                               String prepUrl,
+                                               long jobId,
+                                               org.springframework.core.io.Resource filePart,
+                                               String laterality,
+                                               String e2eUuid,
+                                               int scanIndex) {
         String token = preprocessToken();
         if (token == null || token.isBlank()) {
             LOG.warn("Preprocess URL set but no token "
                     + "(core.retinalInference.preprocessToken / remotePushToken) for job {}", jobId);
             return null;
         }
-
-        ByteArrayResource filePart = new ByteArrayResource(e2eBytes) {
-            @Override public String getFilename() { return e2eName; }
-        };
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("file", filePart);
