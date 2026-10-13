@@ -1,6 +1,6 @@
 # Multimodal Spectralis exports: one upload, one item per series
 
-**Status:** in progress, 2026-10-13. Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
+**Status:** in progress, 2026-10-13 (server side implemented, see below). Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
 
 ## Why
 
@@ -168,6 +168,21 @@ Response `201`:
 7. **Limits.** Uploads of up to 2 GiB are accepted (servlet multipart config and nginx). Requests stream to disk and are not buffered in memory.
 8. **Retention.** A stored file shared by several items is deleted only when no item references it any more.
 9. **Inbox.** Items show their series modality and frame count. Staff can preview a series through an app endpoint that checks inbox visibility and proxies `/e2e/series-image`.
+
+### Implemented (server side, 2026-10-13)
+
+Built as specified, with these details worth knowing:
+
+- **Entry points.** `split=true` on `POST …/public/upload/commit` and `POST …/ingest/upload/commit`, and `?sha256=…&split=true` on both preflights (`{exists, split:true, existingIngestItemIds:[…]}`). `eventCrfId`, `scanDate` and `laterality` are refused with 400 in split mode (use `studyEventId` or `park`). On the staff route `split=true` answers 400 while de-identification is required (that path keeps its per-volume behaviour).
+- **Migration** `lc-muw-2026-10-13-e2e-series.xml`: `ingest_item.e2e_series_key/series_modality/series_frames`, `imaging_modality.e2e_series`, unique `(sha256, e2e_series_key)`. The old `(sha256, COALESCE(scan_index,-1))` index is recreated as partial (`e2e_series_key IS NULL`), because the non-OCT series of one file all have `scan_index` NULL and would collide.
+- **Analysable.** A series row is `kind='e2e'` with `oct_volume` TRUE for `OCT` and FALSE otherwise; `OctVolumes.isAnalysable` now treats an `.e2e` row with `oct_volume = FALSE` as not analysable (legacy rows have NULL and stay analysable). So binding an IR/FA/line-scan series from the inbox starts no job.
+- **Binding.** The label alone must name exactly one visible subject, else the whole file is parked. A series with no visit on its date is parked on its own; the rest of the file is bound. `headerPatient=differs` or `park=true` parks everything. A series whose OCT volume has the same picture as an earlier item is parked on its own with the usual held-back audit row (the per-volume route refuses a same-label twin instead; refusing one volume of a split file would drop the others).
+- **Modality.** Looked up by `imaging_modality.e2e_series` in the bound study, only if exactly one active entry carries the token. An OCT volume with no token entry falls back to the study's single `e2e`-accepting entry, as the per-volume route does. Binding from the inbox sets the modality the same way; unbinding clears it for a series row.
+- **Jobs.** Only `OCT` volumes with a laterality get jobs (visit plan, inference switch as before). Preprocessing streams the stored file (`RemoteRetinalInferenceClient.preprocessUploadFile`, JDK HTTP client) once per OCT volume with its `scan_index`; the acquisition date comes from `/e2e/describe`, not from `/preprocess`.
+- **Failure of the sidecar.** The stored file is deleted and nothing is filed: 503 when the converter is not configured or unreachable, 502 for an error or an unusable answer (duplicate or malformed `seriesKey`, unknown `seriesModality`, `headerPatient` outside `empty|matches|differs`), 422 for a file without series.
+- **Inbox.** Rows carry `seriesModality`, `seriesFrames`, `seriesKey`; `GET /api/v1/ingest/{id}/series-image?frame=0` proxies `/e2e/series-image` under the same visibility rules as the other previews. `previewUrl` of a series row points at it.
+- **Retention and undo.** The retention sweep already kept a file while another row names it; the undo endpoints now do the same (they used to unlink the file unconditionally).
+- **Limits.** `web.xml` multipart 2 GiB; nginx 2048m, unbuffered request, 30-minute send/read timeouts on the public, ingest-upload and event-CRF OCT upload locations. The Tomcat connector has no custom settings in this repository (`maxPostSize` only concerns form-urlencoded bodies; `maxSwallowSize` only an aborted upload).
 
 ## Contract 3: clients
 

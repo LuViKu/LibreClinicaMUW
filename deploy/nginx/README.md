@@ -164,21 +164,22 @@ Applies to both deployments (it is in the shared `ecrf.conf`):
   server-level `client_max_body_size 1024m`, nginx's default timeouts and no
   rate limiting; the internet-facing one (`internet-facing.conf`) sets 2 MB, the
   timeouts and the rate limits below. The per-location limits in this table are
-  in `ecrf.conf` and apply in both modes. All are 1024m (the old internal
-  limit), so internal is unchanged; the app's own `/pages/*` multipart cap of
-  200 MiB is the real ceiling on those routes.
+  in `ecrf.conf` and apply in both modes. The image/OCT upload routes are
+  2048m (DR-041: one multimodal `.e2e` of up to 2 GiB), unbuffered and with
+  30-minute send/read timeouts; the others are 1024m (the old internal limit).
+  The app's own `/pages/*` multipart cap is 2 GiB (`web.xml`).
 - Request bodies, internet-facing: **2 MB** by default. The large limit is granted only here:
 
   | Location | Limit |
   |---|---|
-  | `/LibreClinica/pages/api/v1/public/` (portals; 404 on internet-facing) | 1024m |
-  | `/LibreClinica/pages/api/v1/ingest/upload/` (SPA `/ingest-inbox/upload`) | 1024m |
-  | `/LibreClinica/pages/api/v1/event-crfs/{id}/oct-upload` | 1024m |
+  | `/LibreClinica/pages/api/v1/public/` (portals; 404 on internet-facing) | 2048m, `proxy_request_buffering off` |
+  | `/LibreClinica/pages/api/v1/ingest/upload/` (SPA `/ingest-inbox/upload`) | 2048m, `proxy_request_buffering off` |
+  | `/LibreClinica/pages/api/v1/event-crfs/{id}/oct-upload` | 2048m, `proxy_request_buffering off` |
   | `/LibreClinica/pages/api/v1/eventCrfs/{id}/items/{oid}/file` (CRF file item) | 1024m |
   | `/LibreClinica/pages/api/v1/crfs/{oid}/versions`, `…/import`, `…/rules/import` | 1024m |
   | `/LibreClinica/{CreateCRFVersion,CreateXformCRFVersion,ImportCRFData,ImportRule,UploadFile}` (legacy multipart JSPs) | 1024m |
 
-  The app itself caps the `/pages/*` multipart parser at 200 MiB (`web.xml`).
+  The app itself caps the `/pages/*` multipart parser at 2 GiB (`web.xml`).
   The Optomed device endpoints and uploader heartbeats are tiny and keep the
   2 MB default. **A new upload route needs a line in this table and in
   `ecrf.conf`, or it answers 413.** The `:8088` retinal failover listener keeps
