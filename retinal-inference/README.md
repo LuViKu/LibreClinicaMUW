@@ -15,7 +15,8 @@ only a new decoder checkpoint.
 ## Layout
 
 - `src/retinal_inference/main.py` — FastAPI app entry.
-- `src/retinal_inference/api/` — `/health`, `/screen`, `/jobs/{id}` routers.
+- `src/retinal_inference/api/` — `/health`, `/screen`, `/jobs/{id}` routers; `/preprocess`
+  and `/e2e/describe` + `/e2e/series-image` ([docs/e2e-series-endpoints.md](docs/e2e-series-endpoints.md)).
 - `src/retinal_inference/inference/` — `RetinalInferenceAdapter` ABC,
   `PlaceholderAdapter`, stubbed `MirageAdapter`.
 - `src/retinal_inference/db/` — psycopg2 pool + Postgres-as-queue helpers

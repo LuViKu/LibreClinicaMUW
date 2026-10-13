@@ -24,17 +24,20 @@ from .e2e_parser import (
 )
 from .fundus_extract import build_geometry, extract_fundus_png
 from .phi import DEIDENTIFICATION_METHOD, redact_dicom
+from .series import describe_e2e, render_series_png
 
 __all__ = [
     "BscanVolume",
     "DEIDENTIFICATION_METHOD",
     "E2EMetadata",
     "build_geometry",
+    "describe_e2e",
     "extract_fundus_png",
     "heidelberg_pos_to_mm",
     "parse_e2e_metadata",
     "prepare_bscan_dcm",
     "read_e2e_volume",
     "redact_dicom",
+    "render_series_png",
     "write_bscan_dcm",
 ]

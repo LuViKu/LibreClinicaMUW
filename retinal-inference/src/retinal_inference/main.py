@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from retinal_inference.api import derive, health, jobs, preprocess, run, screen
+from retinal_inference.api import derive, e2e_series, health, jobs, preprocess, run, screen
 from retinal_inference.inference.adapter import get_adapter
 
 
@@ -38,4 +38,5 @@ app.include_router(screen.router)
 app.include_router(jobs.router)
 app.include_router(run.router)
 app.include_router(preprocess.router)
+app.include_router(e2e_series.router)
 app.include_router(derive.router)
