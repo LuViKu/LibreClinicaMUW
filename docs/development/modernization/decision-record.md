@@ -1168,15 +1168,6 @@ every thickness of such a file would be about 1.5× too large, silently.
 
 ---
 
-## Future decisions (open)
-
-*Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*
-
-- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP). The app still runs on DBCP 1.x; plan item R4
-- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache. De facto EhCache 3 (3.10.8) since B.5; decide with the Spring Boot 4 migration (DR-037)
-- DR-016 — JIT vs LOOKUP_ONLY provisioning default for SSO users (decide during Phase D execution after MedUni Wien admin-process review)
-- DR-017 — Authority/role mapping from SSO attributes (institution-specific; document a mapping-rule format)
-
 ## DR-041 — A multimodal Spectralis export is uploaded once and split into one item per series on the server
 
 **Status:** Accepted (2026-10-13). Design and contracts: [e2e-multimodal-split.md](../e2e-multimodal-split.md).
@@ -1202,3 +1193,12 @@ The header patient ID of these exports is unreliable: empty in 13 of the first 2
 - Every series in an export is visible in the inbox and can tick its own "performed" item once the study is configured.
 - The three readers no longer have to agree on volume numbering for this path, because the server is the only one that splits.
 - Several items now share one stored file, so retention deletes the file only when the last item referencing it is gone.
+
+## Future decisions (open)
+
+*Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*
+
+- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP). The app still runs on DBCP 1.x; plan item R4
+- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache. De facto EhCache 3 (3.10.8) since B.5; decide with the Spring Boot 4 migration (DR-037)
+- DR-016 — JIT vs LOOKUP_ONLY provisioning default for SSO users (decide during Phase D execution after MedUni Wien admin-process review)
+- DR-017 — Authority/role mapping from SSO attributes (institution-specific; document a mapping-rule format)
