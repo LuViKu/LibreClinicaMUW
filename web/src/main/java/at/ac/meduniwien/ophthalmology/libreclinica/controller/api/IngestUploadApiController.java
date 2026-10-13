@@ -169,11 +169,15 @@ public class IngestUploadApiController {
     @GetMapping(value = "/preflight", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> preflightStaffUpload(@RequestParam("sha256") String sha256,
                                        @RequestParam(value = "scanIndex", required = false) Integer scanIndex,
+                                       @RequestParam(value = "split", defaultValue = "false") boolean split,
                                        HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) return guard;
         if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
             return ResponseEntity.badRequest().body(Map.of("message", "sha256 must be 64 hex characters"));
+        }
+        if (split) {
+            return ResponseEntity.ok(oct.preflightSplit(sha256, visibility().visibleTo(session)));
         }
         // Only files this session may see count as "already there"; a file of
         // a site the caller has no access to would otherwise be named by id.
@@ -195,6 +199,8 @@ public class IngestUploadApiController {
             @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
             @RequestParam(value = "park", defaultValue = "false") boolean park,
             @RequestParam(value = "device", required = false) String device,
+            // DR-041 - a multimodal .e2e is split on the server into one item per series.
+            @RequestParam(value = "split", defaultValue = "false") boolean split,
             // Required de-identification (libreclinica.ingest.deidentification.required):
             // the browser's confirmation that it stripped the file, and the
             // SHA-256 of the bytes it sent, which the server checks.
@@ -247,6 +253,29 @@ public class IngestUploadApiController {
             deid = new DeidUploadGate.Context(pass.label(), pass.sha256(), pass.filename(),
                     violations -> DeidUploadGate.auditRejected(dataSource, actor.user(), actor.study(),
                             violations, pass.sha256(), "staff"));
+        }
+
+        if (split) {
+            // The browser de-identification path keeps its per-volume behaviour.
+            if (deidRequired) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "split=true is not available while de-identification is required"));
+            }
+            if (sniffed.kind() != IngestArtifactStore.Kind.E2E) {
+                return ResponseEntity.badRequest().body(Map.of("message", "split=true is only for .e2e files"));
+            }
+            if (!UploadRoute.isBlank(date) || !UploadRoute.isBlank(laterality)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "scanDate and laterality are taken from the file with split=true"));
+            }
+            String pid = patientId;
+            if (UploadRoute.isBlank(pid) && visit != null) {
+                pid = UploadRoute.subjectLabelForStudyEvent(dataSource, visit);
+            }
+            ResponseEntity<?> r = oct.commitSplitStaff(file, pid == null ? "" : pid, studyEventId, eventCrfId,
+                    park, access().visibleStudyIds(session), visibility().visibleTo(session));
+            attributeOctUpload(r, actor);
+            return UploadRoute.asE2e(r);
         }
 
         if (sniffed.kind() == IngestArtifactStore.Kind.E2E) {
@@ -378,9 +407,21 @@ public class IngestUploadApiController {
     private void attributeOctUpload(ResponseEntity<?> r, IngestBindService.Actor actor) {
         if (!r.getStatusCode().is2xxSuccessful() || actor.isSystem()) return;
         if (!(r.getBody() instanceof Map<?, ?> body)) return;
+        if (body.get("items") instanceof java.util.List<?> items) {
+            // DR-041 - a split upload made one item per series.
+            for (Object it : items) {
+                if (it instanceof Map<?, ?> m && m.get("ingestItemId") instanceof Number num) {
+                    attributeOctItem(num.longValue(), String.valueOf(m.get("status")), actor);
+                }
+            }
+            return;
+        }
         Object idRaw = body.get("ingestItemId");
         if (!(idRaw instanceof Number n)) return;
-        long id = n.longValue();
+        attributeOctItem(n.longValue(), String.valueOf(body.get("status")), actor);
+    }
+
+    private void attributeOctItem(long id, String status, IngestBindService.Actor actor) {
         // Who may see the scan while it is unbound: the uploader's study.
         if (actor.study() != null && actor.study().getId() > 0) {
             try (Connection c = dataSource.getConnection();
@@ -408,7 +449,6 @@ public class IngestUploadApiController {
                 LOG.warn("could not record the origin location of OCT upload ingest_item {}: {}", id, e.getMessage());
             }
         }
-        String status = String.valueOf(body.get("status"));
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "UPDATE ingest_item SET bound_by_user_id = ? "
