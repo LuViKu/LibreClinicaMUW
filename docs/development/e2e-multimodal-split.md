@@ -41,6 +41,8 @@ Before this change:
    - When it differs, every item of that file is parked in the inbox.
 4. **The drusen study is not configured yet.** Items park in the inbox until the study exists. The design must still bind them by modality once it does.
 
+> **Amended 2026-10-13 (subject rule).** Exports can land in one shared watch folder, so the folder cannot be relied on. The subject is the study label in the header's **surname** slot. The first-name and patient-ID slots can hold a clinic number and are never used. When the file sits in a patient folder, that folder must agree with the label; otherwise the file is parked. See [heidelberg-e2e-format-notes.md](heidelberg-e2e-format-notes.md). This supersedes decision 3 and the folder rules in Contract 3 below.
+
 ## Series kinds
 
 The kind is taken from the file's own per-series metadata (`oct-converter` `metadata['enface_modality']` and `metadata['scan_pattern']`, keyed by series):
