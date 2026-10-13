@@ -163,3 +163,115 @@ def test_unreadable_file_is_422_and_does_not_echo_the_parser_message(client, mon
     monkeypatch.setattr(mod, "describe_e2e", boom)
     r = _describe(client)
     assert r.status_code == 422 and "SECRET-FROM-FILE" not in r.text
+
+
+# ---- POST /e2e/convert (amendment 2026-10-13 (b)) ---------------------------------------
+
+
+class _ConvertRoot:
+    def __init__(self, root: Path, calls: list) -> None:
+        self.root = root
+        self.calls = calls
+
+    def __truediv__(self, other):
+        return self.root / other
+
+
+@pytest.fixture
+def convert_root(uploads, tmp_path, monkeypatch):
+    root = tmp_path / "e2e-convert"
+    monkeypatch.setattr(_config.settings, "e2e_convert_path", root)
+    calls: list[tuple] = []
+
+    def fake_convert(path, label, keys, out_dir):
+        calls.append((Path(path).name, label, list(keys), Path(out_dir)))
+        for k in keys:
+            if k not in ("s0", "s1", "s2"):
+                raise KeyError(k)
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        files = []
+        for k in keys:
+            (out / f"{k}.dcm").write_bytes(b"DICM-" + k.encode())
+            files.append({"seriesKey": k, "file": f"{k}.dcm", "sha256": "ab" * 32, "bytes": 7,
+                          "frames": 1, "sopClassUid": "1.2.3", "seriesModality": "IR"})
+        return files
+
+    monkeypatch.setattr(mod, "convert_series", fake_convert)
+    return _ConvertRoot(root, calls)
+
+
+def _convert(client, keys=("s0", "s1"), name=NAME, label="EIAMD005", headers=HEADERS):
+    body = {"storedName": name, "seriesKeys": list(keys)}
+    if label is not None:
+        body["label"] = label
+    return client.post("/e2e/convert", json=body, headers=headers)
+
+
+def test_convert_ok_writes_into_a_fresh_directory_named_after_the_stem(client, convert_root) -> None:
+    stale = convert_root / NAME[:-4]
+    stale.mkdir(parents=True)
+    (stale / "old.dcm").write_bytes(b"left over from an earlier attempt")
+    r = _convert(client)
+    assert r.status_code == 200
+    files = r.json()["files"]
+    assert [f["seriesKey"] for f in files] == ["s0", "s1"]
+    assert set(files[0]) == {"seriesKey", "file", "sha256", "bytes", "frames", "sopClassUid"}
+    assert sorted(p.name for p in stale.iterdir()) == ["s0.dcm", "s1.dcm"]  # stale file gone
+    name, label, keys, out = convert_root.calls[0]
+    assert (name, label, keys, out) == (NAME, "EIAMD005", ["s0", "s1"], stale)
+
+
+def test_convert_unknown_key_is_400_and_leaves_no_directory(client, convert_root) -> None:
+    r = _convert(client, keys=("s0", "s9"))
+    assert r.status_code == 400
+    assert not (convert_root / NAME[:-4]).exists()
+
+
+@pytest.mark.parametrize("keys", [[], ["../x"], ["s1;"], ["S1"], [""], ["s1\n"]])
+def test_convert_malformed_keys_are_400(client, convert_root, keys) -> None:
+    assert _convert(client, keys=keys).status_code in (400, 422)
+    assert not convert_root.calls
+
+
+@pytest.mark.parametrize("name", ["../x.e2e", "a/b.e2e", "x.txt", "", "a b.e2e", "x.e2e\x00"])
+def test_convert_bad_names_are_400(client, convert_root, name) -> None:
+    assert _convert(client, name=name).status_code == 400
+    assert not convert_root.calls
+
+
+def test_convert_missing_file_is_404(client, convert_root) -> None:
+    assert _convert(client, name="missing.e2e").status_code == 404
+
+
+def test_convert_failure_removes_the_directory_and_does_not_echo(client, convert_root, monkeypatch) -> None:
+    def boom(path, label, keys, out_dir):
+        Path(out_dir).mkdir(parents=True)
+        (Path(out_dir) / "s0.dcm").write_bytes(b"partial")
+        raise RuntimeError("SECRET-FROM-FILE")
+
+    monkeypatch.setattr(mod, "convert_series", boom)
+    r = _convert(client)
+    assert r.status_code == 422 and "SECRET-FROM-FILE" not in r.text
+    assert not (convert_root / NAME[:-4]).exists()
+
+
+def test_convert_has_the_same_gates_as_describe(client, convert_root, monkeypatch) -> None:
+    assert _convert(client, headers={}).status_code == 401
+    assert _convert(client, headers={"X-MUW-Inference-Token": "wrong"}).status_code == 401
+    monkeypatch.setattr(_config.settings, "auth_token", None)
+    assert _convert(client).status_code == 503
+    monkeypatch.setattr(_config.settings, "auth_token", TOKEN)
+    monkeypatch.setattr(mod, "_CONVERTER_AVAILABLE", False)
+    r = _convert(client)
+    assert r.status_code == 503 and "DR-024" in r.json()["detail"]
+    monkeypatch.setattr(mod, "_CONVERTER_AVAILABLE", True)
+    monkeypatch.setattr(_config.settings, "preprocess_endpoint_enabled", False)
+    assert _convert(client).status_code == 404
+    assert not convert_root.calls
+
+
+def test_convert_never_logs_the_label(client, convert_root, caplog) -> None:
+    with caplog.at_level("DEBUG"):
+        _convert(client, label="EIAMD005-SECRET")
+    assert "EIAMD005-SECRET" not in caplog.text

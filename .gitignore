@@ -107,6 +107,10 @@ docker/retinal-artifacts/
 # e2e-uploads). The files inside are real patient OCT scans — PHI — and must
 # never enter git.
 docker/e2e-uploads/
+# One DICOM per series (e2e-multimodal-split, amendment b): the converted series on their way
+# into the ingest store, and the original .E2E kept for the retention period. PHI-bearing, never in git.
+docker/e2e-convert/
+docker/e2e-source/
 # DR-025 shared DICOM/upload ingest store (compose binds it into the app and
 # the dicom-scp sidecar). Real fundus photographs — never enter git.
 docker/dicom-ingest/

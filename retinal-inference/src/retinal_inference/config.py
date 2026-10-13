@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     db_url: str = "postgresql://clinica:clinica@db:5432/libreclinica"
     shared_storage_path: Path = Path("/var/lib/libreclinica/segmentation-output")
     e2e_uploads_path: Path = Path("/var/lib/libreclinica/e2e-uploads")
+    # Where POST /e2e/convert writes <storedName-stem>/<seriesKey>.dcm; the app mounts the same
+    # directory read-write, imports the files and removes the directory.
+    e2e_convert_path: Path = Path("/var/lib/libreclinica/e2e-convert")
     worker_poll_interval_s: float = 2.0
     # DR-022 split topology: institutional dev compose runs the DB-poll worker
     # (default true). Production GPU host runs the /run endpoint only — set

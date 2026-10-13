@@ -1,4 +1,4 @@
-"""POST /e2e/describe and GET /e2e/series-image — series view of a stored ``.E2E`` (Contract 1).
+"""POST /e2e/describe, POST /e2e/convert and GET /e2e/series-image — series view of a stored ``.E2E``.
 
 See ``docs/development/e2e-multimodal-split.md``. The app stores a whole multimodal Spectralis
 export once as ``<uuid>.e2e`` under ``RETINAL_INFERENCE_E2E_UPLOADS_PATH`` and asks this
@@ -10,6 +10,12 @@ service which series it holds (``/e2e/describe``) and for a preview of one of th
   ``muw-e2e-converter`` is not installed, DR-024).
 * ``storedName`` is a bare file name (``^[A-Za-z0-9-]+[.]e2e$``, extension case-insensitive) that
   resolves only below the upload directory. Anything else is a 400.
+* ``POST /e2e/convert`` (amendment 2026-10-13 (b)) converts the kept series of the file in one pass
+  into ``<seriesKey>.dcm`` (plus ``<seriesKey>.geometry.json`` for an OCT volume) below
+  ``RETINAL_INFERENCE_E2E_CONVERT_PATH/<storedName stem>/``, a directory created fresh and removed
+  again when the conversion fails. The app mounts the same directory read-write and removes it after
+  importing the files. Request ``{storedName, label, seriesKeys}``; an unknown or malformed key is a
+  400. ``label`` is the only identity written into the DICOMs (PatientID and PatientName).
 * ``expectedLabel`` is optional. The response carries ``headerLabel`` (the surname slot of the
   patient chunk, only when it is a plain label token, else null) and ``headerPatient``
   (``none | empty | matches | differs``, the surname compared with ``expectedLabel``). It never
@@ -20,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status
@@ -31,12 +38,12 @@ from retinal_inference.security import resolve_under
 
 # DR-024 — absent in the cluster posture; the endpoints then answer 503.
 try:
-    from muw_e2e_converter import describe_e2e, render_series_png
+    from muw_e2e_converter import convert_series, describe_e2e, render_series_png
 
     _CONVERTER_AVAILABLE = True
 except ModuleNotFoundError:  # cluster posture — converter not installed
     _CONVERTER_AVAILABLE = False
-    describe_e2e = render_series_png = None  # type: ignore[assignment]
+    describe_e2e = render_series_png = convert_series = None  # type: ignore[assignment]
 
 LOG = logging.getLogger(__name__)
 
@@ -49,6 +56,12 @@ _SERIES_KEY_RE = re.compile(r"s[0-9]{1,6}")
 class DescribeRequest(BaseModel):
     storedName: str = Field(..., max_length=255)  # noqa: N815 — wire name
     expectedLabel: str | None = Field(default=None, max_length=128)  # noqa: N815 — wire name
+
+
+class ConvertRequest(BaseModel):
+    storedName: str = Field(..., max_length=255)  # noqa: N815 — wire name
+    label: str | None = Field(default=None, max_length=128)
+    seriesKeys: list[str] = Field(..., min_length=1, max_length=2000)  # noqa: N815 — wire name
 
 
 def _check_enabled() -> None:
@@ -108,6 +121,61 @@ def e2e_describe(
         raise HTTPException(status_code=404, detail="E2E file not found") from e
     except Exception as e:  # noqa: BLE001
         raise _unreadable(e) from e
+
+
+def _convert_dir(stored_name: str) -> Path:
+    """``<convert root>/<stem>`` for a validated stored name; 400 if it would leave the root."""
+    target = resolve_under(_config.settings.e2e_convert_path, Path(stored_name).stem)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="storedName resolves outside the E2E convert directory",
+        )
+    return target
+
+
+@router.post("/e2e/convert")
+def e2e_convert(
+    body: ConvertRequest,
+    x_muw_inference_token: str | None = Header(default=None),
+) -> dict:
+    _check_enabled()
+    _check_auth(x_muw_inference_token)
+    path = _stored_file(body.storedName)
+    keys = body.seriesKeys
+    if any(not _SERIES_KEY_RE.fullmatch(k) for k in keys):
+        raise HTTPException(status_code=400, detail="seriesKeys must be series keys like s3")
+    out_dir = _convert_dir(body.storedName)
+    # A fresh directory: whatever an earlier attempt left behind is not trusted.
+    shutil.rmtree(out_dir, ignore_errors=True)
+    try:
+        out_dir.parent.mkdir(parents=True, exist_ok=True)
+        results = convert_series(path, body.label, keys, out_dir)
+    except KeyError as e:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="Unknown seriesKey") from e
+    except ValueError as e:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="Invalid seriesKeys") from e
+    except FileNotFoundError as e:
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise HTTPException(status_code=404, detail="E2E file not found") from e
+    except Exception as e:  # noqa: BLE001 — a failed conversion leaves nothing behind
+        shutil.rmtree(out_dir, ignore_errors=True)
+        raise _unreadable(e) from e
+    files = [
+        {
+            "seriesKey": r["seriesKey"],
+            "file": r["file"],
+            "sha256": r["sha256"],
+            "bytes": r["bytes"],
+            "frames": r["frames"],
+            "sopClassUid": r["sopClassUid"],
+            **({"geometryFile": r["geometryFile"]} if "geometryFile" in r else {}),
+        }
+        for r in results
+    ]
+    return {"files": files}
 
 
 @router.get("/e2e/series-image")

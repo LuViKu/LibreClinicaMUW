@@ -54,6 +54,11 @@ _CHUNK_LATERALITY = 11
 _CHUNK_BSCAN_META = 10004
 _CHUNK_SCAN_PATTERN = 9006
 _CHUNK_ENFACE_MODALITY = 9007
+_CHUNK_DEVICE_NAME = 9001
+_CHUNK_EXAMINED = 9005
+_CHUNK_DEVICE_STRINGS = (1005, 1006)
+_BSCAN_META_KEYS = ("imgSizeY", "imgSizeX", "imgSizeWidth", "posX1", "posY1", "posX2", "posY2",
+                    "scaley", "centrePosX", "centrePosY")
 _CHUNK_IMAGE = 1073741824
 _IMAGE_HEADER_BYTES = 60 + 20  # chunk header + image_structure
 _TEXT_CHUNK_CAP = 8192
@@ -84,6 +89,9 @@ class _Series:
     oct_extra: list[_Image] = field(default_factory=list)
     # en-face frames (chunk ind == 0)
     en_images: list[_Image] = field(default_factory=list)
+    # per-B-scan geometry records (chunk 10004) of THIS series, in chunk order; used by convert
+    bscan_meta: list[dict[str, float]] = field(default_factory=list)
+    examined: str | None = None  # chunk 9005, e.g. "Retina"
 
     def oct_images(self) -> list[_Image]:
         if self.oct_slots:
@@ -107,6 +115,8 @@ class _Index:
     described: list[_Described]  # sorted by the response order
     by_key: dict[str, _Described]
     e2e: E2E
+    device_name: str | None = None  # first device-name chunk (9001), e.g. "Heidelberg Retina Angiograph"
+    device_model: str | None = None  # first additional-device string (1005/1006), e.g. "SPECTRALISHX202"
 
 
 def _filetime(value: int) -> datetime | None:
@@ -147,6 +157,9 @@ def _scan(path: Path) -> _Index:
         array_volumes = {ids for ids, n in volume_max_slice.items() if n > 0}
         series_map: dict[tuple[int, int, int], _Series] = {}
         header_surnames: list[str] = []
+        device_name: str | None = None
+        device_model: str | None = None
+        device_model_seen = False
         oct_stop = False
 
         for start in chunk_stack:
@@ -220,10 +233,33 @@ def _scan(path: Path) -> _Index:
                 try:
                     meta = _eb.bscan_metadata.parse(f.read(104))
                     when = _filetime(int(meta.acquisitionTime))
+                    series.bscan_meta.append({k: float(meta[k]) for k in _BSCAN_META_KEYS})
                 except Exception:
                     when = None
                 if when is not None and series.bscan_time is None:
                     series.bscan_time = when
+            elif ctype == _CHUNK_DEVICE_NAME:
+                if device_name is None:
+                    try:
+                        parsed = _eb.device_name.parse(f.read(min(chunk.size, _TEXT_CHUNK_CAP)))
+                        device_name = _text(parsed, 0)
+                    except Exception:
+                        pass
+            elif ctype == _CHUNK_EXAMINED:
+                if series.examined is None:
+                    try:
+                        parsed = _eb.examined_structure.parse(
+                            f.read(min(chunk.size, _TEXT_CHUNK_CAP)))
+                        series.examined = _text(parsed, 0)
+                    except Exception:
+                        pass
+            elif ctype in _CHUNK_DEVICE_STRINGS:
+                # oct-converter takes the FIRST such chunk's value, even when it is empty
+                if not device_model_seen:
+                    device_model_seen = True
+                    raw = f.read(min(chunk.size, _TEXT_CHUNK_CAP))
+                    text = "".join(c for c in raw.decode("latin-1") if " " <= c <= "~").strip()
+                    device_model = text[:64] or None
             elif ctype in (_CHUNK_SCAN_PATTERN, _CHUNK_ENFACE_MODALITY):
                 try:
                     parser = (_eb.scan_pattern if ctype == _CHUNK_SCAN_PATTERN
@@ -269,7 +305,8 @@ def _scan(path: Path) -> _Index:
         )
 
     described.sort(key=sort_key)
-    return _Index(path, skip, header_surnames, described, {d.key: d for d in described}, e2e)
+    return _Index(path, skip, header_surnames, described, {d.key: d for d in described}, e2e,
+                  device_name, device_model)
 
 
 def _series_time(d: _Described) -> datetime | None:

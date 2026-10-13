@@ -14,7 +14,7 @@
 #   - libreclinica: runtime config bind-mounted from
 #     /opt/libreclinica/config so the operator can edit datainfo.properties
 #     (mail relay, etc.) without rebuilding the image.
-#   - every file store — e2e-uploads, retinal-artifacts, dicom-ingest and
+#   - every file store — e2e-uploads, e2e-convert, e2e-source, retinal-artifacts, dicom-ingest and
 #     the unified ingest store — lives under /var/lib/libreclinica/<store> on
 #     the host and is bound at the same path in EVERY container that touches
 #     it (app, retinal-inference, dicom-scp). The base compose.yaml binds the
@@ -118,6 +118,13 @@ services:
       # e2e-uploads: the app writes uploaded OCT volumes; retinal-inference
       # reads them back read-only through the same host directory.
       - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads
+      # e2e-convert: retinal-inference writes one DICOM per series here, the app imports them
+      # into the ingest store and removes the directory (both mount it read-write).
+      - /var/lib/libreclinica/e2e-convert:/var/lib/libreclinica/e2e-convert
+      # e2e-source (core.retinalInference.e2eSourcePath): the original .E2E of a split upload,
+      # kept for core.retinalInference.e2eSourceRetentionDays. The app only: the sidecar never
+      # sees it, and nothing serves or analyses it.
+      - /var/lib/libreclinica/e2e-source:/var/lib/libreclinica/e2e-source
       # retinal-artifacts: the sidecar writes bscan.dcm/fundus.png companions
       # and segmentation outputs; the viewer streams them from here.
       - /var/lib/libreclinica/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
@@ -213,6 +220,8 @@ services:
       # script creates and chowns to libreclinica:libreclinica.
       - /var/lib/libreclinica/retinal-inference:/var/lib/libreclinica/segmentation-output
       - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+      # Where POST /e2e/convert writes the per-series DICOMs (the app removes them after import).
+      - /var/lib/libreclinica/e2e-convert:/var/lib/libreclinica/e2e-convert
       # Shared artifact store — the SAME host dir the libreclinica service
       # binds at this target (see its volumes above), so the sidecar writes
       # companions where the app reads them.
