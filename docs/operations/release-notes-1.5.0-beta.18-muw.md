@@ -1,6 +1,6 @@
 # LibreClinica MUW · 1.5.0-beta.18-muw release notes
 
-_Successor to **1.5.0-beta.17-muw**. A feature release: platform-wide **locations** (DR-040). A location (*Standort*) is a physical place: a clinic, a department or a partner hospital. Studies and their sites are placed at locations, every file a device sends has an origin location, and the inbox shows a person only the device files of their own locations. Acquisition PCs authenticate with a per-uploader **token** issued for one location. Whether an installation has one location or several is a **deploy-time mode**, and the default (`single`) changes nothing for the internal deployment. The per-study site is now called **Prüfzentrum** in German, so that "Standort" means only the global place._
+_Successor to **1.5.0-beta.17-muw**. A feature release: platform-wide **locations** (DR-040). A location (*Standort*) is a physical place: a clinic, a department or a partner hospital. Studies and their sites are placed at locations, every file a device sends has an origin location, and the inbox shows a person only the device files of their own locations. Acquisition PCs authenticate with a per-uploader **token** issued for one location. Whether an installation has one location or several is a **deploy-time mode**, and the default (`single`) changes nothing for the internal deployment. The per-study site is now called **Prüfzentrum** in German, so that "Standort" means only the global place. The release also resolves every open code-scanning alert (#427)._
 
 For older releases see [release-notes-1.5.0-beta.17-muw.md](release-notes-1.5.0-beta.17-muw.md) and its predecessors.
 
@@ -84,6 +84,26 @@ Work through [Upgrading the app VM](#upgrading-the-app-vm) in order, then throug
 - **Multi mode:** an unassigned camera is offered an empty worklist, an unassigned Remidio account pushes nothing, and a worklist request without a calling AE title (an older receiver) is refused. **Upgrade the dicom-scp receiver together with the app** (same tag, as always).
 - The Optomed worklist already follows the bridge's uploader token (phase 2).
 
+### Code scanning: every open alert resolved (#427, #425, #426)
+
+- **#427:** the 855 alerts open on `main` (848 CodeQL, 7 Trivy) are resolved. 532 are fixed, and 323 are dismissed on GitHub, each with its reason. They close on `main` once it is rescanned after this release.
+- **#425, #426:** the six alerts that the location work raised are resolved. Five are fixed: request-supplied values no longer reach log lines, and the uploaders query is a constant statement. One, a CSRF warning on the internal camera worklist, which accepts only the sidecar's token header, is dismissed as a false positive.
+- **Jackson 3.1.5 → 3.1.7**, fixing the 7 Trivy CVEs. `jackson-bom` is now imported ahead of Spring Boot's.
+- **Real defects among the fixes:**
+  - a `PreparedStatement` left open in `NewCRFBean`;
+  - the context path doubled in the URL of rule e-mails;
+  - a `NullPointerException` in the domain status types' `getI18n*` on a null field;
+  - an integer overflow in an hours-to-milliseconds conversion beyond about 596 hours;
+  - `UpdateEventDefinitionServlet` and `ExportExcelStudySubjectAuditLogServlet` going on after an error or a forward;
+  - the System status probe throwing, and leaking its connection, when the probe failed;
+  - non-numeric ids answering 500 in `RemoveCRFVersionServlet`, `Validator` and `ExtractController`;
+  - unbounded regular expressions in `SdRetinaNetReader`.
+- **Behaviour changes to know about:**
+  - Data entry fails with a clear error when the form has no section or event CRF; it used to throw a `NullPointerException`.
+  - The site audit log lines keep the OIDs and the user name, filtered for control characters.
+  - The discrepancy-note table search matches the note type's name.
+  - A role pointing at a missing study returns to the user list with a message (`EditStudyUserRoleServlet`, a screen that closes in wave W1).
+
 ### Uploader scripts: Export Watcher 2026-10-12.2, Optomed Bridge 2026-10-12.1
 
 - **A token setting.** Both scripts take a token in their settings dialog (tray icon → *Settings...* → *Uploader-Token*). It is DPAPI-protected and never passed on a command line. They send it on every request when it is set, and behave as before while it is not.
@@ -136,7 +156,8 @@ The backfill updates every row of `study` and `ingest_item` once; the dry run sh
   - `application.yml` reads it as `libreclinica.deployment.locations`.
   - `setup-ubuntu-host.sh` does not write it.
   - Leave it unset on the internal VM.
-- **No other key is new or changed.** Both `datainfo.properties` files only gained a comment that the token requirement is the location mode, not a setting there (checked against the diff since 1.5.0-beta.17-muw).
+- **No other key is new or changed.** #427 changes no configuration and adds no migration; it only pins Jackson to 3.1.7 in `pom.xml`.
+- **`datainfo.properties`:** both files only gained a comment that the token requirement is the location mode, not a setting there (checked against the diff since 1.5.0-beta.17-muw).
 - **`core.optomed.worklist.token`** keeps working in single mode only.
 
 ---
@@ -206,7 +227,14 @@ Stop the service and start the previous image tag (set `--image-tag` back to the
 
 ## Still open at this release
 
-- **CI results.** CI run [38260435301](https://github.com/LuViKu/LibreClinicaMUW/actions/runs/38260435301) on `6fbc9081d` (lc-develop after #421) passed all seven jobs: Maven build and unit tests (core 570, web 1,520), integration tests on PostgreSQL 14 and 17 (web integration profile 4,527, core 650), the compose smoke test (`api.ts` against the live spec, no drift), the SPA (2,504 vitest tests, 4 skipped) and the three Python sidecar suites (muw-e2e-converter 14, dicom-scp 107, retinal-inference 287). CodeQL and the security scan passed on the same commit.
+- **CI results.** CI run [38355458878](https://github.com/LuViKu/LibreClinicaMUW/actions/runs/38355458878) on `b2d24982a` (lc-develop with #425–#427) passed all seven jobs:
+  - Maven build and unit tests: core 574, web 1,540;
+  - integration tests on PostgreSQL 14 and 17: web integration profile 4,547, core 654;
+  - the compose smoke test, including `api.ts` against the live spec;
+  - the SPA: 2,504 vitest tests, 4 skipped;
+  - the three Python sidecar suites: muw-e2e-converter 14, dicom-scp 107, retinal-inference 289.
+
+  CodeQL and the security scan passed on the same commit. The location work alone (`6fbc9081d`, run 38260435301) had passed the same jobs before #425–#427.
 - **One Remidio account is one source:** a second clinic on Remidio would need a second account (not supported yet).
 - **Not yet sources:** the public upload page without a token (the `portal` kind exists in the schema, but nothing creates one).
 - **Duplicate pictures across locations.** A tokened upload of a picture already filed at another location still gets that location's duplicate or held verdict, without its ids.
