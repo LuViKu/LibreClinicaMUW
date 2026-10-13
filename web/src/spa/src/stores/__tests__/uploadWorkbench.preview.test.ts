@@ -165,13 +165,13 @@ describe('excludeSeries wiring', () => {
     expect(isConfirmable(row())).toBe(true)
   })
 
-  it('after the upload the server list of excluded series is kept (keys or objects)', async () => {
+  it('after the upload the server list of excluded series is kept (seriesKey strings)', async () => {
     const { store, row } = await rowFor('both-eyes-mixed', 'SYNTH005/both-eyes-mixed.E2E')
     const keys = row().preview!.series.map((s) => s.seriesKey)
     store.setSeriesIncluded(row().rowId, [keys[0]!], false)
     api.commitFile.mockResolvedValue({
       sha256: 'x', headerPatient: 'matches', parked: false, kind: 'e2e', format: 'e2e', status: 'UNBOUND',
-      ingestItemId: 0, jobId: null, items: [], excluded: [{ seriesKey: keys[0]! }],
+      ingestItemId: 0, jobId: null, items: [], excluded: [keys[0]!],
     })
     await store.confirm(row().rowId)
     expect(row().state).toBe('committed')

@@ -27,6 +27,7 @@ import type {
 import { sha256OfFile } from '@/api/octPortal'
 import { listDueVisits } from '@/api/events'
 import { apiGet } from '@/api/client'
+import type { components } from '@/types/api'
 import {
   UPLOADER_TOKEN_HEADER,
   UploadTokenError,
@@ -149,9 +150,10 @@ export interface PreflightResponse {
   exists: boolean
   ingestItemId: number | null
   jobId: number | null
-  /** Split mode: the items an earlier upload of this file made. */
-  existingIngestItemIds?: number[]
 }
+
+/** The split preflight (operations preflightSplitUpload / preflightSplitStaffUpload). */
+export type SplitPreflightResponse = components['schemas']['E2eSplitPreflightResponse']
 
 /**
  * Is this file already here? Asked before the bytes travel. With
@@ -160,11 +162,23 @@ export interface PreflightResponse {
 export function preflight(
   mode: UploadMode,
   sha256: string,
+  scanIndex: number | null | undefined,
+  opts: { split: true },
+): Promise<SplitPreflightResponse>
+export function preflight(
+  mode: UploadMode,
+  sha256: string,
+  scanIndex?: number | null,
+  opts?: { split?: false },
+): Promise<PreflightResponse>
+export function preflight(
+  mode: UploadMode,
+  sha256: string,
   scanIndex?: number | null,
   opts?: { split?: boolean },
-): Promise<PreflightResponse> {
+): Promise<PreflightResponse | SplitPreflightResponse> {
   const qs = (scanIndex == null ? '' : `&scanIndex=${scanIndex}`) + (opts?.split ? '&split=true' : '')
-  return request<PreflightResponse>(mode, `/preflight?sha256=${encodeURIComponent(sha256)}${qs}`, {
+  return request<PreflightResponse | SplitPreflightResponse>(mode, `/preflight?sha256=${encodeURIComponent(sha256)}${qs}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
   }, 'GET /preflight')
@@ -284,20 +298,11 @@ export interface CommitRequest {
   excludeSeries?: string[]
 }
 
-/** DR-041 — one series the server made an item of. */
-export interface SplitItem {
-  ingestItemId: number
-  seriesKey: string
-  /** OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA or OTHER. */
-  seriesModality: string
-  laterality: string | null
-  acquisitionDate: string | null
-  frames: number | null
-  imagingModalityId: number | null
-  /** UNBOUND, BOUND, ... as the inbox names it. */
-  status: string
-  jobs?: Array<{ jobId: number; task: string; status: string }>
-}
+/** DR-041 — one series the server made an item of (generated: E2eSplitItemDto). */
+export type SplitItem = components['schemas']['E2eSplitItemDto']
+
+/** DR-041 — the answer to a split commit (operations commitSplitUpload / commitSplitStaffUpload). */
+export type SplitCommitResponse = components['schemas']['E2eSplitCommitResponse']
 
 /**
  * How the label in the file header compares with the folder name: `none` when
@@ -306,7 +311,6 @@ export interface SplitItem {
 export type HeaderPatient = 'none' | 'empty' | 'matches' | 'differs'
 
 export interface CommitResponse {
-  /** Absent for a split upload: it has {@link items}. */
   ingestItemId: number
   /** OCT only — the primary inference job; null for a parked scan and for every other kind. */
   jobId: number | null
@@ -326,16 +330,6 @@ export interface CommitResponse {
    */
   heldBack?: boolean
   sameImageAs?: number | null
-  /** Split upload only. */
-  sha256?: string
-  headerPatient?: HeaderPatient
-  /** Split upload only: the matched subject's label, else null (the file named no subject this caller may see). */
-  subjectLabel?: string | null
-  /** Split upload only: every item went to the inbox. */
-  parked?: boolean
-  items?: SplitItem[]
-  /** Split upload only: the series that were left out, as `seriesKey`s (or objects carrying one). */
-  excluded?: Array<string | { seriesKey: string }>
 }
 
 /**
@@ -345,15 +339,29 @@ export interface CommitResponse {
  */
 export function commitFile(
   mode: UploadMode,
+  req: CommitRequest & { split: true },
+  onProgress?: (pct: number) => void,
+): Promise<SplitCommitResponse>
+export function commitFile(
+  mode: UploadMode,
+  req: CommitRequest & { split?: false },
+  onProgress?: (pct: number) => void,
+): Promise<CommitResponse>
+export function commitFile(
+  mode: UploadMode,
   req: CommitRequest,
   onProgress?: (pct: number) => void,
-): Promise<CommitResponse> {
+): Promise<CommitResponse | SplitCommitResponse> {
   const form = new FormData()
   form.append('file', req.file, req.file.name)
   if (req.patientId) form.append('patientId', req.patientId)
-  if (req.split) form.append('split', 'true')
-  if (req.split && req.excludeSeries && req.excludeSeries.length > 0) {
-    form.append('excludeSeries', req.excludeSeries.join(','))
+  // The generated contract takes split and excludeSeries as query parameters.
+  let query = ''
+  if (req.split) {
+    query = '?split=true'
+    if (req.excludeSeries && req.excludeSeries.length > 0) {
+      query += `&excludeSeries=${encodeURIComponent(req.excludeSeries.join(','))}`
+    }
   }
   if (req.scanDate) form.append('scanDate', req.scanDate)
   if (req.laterality) form.append('laterality', req.laterality)
@@ -367,9 +375,9 @@ export function commitFile(
     if (req.deidSha256) form.append('deidSha256', req.deidSha256)
   }
 
-  return new Promise<CommitResponse>((resolve, reject) => {
+  return new Promise<CommitResponse | SplitCommitResponse>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${base(mode)}/commit`)
+    xhr.open('POST', `${base(mode)}/commit${query}`)
     xhr.withCredentials = mode === 'staff'
     xhr.setRequestHeader('Accept', 'application/json')
     for (const [name, value] of Object.entries(authHeaders(mode))) xhr.setRequestHeader(name, value)
@@ -389,7 +397,7 @@ export function commitFile(
       }
       if (xhr.status >= 200 && xhr.status < 300) {
         if (mode === 'public') reportTokenProblem(null)
-        resolve(body as CommitResponse)
+        resolve(body as CommitResponse | SplitCommitResponse)
       } else {
         reject(failure(mode, xhr.status, body, `POST /commit → ${xhr.status}`))
       }

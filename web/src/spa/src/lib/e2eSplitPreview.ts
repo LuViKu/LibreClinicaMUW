@@ -88,8 +88,7 @@ export function groupByEye(series: readonly E2eSeriesInfo[]): Array<{ eye: EyeGr
     .filter((g) => g.series.length > 0)
 }
 
-/** Normalise the server's `excluded` list (keys or objects carrying one). */
-export function excludedFromResponse(raw: ReadonlyArray<string | { seriesKey: string }> | undefined): string[] | null {
-  if (!raw) return null
-  return raw.map((e) => (typeof e === 'string' ? e : e.seriesKey))
+/** The server's `excluded` list: seriesKey strings. */
+export function excludedFromResponse(raw: ReadonlyArray<string> | undefined): string[] | null {
+  return raw ? [...raw] : null
 }

@@ -561,15 +561,20 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     dedupSessionRows()
     for (const r of rows.value.filter((x) => x.state === 'parsing' && x.fileHash != null)) {
       try {
-        const pf = r.split
-          ? await preflight(mode.value, r.fileHash!, null, { split: true })
-          : await preflight(mode.value, r.fileHash!, r.kind === 'e2e' ? r.scan!.scanIndex : null)
-        if (pf.exists) {
-          patch(r.rowId, {
-            state: 'duplicate',
-            existingIngestItemId: pf.ingestItemId ?? pf.existingIngestItemIds?.[0] ?? undefined,
-            existingJobId: pf.jobId ?? undefined,
-          })
+        if (r.split) {
+          const pf = await preflight(mode.value, r.fileHash!, null, { split: true })
+          if (pf.exists) {
+            patch(r.rowId, { state: 'duplicate', existingIngestItemId: pf.existingIngestItemIds?.[0] })
+          }
+        } else {
+          const pf = await preflight(mode.value, r.fileHash!, r.kind === 'e2e' ? r.scan!.scanIndex : null)
+          if (pf.exists) {
+            patch(r.rowId, {
+              state: 'duplicate',
+              existingIngestItemId: pf.ingestItemId ?? undefined,
+              existingJobId: pf.jobId ?? undefined,
+            })
+          }
         }
       } catch (e) {
         // Best-effort: the commit-time unique index still gates the race. But a
@@ -842,7 +847,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
           // The server's own list of what it left out wins over what was sent.
           excludedKeys: excludedFromResponse(splitRes.excluded) ?? excluded,
           items,
-          headerPatient: splitRes.headerPatient,
+          headerPatient: splitRes.headerPatient as HeaderPatient,
           subjectLabel: splitRes.subjectLabel ?? null,
           parked: splitRes.parked,
           ingestItemId: items[0]?.ingestItemId,
