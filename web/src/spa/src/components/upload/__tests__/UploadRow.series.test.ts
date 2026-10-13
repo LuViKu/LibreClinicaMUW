@@ -76,4 +76,14 @@ describe('UploadRow series list', () => {
     const w = render(row({ state: 'suggested', items: undefined }))
     expect(w.find('[data-testid="series-list-r1"]').exists()).toBe(false)
   })
+  it('fills the date and eye columns from the series: a date range and OU when both eyes are there', () => {
+    const w = render(row({ items: [
+      { ingestItemId: 21, seriesKey: 's1', seriesModality: 'OCT', laterality: 'OD', acquisitionDate: '2026-09-30', frames: 97, imagingModalityId: null, status: 'UNBOUND' },
+      { ingestItemId: 22, seriesKey: 's2', seriesModality: 'IR', laterality: 'OS', acquisitionDate: '2026-10-02', frames: 1, imagingModalityId: null, status: 'UNBOUND' },
+    ] }))
+    expect(w.find('[data-testid="row-date"]').text()).toMatch(/–/)
+    expect(w.find('[data-testid="row-eye-ou"]').exists()).toBe(true)
+    expect(w.find('[data-testid="series-item-22"]').text()).toContain('1 frame')
+    expect(w.find('[data-testid="series-item-22"]').text()).not.toContain('1 frames')
+  })
 })

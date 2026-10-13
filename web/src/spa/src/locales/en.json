@@ -3927,7 +3927,7 @@
     },
     "split": {
       "summary": "{count} series",
-      "frames": "{n} frames",
+      "frames": "{n} frame | {n} frames",
       "autoVisit": "The server assigns the visit per series; a series without one goes to the inbox.",
       "labelFromFile": "The patient is read from the file when it is sent; a file without a known patient goes to the inbox.",
       "noSubject": "No subject — parked in the inbox. The file's patient label is unknown here, or none was found.",

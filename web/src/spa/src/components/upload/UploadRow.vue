@@ -84,7 +84,37 @@ function statusLabel(status: string): string {
   return te(key) ? t(key) : status
 }
 
-const dateLabel = computed(() => (props.row.date ? formatDate(props.row.date) : ''))
+/**
+ * DR-041 — a split row has no date or eye of its own; its series do. Before the
+ * upload they come from the browser preview, afterwards from the server's items.
+ */
+const splitDates = computed<string[]>(() => {
+  if (!props.row.split) return []
+  const fromItems = items.value.map((i) => i.acquisitionDate ?? null)
+  const fromPreview = (props.row.preview?.series ?? []).map((s) => (s.acquiredAt ? s.acquiredAt.slice(0, 10) : null))
+  const all = (fromItems.length ? fromItems : fromPreview).filter((d): d is string => !!d)
+  return Array.from(new Set(all)).sort()
+})
+
+const splitLaterality = computed<'OD' | 'OS' | 'OU' | null>(() => {
+  if (!props.row.split) return null
+  const eyes = new Set(
+    (items.value.length ? items.value.map((i) => i.laterality) : (props.row.preview?.series ?? []).map((s) => s.laterality))
+      .filter((e): e is 'OD' | 'OS' => e === 'OD' || e === 'OS'),
+  )
+  if (eyes.size === 2) return 'OU'
+  return eyes.size === 1 ? (eyes.values().next().value as 'OD' | 'OS') : null
+})
+
+const dateLabel = computed(() => {
+  if (props.row.split && splitDates.value.length) {
+    const d = splitDates.value
+    return d.length === 1 ? formatDate(d[0]) : `${formatDate(d[0])} – ${formatDate(d[d.length - 1])}`
+  }
+  return props.row.date ? formatDate(props.row.date) : ''
+})
+
+const shownLaterality = computed(() => (props.row.split ? splitLaterality.value : props.row.laterality))
 
 /** The eye can be set on the row when the file did not say — and only before it is sent. */
 const lateralityEditable = computed(() =>
@@ -139,7 +169,7 @@ function onLateralityChange(e: Event): void {
     </div>
 
     <div class="md:w-[110px] shrink-0 text-[12px] text-slate-500 relative z-10">
-      <span v-if="dateLabel">{{ dateLabel }}</span>
+      <span v-if="dateLabel" data-testid="row-date">{{ dateLabel }}</span>
       <span v-else class="text-slate-500">—</span>
     </div>
 
@@ -158,8 +188,8 @@ function onLateralityChange(e: Event): void {
         <option v-if="!props.row.needsDeidConfirm" value="OU">OU</option>
       </select>
       <template v-else>
-        <EyeBadge v-if="props.row.laterality !== 'OU'" :laterality="props.row.laterality" />
-        <span v-else class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold">OU</span>
+        <EyeBadge v-if="shownLaterality !== 'OU'" :laterality="shownLaterality" />
+        <span v-else class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold" data-testid="row-eye-ou">OU</span>
       </template>
     </div>
 
@@ -212,7 +242,7 @@ function onLateralityChange(e: Event): void {
         >
           <span class="font-semibold text-slate-800 w-24 shrink-0">{{ modalityLabel(item.seriesModality) }}</span>
           <span class="w-10 shrink-0"><EyeBadge :laterality="item.laterality === 'OD' || item.laterality === 'OS' ? item.laterality : null" /></span>
-          <span class="w-20 shrink-0 tabular-nums">{{ item.frames != null ? t('uploadPortal.split.frames', { n: item.frames }) : '' }}</span>
+          <span class="w-20 shrink-0 tabular-nums">{{ item.frames != null ? t('uploadPortal.split.frames', { n: item.frames }, item.frames) : '' }}</span>
           <span class="w-24 shrink-0 text-slate-500">{{ item.acquisitionDate ? formatDate(item.acquisitionDate) : '' }}</span>
           <span class="text-slate-500" data-testid="series-status">{{ statusLabel(item.status) }}</span>
         </li>

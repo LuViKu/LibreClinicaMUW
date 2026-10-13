@@ -247,7 +247,7 @@ watch(ready, () => { void loadThumbs() }, { immediate: true })
             <div class="min-w-0 flex-1 text-[12px] text-slate-600">
               <div class="flex flex-wrap items-center gap-x-3">
                 <span class="font-semibold text-slate-800">{{ modalityLabel(s.seriesModality) }}</span>
-                <span class="tabular-nums">{{ t('uploadPortal.split.frames', { n: s.frames }) }}</span>
+                <span class="tabular-nums">{{ t('uploadPortal.split.frames', { n: s.frames }, s.frames) }}</span>
                 <span class="tabular-nums text-slate-500">{{ s.width }}&times;{{ s.height }}</span>
                 <span class="text-slate-500">{{ timeOf(s) }}</span>
               </div>

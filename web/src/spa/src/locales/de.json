@@ -3927,7 +3927,7 @@
     },
     "split": {
       "summary": "{count} Serien",
-      "frames": "{n} Bilder",
+      "frames": "{n} Bild | {n} Bilder",
       "autoVisit": "Die Visite wird je Serie vom Server zugeordnet; sonst landet die Serie im Eingang.",
       "labelFromFile": "Der Patient wird beim Senden aus der Datei gelesen; eine Datei ohne bekannten Patienten landet im Eingang.",
       "noSubject": "Kein Patient — im Eingang abgelegt. Das Patientenkürzel der Datei ist hier unbekannt oder fehlt.",
