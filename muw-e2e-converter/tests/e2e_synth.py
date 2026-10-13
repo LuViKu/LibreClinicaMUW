@@ -57,14 +57,20 @@ def _text(parts: list[str]) -> bytes:
     return eb.scan_pattern.build(dict(n_strings=len(parts), string_size=64, text=parts))
 
 
-def build_e2e(path: Path, series: list[Series], header_patient: str | None = None,
-              *, first_name: str = "SYNTHFIRST", surname: str = "SYNTHLAST") -> Path:
-    """Write ``series`` to ``path``; chunks are laid out series by series, in order."""
+def build_e2e(path: Path, series: list[Series], surname: str | None = None,
+              *, first_name: str = "SYNTHFIRST", patient_id: str = "SYNTHPID",
+              more_surnames: tuple[str, ...] = ()) -> Path:
+    """Write ``series`` to ``path``; chunks are laid out series by series, in order.
+
+    ``surname`` (the study label slot) adds a patient chunk; ``more_surnames`` adds further
+    patient chunks. First name and patient ID are decoys that must never be read.
+    """
     chunks: list[tuple[tuple[int, int, int], int, bytes]] = []  # (ids, slice_id, bytes)
-    if header_patient is not None:
+    names = ([surname] if surname is not None else []) + list(more_surnames)
+    for name in names:
         patient = eb.patient_id_structure.build(
-            dict(first_name=first_name, surname=surname, title="", birthdate=0, sex="F",
-                 patient_id=header_patient)
+            dict(first_name=first_name, surname=name, title="", birthdate=0, sex="F",
+                 patient_id=patient_id)
         )
         chunks.append(((1, 1, 0), -1, _chunk((1, 1, 0), 9, patient, ind=65535)))
     for s in series:

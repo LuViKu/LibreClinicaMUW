@@ -20,18 +20,26 @@ below that directory and a path that leaves it (symlinks included) is refused wi
 { "storedName": "3f2b8c1e-....e2e", "expectedLabel": "EIAMD005" }
 ```
 
+`expectedLabel` is optional (a folder name the client may have; leave it out for a file from a
+shared watch folder).
+
 Response `200` (`muw_e2e_converter.describe_e2e`):
 
 ```json
-{ "headerPatient": "empty | matches | differs",
+{ "headerPatient": "none | empty | matches | differs",
+  "headerLabel": "EIAMD005",
   "series": [ { "seriesKey": "s3", "seriesModality": "OCT", "deviceModality": "IR",
                 "scanPattern": "OCT ART Volume", "laterality": "OD",
                 "acquiredAt": "2026-09-30T10:12:03", "frames": 97, "width": 1024,
                 "height": 496, "octVolumeIndex": 0 } ] }
 ```
 
-The response carries no patient ID, name or birth date; the header ID is compared with
-`expectedLabel` inside the service. `octVolumeIndex` is the `scan_index` that `/preprocess`
+`headerLabel` is the study label in the **surname** slot of the patient chunk. It is non-null
+only when every patient chunk in the file carries the same non-empty surname and that surname is
+a printable-ASCII token of 1 to 24 characters without spaces; otherwise it is `null`.
+`headerPatient` compares `expectedLabel` with the surname only: `none` when no `expectedLabel`
+was sent, else `empty`, `matches` (case-insensitive) or `differs`. First name, patient ID and
+birth date are never read, returned or logged, and the service never logs `headerLabel`. `octVolumeIndex` is the `scan_index` that `/preprocess`
 takes for the same file.
 
 ## `GET /e2e/series-image?storedName=…&seriesKey=…&frame=0`

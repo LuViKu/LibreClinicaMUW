@@ -53,8 +53,9 @@ under 100 MB of memory; no pixel data is decoded until a frame is rendered.
 ```python
 from muw_e2e_converter import describe_e2e, render_series_png
 
-d = describe_e2e(Path("/uploads/3f2b8c1e.e2e"), expected_label="EIAMD005")
-# {"headerPatient": "empty" | "matches" | "differs",
+d = describe_e2e(Path("/uploads/3f2b8c1e.e2e"), expected_label="EIAMD005")  # label optional
+# {"headerPatient": "none" | "empty" | "matches" | "differs",
+#  "headerLabel": "EIAMD005" | None,
 #  "series": [{"seriesKey": "s3", "seriesModality": "OCT", "deviceModality": "IR",
 #              "scanPattern": "OCT ART Volume", "laterality": "OD",
 #              "acquiredAt": "2026-09-30T10:12:03", "frames": 97, "width": 1024,
@@ -63,9 +64,12 @@ d = describe_e2e(Path("/uploads/3f2b8c1e.e2e"), expected_label="EIAMD005")
 png = render_series_png(Path("/uploads/3f2b8c1e.e2e"), "s3", frame=0)  # bytes
 ```
 
-* `describe_e2e(path, expected_label) -> dict`. `headerPatient` compares the header patient ID
-  with `expected_label` (case-insensitive; `differs` if any header ID differs) and is the only
-  trace of it: the ID, names and birth date are never returned or logged. Series are ordered
+* `describe_e2e(path, expected_label=None) -> dict`. `headerLabel` is the surname slot of the
+  patient chunk (type 9, offset 31, 51 bytes) when every patient chunk carries the same
+  non-empty surname and it is a printable-ASCII token of 1-24 characters without spaces, else
+  `None`. `headerPatient` compares `expected_label` with the surname only (case-insensitive):
+  `none` without an expected label, else `empty`, `matches` or `differs`. The first-name and
+  patient-ID slots and the birth date are never read, returned or logged. Series are ordered
   OD, OS, unknown eye; then `OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA, OTHER`; then time.
   `seriesKey` is `s<ordinal>` over the series ids sorted numerically, so the same bytes always
   give the same keys. `seriesModality` is `OCT` (scan pattern contains `Volume`), `OCT_LINE`

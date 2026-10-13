@@ -56,7 +56,7 @@ def _series() -> list[Series]:
 
 @pytest.fixture
 def e2e(tmp_path: Path) -> Path:
-    return build_e2e(tmp_path / "a.e2e", _series(), header_patient="EIAMD005")
+    return build_e2e(tmp_path / "a.e2e", _series(), surname="EIAMD005")
 
 
 def _by_key(result: dict) -> dict[str, dict]:
@@ -65,7 +65,7 @@ def _by_key(result: dict) -> dict[str, dict]:
 
 def test_response_shape_and_modality_mapping(e2e: Path) -> None:
     result = describe_e2e(e2e, "EIAMD005")
-    assert set(result) == {"headerPatient", "series"}
+    assert set(result) == {"headerPatient", "headerLabel", "series"}
     s = _by_key(result)
     assert set(s["s0"]) == {
         "seriesKey", "seriesModality", "deviceModality", "scanPattern", "laterality",
@@ -138,21 +138,53 @@ def test_series_keys_are_stable_unique_and_opaque(e2e: Path, tmp_path: Path) -> 
 
 @pytest.mark.parametrize(
     ("header", "label", "expected"),
-    [(None, "EIAMD005", "empty"), ("EIAMD005", "EIAMD005", "matches"),
-     ("eiamd005", "EIAMD005", "matches"), ("OTHER001", "EIAMD005", "differs"),
-     ("EIAMD005", "", "differs")],
+    [(None, "EIAMD005", "empty"), ("", "EIAMD005", "empty"),
+     ("EIAMD005", "EIAMD005", "matches"), ("eiamd005", "EIAMD005", "matches"),
+     ("OTHER001", "EIAMD005", "differs"), ("EIAMD005", "", "none"),
+     ("EIAMD005", None, "none"), (None, None, "none")],
 )
 def test_header_patient_comparison(tmp_path: Path, header, label, expected) -> None:
-    p = build_e2e(tmp_path / "h.e2e", _series(), header_patient=header)
+    p = build_e2e(tmp_path / "h.e2e", _series(), surname=header)
     assert describe_e2e(p, label)["headerPatient"] == expected
 
 
+def test_header_patient_ignores_first_name_and_patient_id(tmp_path: Path) -> None:
+    p = build_e2e(tmp_path / "f.e2e", _series(), surname="OTHER001",
+                  first_name="EIAMD005", patient_id="EIAMD005")
+    assert describe_e2e(p, "EIAMD005")["headerPatient"] == "differs"
+    q = build_e2e(tmp_path / "g.e2e", _series(), surname="",
+                  first_name="EIAMD005", patient_id="EIAMD005")
+    assert describe_e2e(q, "EIAMD005")["headerPatient"] == "empty"
+    assert describe_e2e(q)["headerLabel"] is None
+
+
+@pytest.mark.parametrize(
+    ("surname", "more", "expected"),
+    [("EIAMD005", (), "EIAMD005"),
+     ("EIAMD005", ("EIAMD005",), "EIAMD005"),
+     ("EIAMD005", ("EIAMD006",), None),  # chunks disagree
+     ("EIAMD005", ("",), None),  # one chunk empty
+     ("", (), None),
+     ("A" * 24, (), "A" * 24),
+     ("A" * 25, (), None),  # too long
+     ("EIAMD 005", (), None),  # space
+     ("Mustermann, Max", (), None),  # not a label
+     (None, (), None)],  # no patient chunk
+)
+def test_header_label(tmp_path: Path, surname, more, expected) -> None:
+    p = build_e2e(tmp_path / "l.e2e", _series(), surname=surname, more_surnames=more)
+    result = describe_e2e(p)
+    assert result["headerLabel"] == expected
+    assert result["headerPatient"] == "none"
+
+
 def test_no_identifying_data_in_response(tmp_path: Path) -> None:
-    p = build_e2e(tmp_path / "i.e2e", _series(), header_patient="HDRID-9999",
-                  first_name="SYNTHFIRST", surname="SYNTHLAST")
+    p = build_e2e(tmp_path / "i.e2e", _series(), surname="EIAMD005",
+                  first_name="SYNTHFIRST", patient_id="HDRID-9999")
     blob = json.dumps(describe_e2e(p, "EIAMD005"))
-    for secret in ("HDRID-9999", "SYNTHFIRST", "SYNTHLAST"):
+    for secret in ("HDRID-9999", "SYNTHFIRST", "SYNTHPID"):
         assert secret not in blob
+    assert "EIAMD005" in blob  # only the vetted surname token (headerLabel)
 
 
 def test_missing_file(tmp_path: Path) -> None:

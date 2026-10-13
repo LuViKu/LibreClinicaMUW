@@ -15,15 +15,18 @@ Design notes:
   the order their first image appears), so it can be passed straight to ``read_e2e_volume`` /
   ``/preprocess`` as ``scan_index``. ``tests`` pin the rule; ``describe_e2e`` is validated against
   real exports.
-* **No identifying data leaves this module.** The header patient ID is compared with the
-  expected label here and reduced to ``empty`` / ``matches`` / ``differs``. Names and birth
-  date are never read.
+* **The subject is the surname slot.** The study label sits in the surname slot of the patient
+  chunk (type 9, offset 31, 51 bytes). The first-name and patient-ID slots can hold a clinic
+  number: they, and the birth date, are never read. ``describe_e2e`` returns the surname as
+  ``headerLabel`` only when it is a plain label token (see ``_label_token``) and otherwise
+  ``null``; ``headerPatient`` compares ``expected_label`` with the surname only.
 """
 
 from __future__ import annotations
 
 import io
 import os
+import re
 import struct
 import threading
 from collections import OrderedDict
@@ -54,6 +57,10 @@ _CHUNK_ENFACE_MODALITY = 9007
 _CHUNK_IMAGE = 1073741824
 _IMAGE_HEADER_BYTES = 60 + 20  # chunk header + image_structure
 _TEXT_CHUNK_CAP = 8192
+_PATIENT_CHUNK_BYTES = 127
+_SURNAME_OFFSET = 31
+_SURNAME_BYTES = 51
+_LABEL_TOKEN = re.compile(r"[!-~]{1,24}")  # printable ASCII, no space, 1-24 chars
 
 
 @dataclass
@@ -96,7 +103,7 @@ class _Described:
 class _Index:
     path: Path
     byte_skip: int
-    header_ids: set[str]  # never leaves this module
+    header_surnames: list[str]  # one entry per patient chunk; returned only as a vetted token
     described: list[_Described]  # sorted by the response order
     by_key: dict[str, _Described]
     e2e: E2E
@@ -139,7 +146,7 @@ def _scan(path: Path) -> _Index:
 
         array_volumes = {ids for ids, n in volume_max_slice.items() if n > 0}
         series_map: dict[tuple[int, int, int], _Series] = {}
-        header_ids: set[str] = set()
+        header_surnames: list[str] = []
         oct_stop = False
 
         for start in chunk_stack:
@@ -152,13 +159,13 @@ def _scan(path: Path) -> _Index:
             ctype = chunk.type
 
             if ctype == _CHUNK_PATIENT:
-                try:
-                    pid = _eb.patient_id_structure.parse(f.read(127)).patient_id
-                    pid = str(pid).strip().strip("\x00")
-                    if pid:
-                        header_ids.add(pid)
-                except Exception:
-                    pass
+                # Only the surname slot is looked at; the other slots are never decoded.
+                body = f.read(_PATIENT_CHUNK_BYTES)
+                if len(body) >= _SURNAME_OFFSET + _SURNAME_BYTES:
+                    raw = body[_SURNAME_OFFSET:_SURNAME_OFFSET + _SURNAME_BYTES]
+                    header_surnames.append(raw.split(b"\x00", 1)[0].decode("latin-1").strip())
+                else:
+                    header_surnames.append("")
                 continue
 
             series = series_map.get(ids)
@@ -262,7 +269,7 @@ def _scan(path: Path) -> _Index:
         )
 
     described.sort(key=sort_key)
-    return _Index(path, skip, header_ids, described, {d.key: d for d in described}, e2e)
+    return _Index(path, skip, header_surnames, described, {d.key: d for d in described}, e2e)
 
 
 def _series_time(d: _Described) -> datetime | None:
@@ -295,19 +302,33 @@ def _index(path: str | os.PathLike[str]) -> _Index:
     return built
 
 
-def _header_patient(ids: set[str], expected_label: str) -> str:
-    if not ids:
+def _header_label(surnames: list[str]) -> str | None:
+    """The surname if every patient chunk carries the same non-empty, label-shaped one."""
+    if not surnames or len(set(surnames)) != 1:
+        return None
+    value = surnames[0]
+    return value if _LABEL_TOKEN.fullmatch(value) else None
+
+
+def _header_patient(surnames: list[str], expected_label: str | None) -> str:
+    expected = (expected_label or "").strip()
+    if not expected:
+        return "none"
+    present = {v for v in surnames if v}
+    if not present:
         return "empty"
-    expected = (expected_label or "").strip().casefold()
-    return "matches" if all(i.casefold() == expected for i in ids) else "differs"
+    return "matches" if all(v.casefold() == expected.casefold() for v in present) else "differs"
 
 
-def describe_e2e(path: str | os.PathLike[str], expected_label: str) -> dict[str, Any]:
+def describe_e2e(path: str | os.PathLike[str], expected_label: str | None = None) -> dict[str, Any]:
     """Describe every series of an ``.E2E`` file (Contract 1 response shape).
 
-    ``headerPatient`` is ``empty`` (no patient ID in the header), ``matches`` (every header
-    ID equals ``expected_label``, case-insensitive) or ``differs``. The ID itself is not
-    returned. Raises ``FileNotFoundError`` for a missing file.
+    ``headerLabel`` is the surname slot when every patient chunk carries the same non-empty
+    printable-ASCII token of 1-24 characters without spaces, else ``None``. ``headerPatient``
+    compares ``expected_label`` (optional) with the surname slot only: ``none`` without an
+    expected label, else ``empty`` (no surname), ``matches`` (case-insensitive) or ``differs``.
+    First name, patient ID and birth date are never read. Raises ``FileNotFoundError`` for a
+    missing file.
     """
     idx = _index(path)
     series_out: list[dict[str, Any]] = []
@@ -333,7 +354,11 @@ def describe_e2e(path: str | os.PathLike[str], expected_label: str) -> dict[str,
                 "octVolumeIndex": d.oct_index,
             }
         )
-    return {"headerPatient": _header_patient(idx.header_ids, expected_label), "series": series_out}
+    return {
+        "headerPatient": _header_patient(idx.header_surnames, expected_label),
+        "headerLabel": _header_label(idx.header_surnames),
+        "series": series_out,
+    }
 
 
 def _read_bscan(idx: _Index, image: _Image) -> np.ndarray:

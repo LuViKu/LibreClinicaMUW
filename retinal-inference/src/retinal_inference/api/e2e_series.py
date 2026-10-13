@@ -10,8 +10,10 @@ service which series it holds (``/e2e/describe``) and for a preview of one of th
   ``muw-e2e-converter`` is not installed, DR-024).
 * ``storedName`` is a bare file name (``^[A-Za-z0-9-]+[.]e2e$``, extension case-insensitive) that
   resolves only below the upload directory. Anything else is a 400.
-* The response never carries the header patient ID, names or birth date: the converter reduces
-  the ID to ``empty | matches | differs`` against ``expectedLabel``.
+* ``expectedLabel`` is optional. The response carries ``headerLabel`` (the surname slot of the
+  patient chunk, only when it is a plain label token, else null) and ``headerPatient``
+  (``none | empty | matches | differs``, the surname compared with ``expectedLabel``). It never
+  carries the first name, the patient ID or the birth date, and ``headerLabel`` is never logged.
 """
 
 from __future__ import annotations
@@ -46,7 +48,7 @@ _SERIES_KEY_RE = re.compile(r"s[0-9]{1,6}")
 
 class DescribeRequest(BaseModel):
     storedName: str = Field(..., max_length=255)  # noqa: N815 — wire name
-    expectedLabel: str = Field(default="", max_length=128)  # noqa: N815 — wire name
+    expectedLabel: str | None = Field(default=None, max_length=128)  # noqa: N815 — wire name
 
 
 def _check_enabled() -> None:

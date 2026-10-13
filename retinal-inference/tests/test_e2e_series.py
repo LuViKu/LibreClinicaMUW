@@ -21,9 +21,13 @@ NAME = "3f2b8c1e-0000-4000-8000-000000000001.e2e"
 PNG = b"\x89PNG\r\n\x1a\nfake"
 
 
-def _fake_describe(path, expected_label):
+def _fake_describe(path, expected_label=None):
     assert Path(path).is_file()
-    return {"headerPatient": "matches" if expected_label == "EIAMD005" else "differs", "series": []}
+    if not expected_label:
+        patient = "none"
+    else:
+        patient = "matches" if expected_label == "EIAMD005" else "differs"
+    return {"headerPatient": patient, "headerLabel": "EIAMD005", "series": []}
 
 
 def _fake_render(path, series_key, frame=0):
@@ -56,8 +60,10 @@ def client(uploads) -> TestClient:
 
 
 def _describe(client, name=NAME, label="EIAMD005", headers=HEADERS):
-    return client.post("/e2e/describe", json={"storedName": name, "expectedLabel": label},
-                       headers=headers)
+    body = {"storedName": name}
+    if label is not None:
+        body["expectedLabel"] = label
+    return client.post("/e2e/describe", json=body, headers=headers)
 
 
 def _image(client, name=NAME, key="s0", frame=0, headers=HEADERS):
@@ -69,8 +75,21 @@ def _image(client, name=NAME, key="s0", frame=0, headers=HEADERS):
 def test_describe_ok(client) -> None:
     r = _describe(client)
     assert r.status_code == 200
-    assert r.json() == {"headerPatient": "matches", "series": []}
+    assert r.json() == {"headerPatient": "matches", "headerLabel": "EIAMD005", "series": []}
     assert _describe(client, label="other").json()["headerPatient"] == "differs"
+
+
+def test_describe_without_expected_label(client) -> None:
+    r = _describe(client, label=None)
+    assert r.status_code == 200
+    assert r.json()["headerPatient"] == "none"
+    assert r.json()["headerLabel"] == "EIAMD005"
+
+
+def test_describe_never_logs_the_header_label(client, caplog) -> None:
+    with caplog.at_level("DEBUG"):
+        _describe(client, label=None)
+    assert "EIAMD005" not in caplog.text
 
 
 def test_extension_is_case_insensitive(client, uploads) -> None:
