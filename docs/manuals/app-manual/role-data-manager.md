@@ -436,10 +436,27 @@ Upload it once and the server splits it:
   patient-ID fields of the header are never used. The row shows the subject the
   server found after **Bestätigen**, or *no subject, parked in the inbox* when
   the label belongs to nobody you may see (that label is not stored).
-- **One row per file.** The browser reads no header and does not load the file
-  into memory: it computes the checksum in 8 MiB slices, one file at a time, and
-  asks the server whether the file is already there (**Bereits hochgeladen**).
-  Files over 2 GiB are refused with a message before anything is sent.
+- **One row per file.** The browser does not load the file into memory: it
+  computes the checksum in 8 MiB slices, one file at a time, and asks the server
+  whether the file is already there (**Bereits hochgeladen**). Files over 2 GiB
+  are refused with a message before anything is sent.
+- **Check what is in the file before it is sent.** Each row also shows the series
+  the file holds, read in the browser from the file's directory with a few small
+  reads (never the whole file). They are listed per eye, each with a thumbnail,
+  its modality, number of images, date and time, the visit it would land on, and
+  a tick:
+  - everything is ticked; untick the series you do not want uploaded;
+  - **All** / **None** next to an eye, and one button per modality, tick or
+    untick a group at once;
+  - unticked series are not stored, not converted and not listed afterwards; the
+    row names them as *left out*;
+  - if every series is unticked the row cannot be confirmed;
+  - the row shows the label read from the file, and warns when it differs from
+    the folder: the server then puts every series in the inbox. If the series
+    list cannot be read in the browser, the row says so and the whole file is
+    sent.
+  To bring a left-out series in later, upload the file again; the server refuses
+  a file it already has, so ask your administrator first.
 - **Every series becomes an item.** After **Bestätigen**, the row lists the
   series the server made: OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA
   and FA, per eye, with frame count and status. A time sequence is one item.

@@ -1,0 +1,54 @@
+{
+  "headerPatient": "none",
+  "headerLabel": null,
+  "series": [
+    {
+      "seriesKey": "s0",
+      "seriesModality": "BAF",
+      "deviceModality": "BAF",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T11:00:00",
+      "frames": 3,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s1",
+      "seriesModality": "IRAF",
+      "deviceModality": "IRAF",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T11:05:00",
+      "frames": 2,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s2",
+      "seriesModality": "FA",
+      "deviceModality": "FA",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T11:20:00",
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s3",
+      "seriesModality": "BR",
+      "deviceModality": "BR",
+      "scanPattern": "Images",
+      "laterality": "OS",
+      "acquiredAt": "2026-09-30T11:30:00",
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    }
+  ]
+}

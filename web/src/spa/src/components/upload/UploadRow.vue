@@ -12,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 
 import EyeBadge from '@/components/octportal/EyeBadge.vue'
 import UploadAssignment from './UploadAssignment.vue'
+import UploadSeriesPreview from './UploadSeriesPreview.vue'
 import { useUploadWorkbenchStore, type Laterality, type UploadRow as UploadRowData } from '@/stores/uploadWorkbench'
 import { formatDate } from '@/lib/dateFormat'
 
@@ -174,6 +175,9 @@ function onLateralityChange(e: Event): void {
         @dismiss="(id) => emit('dismiss', id)"
       />
     </div>
+
+    <!-- DR-041 amendment (b) — the series list read in the browser, with a tick for each. -->
+    <UploadSeriesPreview v-if="props.row.split && props.row.preview" :row="props.row" />
 
     <!-- DR-041 — the series the server made of this file. -->
     <div

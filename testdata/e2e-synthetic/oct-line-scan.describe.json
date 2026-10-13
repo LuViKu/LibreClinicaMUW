@@ -1,0 +1,30 @@
+{
+  "headerPatient": "none",
+  "headerLabel": null,
+  "series": [
+    {
+      "seriesKey": "s1",
+      "seriesModality": "OCT_LINE",
+      "deviceModality": "IR",
+      "scanPattern": "OCT B-Scan",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T10:03:30",
+      "frames": 1,
+      "width": 10,
+      "height": 6,
+      "octVolumeIndex": 1
+    },
+    {
+      "seriesKey": "s0",
+      "seriesModality": "OCT_LINE",
+      "deviceModality": "IR",
+      "scanPattern": "OCT B-Scan",
+      "laterality": "OS",
+      "acquiredAt": "2026-09-30T10:05:00",
+      "frames": 1,
+      "width": 10,
+      "height": 6,
+      "octVolumeIndex": 0
+    }
+  ]
+}

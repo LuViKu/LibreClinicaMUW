@@ -276,6 +276,12 @@ export interface CommitRequest {
    * are not sent; the server reads them per series.
    */
   split?: boolean
+  /**
+   * Split only: the `seriesKey`s the person left out (comma-separated on the wire).
+   * The server checks each against its own describe (an unknown key is a 400) and
+   * stores, converts and itemises none of them.
+   */
+  excludeSeries?: string[]
 }
 
 /** DR-041 — one series the server made an item of. */
@@ -328,6 +334,8 @@ export interface CommitResponse {
   /** Split upload only: every item went to the inbox. */
   parked?: boolean
   items?: SplitItem[]
+  /** Split upload only: the series that were left out, as `seriesKey`s (or objects carrying one). */
+  excluded?: Array<string | { seriesKey: string }>
 }
 
 /**
@@ -344,6 +352,9 @@ export function commitFile(
   form.append('file', req.file, req.file.name)
   if (req.patientId) form.append('patientId', req.patientId)
   if (req.split) form.append('split', 'true')
+  if (req.split && req.excludeSeries && req.excludeSeries.length > 0) {
+    form.append('excludeSeries', req.excludeSeries.join(','))
+  }
   if (req.scanDate) form.append('scanDate', req.scanDate)
   if (req.laterality) form.append('laterality', req.laterality)
   if (req.scanIndex != null) form.append('scanIndex', String(req.scanIndex))

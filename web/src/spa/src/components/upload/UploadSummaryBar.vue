@@ -10,7 +10,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PortalStatusPill from '@/components/octportal/PortalStatusPill.vue'
-import type { UploadRow } from '@/stores/uploadWorkbench'
+import { hasNoSeriesLeft, type UploadRow } from '@/stores/uploadWorkbench'
 
 const { t } = useI18n()
 
@@ -25,7 +25,7 @@ const emit = defineEmits<{ 'confirm-all': []; 'tick-all-previews': [checked: boo
 const deidRows = computed(() => props.rows.filter((r) => r.needsDeidConfirm && r.state === 'suggested'))
 const allTicked = computed(() => deidRows.value.length > 0 && deidRows.value.every((r) => r.deidConfirmed === true))
 const confirmable = computed(
-  () => props.rows.filter((r) => r.state === 'suggested' && (!r.needsDeidConfirm || r.deidConfirmed === true)).length,
+  () => props.rows.filter((r) => r.state === 'suggested' && (!r.needsDeidConfirm || r.deidConfirmed === true) && !hasNoSeriesLeft(r)).length,
 )
 
 const totalCount = computed(() => props.rows.length)
