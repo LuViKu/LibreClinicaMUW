@@ -69,6 +69,7 @@ const errorText = computed(() => {
     undoFailed: t('uploadPortal.row.undoFailed'),
     invalidVisit: t('uploadPortal.row.invalidVisit'),
     noSubject: t('uploadPortal.row.noSubject'),
+    tooLarge: t('uploadPortal.split.tooLarge', { file: props.row.file.name }),
   }
   return keyed[e] ?? e
 })
@@ -94,7 +95,12 @@ const withoutVisitLabel = computed(() =>
           </span>
           <PortalStatusPill tone="ok">{{ t('octPortal.assignment.patientFound') }}</PortalStatusPill>
         </div>
-        <div class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 pl-2.5 pr-2 py-1.5">
+        <div
+          v-if="props.row.split && !props.row.selectedEvent"
+          class="text-[12px] text-slate-600"
+          data-testid="row-split-auto"
+        >{{ t('uploadPortal.split.autoVisit') }}</div>
+        <div v-else class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 pl-2.5 pr-2 py-1.5">
           <span class="text-amber-600">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
               <rect width="18" height="18" x="3" y="4" rx="2" />

@@ -149,11 +149,21 @@ export interface PreflightResponse {
   exists: boolean
   ingestItemId: number | null
   jobId: number | null
+  /** Split mode: the items an earlier upload of this file made. */
+  existingIngestItemIds?: number[]
 }
 
-/** Is this file already here? Asked before the bytes travel. */
-export function preflight(mode: UploadMode, sha256: string, scanIndex?: number | null): Promise<PreflightResponse> {
-  const qs = scanIndex == null ? '' : `&scanIndex=${scanIndex}`
+/**
+ * Is this file already here? Asked before the bytes travel. With
+ * {@code split}, the question is about the whole file (DR-041), not one volume.
+ */
+export function preflight(
+  mode: UploadMode,
+  sha256: string,
+  scanIndex?: number | null,
+  opts?: { split?: boolean },
+): Promise<PreflightResponse> {
+  const qs = (scanIndex == null ? '' : `&scanIndex=${scanIndex}`) + (opts?.split ? '&split=true' : '')
   return request<PreflightResponse>(mode, `/preflight?sha256=${encodeURIComponent(sha256)}${qs}`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
@@ -260,9 +270,34 @@ export interface CommitRequest {
    */
   deidConfirmed?: boolean
   deidSha256?: string | null
+  /**
+   * DR-041 — a whole multimodal Spectralis export in one upload: the server
+   * splits it into one item per series. The scan date, eye and volume index
+   * are not sent; the server reads them per series.
+   */
+  split?: boolean
 }
 
+/** DR-041 — one series the server made an item of. */
+export interface SplitItem {
+  ingestItemId: number
+  seriesKey: string
+  /** OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA or OTHER. */
+  seriesModality: string
+  laterality: string | null
+  acquisitionDate: string | null
+  frames: number | null
+  imagingModalityId: number | null
+  /** UNBOUND, BOUND, ... as the inbox names it. */
+  status: string
+  jobs?: Array<{ jobId: number; task: string; status: string }>
+}
+
+/** How the file header's patient ID compares with the folder name; the ID itself never leaves the server. */
+export type HeaderPatient = 'empty' | 'matches' | 'differs'
+
 export interface CommitResponse {
+  /** Absent for a split upload: it has {@link items}. */
   ingestItemId: number
   /** OCT only — the primary inference job; null for a parked scan and for every other kind. */
   jobId: number | null
@@ -282,6 +317,12 @@ export interface CommitResponse {
    */
   heldBack?: boolean
   sameImageAs?: number | null
+  /** Split upload only. */
+  sha256?: string
+  headerPatient?: HeaderPatient
+  /** Split upload only: every item went to the inbox. */
+  parked?: boolean
+  items?: SplitItem[]
 }
 
 /**
@@ -297,6 +338,7 @@ export function commitFile(
   const form = new FormData()
   form.append('file', req.file, req.file.name)
   if (req.patientId) form.append('patientId', req.patientId)
+  if (req.split) form.append('split', 'true')
   if (req.scanDate) form.append('scanDate', req.scanDate)
   if (req.laterality) form.append('laterality', req.laterality)
   if (req.scanIndex != null) form.append('scanIndex', String(req.scanIndex))

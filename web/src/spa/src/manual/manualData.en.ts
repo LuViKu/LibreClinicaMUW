@@ -671,6 +671,23 @@ export const manualEn: Manual = {
             'Every resolution is captured in the audit trail with its reason — DDE is a data-quality control, so treat the reason field as part of the record.',
           ],
         },
+        {
+          id: 'dm-upload', num: '14', title: 'Uploading acquisitions', deutsch: 'Aufnahmen hochladen', route: '/ingest-inbox/upload',
+          roles: ['data-manager','administrator'],
+          goal: 'Bring device exports — above all whole Spectralis exports — from the browser into the inbox or onto a visit.',
+          steps: [
+            'In the **Eingang** (inbox) open **Hochladen**. Optionally pick one visit for the whole batch under **Visite für diese Dateien**.',
+            'Drop files or **whole folders** on the page, or use **choose files** / **choose a folder**. Folders are read including their sub-folders.',
+            '**One folder per patient:** for a Spectralis `.E2E` file, the folder that directly contains the file is the patient label (for example `iAMD/EIAMD005/EIAMD01D.E2E` belongs to `EIAMD005`). A file with no folder has no label: find the subject on its row with **Patient suchen**.',
+            'Each `.E2E` file is **one row** and is uploaded **once** (up to 2 GiB; the browser refuses larger files). The browser does not read the file into memory for this, and checks by its checksum whether the server already has it.',
+            'After **Bestätigen**, the server makes **every series** of the file its own item — OCT volumes and line scans, IR, BAF, BR, IRAF, qAF, ICGA and FA, per eye. The row lists them with modality, eye, frame count and status.',
+          ],
+          notes: [
+            'If the ID in the file header differs from the folder name, **all** series of that file are in the inbox and must be assigned by hand; the row says so. With no visit chosen, the server assigns each series by label and date, or leaves it in the inbox.',
+            '**Rückgängig** (undo) takes an uploaded file back within a minute and deletes all of its items.',
+            'On installations that de-identify in the browser, behaviour is unchanged: one row per OCT volume, with a preview and a confirmation.',
+          ],
+        },
       ],
     },
 

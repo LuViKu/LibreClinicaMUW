@@ -419,6 +419,36 @@ visits offered are those of the studies you can see.
    a visit can go to the Eingang with **Ohne Visite hochladen**; a sent row can be
    taken back with **Rückgängig** for a minute.
 
+### Spectralis exports: one folder per patient, every series an item
+
+A Spectralis `.E2E` file holds a whole multimodal session for both eyes (DR-041).
+Upload it once and the server splits it:
+
+- **Select a folder.** Use **Ordner wählen**, or drag a folder onto the page.
+  Sub-folders are read too. **Dateien wählen** still picks single files.
+- **The folder is the subject.** The folder that directly contains the `.E2E`
+  file is the patient label: `iAMD/EIAMD005/EIAMD01D.E2E` belongs to `EIAMD005`,
+  and so does `EIAMD005/EIAMD01D.E2E`. A file with no folder has no label; use
+  **Patient suchen** on its row (or the label field above the list).
+- **One row per file.** The browser reads no header and does not load the file
+  into memory: it computes the checksum in 8 MiB slices, one file at a time, and
+  asks the server whether the file is already there (**Bereits hochgeladen**).
+  Files over 2 GiB are refused with a message before anything is sent.
+- **Every series becomes an item.** After **Bestätigen**, the row lists the
+  series the server made: OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA
+  and FA, per eye, with frame count and status. A time sequence is one item.
+- **Visit.** With a batch visit set, every series is filed against it. Without
+  one, the server assigns each series by label and date, or leaves it in the
+  Eingang.
+- **Header ID differs.** If the patient ID inside the file differs from the folder
+  name, the row says so and **all** its series wait in the Eingang for you to
+  assign them. An empty header ID is normal and does not park the file.
+- **Undo.** **Rückgängig** within a minute deletes all items of the file.
+
+On an installation that de-identifies in the browser (internet-facing
+deployments), this does not apply: the file is stripped in the browser and the
+page keeps one row per OCT volume, with a preview to confirm.
+
 A DICOM export is pseudonymised before it is kept: the visit's subject label
 replaces the patient name and ID from the hospital system, the date of birth and
 staff names are cleared. If the DICOM service is not running the page refuses
