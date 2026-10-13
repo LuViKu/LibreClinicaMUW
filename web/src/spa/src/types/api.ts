@@ -3529,6 +3529,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/{id}/series-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["seriesImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingest/{id}/preview": {
         parameters: {
             query?: never;
@@ -9866,6 +9882,7 @@ export interface operations {
                 studyEventId?: number;
                 park?: boolean;
                 device?: string;
+                split?: boolean;
                 disambiguated?: boolean;
                 candidateCount?: number;
             };
@@ -10341,6 +10358,7 @@ export interface operations {
                 studyEventId?: number;
                 park?: boolean;
                 device?: string;
+                split?: boolean;
                 deidConfirmed?: string;
                 deidSha256?: string;
             };
@@ -12785,6 +12803,7 @@ export interface operations {
             query: {
                 sha256: string;
                 scanIndex?: number;
+                split?: boolean;
             };
             header?: never;
             path?: never;
@@ -13164,6 +13183,30 @@ export interface operations {
             };
         };
     };
+    seriesImage: {
+        parameters: {
+            query?: {
+                frame?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     preview_1: {
         parameters: {
             query?: never;
@@ -13191,6 +13234,7 @@ export interface operations {
             query: {
                 sha256: string;
                 scanIndex?: number;
+                split?: boolean;
             };
             header?: never;
             path?: never;
