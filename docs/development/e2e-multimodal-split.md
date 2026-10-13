@@ -173,13 +173,13 @@ Response `201`:
 
 **Export Watcher** (`deploy/export-watcher/ExportWatcher.ps1`):
 
-- **Subject.** An E2E file directly under the watch folder has no subject: it is skipped and reported. An E2E file in a sub-folder takes the first folder name below the watch folder as its subject.
+- **Subject.** The subject is the name of the folder that directly contains the file. Both clients use this rule. An E2E file directly under the watch folder has no subject: it is skipped and reported.
 - **Upload.** For each settled file, the watcher checks the preflight by a streamed SHA-256, then makes one streamed commit with `split=true`. The upload uses `StreamContent` and a timeout sized for 2 GiB. The watcher no longer loops over volumes, and no file is read whole into memory.
 - **Moving files.** A `201` or `409` moves the file to `_uploaded`, as before.
 
 **Browser upload** (`UploadWorkbench`):
 
-- **Selecting files.** A folder picker and folder drag-and-drop. For an E2E file, the top folder name is the subject.
+- **Selecting files.** A folder picker and folder drag-and-drop. For an E2E file, the subject is the folder that directly contains it, as in the watcher. A file picked on its own has no subject, and the user searches for one.
 - **Hashing.** The SHA-256 is computed in chunks, never by reading the whole file into memory. Large files are processed one at a time.
 - **Rows.** One row per E2E file, showing the subject from the folder. After commit, the row lists its series items (modality, eye, frames, status).
 - **Size.** Files over 2 GiB are refused in the browser before upload.
