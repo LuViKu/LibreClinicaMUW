@@ -109,7 +109,7 @@ FIXTURES: dict[str, dict] = {
                    [Img(0, 0, height=8, width=8, fill=13)]),
         ],
     ),
-    # Large pixel chunks (about 300 KB): the browser parser must read a few KB of it.
+    # Large pixel chunks (about 180 KB): the browser parser must read a few KB of it.
     "large-pixels": dict(
         surname="SYNTH007",
         series=[
