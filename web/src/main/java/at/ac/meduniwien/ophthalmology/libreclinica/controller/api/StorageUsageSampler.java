@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eSourceRetentionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.system.DirectoryUsage;
@@ -152,6 +153,10 @@ public class StorageUsageSampler {
                 IngestArtifactStore.LEGACY_DEFAULT_DICOM));
         add(candidates, "e2e-uploads", configField(IngestArtifactStore.LEGACY_KEY_E2E,
                 IngestArtifactStore.LEGACY_DEFAULT_E2E));
+        // DR-041: the original .E2E of split uploads, kept for e2eSourceRetentionDays - the largest
+        // time-limited store (a session is up to 600 MB).
+        add(candidates, "e2e-source", configField(E2eSourceRetentionService.CONFIG_KEY_SOURCE_PATH,
+                E2eSourceRetentionService.DEFAULT_SOURCE_PATH));
         add(candidates, "retinal-artifacts", configField("core.retinalInference.artifactStorePath",
                 RetinalArtifactStorageService.DEFAULT_STORE_PATH));
         add(candidates, "retinal-bscans", configField("core.retinalInference.bscanStorePath", ""));

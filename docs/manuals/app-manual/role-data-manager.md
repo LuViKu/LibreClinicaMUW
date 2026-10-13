@@ -451,6 +451,14 @@ Upload it once and the server splits it:
   assign them. A file whose header has no usable label takes its folder name as
   the label; with neither, it is parked.
 - **Undo.** **Rückgängig** within a minute deletes all items of the file.
+- **What is kept.** Each series is stored as a DICOM image of its own, the
+  items you see in the Eingang. The original `.E2E` file is kept on the server
+  for a limited time (90 days by default, set by the administrator) and then
+  deleted automatically; the items stay. Uploading the same file again is still
+  recognised afterwards. Nothing serves or analyses the original file.
+- **Leaving series out.** The server can leave chosen series out of an upload
+  (they are not stored and make no item); the browser page offers this once its
+  preview is available.
 
 On an installation that de-identifies in the browser (internet-facing
 deployments), this does not apply: the file is stripped in the browser and the

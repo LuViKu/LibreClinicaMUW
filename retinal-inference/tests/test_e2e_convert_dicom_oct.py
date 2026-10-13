@@ -17,8 +17,9 @@ from fastapi.testclient import TestClient
 pytest.importorskip("muw_e2e_converter")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "muw-e2e-converter" / "tests"))
-from convert_synth import Item, Ser, build  # noqa: E402
 from datetime import datetime  # noqa: E402
+
+from convert_synth import Item, Ser, build  # noqa: E402
 
 from muw_e2e_converter import convert_series, describe_e2e, prepare_bscan_dcm  # noqa: E402
 from retinal_inference import config as _config  # noqa: E402

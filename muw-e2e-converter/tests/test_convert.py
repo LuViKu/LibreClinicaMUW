@@ -17,8 +17,8 @@ import pytest
 from convert_synth import DECOY_FIRST_NAME, DECOY_PATIENT_ID, Item, Ser, build, pixels
 from oct_converter.readers import E2E
 
-from muw_e2e_converter import convert_series, describe_e2e, read_e2e_volume
 from muw_e2e_converter import convert as convert_mod
+from muw_e2e_converter import convert_series, describe_e2e, read_e2e_volume
 from muw_e2e_converter import series as series_mod
 
 T = datetime

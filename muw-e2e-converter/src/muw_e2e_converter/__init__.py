@@ -13,6 +13,7 @@ the refactor.
 
 from __future__ import annotations
 
+from .convert import convert_series
 from .e2e_parser import (
     BscanVolume,
     E2EMetadata,
@@ -22,7 +23,6 @@ from .e2e_parser import (
     read_e2e_volume,
     write_bscan_dcm,
 )
-from .convert import convert_series
 from .fundus_extract import build_geometry, extract_fundus_png
 from .phi import DEIDENTIFICATION_METHOD, redact_dicom
 from .series import describe_e2e, render_series_png
