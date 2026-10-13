@@ -1,0 +1,114 @@
+{
+  "headerPatient": "none",
+  "headerLabel": "SYNTH005",
+  "series": [
+    {
+      "seriesKey": "s6",
+      "seriesModality": "OCT",
+      "deviceModality": "IR",
+      "scanPattern": "OCT ART Volume",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T10:00:00",
+      "frames": 2,
+      "width": 10,
+      "height": 6,
+      "octVolumeIndex": 1
+    },
+    {
+      "seriesKey": "s5",
+      "seriesModality": "IR",
+      "deviceModality": "IR",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": null,
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s4",
+      "seriesModality": "ICGA",
+      "deviceModality": "ICGA",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T10:45:00",
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s0",
+      "seriesModality": "ICGA",
+      "deviceModality": "ICGA",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T11:00:00",
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s7",
+      "seriesModality": "FA",
+      "deviceModality": "FA",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T10:45:00",
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s3",
+      "seriesModality": "OCT",
+      "deviceModality": "IR",
+      "scanPattern": "OCT ART Volume",
+      "laterality": "OS",
+      "acquiredAt": "2026-09-30T10:30:00",
+      "frames": 3,
+      "width": 10,
+      "height": 6,
+      "octVolumeIndex": 0
+    },
+    {
+      "seriesKey": "s1",
+      "seriesModality": "OCT_LINE",
+      "deviceModality": "IR",
+      "scanPattern": "OCT B-Scan",
+      "laterality": "OS",
+      "acquiredAt": "2026-09-30T10:40:00",
+      "frames": 1,
+      "width": 10,
+      "height": 6,
+      "octVolumeIndex": 2
+    },
+    {
+      "seriesKey": "s8",
+      "seriesModality": "IR",
+      "deviceModality": "IR",
+      "scanPattern": "Images",
+      "laterality": "OS",
+      "acquiredAt": "2026-10-01T09:00:00",
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s2",
+      "seriesModality": "OTHER",
+      "deviceModality": "XYZ",
+      "scanPattern": "Images",
+      "laterality": null,
+      "acquiredAt": null,
+      "frames": 1,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "headerPatient": "none",
+  "headerLabel": "SYNTH001",
+  "series": [
+    {
+      "seriesKey": "s0",
+      "seriesModality": "OCT",
+      "deviceModality": "IR",
+      "scanPattern": "OCT ART Volume",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T10:00:00",
+      "frames": 5,
+      "width": 10,
+      "height": 6,
+      "octVolumeIndex": 0
+    }
+  ]
+}
