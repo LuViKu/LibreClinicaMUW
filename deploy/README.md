@@ -460,7 +460,7 @@ upload front door the page uses (DR-029), so nothing changes server-side:
   does not have it yet, sends the whole file in **one streamed**
   `POST /public/upload/commit` (`split=true`, `device`, and `patientId` = the
   folder name only for a file in a sub-folder), up to **2 GiB**; the file is
-  never read into memory. The platform splits it into one item per series
+  never read into memory (the watcher has no preview and always sends every series; leaving series out is possible in the browser upload only). The platform splits it into one item per series
   (OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA, FA, per eye),
   binds them when it can and parks them in the inbox when the header's label
   differs from the folder name, the file carries no usable label and has no

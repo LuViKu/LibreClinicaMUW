@@ -473,9 +473,9 @@ Upload it once and the server splits it:
   for a limited time (90 days by default, set by the administrator) and then
   deleted automatically; the items stay. Uploading the same file again is still
   recognised afterwards. Nothing serves or analyses the original file.
-- **Leaving series out.** The server can leave chosen series out of an upload
-  (they are not stored and make no item); the browser page offers this once its
-  preview is available.
+- **Leaving series out.** Unticked series are left out of the upload (they are
+  not stored and make no item). This is done in the browser page only; the Export
+  Watcher on the acquisition PC always uploads the whole file.
 
 On an installation that de-identifies in the browser (internet-facing
 deployments), this does not apply: the file is stripped in the browser and the

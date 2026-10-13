@@ -1,6 +1,6 @@
 # Multimodal Spectralis exports: one upload, one item per series
 
-**Status:** in progress, 2026-10-14. Server side implemented, including the amendment (b) storage model (one DICOM per series, `excludeSeries`, typed responses; see "Implemented (amendment b)" at the end). The browser preview is built separately. Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
+**Status:** implemented, 2026-10-14: converter, sidecar endpoints, server split (one DICOM per series, `excludeSeries`, typed responses, 90-day source retention; see "Implemented (amendment b)" at the end), Export Watcher, and the browser upload with in-browser preview and series selection. Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
 
 ## Why
 
@@ -117,7 +117,7 @@ For an out-of-range frame or an unknown key it answers 404. The PNG carries no m
 Multipart fields:
 
 - `file`: the whole `.E2E`, streamed.
-- `split=true`
+- `split=true` and `excludeSeries` travel in the **query string**, as the generated contract (`commitSplitUpload`, `commitSplitStaffUpload`) has them; the other fields below are multipart parts.
 - `patientId` (optional): the folder the client found the file in, the immediate parent folder. Left out for a file in a shared watch folder. The subject comes from the file's own header label; see the server rules.
 - `device=spectralis`
 - Optionally `studyEventId`, to bind every series to one visit (the staff page's batch visit), or `park=true`.
@@ -199,6 +199,7 @@ Built as specified, with these details worth knowing:
 - **Subject.** The platform reads the subject from the file. A file directly in the watch folder is uploaded without `patientId`. A file in a sub-folder is uploaded with `patientId` = the folder that directly contains it. Nothing is skipped for lack of a folder; the coded problem `no-subject-folder` no longer exists. `file-too-large` remains.
 - **Upload.** For each settled file, the watcher checks the preflight by a streamed SHA-256, then makes one streamed commit with `split=true`. The upload uses `StreamContent` and a timeout sized for 2 GiB. The watcher no longer loops over volumes, and no file is read whole into memory.
 - **Moving files.** A `201` or `409` moves the file to `_uploaded`, as before.
+- **No series selection.** The watcher always sends the whole file. Previewing a file and leaving series out (`excludeSeries`) exist in the browser upload only.
 
 **Browser upload** (`UploadWorkbench`):
 

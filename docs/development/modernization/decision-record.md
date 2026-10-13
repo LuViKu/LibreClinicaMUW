@@ -1184,9 +1184,9 @@ The header patient ID of these exports is unreliable: empty in 13 of the first 2
 
 - **One upload.** Each file is uploaded once, streamed, with files of up to 2 GiB accepted.
 - **Split on the server.** The converter sidecar lists the series from the file's own per-series metadata (device modality and scan pattern), without returning any identifying data. The app creates one inbox item per series.
-- **Subject.** The subject label is the patient's folder name. A header ID that differs from it parks the whole file for a person to decide.
+- **Subject.** ~~The subject label is the patient's folder name.~~ Amended 2026-10-13: the subject is the study label in the header's **surname** slot (the first-name and patient-ID slots are never used, sent, stored or logged). A folder, if the file sits in one, must agree with that label, otherwise the whole file is parked for a person to decide; a file in no folder is bound by its label alone. See the format notes (`heidelberg-e2e-format-notes.md`).
 - **Modality and jobs.** A series reaches its catalogue modality through a new `imaging_modality.e2e_series` token. Only OCT volumes start retinal-inference jobs.
-- **Clients.** The Export Watcher and the browser upload both use this one contract. The browser de-identification path for internet-facing deployments is unchanged.
+- **Clients.** The Export Watcher and the browser upload both use this one contract (the browser additionally previews the series and can leave some out with `excludeSeries`). The browser de-identification path for internet-facing deployments is unchanged.
 
 **Consequences.**
 
