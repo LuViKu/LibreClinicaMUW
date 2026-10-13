@@ -599,11 +599,22 @@ export async function decodeSeriesThumbnail(
   return (await scanE2eCached(file)).thumbnailPixels(series.seriesKey)
 }
 
-/** A PNG data URL of the series' thumbnail (browser only; needs a canvas). */
-export async function renderSeriesThumbnail(
+let thumbQueue: Promise<unknown> = Promise.resolve()
+
+/**
+ * A PNG data URL of the series' thumbnail (browser only; needs a canvas). Calls are served one at
+ * a time, across all files, so a big export does not read a hundred images at once.
+ */
+export function renderSeriesThumbnail(
   file: Blob,
   series: Pick<E2eSeriesInfo, 'seriesKey'>,
 ): Promise<string | null> {
+  const run = thumbQueue.then(() => renderNow(file, series))
+  thumbQueue = run.catch(() => undefined)
+  return run
+}
+
+async function renderNow(file: Blob, series: Pick<E2eSeriesInfo, 'seriesKey'>): Promise<string | null> {
   const img = await decodeSeriesThumbnail(file, series)
   if (!img) return null
   const canvas = document.createElement('canvas')

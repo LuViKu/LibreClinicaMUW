@@ -3934,6 +3934,35 @@
       "headerDiffers": "Das Kürzel in der Datei weicht vom Ordnernamen ab — alle Serien liegen im Eingang und müssen von Hand zugeordnet werden.",
       "parked": "Alle Serien liegen im Eingang.",
       "tooLarge": "{file} ist größer als 2 GiB und kann nicht hochgeladen werden.",
+      "preview": {
+        "title": "Serien in dieser Datei",
+        "selected": "{n} von {total} ausgewählt",
+        "labelInFile": "Kürzel in der Datei:",
+        "labelMatches": "Das Kürzel in der Datei stimmt mit dem Ordner überein.",
+        "labelDiffers": "Das Kürzel in der Datei ({label}) weicht vom Ordner ({folder}) ab: Der Server legt alle Serien im Eingang ab, Sie ordnen sie von Hand zu.",
+        "labelFolderUsed": "Die Datei enthält kein lesbares Kürzel; der Ordnername {folder} wird verwendet.",
+        "labelNone": "Die Datei enthält kein lesbares Kürzel und liegt in keinem Ordner: Alle Serien landen im Eingang.",
+        "noneSelected": "Wählen Sie mindestens eine Serie aus, um diese Datei hochzuladen.",
+        "byModality": "Nach Modalität auswählen",
+        "all": "Alle",
+        "none": "Keine",
+        "includeAria": "{series} hochladen",
+        "eye": {
+          "OD": "Rechtes Auge (OD)",
+          "OS": "Linkes Auge (OS)",
+          "none": "Auge nicht angegeben"
+        },
+        "visit": {
+          "picked": "Visite: {visit}",
+          "suggested": "Visite: {visit} {date}",
+          "none": "Keine Visite für dieses Datum: Eingang",
+          "noSubject": "Patient nicht gefunden: Eingang",
+          "ambiguous": "Mehrere Treffer: der Server entscheidet"
+        },
+        "leftOut": "{n} Serien vom Upload ausgenommen",
+        "leftOutTag": "ausgenommen",
+        "readFailed": "Die Serienliste konnte hier nicht gelesen werden; die ganze Datei wird gesendet."
+      },
       "modality": {
         "OCT": "OCT-Volumen",
         "OCT_LINE": "OCT-Linienscan",

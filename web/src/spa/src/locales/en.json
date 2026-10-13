@@ -3934,6 +3934,35 @@
       "headerDiffers": "The label in the file differs from the folder name — every series is in the inbox and must be assigned by hand.",
       "parked": "Every series is in the inbox.",
       "tooLarge": "{file} is larger than 2 GiB and cannot be uploaded.",
+      "preview": {
+        "title": "Series in this file",
+        "selected": "{n} of {total} selected",
+        "labelInFile": "Label in the file:",
+        "labelMatches": "The label in the file matches the folder.",
+        "labelDiffers": "The label in the file ({label}) differs from the folder ({folder}): the server will put every series in the inbox for you to assign.",
+        "labelFolderUsed": "The file has no readable label; the folder name {folder} is used.",
+        "labelNone": "The file has no readable label and it is in no folder: every series will go to the inbox.",
+        "noneSelected": "Select at least one series to upload this file.",
+        "byModality": "Select by modality",
+        "all": "All",
+        "none": "None",
+        "includeAria": "Upload {series}",
+        "eye": {
+          "OD": "Right eye (OD)",
+          "OS": "Left eye (OS)",
+          "none": "Eye not stated"
+        },
+        "visit": {
+          "picked": "Visit: {visit}",
+          "suggested": "Visit: {visit} {date}",
+          "none": "No visit for this date: inbox",
+          "noSubject": "Subject not found: inbox",
+          "ambiguous": "Several matches: the server decides"
+        },
+        "leftOut": "{n} series left out of the upload",
+        "leftOutTag": "left out",
+        "readFailed": "The series list could not be read here; the whole file will be sent."
+      },
       "modality": {
         "OCT": "OCT volume",
         "OCT_LINE": "OCT line scan",

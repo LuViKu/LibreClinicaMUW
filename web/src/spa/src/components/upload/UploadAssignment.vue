@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 import EyeBadge from '@/components/octportal/EyeBadge.vue'
 import PortalStatusPill from '@/components/octportal/PortalStatusPill.vue'
 import StudyChip from '@/components/octportal/StudyChip.vue'
-import { useUploadWorkbenchStore, type UploadRow } from '@/stores/uploadWorkbench'
+import { hasNoSeriesLeft, useUploadWorkbenchStore, type UploadRow } from '@/stores/uploadWorkbench'
 import { formatDate } from '@/lib/dateFormat'
 
 const store = useUploadWorkbenchStore()
@@ -44,6 +44,8 @@ const subjectLabel = computed(() =>
     : (candidate.value?.subjectLabel ?? props.row.patientId ?? ''))
 /** A split file in no folder, not yet sent: the server reads the label from the file. */
 const flatSplit = computed(() => props.row.split === true && !props.row.selectedCandidate && !props.row.patientId)
+/** Every series of a split row is unticked: there is nothing to send. */
+const noSeriesLeft = computed(() => hasNoSeriesLeft(props.row))
 const eventLabel = computed(() => props.row.selectedEvent?.definitionLabel ?? '')
 const isOct = computed(() => props.row.kind === 'e2e')
 
@@ -268,8 +270,8 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             :data-testid="`action-confirm-${props.row.rowId}`"
-            :disabled="props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true"
-            :title="props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true ? t('uploadPortal.deid.confirmFirst') : undefined"
+            :disabled="(props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true) || noSeriesLeft"
+            :title="noSeriesLeft ? t('uploadPortal.split.preview.noneSelected') : props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true ? t('uploadPortal.deid.confirmFirst') : undefined"
             @click="emit('confirm', props.row.rowId)"
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
@@ -307,6 +309,7 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
+            :disabled="noSeriesLeft"
             @click="emit('park', props.row.rowId)"
           >{{ withoutVisitLabel }}</button>
         </div>
@@ -332,6 +335,7 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
+            :disabled="noSeriesLeft"
             @click="emit('park', props.row.rowId)"
           >{{ isOct ? t('octPortal.actions.park') : t('uploadPortal.actions.uploadWithoutVisit') }}</button>
         </div>
@@ -349,6 +353,7 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
+            :disabled="noSeriesLeft"
             @click="emit('park', props.row.rowId)"
           >{{ withoutVisitLabel }}</button>
         </div>
