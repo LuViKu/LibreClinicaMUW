@@ -21,7 +21,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const store = useUploadWorkbenchStore()
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const emit = defineEmits<{
   confirm: [rowId: string]
@@ -55,6 +55,25 @@ const kindTone = computed(() => {
     default: return 'bg-slate-100 text-slate-500 ring-slate-200'
   }
 })
+
+/** DR-041 — what the server made of a split file: one item per series. */
+const items = computed(() => props.row.items ?? [])
+
+const modalitySummary = computed(() => {
+  const counts = new Map<string, number>()
+  for (const item of items.value) counts.set(item.seriesModality, (counts.get(item.seriesModality) ?? 0) + 1)
+  return Array.from(counts, ([m, n]) => `${n} ${modalityLabel(m)}`).join(' · ')
+})
+
+function modalityLabel(m: string): string {
+  const key = `uploadPortal.split.modality.${m}`
+  return te(key) ? t(key) : m
+}
+
+function statusLabel(status: string): string {
+  const key = `uploadPortal.split.status.${status}`
+  return te(key) ? t(key) : status
+}
 
 const dateLabel = computed(() => (props.row.date ? formatDate(props.row.date) : ''))
 
@@ -100,7 +119,7 @@ function onLateralityChange(e: Event): void {
         data-testid="row-kind"
       >{{ kindLabel }}</span>
       <div class="min-w-0">
-        <div class="text-[13px] font-semibold truncate" :class="dim ? 'text-slate-500' : 'text-slate-900'" :title="props.row.file.name">{{ props.row.file.name }}</div>
+        <div class="text-[13px] font-semibold truncate" :class="dim ? 'text-slate-500' : 'text-slate-900'" :title="props.row.relativePath || props.row.file.name">{{ props.row.file.name }}</div>
         <div class="text-[11px] text-slate-400">{{ sizeLabel }}<template v-if="props.row.hints?.modelName"> · {{ props.row.hints.modelName }}</template></div>
       </div>
     </div>
@@ -146,6 +165,41 @@ function onLateralityChange(e: Event): void {
         @search-patient="(id) => emit('search-patient', id)"
         @dismiss="(id) => emit('dismiss', id)"
       />
+    </div>
+
+    <!-- DR-041 — the series the server made of this file. -->
+    <div
+      v-if="props.row.split && items.length > 0"
+      class="relative z-10 w-full md:basis-full rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2"
+      :data-testid="`series-list-${props.row.rowId}`"
+    >
+      <div class="text-[12px] font-medium text-slate-700" data-testid="series-summary">
+        {{ t('uploadPortal.split.summary', { count: items.length }) }} · {{ modalitySummary }}
+      </div>
+      <p
+        v-if="props.row.headerPatient === 'differs'"
+        class="mt-1 text-[12px] text-amber-800"
+        data-testid="series-header-differs"
+      >{{ t('uploadPortal.split.headerDiffers') }}</p>
+      <p
+        v-else-if="props.row.parked"
+        class="mt-1 text-[12px] text-slate-600"
+        data-testid="series-parked"
+      >{{ t('uploadPortal.split.parked') }}</p>
+      <ul class="mt-1.5 max-h-48 overflow-y-auto divide-y divide-slate-100 text-[12px] text-slate-600">
+        <li
+          v-for="item in items"
+          :key="item.seriesKey"
+          class="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1"
+          :data-testid="`series-item-${item.ingestItemId}`"
+        >
+          <span class="font-semibold text-slate-800 w-24 shrink-0">{{ modalityLabel(item.seriesModality) }}</span>
+          <span class="w-10 shrink-0"><EyeBadge :laterality="item.laterality === 'OD' || item.laterality === 'OS' ? item.laterality : null" /></span>
+          <span class="w-20 shrink-0 tabular-nums">{{ item.frames != null ? t('uploadPortal.split.frames', { n: item.frames }) : '' }}</span>
+          <span class="w-24 shrink-0 text-slate-500">{{ item.acquisitionDate ? formatDate(item.acquisitionDate) : '' }}</span>
+          <span class="text-slate-500" data-testid="series-status">{{ statusLabel(item.status) }}</span>
+        </li>
+      </ul>
     </div>
 
     <!-- De-identifying deployment: what the operator confirms against. The

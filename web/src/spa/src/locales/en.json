@@ -3917,9 +3917,36 @@
       "heroTitle": "Drop files here",
       "heroBrowsePrefix": "or",
       "heroBrowse": "choose files",
+      "heroOr": "or",
+      "browseFolder": "choose a folder",
+      "folderHelp": "One folder per patient: the folder that directly contains the .E2E file is the patient label (for example EIAMD005/file.E2E). You can drop folders here too. Every series in an .E2E file becomes its own item.",
       "heroNote": "several files at once · headers are read locally in the browser",
       "slimDropMore": "Drop more files here",
       "browse": "Browse"
+    },
+    "split": {
+      "summary": "{count} series",
+      "frames": "{n} frames",
+      "autoVisit": "The server assigns the visit per series; a series without one goes to the inbox.",
+      "headerDiffers": "The ID in the file header differs from the folder name — every series is in the inbox and must be assigned by hand.",
+      "parked": "Every series is in the inbox.",
+      "tooLarge": "{file} is larger than 2 GiB and cannot be uploaded.",
+      "modality": {
+        "OCT": "OCT volume",
+        "OCT_LINE": "OCT line scan",
+        "IR": "IR",
+        "BAF": "BAF",
+        "BR": "BR",
+        "IRAF": "IRAF",
+        "QAF": "qAF",
+        "ICGA": "ICGA",
+        "FA": "FA",
+        "OTHER": "Other"
+      },
+      "status": {
+        "UNBOUND": "In inbox",
+        "BOUND": "Assigned"
+      }
     },
     "batch": {
       "title": "Visit for these files",

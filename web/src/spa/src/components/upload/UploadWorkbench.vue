@@ -22,6 +22,7 @@ import { useUploadWorkbenchStore } from '@/stores/uploadWorkbench'
 import { tokenProblem } from '@/lib/uploaderToken'
 import type { ResolveCandidate, UploadMode } from '@/api/uploadWorkbench'
 import type { StudySubjectSearchHit } from '@/api/retinal'
+import type { PickedFile } from '@/lib/folderEntries'
 
 const props = defineProps<{ mode: UploadMode }>()
 const { t } = useI18n()
@@ -77,7 +78,7 @@ const tokenMessageKey = computed<string | null>(() => {
   }
 })
 
-function onFilesAdded(files: File[]): void {
+function onFilesAdded(files: Array<File | PickedFile>): void {
   void store.addFiles(files)
 }
 

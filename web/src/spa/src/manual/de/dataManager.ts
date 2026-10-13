@@ -224,5 +224,22 @@ export const dataManagerDe: ManualChapter = {
         'Jede Auflösung wird mit ihrem Grund im Audit Trail festgehalten — der DDE-Abgleich ist eine Datenqualitätskontrolle, behandeln Sie das Grund-Feld daher als Teil des Datensatzes.',
       ],
     },
+    {
+      id: 'dm-upload', num: '14', title: 'Aufnahmen hochladen', deutsch: 'Uploading acquisitions (Eingang → Hochladen)', route: '/ingest-inbox/upload',
+      roles: ['data-manager','administrator'],
+      goal: 'Geräteexporte — vor allem komplette Spectralis-Exporte — im Browser in den Eingang oder auf eine Visite bringen.',
+      steps: [
+        'Öffnen Sie im **Eingang** den Punkt **Hochladen**. Optional wählen Sie oben unter **Visite für diese Dateien** eine Visite für den ganzen Stapel.',
+        'Ziehen Sie Dateien oder **ganze Ordner** auf die Fläche, oder wählen Sie mit **Dateien wählen** bzw. **Ordner wählen**. Ordner werden samt Unterordnern gelesen.',
+        '**Ein Ordner pro Patient:** Bei Spectralis-`.E2E`-Dateien ist der Ordner, der die Datei unmittelbar enthält, das Patientenkürzel (z. B. `iAMD/EIAMD005/EIAMD01D.E2E` gehört zu `EIAMD005`). Eine Datei ohne Ordner hat kein Kürzel: Suchen Sie den Teilnehmer in der Zeile mit **Patient suchen**.',
+        'Jede `.E2E`-Datei ist **eine Zeile** und wird **einmal** hochgeladen (bis 2 GiB; größere Dateien lehnt der Browser ab). Der Browser liest die Datei dazu nicht in den Speicher und prüft vorab über die Prüfsumme, ob der Server sie schon hat.',
+        'Nach **Bestätigen** legt der Server **jede Serie** der Datei als eigenen Eintrag an — OCT-Volumen und Linienscans, IR, BAF, BR, IRAF, qAF, ICGA und FA, je Auge. Die Zeile listet sie mit Modalität, Auge, Bildanzahl und Status.',
+      ],
+      notes: [
+        'Weicht die Kennung im Dateikopf vom Ordnernamen ab, liegen **alle** Serien der Datei im Eingang und müssen von Hand zugeordnet werden; die Zeile weist darauf hin. Ist keine Visite gewählt, ordnet der Server jede Serie nach Kennung und Datum zu oder legt sie im Eingang ab.',
+        '**Rückgängig** nimmt eine hochgeladene Datei innerhalb einer Minute zurück und löscht dabei alle ihre Einträge.',
+        'Auf Installationen, die Aufnahmen schon im Browser pseudonymisieren, bleibt das Verhalten unverändert: eine Zeile je OCT-Volumen, mit Vorschau und Bestätigung.',
+      ],
+    },
   ],
 }
