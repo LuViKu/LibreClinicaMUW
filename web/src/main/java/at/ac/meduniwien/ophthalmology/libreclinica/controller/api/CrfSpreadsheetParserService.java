@@ -195,7 +195,7 @@ public class CrfSpreadsheetParserService {
                              ResourceBundle respage) throws IOException, CRFReadingException {
         try (FileInputStream firstStream = new FileInputStream(storedFile.toFile())) {
             SpreadSheetTableRepeating repeating = new SpreadSheetTableRepeating(
-                    firstStream, uploader, versionName, locale, studyId);
+                    firstStream, uploader, locale, studyId);
             repeating.setMeasurementUnitDao(measurementUnitDao);
 
             if (repeating.isRepeating()) {
@@ -210,7 +210,7 @@ public class CrfSpreadsheetParserService {
         // No "groups" sheet → fall back to the classic parser.
         try (FileInputStream secondStream = new FileInputStream(storedFile.toFile())) {
             SpreadSheetTableClassic classic = new SpreadSheetTableClassic(
-                    secondStream, uploader, versionName, locale, studyId);
+                    secondStream, uploader, locale, studyId);
             classic.setMeasurementUnitDao(measurementUnitDao);
             classic.setCrfId(crf.getId());
             NewCRFBean nib = classic.toNewCRF(dataSource, respage);

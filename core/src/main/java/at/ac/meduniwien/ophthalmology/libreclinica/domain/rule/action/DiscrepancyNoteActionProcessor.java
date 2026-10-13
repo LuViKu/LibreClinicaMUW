@@ -40,7 +40,7 @@ public class DiscrepancyNoteActionProcessor implements ActionProcessor {
             String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
         switch (executionMode) {
         case DRY_RUN: {
-            return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+            return dryRun(ruleAction);
         }
 
         case SAVE: {
@@ -59,7 +59,7 @@ public class DiscrepancyNoteActionProcessor implements ActionProcessor {
         return null;
     }
 
-    private RuleActionBean dryRun(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+    private RuleActionBean dryRun(RuleActionBean ruleAction) {
         return ruleAction;
     }
 

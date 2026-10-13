@@ -129,16 +129,16 @@ public class XsltTransformJob extends QuartzJobBean {
         ResourceBundleProvider.updateLocale(locale);
         ResourceBundle pageMessages = ResourceBundleProvider.getPageMessagesBundle();
         List<File> markForDelete = new LinkedList<File>();
-        Boolean zipped = true;
-        Boolean deleteOld = true;
-        Boolean exceptions = false;
+        boolean zipped = true;
+        boolean deleteOld = true;
+        boolean exceptions = false;
         JobDataMap dataMap = context.getMergedJobDataMap();
         String localeStr = dataMap.getString(LOCALE);
         String[] doNotDeleteUntilExtract = new String[4];
         int cnt = dataMap.getInt("count");
         DatasetBean datasetBean = null;
         if (localeStr != null) {
-            locale = new Locale(localeStr);
+            locale = Locale.of(localeStr);
             ResourceBundleProvider.updateLocale(locale);
             pageMessages = ResourceBundleProvider.getPageMessagesBundle();
         }
@@ -393,7 +393,7 @@ public class XsltTransformJob extends QuartzJobBean {
                 if (dontDelFiles.length > 1 && zipped) {
                     logger.debug("count =====" + cnt + "dontDelFiles length==---" + dontDelFiles.length);
 
-                        logger.debug("Entering this?" + cnt + "dontDelFiles" + dontDelFiles);
+                        logger.debug("Entering this?" + cnt + "dontDelFiles" + Arrays.toString(dontDelFiles));
                         String path = outputPath + File.separator;
                         logger.debug("path = " + path);
                         logger.debug("zipName?? = " + epBean.getZipName());

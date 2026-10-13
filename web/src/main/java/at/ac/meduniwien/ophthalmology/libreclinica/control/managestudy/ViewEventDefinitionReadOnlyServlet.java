@@ -14,14 +14,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterValueDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.EventDefinitionCrfTagService;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 
 import java.util.ArrayList;
@@ -39,7 +37,6 @@ public class ViewEventDefinitionReadOnlyServlet extends ViewEventDefinitionServl
 	 */
 	private static final long serialVersionUID = -3513770750134790412L;
 
-	EventDefinitionCrfTagService eventDefinitionCrfTagService = null;
 
     public static String EVENT_ID = "id";
     public static String EVENT_OID = "Oid";
@@ -102,12 +99,5 @@ public class ViewEventDefinitionReadOnlyServlet extends ViewEventDefinitionServl
             forwardPage(Page.VIEW_EVENT_DEFINITION_NOSIDEBAR);
         }
     }
-    @Override
-    public EventDefinitionCrfTagService getEventDefinitionCrfTagService() {
-        eventDefinitionCrfTagService=
-         this.eventDefinitionCrfTagService != null ? eventDefinitionCrfTagService : (EventDefinitionCrfTagService) SpringServletAccess.getApplicationContext(context).getBean("eventDefinitionCrfTagService");
-
-         return eventDefinitionCrfTagService;
-     }
 
 }

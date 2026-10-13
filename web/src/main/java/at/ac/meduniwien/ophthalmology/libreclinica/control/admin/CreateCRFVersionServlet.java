@@ -207,7 +207,6 @@ public class CreateCRFVersionServlet extends SecureController {
                 // List excelErr =
                 // ((ArrayList)request.getAttribute("excelErrors"));
                 ArrayList<String> excelErr = asArrayList(session.getAttribute("excelErrors"), String.class);
-                logger.debug("excelErr.isEmpty()=" + excelErr.isEmpty());
                 if (excelErr != null && excelErr.isEmpty()) {
                     addPageMessage(resword.getString("congratulations_your_spreadsheet_no_errors"));
                     forwardPage(Page.VIEW_SECTION_DATA_ENTRY_PREVIEW);
@@ -245,6 +244,11 @@ public class CreateCRFVersionServlet extends SecureController {
                         session.setAttribute("eventsForVersion", new ArrayList<>());
                     }
                     forwardPage(Page.CREATE_CRF_VERSION_NODELETE);
+                    return;
+                }
+                if (nib == null) {
+                    // the uploaded spreadsheet is no longer in the session; start over
+                    forwardPage(Page.CREATE_CRF_VERSION);
                     return;
                 }
                 ArrayList<ItemBean> nonSharedItems = vdao.findNotSharedItemsByVersion(previousVersionId.intValue());
@@ -377,7 +381,6 @@ public class CreateCRFVersionServlet extends SecureController {
         } else if ("delete".equalsIgnoreCase(action)) {
             logger.debug("user wants to delete previous version");
             ArrayList<String> excelErr = asArrayList(session.getAttribute("excelErrors"), String.class);
-            logger.debug("for overwrite CRF version, excelErr.isEmpty()=" + excelErr.isEmpty());
             if (excelErr != null && excelErr.isEmpty()) {
                 addPageMessage(resword.getString("congratulations_your_spreadsheet_no_errors"));
                 session.setAttribute("deletePreviousVersion", Boolean.TRUE);// should be moved to excelErr != null block
@@ -437,13 +440,13 @@ public class CreateCRFVersionServlet extends SecureController {
                     htab = new SpreadSheetTableRepeating(inStream, ub,
                     // SpreadSheetTable htab = new SpreadSheetTable(new
                     // FileInputStream(theDir + tempFile), ub,
-                            version.getName(), locale, currentStudy.getId());
+                            locale, currentStudy.getId());
 
                     htab.setMeasurementUnitDao((MeasurementUnitDao) SpringServletAccess.getApplicationContext(context).getBean("measurementUnitDao"));
 
                     if (!htab.isRepeating()) {
                         inStreamClassic = new FileInputStream(theDir + tempFile);
-                        sstc = new SpreadSheetTableClassic(inStreamClassic, ub, version.getName(), locale, currentStudy.getId());
+                        sstc = new SpreadSheetTableClassic(inStreamClassic, ub, locale, currentStudy.getId());
                         sstc.setMeasurementUnitDao((MeasurementUnitDao) SpringServletAccess.getApplicationContext(context).getBean("measurementUnitDao"));
                     }
                     // logger.debug("finishing with feedin file-input-stream, did
@@ -555,9 +558,11 @@ public class CreateCRFVersionServlet extends SecureController {
                     }
                 }
                 // request.setAttribute("excelErrors", .getErrors());
-                session.setAttribute("excelErrors", nib.getErrors());
-                session.setAttribute("htmlTable", nib.getHtmlTable());
-                session.setAttribute("nib", nib);
+                if (nib != null) {
+                    session.setAttribute("excelErrors", nib.getErrors());
+                    session.setAttribute("htmlTable", nib.getHtmlTable());
+                    session.setAttribute("nib", nib);
+                }
             }
         }
         return tempFile;
@@ -706,10 +711,15 @@ public class CreateCRFVersionServlet extends SecureController {
                 String text1 = restoreQuotes(rob1.getText());
 
                 String value1 = restoreQuotes(rob1.getValue());
+                if (text1 == null) {
+                    text1 = "";
+                }
+                if (value1 == null) {
+                    value1 = "";
+                }
 
                 if (
-                		(text1 == null || text1.trim().isEmpty()) && 
-                		(value1 == null || value1.trim().isEmpty())
+                		text1.trim().isEmpty() && value1.trim().isEmpty()
                 ) {
                     // this response label appears in the spreadsheet
                     // multiple times, so

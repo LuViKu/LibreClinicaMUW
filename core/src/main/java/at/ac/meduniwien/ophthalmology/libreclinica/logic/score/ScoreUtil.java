@@ -62,7 +62,7 @@ public class ScoreUtil {
             if (c == ' ') {
                 // do nothing
             } else if (c == ScoreSymbol.ARITHMETIC_OPERATOR_SYMBOL) {
-                if (couldBeSign & isSign(t.getName())) {
+                if (couldBeSign && isSign(t.getName())) {
                     if (token.getName().length() > 0) {
                         logger.info("Wrong at operator " + t.getName() + " at position " + info.pos);
                         throw new ScoreException(t.getName() + " at position " + info.pos + " is invalid.", "1");
@@ -90,9 +90,9 @@ public class ScoreUtil {
                 String funcname = getFunctionName(tokenname);
                 if (funcname != null && !funcname.equalsIgnoreCase("getexternalvalue") && !funcname.equalsIgnoreCase(FUNCTION_PACKAGE + "getexternalvalue")) {
                     try {
-                        token.setName(sign + evalFunc(expression, info, (Function) Class.forName(funcname).newInstance()));
+                        token.setName(sign + evalFunc(expression, info, (Function) Class.forName(funcname).getDeclaredConstructor().newInstance()));
                         token.setSymbol(ScoreSymbol.TERM_SYMBOL);
-                    } catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
+                    } catch (ReflectiveOperationException e) {
                         // 2026-06-28 — heritage-debt audit (PR #262): never silently
                         // swallow score-function load failures — an unscored CRF must
                         // not be indistinguishable from a scored one.
@@ -222,11 +222,11 @@ public class ScoreUtil {
                 if (funcname != null) {
                     // store in the current argument
                     try {
-                        token.setName(sign + evalFunc(contents, info, (Function) Class.forName(funcname).newInstance()));
+                        token.setName(sign + evalFunc(contents, info, (Function) Class.forName(funcname).getDeclaredConstructor().newInstance()));
                         token.setSymbol(ScoreSymbol.TERM_SYMBOL);
                         currArg.add(token);
                         couldBeSign = false;
-                    } catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
+                    } catch (ReflectiveOperationException e) {
                         // 2026-06-28 — heritage-debt audit (PR #262): never silently
                         // swallow score-function load failures — surface as a
                         // ScoreException so the caller sees the partial computation.

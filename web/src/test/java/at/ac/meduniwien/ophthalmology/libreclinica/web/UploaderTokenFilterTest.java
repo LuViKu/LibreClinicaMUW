@@ -636,10 +636,12 @@ class UploaderTokenFilterTest {
             assertFalse(line.contains("10.7.7.7"), "no client address: " + line);
             assertFalse(line.contains(UploaderTokenFilter.TOKEN_HEADER), "no header: " + line);
         }
-        assertTrue(lines.stream().anyMatch(l -> l.contains("POST") && l.contains(RESOLVE) && l.contains("token rejected")),
-                lines.toString());
-        assertTrue(lines.stream().anyMatch(l -> l.contains("/pages/api/v1/public/oct-upload/commit")
+        assertTrue(lines.stream().anyMatch(l -> l.contains("POST") && l.contains("/pages/api/v1/public/upload/**")
+                && l.contains("token rejected")), lines.toString());
+        assertTrue(lines.stream().anyMatch(l -> l.contains("/pages/api/v1/public/oct-upload/**")
                 && l.contains("no token, front door closed")), lines.toString());
+        // The route is named by the filter, never copied from the request line.
+        assertTrue(lines.stream().noneMatch(l -> l.contains(RESOLVE)), lines.toString());
         assertTrue(lines.stream().anyMatch(l -> l.contains("too many rejected tokens")), lines.toString());
     }
 

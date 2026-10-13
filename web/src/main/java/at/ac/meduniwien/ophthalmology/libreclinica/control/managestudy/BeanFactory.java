@@ -734,7 +734,7 @@ public class BeanFactory {
                 }
             }
             secBean.setBorders(borders);
-            secBean.setParent(createSectionBean(sectionVals.get("parent_section")));
+            secBean.setParent(createSectionBean());
             secBean.setTitle(sectionVals.get("section_title"));
             secBean.setSubtitle(sectionVals.get("subtitle"));
             secBean.setInstructions(sectionVals.get("instructions"));
@@ -830,7 +830,7 @@ public class BeanFactory {
         return allDisplayItems;
     }
 
-    public static SectionBean createSectionBean(String secLabel) {
+    public static SectionBean createSectionBean() {
         return new SectionBean();
     }
 

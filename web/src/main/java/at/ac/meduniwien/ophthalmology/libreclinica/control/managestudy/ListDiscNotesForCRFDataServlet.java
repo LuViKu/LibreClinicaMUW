@@ -259,7 +259,7 @@ public class ListDiscNotesForCRFDataServlet extends SecureController {
         // flag is final (matches legacy factory behaviour).
         for (Map<String, Object> row : rows) {
             row.put("availableActions",
-                    availableActions(studyHasDiscNotes, resolutionStatus, discNoteType));
+                    availableActions(studyHasDiscNotes));
         }
 
         List<Map<String, Object>> columns = new ArrayList<>();
@@ -333,8 +333,7 @@ public class ListDiscNotesForCRFDataServlet extends SecureController {
         return entry;
     }
 
-    private List<String> availableActions(boolean studyHasDiscNotes,
-                                          int resolutionStatus, int discNoteType) {
+    private List<String> availableActions(boolean studyHasDiscNotes) {
         List<String> a = new ArrayList<>();
         a.add("view");
         if (studyHasDiscNotes) {

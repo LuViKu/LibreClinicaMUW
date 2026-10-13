@@ -395,7 +395,7 @@ public class ScoreCalculator {
 
         ItemDataType idt = ib.getDataType();
         if (value == null || value.length() == 0) {
-            if (idb.isActive() && !"".equals(idb.getValue())) {
+            if (idb.isActive() && (idb.getValue() == null || !idb.getValue().isEmpty())) {
                 idb.setValue("<erased>");
             } else {
                 idb.setValue("");
@@ -462,7 +462,7 @@ public class ScoreCalculator {
         NumberFormat nf = NumberFormat.getInstance(Locale.ENGLISH);
         if (idt.equals(ItemDataType.INTEGER)) {
             try {
-                Double d = nf.parse(value).doubleValue();
+                double d = nf.parse(value).doubleValue();
                 int p = 0;
                 if (width > 0) {
                     p = d >= 0 ? width : width - 1;
@@ -483,7 +483,7 @@ public class ScoreCalculator {
             }
         } else if (idt.equals(ItemDataType.REAL)) {
             try {
-                Double d = nf.parse(value).doubleValue();
+                double d = nf.parse(value).doubleValue();
                 // there should be no width specify for calculation item
                 int p = BigDecimal.valueOf(d).precision();
                 // set default scale as 4

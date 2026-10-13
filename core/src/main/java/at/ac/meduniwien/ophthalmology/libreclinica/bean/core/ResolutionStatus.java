@@ -36,17 +36,17 @@ public class ResolutionStatus extends Term {
 
 	protected static final Logger logger = LoggerFactory.getLogger(ResolutionStatus.class.getName());
 
-    public static final ResolutionStatus INVALID = new ResolutionStatus(0, "invalid", null, null);
+    public static final ResolutionStatus INVALID = new ResolutionStatus(0, "invalid", null);
 
-    public static final ResolutionStatus OPEN = new ResolutionStatus(1, "New", null, "images/icon_Note.gif");
+    public static final ResolutionStatus OPEN = new ResolutionStatus(1, "New", "images/icon_Note.gif");
 
-    public static final ResolutionStatus UPDATED = new ResolutionStatus(2, "Updated", null, "images/icon_flagYellow.gif");
+    public static final ResolutionStatus UPDATED = new ResolutionStatus(2, "Updated", "images/icon_flagYellow.gif");
 
-    public static final ResolutionStatus RESOLVED = new ResolutionStatus(3, "Resolution_Proposed", null, "images/icon_flagGreen.gif");
+    public static final ResolutionStatus RESOLVED = new ResolutionStatus(3, "Resolution_Proposed", "images/icon_flagGreen.gif");
 
-    public static final ResolutionStatus CLOSED = new ResolutionStatus(4, "Closed", null, "images/icon_flagBlack.gif");
+    public static final ResolutionStatus CLOSED = new ResolutionStatus(4, "Closed", "images/icon_flagBlack.gif");
 
-    public static final ResolutionStatus NOT_APPLICABLE = new ResolutionStatus(5, "Not_Applicable", null, "images/icon_flagWhite.gif");
+    public static final ResolutionStatus NOT_APPLICABLE = new ResolutionStatus(5, "Not_Applicable", "images/icon_flagWhite.gif");
 
     private String iconFilePath;
 
@@ -84,7 +84,7 @@ public class ResolutionStatus extends Term {
 
     private List<Privilege> privileges;
 
-    private ResolutionStatus(int id, String name, Privilege[] myPrivs, String path) {
+    private ResolutionStatus(int id, String name, String path) {
         super(id, name);
         this.iconFilePath = path;
     }

@@ -139,7 +139,7 @@ public class PatientsApiController {
                 ? DEFAULT_PAGE_SIZE : Math.min(pageSize, MAX_PAGE_SIZE);
         String searchTrim = (search == null) ? "" : search.trim();
 
-        Set<Integer> visibleStudyIds = visibleStudyIdsForUser(currentUser, session);
+        Set<Integer> visibleStudyIds = visibleStudyIdsForUser(currentUser);
         if (visibleStudyIds.isEmpty()) {
             return ResponseEntity.ok(new PatientsListResponse(0, p, ps, List.of()));
         }
@@ -173,7 +173,7 @@ public class PatientsApiController {
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        Set<Integer> visibleStudyIds = visibleStudyIdsForUser(currentUser, session);
+        Set<Integer> visibleStudyIds = visibleStudyIdsForUser(currentUser);
         if (visibleStudyIds.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Patient with subjectId=" + subjectId + " not found."));
@@ -230,7 +230,7 @@ public class PatientsApiController {
         if (currentUser == null || currentUser.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        Set<Integer> visibleStudyIds = visibleStudyIdsForUser(currentUser, session);
+        Set<Integer> visibleStudyIds = visibleStudyIdsForUser(currentUser);
         if (visibleStudyIds.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Patient with subjectId=" + subjectId + " not found."));
@@ -305,7 +305,7 @@ public class PatientsApiController {
      * one filter call; for multi-study sponsors the union is bounded
      * by the user's grant count, which is small.
      */
-    private Set<Integer> visibleStudyIdsForUser(UserAccountBean user, HttpSession session) {
+    private Set<Integer> visibleStudyIdsForUser(UserAccountBean user) {
         Set<Integer> out = new LinkedHashSet<>();
         StudyDAO studyDAO = new StudyDAO(dataSource);
         UserAccountDAO userDAO = new UserAccountDAO(dataSource);

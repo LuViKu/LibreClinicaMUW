@@ -313,7 +313,7 @@ public class EventDefinitionsApiController {
         }
 
         LOG.info("Retinal tasks updated for event_def {} (study {}): {} → {}",
-                sedId, studyOid, previous, normalised);
+                sedId, logSafe(studyOid), previous, normalised);
         return ResponseEntity.ok(Map.of("tasks", new ArrayList<>(normalised)));
     }
 
@@ -698,7 +698,7 @@ public class EventDefinitionsApiController {
         writeEventDefCreatedAudit(me, persisted);
 
         LOG.info("Create event definition: oid={} name={} study={} by admin={}",
-                persisted.getOid(), persisted.getName(), studyOid, me.getName());
+                persisted.getOid(), persisted.getName(), logSafe(studyOid), me.getName());
 
         return ResponseEntity.status(201).body(toDto(persisted));
     }
@@ -791,7 +791,7 @@ public class EventDefinitionsApiController {
         sedDao.update(target);
 
         LOG.info("Update event definition: oid={} study={} by admin={}",
-                sedOid, studyOid, me.getName());
+                logSafe(sedOid), logSafe(studyOid), me.getName());
 
         return ResponseEntity.ok(toDto(target));
     }
@@ -854,7 +854,7 @@ public class EventDefinitionsApiController {
         }
 
         LOG.info("Reorder event definitions: study={} by admin={} ({} rows)",
-                studyOid, me.getName(), body.orderedOids().size());
+                logSafe(studyOid), me.getName(), body.orderedOids().size());
 
         // Return the refreshed list so the SPA can replace its in-memory state.
         return list(studyOid, session);
@@ -918,7 +918,7 @@ public class EventDefinitionsApiController {
             }
         } catch (SQLException e) {
             LOG.error("Failed to count the removal impact of event definition oid={}: {}",
-                    sedOid, e.getMessage(), e);
+                    logSafe(sedOid), e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to count what removing the event definition would remove — see server log."));
         }
@@ -983,11 +983,11 @@ public class EventDefinitionsApiController {
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.warn("Audit write failed for study_event_definition_disable oid={} (continuing): {}",
-                    sedOid, e.getMessage());
+                    logSafe(sedOid), e.getMessage());
         }
 
         LOG.info("Disable event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
-                sedOid, studyOid, me.getName(), removed[0], removed[1], removed[2], removed[3]);
+                logSafe(sedOid), logSafe(studyOid), me.getName(), removed[0], removed[1], removed[2], removed[3]);
 
         return ResponseEntity.ok(toDto(target));
     }
@@ -1173,11 +1173,11 @@ public class EventDefinitionsApiController {
         // and event CRFs a CRF removal holds (read above).
         int[] restored = restoreDependents(target, me, removedCrfs, held);
 
-        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
-                oldStatus, Status.AVAILABLE, "study_event_definition_restore");
+        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, target,
+                oldStatus, Status.AVAILABLE);
 
         LOG.info("Restore event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
-                sedOid, studyOid, me.getName(), restored[0], restored[1], restored[2], restored[3]);
+                logSafe(sedOid), logSafe(studyOid), me.getName(), restored[0], restored[1], restored[2], restored[3]);
 
         return ResponseEntity.ok(toDto(target));
     }
@@ -1226,11 +1226,11 @@ public class EventDefinitionsApiController {
         Status oldStatus = target.getStatus();
         int affected = cascadeStatus(target, Status.LOCKED, me, /* onlyFlipAvailable */ true);
 
-        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
-                oldStatus, Status.LOCKED, "study_event_definition_lock");
+        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, target,
+                oldStatus, Status.LOCKED);
 
         LOG.info("Lock event definition: oid={} study={} by admin={} (child rows touched={})",
-                sedOid, studyOid, me.getName(), affected);
+                logSafe(sedOid), logSafe(studyOid), me.getName(), affected);
 
         return ResponseEntity.ok(toDto(target));
     }
@@ -1272,11 +1272,11 @@ public class EventDefinitionsApiController {
         Status oldStatus = target.getStatus();
         int affected = cascadeStatus(target, Status.AVAILABLE, me, /* onlyFlipAvailable */ false);
 
-        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
-                oldStatus, Status.AVAILABLE, "study_event_definition_unlock");
+        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, target,
+                oldStatus, Status.AVAILABLE);
 
         LOG.info("Unlock event definition: oid={} study={} by admin={} (child rows touched={})",
-                sedOid, studyOid, me.getName(), affected);
+                logSafe(sedOid), logSafe(studyOid), me.getName(), affected);
 
         return ResponseEntity.ok(toDto(target));
     }
@@ -1372,18 +1372,14 @@ public class EventDefinitionsApiController {
      * existing {@code writeEventDefFieldAudit} helper.
      *
      * <p>Audit-table unification (slice C, 2026-06-12) — direct INSERT
-     * into {@code audit_log_event}. The {@code actionPrefix} argument
-     * is no longer persisted (the {@code auditTypeId} encodes the
-     * operation type) but is retained in the signature for symmetry
-     * with the other lifecycle writers across the unified surface.
+     * into {@code audit_log_event}. The {@code auditTypeId} encodes the
+     * operation type.
      */
     private void writeLifecycleAudit(int auditTypeId,
                                      UserAccountBean editor,
-                                     @SuppressWarnings("unused") StudyBean study,
                                      StudyEventDefinitionBean target,
                                      Status oldStatus,
-                                     Status newStatus,
-                                     @SuppressWarnings("unused") String actionPrefix) {
+                                     Status newStatus) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -1515,13 +1511,13 @@ public class EventDefinitionsApiController {
         EventDefinitionCRFBean persisted = assignmentDao.create(toCreate);
         if (persisted == null || persisted.getId() == 0) {
             LOG.warn("EventDefinitionCRFDAO.create returned no row for sed={} crf={}",
-                    sedOid, body.crfOid());
+                    logSafe(sedOid), body.crfOid());
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist event-CRF assignment"));
         }
 
         LOG.info("Attach CRF: study={} event={} crf={} defaultVersion={} by user={}",
-                studyOid, sedOid, body.crfOid(), body.defaultVersionOid(), me.getName());
+                logSafe(studyOid), logSafe(sedOid), body.crfOid(), body.defaultVersionOid(), me.getName());
 
         return ResponseEntity.status(201).body(toAssignmentDto(persisted, crfDao, versionDao));
     }
@@ -1593,8 +1589,8 @@ public class EventDefinitionsApiController {
         target.setUpdatedDate(new java.util.Date());
         assignmentDao.update(target);
 
-        LOG.info("Update CRF assignment: study={} event={} crf={} by user={}",
-                studyOid, sedOid, crfOid, me.getName());
+        LOG.info("Update CRF assignment: study={} event={} crf={} by userId={}",
+                logSafe(studyOid), logSafe(sedOid), logSafe(crfOid), me.getId());
 
         return ResponseEntity.ok(toAssignmentDto(target, crfDao, versionDao));
     }
@@ -1638,8 +1634,8 @@ public class EventDefinitionsApiController {
         target.setUpdatedDate(new java.util.Date());
         assignmentDao.update(target);
 
-        LOG.info("Remove CRF assignment: study={} event={} crf={} by user={}",
-                studyOid, sedOid, crfOid, me.getName());
+        LOG.info("Remove CRF assignment: study={} event={} crf={} by userId={}",
+                logSafe(studyOid), logSafe(sedOid), logSafe(crfOid), me.getId());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         return ResponseEntity.ok(toAssignmentDto(target, crfDao, versionDao));
@@ -1883,5 +1879,10 @@ public class EventDefinitionsApiController {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    /** Request values reach the log with line breaks and other control characters replaced. */
+    private static String logSafe(Object value) {
+        return value == null ? null : String.valueOf(value).replaceAll("[\\r\\n]", "_").replaceAll("\\p{Cntrl}", "_");
     }
 }

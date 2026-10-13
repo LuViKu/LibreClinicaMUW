@@ -59,11 +59,6 @@ public class MetaDataCollector extends OdmDataCollector {
         odmStudyMap = new LinkedHashMap<String, OdmStudyBean>();
     }
 
-    public MetaDataCollector(DataSource ds,RuleSetRuleDao ruleSetRuleDao) {
-    	this.ruleSetRuleDao = ruleSetRuleDao;
-    	
-    }
-
     @Override
     public void collectFileData() {
         this.collectOdmRoot();

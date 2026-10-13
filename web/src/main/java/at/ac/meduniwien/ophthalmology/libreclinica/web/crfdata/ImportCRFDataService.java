@@ -210,7 +210,7 @@ public class ImportCRFDataService {
     /*
      * purpose: returns false if any of the forms/EventCRFs fail the UpsertOnBean rules.
      */
-    public boolean eventCRFStatusesValid(ODMContainer odmContainer, UserAccountBean ub) {
+    public boolean eventCRFStatusesValid(ODMContainer odmContainer) {
         EventCRFDAO eventCrfDAO = new EventCRFDAO(ds);
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(ds);
         StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(ds);
@@ -714,8 +714,8 @@ public class ImportCRFDataService {
             // mm/dd/yyyy
             if (displayItemBean.getItem().getDataType().equals(ItemDataType.DATE)) {
                 // pass it if it is blank, tbh
-                if (!"".equals(displayItemBean.getData().getValue())) {
-                    String dateValue = displayItemBean.getData().getValue();
+                String dateValue = displayItemBean.getData().getValue();
+                if (dateValue == null || !dateValue.isEmpty()) {
                     SimpleDateFormat sdf_sqldate = new SimpleDateFormat("yyyy-MM-dd");
                     try {
                         Date originalDate = sdf_sqldate.parse(dateValue);
@@ -750,7 +750,7 @@ public class ImportCRFDataService {
                     // now, didn't check decimal for testInt.
                 } catch (Exception e) {// should be a sub class
                     // pass if blank, tbh 07/2010
-                    if (!"".equals(displayItemBean.getData().getValue())) {
+                    if (valueIsNotEmptyString(displayItemBean.getData().getValue())) {
                         hardv.put(itemOid, "This value is not an integer.");
                     }
                 }
@@ -769,7 +769,7 @@ public class ImportCRFDataService {
                     }
                 } catch (Exception ee) {
                     // pass if blank, tbh
-                    if (!"".equals(displayItemBean.getData().getValue())) {
+                    if (valueIsNotEmptyString(displayItemBean.getData().getValue())) {
                         hardv.put(itemOid, "This value is not a real number.");
                     }
                 }
@@ -792,7 +792,7 @@ public class ImportCRFDataService {
                             hardv.put(itemOid, "This value exceeds required decimal=" + decimal);
                         }
                     } catch (Exception e) {
-                        if (!"".equals(displayItemBean.getData().getValue())) {
+                        if (valueIsNotEmptyString(displayItemBean.getData().getValue())) {
                             hardv.put(itemOid, "This value is not a real number.");
                         }
                     }
@@ -1174,4 +1174,9 @@ public class ImportCRFDataService {
         }
     }
 
+
+    /** True unless the value is the empty string; a null value counts as not empty (as {@code !"".equals(v)} did). */
+    private static boolean valueIsNotEmptyString(String v) {
+        return v == null || v.length() > 0;
+    }
 }

@@ -112,7 +112,7 @@ public final class BundleExportWriter {
 
         ZipOutputStream zos = dryRun ? null : new ZipOutputStream(out);
         try {
-            Subject s = addSubject(zos, dataSource, studySubjectId, subjectLabel, "",
+            Subject s = addSubject(zos, dataSource, studySubjectId, "",
                     casebookXml, casebookCsv, policy);
 
             Map<String, Object> manifest = manifest(subjectLabel, studyOid, generatedBy,
@@ -191,7 +191,7 @@ public final class BundleExportWriter {
                 // Blinding is per subject, not per bundle: two subjects of the
                 // same dataset can be in different arms, and the requester is
                 // blinded to one and not the other.
-                Subject s = addSubject(zos, dataSource, ds.studySubjectId(), ds.label(),
+                Subject s = addSubject(zos, dataSource, ds.studySubjectId(),
                         prefix, ds.casebookXml(), ds.casebookCsv(), ds.policy());
                 if (ds.policy().maskAi()) masked++;
 
@@ -282,7 +282,7 @@ public final class BundleExportWriter {
      *               reconstruct where a file sits
      */
     static Subject addSubject(ZipOutputStream zos, DataSource dataSource,
-                              int studySubjectId, String subjectLabel, String prefix,
+                              int studySubjectId, String prefix,
                               byte[] casebookXml, byte[] casebookCsv, Policy policy)
             throws IOException {
 

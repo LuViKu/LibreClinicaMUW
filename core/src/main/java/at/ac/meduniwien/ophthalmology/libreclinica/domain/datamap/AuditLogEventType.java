@@ -67,7 +67,7 @@ public class AuditLogEventType extends DataMapDomainObject implements Serializab
 
 	
 	public String getI18nName(Locale locale) {
-        if (!"".equals(this.name)) {
+        if (this.name != null && !this.name.isEmpty()) {
             ResourceBundle resWords = ResourceBundleProvider.getWordsBundle(locale);
             String des = resWords.getString(this.name);
             if(des != null) {

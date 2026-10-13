@@ -410,14 +410,12 @@ public class StudiesApiController {
             moveTo = where.locationId();
         }
 
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-
         if (body.name() != null) {
             String oldVal = target.getName();
             String newVal = body.name().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setName(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "name", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "name", oldVal, newVal);
             }
         }
         if (body.briefSummary() != null) {
@@ -425,7 +423,7 @@ public class StudiesApiController {
             String newVal = body.briefSummary().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setSummary(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "summary", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "summary", oldVal, newVal);
             }
         }
         if (body.principalInvestigator() != null) {
@@ -433,7 +431,7 @@ public class StudiesApiController {
             String newVal = body.principalInvestigator().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setPrincipalInvestigator(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "principal_investigator", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "principal_investigator", oldVal, newVal);
             }
         }
         if (body.sponsor() != null) {
@@ -441,7 +439,7 @@ public class StudiesApiController {
             String newVal = body.sponsor().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setSponsor(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "sponsor", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "sponsor", oldVal, newVal);
             }
         }
         if (body.officialTitle() != null) {
@@ -449,7 +447,7 @@ public class StudiesApiController {
             String newVal = body.officialTitle().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setOfficialTitle(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "official_title", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "official_title", oldVal, newVal);
             }
         }
         if (body.secondaryProtocolId() != null) {
@@ -457,7 +455,7 @@ public class StudiesApiController {
             String newVal = body.secondaryProtocolId().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setSecondaryIdentifier(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "secondary_identifier", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "secondary_identifier", oldVal, newVal);
             }
         }
         if (body.collaborators() != null) {
@@ -465,7 +463,7 @@ public class StudiesApiController {
             String newVal = body.collaborators().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setCollaborators(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "collaborators", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "collaborators", oldVal, newVal);
             }
         }
         if (body.protocolDescription() != null) {
@@ -473,7 +471,7 @@ public class StudiesApiController {
             String newVal = body.protocolDescription().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setProtocolDescription(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "protocol_description", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "protocol_description", oldVal, newVal);
             }
         }
         boolean contactEmailChanged = false;
@@ -482,7 +480,7 @@ public class StudiesApiController {
             String newVal = body.contactEmail().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setContactEmail(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "contact_email", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "contact_email", oldVal, newVal);
                 contactEmailChanged = true;
             }
         }
@@ -491,7 +489,7 @@ public class StudiesApiController {
             String newVal = body.protocolType().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setProtocolType(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "protocol_type", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "protocol_type", oldVal, newVal);
             }
         }
         if (body.phase() != null) {
@@ -499,7 +497,7 @@ public class StudiesApiController {
             String newVal = body.phase().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setPhase(newVal);
-                writeStudyFieldAudit(auditDAO, me, target, "phase", oldVal, newVal);
+                writeStudyFieldAudit(me, target, "phase", oldVal, newVal);
             }
         }
 
@@ -507,7 +505,7 @@ public class StudiesApiController {
             java.util.Map<Integer, LocationScope.Place> places = LocationLabels.load(dataSource);
             LocationScope.Place from = LocationLabels.of(places, target.getLocationId());
             LocationScope.Place to = LocationLabels.of(places, moveTo);
-            writeStudyFieldAudit(auditDAO, me, target, "location", from == null ? "" : from.code(),
+            writeStudyFieldAudit(me, target, "location", from == null ? "" : from.code(),
                     to == null ? String.valueOf(moveTo) : to.code());
         }
 
@@ -644,7 +642,7 @@ public class StudiesApiController {
                     impact.itemData(),
                     impact.datasets()));
         } catch (SQLException e) {
-            LOG.warn("Removal preview failed for study {}: {}", studyOid, e.getMessage());
+            LOG.warn("Removal preview failed for study {}: {}", target.getOid(), e.getMessage());
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to count what the removal would take — see server log."));
         }
@@ -905,7 +903,7 @@ public class StudiesApiController {
                     "Study '" + studyOid + "' was " + (removal ? "removed" : "restored")
                             + " by another request; nothing was changed. Reload and check its status."));
         } catch (Exception e) {
-            LOG.error("Study {} failed for oid={} by admin={}", operation, studyOid, me.getName(), e);
+            LOG.error("Study {} failed for oid={} by admin={}", operation, target.getOid(), me.getName(), e);
             return ResponseEntity.internalServerError().body(Map.of("message",
                     "Failed to " + (removal ? "remove" : "restore") + " the study; nothing was changed. "
                             + "See server log."));
@@ -927,7 +925,7 @@ public class StudiesApiController {
 
         LOG.info("Study {}: oid={} by admin={} sites={} roles={} subjects={} definitions={} events={} "
                         + "eventCrfs={} items={} datasets={}",
-                operation, studyOid, me.getName(), impact.siteNames().size(), impact.roleBindings(),
+                operation, target.getOid(), me.getName(), impact.siteNames().size(), impact.roleBindings(),
                 impact.subjects(), impact.eventDefinitions(), impact.events(), impact.eventCrfs(),
                 impact.itemData(), impact.datasets());
         return ResponseEntity.ok(toIdentityDto(refreshed, studyDao));
@@ -1127,8 +1125,7 @@ public class StudiesApiController {
      * entity_name}, so events written via that path never surfaced in
      * the SPA Audit Log view.
      */
-    private void writeStudyFieldAudit(@SuppressWarnings("unused") AuditEventDAO auditDAO,
-                                      UserAccountBean editor,
+    private void writeStudyFieldAudit(UserAccountBean editor,
                                       StudyBean target,
                                       String columnName,
                                       String oldValue,

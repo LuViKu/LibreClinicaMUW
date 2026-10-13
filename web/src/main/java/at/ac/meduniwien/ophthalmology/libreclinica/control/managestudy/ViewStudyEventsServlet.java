@@ -159,7 +159,7 @@ public class ViewStudyEventsServlet extends SecureController {
                 + "&" + INPUT_STATUS_ID + "=" + statusId + "&" + "sedId=" + sedId + "&submitted=" + fp.getInt("submitted");
         request.setAttribute("queryUrl", queryUrl);
         if ("yes".equalsIgnoreCase(fp.getString(PRINT))) {
-            allEvents = genEventsForPrint(fp, definitions, startDate, endDate, sedId, definitionId, statusId);
+            allEvents = genEventsForPrint(definitions, startDate, endDate, definitionId, statusId);
             request.setAttribute("allEvents", allEvents);
             forwardPage(Page.VIEW_STUDY_EVENTS_PRINT);
         } else {
@@ -312,16 +312,14 @@ public class ViewStudyEventsServlet extends SecureController {
     /**
      * Generates an arraylist of study events for printing
      *
-     * @param fp
      * @param definitions
      * @param startDate
      * @param endDate
-     * @param sedId
      * @param definitionId
      * @param statusId
      * @return
      */
-    private ArrayList<ViewEventDefinitionBean> genEventsForPrint(FormProcessor fp, ArrayList<StudyEventDefinitionBean> definitions, Date startDate, Date endDate, int sedId, int definitionId, int statusId) {
+    private ArrayList<ViewEventDefinitionBean> genEventsForPrint(ArrayList<StudyEventDefinitionBean> definitions, Date startDate, Date endDate, int definitionId, int statusId) {
         StudyEventDAO sedao = new StudyEventDAO(sm.getDataSource());
         EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
         ArrayList<ViewEventDefinitionBean> allEvents = new ArrayList<>();

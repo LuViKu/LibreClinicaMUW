@@ -569,7 +569,10 @@ public class BatchCRFMigrationController implements Runnable {
     }
 
     private File createLogFile(String fileName) {
-        new File(getFilePath()).mkdir();
+        File logDir = new File(getFilePath());
+        if (!logDir.mkdirs() && !logDir.isDirectory()) {
+            logger.warn("Could not create the batch migration log directory");
+        }
         String logFileName = getFilePath() + File.separator + fileName;
         return new File(logFileName);
     }
@@ -763,14 +766,12 @@ public class BatchCRFMigrationController implements Runnable {
         String fileName = new SimpleDateFormat("_yyyy-MM-dd-hhmmssSaa'.txt'").format(new Date());
         fileName = "logFile" + fileName;
         File file = createLogFile(fileName);
-        PrintWriter writer = null;
         try {
-            writer = openFile(file);
-        } catch (FileNotFoundException | UnsupportedEncodingException e) {
-            logger.error("Error in creating file for logging report: ", e);
-        } finally {
+            PrintWriter writer = openFile(file);
             writer.print(toStringTextFormat(reportLog, resterms, stBean, cBean));
             closeFile(writer);
+        } catch (FileNotFoundException | UnsupportedEncodingException e) {
+            logger.error("Error in creating file for logging report: ", e);
         }
         String reportUrl = getReportUrl(fileName, helperObject.getUrlBase());
         String fullName = userAccountBean.getFirstName() + " " + userAccountBean.getLastName();

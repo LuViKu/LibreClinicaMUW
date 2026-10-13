@@ -62,12 +62,12 @@ public class ImportDataRuleRunner extends RuleRunner {
         if(executionMode == ExecutionMode.DRY_RUN) {
             for(ImportDataRuleRunnerContainer container : containers) {
                 if(container.getShouldRunRules())
-                    container.setRuleActionContainerMap(this.populateToBeExpected(container, study, ub));
+                    container.setRuleActionContainerMap(this.populateToBeExpected(container, study));
             }
         } else if(executionMode == ExecutionMode.SAVE){
             for(ImportDataRuleRunnerContainer container : containers) {
                 MessageContainer messageContainer =
-                        this.runRules(study, ub, (HashMap<String, String>)container.getVariableAndValue(), container.getRuleActionContainerMap());
+                        this.runRules(study, ub, container.getRuleActionContainerMap());
                 messageMap.putAll(messageContainer.getByMessageType(MessageType.ERROR));
             }
         }
@@ -76,7 +76,7 @@ public class ImportDataRuleRunner extends RuleRunner {
 
     @Transactional
     private HashMap<String, ArrayList<RuleActionContainer>> populateToBeExpected(ImportDataRuleRunnerContainer container,
-            StudyBean study, UserAccountBean ub) {
+            StudyBean study) {
         //copied code for toBeExpected from DataEntryServlet runRules
         HashMap<String, ArrayList<RuleActionContainer>> toBeExecuted = new HashMap<String, ArrayList<RuleActionContainer>>();
         HashMap<String, String> variableAndValue = (HashMap<String, String>)container.getVariableAndValue();
@@ -162,7 +162,7 @@ public class ImportDataRuleRunner extends RuleRunner {
     }
 
     @Transactional
-    private MessageContainer runRules(StudyBean currentStudy, UserAccountBean ub, HashMap<String, String> variableAndValue,
+    private MessageContainer runRules(StudyBean currentStudy, UserAccountBean ub,
             HashMap<String, ArrayList<RuleActionContainer>> toBeExecuted) {
         //Copied from DataEntryRuleRunner runRules
         MessageContainer messageContainer = new MessageContainer();

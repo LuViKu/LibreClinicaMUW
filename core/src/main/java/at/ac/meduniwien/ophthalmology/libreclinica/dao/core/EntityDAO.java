@@ -924,7 +924,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
         return querySuccessful;
     }
     
-    protected <T> T getValueOrDefault(HashMap<String, Object> hm, String column, T defaultValue, Class<T> resultType) {
+    protected <T> T getValueOrDefault(HashMap<String, Object> hm, String column, T defaultValue) {
         if (hm.containsKey(column)) {
             try {
                 @SuppressWarnings("unchecked")
@@ -940,15 +940,15 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     }
 
     protected String selectString(HashMap<String, Object> hm, String column) {
-    	return getValueOrDefault(hm, column, "", String.class);
+    	return getValueOrDefault(hm, column, "");
     }
 
     protected int selectInt(HashMap<String, Object> hm, String column) {
-    	return getValueOrDefault(hm, column, 0, Integer.class);
+    	return getValueOrDefault(hm, column, 0);
     }
 
     protected boolean selectBoolean(HashMap<String, Object> hm, String column) {
-    	return getValueOrDefault(hm, column, false, Boolean.class);
+    	return getValueOrDefault(hm, column, false);
     }
 
     public void initializeI18nStrings() {
@@ -982,8 +982,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     public ArrayList<StudySubjectBean> selectStudySubjects(int studyid, int parentid, String sedin, String it_in, String dateConstraint, String ecStatusConstraint,
             String itStatusConstraint) {
         clearSignals();
-        String query = getSQLSubjectStudySubjectDataset(studyid, parentid, sedin, it_in, dateConstraint, ecStatusConstraint, itStatusConstraint,
-                CoreResources.getDBName());
+        String query = getSQLSubjectStudySubjectDataset(studyid, parentid, sedin, it_in, dateConstraint, ecStatusConstraint, itStatusConstraint);
         logger.debug("sqlSubjectStudySubjectDataset=" + query);
         ArrayList<StudySubjectBean> results = new ArrayList<>();
         ResultSet rs = null;
@@ -1145,7 +1144,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
     }
 
     protected String getSQLSubjectStudySubjectDataset(int studyid, int studyparentid, String sedin, String it_in, String dateConstraint,
-            String ecStatusConstraint, String itStatusConstraint, String databaseName) {
+            String ecStatusConstraint, String itStatusConstraint) {
         /**
          *
          * SELECT

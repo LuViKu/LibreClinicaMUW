@@ -153,7 +153,7 @@ public class ViewStudySubjectServlet extends SecureController {
             // construct info needed on view study event page
             DisplayStudyEventBean de = new DisplayStudyEventBean();
             de.setStudyEvent(event);
-            de.setDisplayEventCRFs(getDisplayEventCRFs(ds, eventCRFs, eventDefinitionCRFs, ub, currentRole, event.getSubjectEventStatus(), study));
+            de.setDisplayEventCRFs(getDisplayEventCRFs(ds, eventCRFs, ub, currentRole, event.getSubjectEventStatus(), study));
             ArrayList<DisplayEventDefinitionCRFBean> al = getUncompletedCRFs(ds, eventDefinitionCRFs, eventCRFs, event.getSubjectEventStatus());
             populateUncompletedCRFsWithCRFAndVersions(ds, al);
             de.setUncompletedCRFs(al);
@@ -399,13 +399,11 @@ public class ViewStudySubjectServlet extends SecureController {
      * list of DisplayEventCRFBeans, one for each event CRF.
      *
      * @param eventCRFs The list of event CRFs for this study event.
-     * @param eventDefinitionCRFs The list of event definition CRFs for this study event.
      * @return The list of DisplayEventCRFBeans for this study event.
      */
     public static ArrayList<DisplayEventCRFBean> getDisplayEventCRFs(
         DataSource ds,
         ArrayList<EventCRFBean> eventCRFs,
-        ArrayList<EventDefinitionCRFBean> eventDefinitionCRFs,
         UserAccountBean ub,
         StudyUserRoleBean currentRole,
         SubjectEventStatus status, 

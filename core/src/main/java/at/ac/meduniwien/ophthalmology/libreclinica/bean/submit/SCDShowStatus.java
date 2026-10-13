@@ -33,7 +33,7 @@ public enum SCDShowStatus {
     
     @Override
     public String toString() {
-        return name().toString();
+        return name();
     }
     
     public static SCDShowStatus getByCode(Integer code) {

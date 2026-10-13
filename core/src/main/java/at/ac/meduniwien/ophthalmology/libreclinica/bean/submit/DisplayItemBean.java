@@ -266,7 +266,7 @@ public class DisplayItemBean implements Comparable<DisplayItemBean> {
 
         for(String value : values) {
 
-            if (value == null || value.equals("")) {
+            if (value == null || value.isEmpty()) {
                 continue;
             }
 

@@ -626,7 +626,7 @@ public class FormBeanUtil {
         return tr;
     }
 
-    private Element createHeaderCellMultiColumn(DisplayItemBean disBean, boolean isHeader, Element row, int numberOfColumns) {
+    private Element createHeaderCellMultiColumn(DisplayItemBean disBean, boolean isHeader, Element row) {
         // At this point, the row could already contain td cells with headers or
         // subheaders
         CellFactory cellFactory = new CellFactory();
@@ -705,10 +705,10 @@ public class FormBeanUtil {
             for (DisplayItemBean disBean : me.getValue()) {
                 // Each row has its own instance of headerRow and subHeaderRow
                 if (disBean.getMetadata().getHeader().length() > 0) {
-                    headerRow = createHeaderCellMultiColumn(disBean, true, headerRow, numberOfBeansInRow);
+                    headerRow = createHeaderCellMultiColumn(disBean, true, headerRow);
                 }
                 if (disBean.getMetadata().getSubHeader().length() > 0) {
-                    subHeaderRow = createHeaderCellMultiColumn(disBean, false, subHeaderRow, numberOfBeansInRow);
+                    subHeaderRow = createHeaderCellMultiColumn(disBean, false, subHeaderRow);
                 }
                 String responseName = disBean.getMetadata().getResponseSet().getResponseType().getName();
                 Element tdCell = new Element("td");
@@ -923,9 +923,7 @@ public class FormBeanUtil {
 
             @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
-                Integer compInt = disFormGroupBean1.getOrdinal();
-                Integer compInt2 = disFormGroupBean.getOrdinal();
-                return compInt2.compareTo(compInt);
+                return Integer.compare(disFormGroupBean.getOrdinal(), disFormGroupBean1.getOrdinal());
             }
         });
         displaySectionBean.setDisplayFormGroups(displayFormBeans);
@@ -1032,9 +1030,7 @@ public class FormBeanUtil {
 
             @Override
             public int compare(DisplayItemGroupBean disFormGroupBean, DisplayItemGroupBean disFormGroupBean1) {
-                Integer compInt = disFormGroupBean1.getOrdinal();
-                Integer compInt2 = disFormGroupBean.getOrdinal();
-                return compInt2.compareTo(compInt);
+                return Integer.compare(disFormGroupBean.getOrdinal(), disFormGroupBean1.getOrdinal());
             }
         });
         displaySectionBean.setDisplayFormGroups(displayFormBeans);
@@ -1263,8 +1259,6 @@ public class FormBeanUtil {
     /**
      * Create a DisplaySectionBean with a list of FormGroupBeans.
      * 
-     * @param crfVersionId
-     *            The CRF version ID associated with the Items.
      * @param sectionBean
      *            The SectionBean with an ID associated with the Items, which
      *            end up providing the content of the tables.
@@ -1338,8 +1332,6 @@ public class FormBeanUtil {
      * @param sectionId
      *            The Section ID associated with the Items, which end up
      *            providing the content of the tables.
-     * @param crfVersionId
-     *            The CRF version ID associated with the Items.
      * @param studyEventId
      *            The Study Event ID associated with the CRF Version ID.
      * @param sm

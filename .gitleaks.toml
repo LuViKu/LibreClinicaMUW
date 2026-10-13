@@ -130,6 +130,16 @@ regexes = [
   # would still fail the scan.
   '''SECRET_ID\s*=''',
 
+  # --- 2026-10-12 ---
+  #
+  # A fixed UUID in core/src/test/java/.../service/retinal/
+  # RetinalArtifactStorageServiceTest.java (90d6bb021): the test uses it as
+  # the B-scan store folder name, the shape the retinal sidecar writes. It
+  # is assigned to a variable called "key", which with a UUID's entropy
+  # trips generic-api-key. Matched as this one literal, so any other value
+  # in that file is still scanned.
+  '''3f2b8c1e-0d4a-4b7e-9c11-2a6f0e5d9b40''',
+
   # --- 2026-09-29 ---
   #
   # The API key fixture in

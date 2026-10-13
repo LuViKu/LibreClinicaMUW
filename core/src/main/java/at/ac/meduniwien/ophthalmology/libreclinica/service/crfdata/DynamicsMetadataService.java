@@ -47,7 +47,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemFo
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemGroupMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.StratificationFactorBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaException;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
 import org.slf4j.Logger;
@@ -240,52 +239,6 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return true;
     }
 
-    public void show(Integer itemDataId, List<PropertyBean> properties, RuleSetBean ruleSet) {
-        ItemDataBean itemDataBeanA = (ItemDataBean) getItemDataDAO().findByPK(itemDataId);
-        EventCRFBean eventCrfBeanA = getEventCRFDAO().findByPK(itemDataBeanA.getEventCRFId());
-
-        for (PropertyBean propertyBean : properties) {
-            String oid = propertyBean.getOid();
-            ItemOrItemGroupHolder itemOrItemGroup = getItemOrItemGroup(oid);
-            // OID is an item
-            if (itemOrItemGroup.getItemBean() != null) {
-                ItemDataBean oidBasedItemData = getItemData(itemOrItemGroup.getItemBean(), eventCrfBeanA, itemDataBeanA.getOrdinal());
-                ItemFormMetadataBean itemFormMetadataBean =
-                    getItemFormMetadataDAO().findByItemIdAndCRFVersionId(itemOrItemGroup.getItemBean().getId(), eventCrfBeanA.getCRFVersionId());
-                DynamicsItemFormMetadataBean dynamicsMetadataBean = getDynamicsItemFormMetadataBean(itemFormMetadataBean, eventCrfBeanA, oidBasedItemData);
-                if (dynamicsMetadataBean == null) {
-                    showItem(itemFormMetadataBean, eventCrfBeanA, oidBasedItemData);
-                } else if (!dynamicsMetadataBean.isShowItem()) {
-                    dynamicsMetadataBean.setShowItem(true);
-                    getDynamicsItemFormMetadataDao().saveOrUpdate(dynamicsMetadataBean);
-                }
-            }
-            // OID is a group
-            else {
-                logger.debug("found item group id 1 " + oid);
-                ItemGroupBean itemGroupBean = itemOrItemGroup.getItemGroupBean();
-                ArrayList<SectionBean> sectionBeans = getSectionDAO().findAllByCRFVersionId(eventCrfBeanA.getCRFVersionId());
-                for (SectionBean sectionBean : sectionBeans) {
-                    // System.out.println("found section " + sectionBean.getId());
-                    List<ItemGroupMetadataBean> itemGroupMetadataBeans =
-                            getItemGroupMetadataDAO().findMetaByGroupAndSection(itemGroupBean.getId(), eventCrfBeanA.getCRFVersionId(), sectionBean.getId());
-                    for (ItemGroupMetadataBean itemGroupMetadataBean : itemGroupMetadataBeans) {
-                        if (itemGroupMetadataBean.getItemGroupId() == itemGroupBean.getId()) {
-                            // System.out.println("found item group id 2 " + oid);
-                            DynamicsItemGroupMetadataBean dynamicsGroupBean = getDynamicsItemGroupMetadataBean(itemGroupMetadataBean, eventCrfBeanA);
-                            if (dynamicsGroupBean == null) {
-                                showGroup(itemGroupMetadataBean, eventCrfBeanA);
-                            } else if (!dynamicsGroupBean.isShowGroup()) {
-                                dynamicsGroupBean.setShowGroup(true);
-                                getDynamicsItemGroupMetadataDao().saveOrUpdate(dynamicsGroupBean);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     public void hide(Integer itemDataId, List<PropertyBean> properties) {
         ItemDataBean itemDataBean = (ItemDataBean) getItemDataDAO().findByPK(itemDataId);
         EventCRFBean eventCrfBean = getEventCRFDAO().findByPK(itemDataBean.getEventCRFId());
@@ -419,7 +372,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return oidBasedItemData;
     }
 
-    private String getValue(PropertyBean property, RuleSetBean ruleSet, EventCRFBean eventCrfBean,List<StratificationFactorBean> stratificationFactorBeans) {
+    private String getValue(PropertyBean property, RuleSetBean ruleSet, EventCRFBean eventCrfBean) {
         String value = null;
         if (property.getValue() != null && property.getValue().length() > 0) {
             value = property.getValue();
@@ -462,20 +415,19 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
         return format;
     }
 
-    public void insert(ItemDataBean itemDataBean, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet,List<StratificationFactorBean> stratificationFactorBeans) {
-        insert(itemDataBean.getId(), properties, ub, ruleSet, itemDataBean.getStatus(), stratificationFactorBeans);
+    public void insert(ItemDataBean itemDataBean, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet) {
+        insert(itemDataBean.getId(), properties, ub, ruleSet, itemDataBean.getStatus());
     }
 
-    public void insert(Integer itemDataId, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet,List<StratificationFactorBean> stratificationFactorBeans) {
-        insert(itemDataId, properties, ub, ruleSet, null, stratificationFactorBeans);
+    public void insert(Integer itemDataId, List<PropertyBean> properties, UserAccountBean ub, RuleSetBean ruleSet) {
+        insert(itemDataId, properties, ub, ruleSet, null);
     }
 
     private void insert(Integer itemDataId,
                         List<PropertyBean> properties,
                         UserAccountBean ub,
                         RuleSetBean ruleSet,
-                        Status itemDataStatus,
-                        List<StratificationFactorBean> stratificationFactorBeans) {
+                        Status itemDataStatus) {
 
         ItemDataBean itemDataBeanA = (ItemDataBean) getItemDataDAO().findByPK(itemDataId);
         EventCRFBean eventCrfBeanA = getEventCRFDAO().findByPK(itemDataBeanA.getEventCRFId());
@@ -556,7 +508,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 ItemDataBean oidBasedItemData =
                     oneToOne(itemBeanB, eventCrfBeanB, ub, 1);
 
-                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA,stratificationFactorBeans));
+                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA));
 
                 if(itemDataStatus != null) oidBasedItemData.setStatus(itemDataStatus);
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
@@ -566,7 +518,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 List<ItemDataBean> oidBasedItemDatas =
                     oneToMany(itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB, ub);
                 for (ItemDataBean oidBasedItemData : oidBasedItemDatas) {
-                    oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA,stratificationFactorBeans));
+                    oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA));
                     if(itemDataStatus != null) oidBasedItemData.setStatus(itemDataStatus);
                     getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
                 }
@@ -576,7 +528,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupBOrdinal));
-                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA,stratificationFactorBeans));
+                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA));
                 if(itemDataStatus != null) oidBasedItemData.setStatus(itemDataStatus);
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }
@@ -584,7 +536,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
             if (isGroupBRepeating && itemGroupBOrdinal.equals("END")) {
                 ItemDataBean oidBasedItemData =
                     oneToEndMany(itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB, ub);
-                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA,stratificationFactorBeans));
+                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA));
                 if(itemDataStatus != null) oidBasedItemData.setStatus(itemDataStatus);
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }
@@ -593,7 +545,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupBOrdinal));
-                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA,stratificationFactorBeans));
+                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA));
                 if(itemDataStatus != null) oidBasedItemData.setStatus(itemDataStatus);
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }
@@ -602,7 +554,7 @@ public class DynamicsMetadataService implements MetadataServiceInterface {
                 ItemDataBean oidBasedItemData =
                     oneToIndexedMany(itemBeanB, itemGroupBeanB, itemGroupMetadataBeanB, eventCrfBeanB,
                             ub, Integer.parseInt(itemGroupAOrdinal));
-                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA,stratificationFactorBeans));
+                oidBasedItemData.setValue(getValue(propertyBean, ruleSet, eventCrfBeanA));
                 if(itemDataStatus != null) oidBasedItemData.setStatus(itemDataStatus);
                 getItemDataDAO().updateValue(oidBasedItemData, getDateFormat(propertyBean));
             }

@@ -12,7 +12,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.rule;
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.RuleBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.rule.RuleDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,10 +26,6 @@ public class RuleService {
 
     public RuleService(DataSource ds) {
         this.ds = ds;
-    }
-
-    public boolean enableRules(RuleSetBean ruleSet) {
-        return true;
     }
 
     public boolean disableRules() {

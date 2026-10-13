@@ -127,7 +127,7 @@ public class EventCrfMigrationApiController {
         } catch (Refusal r) {
             return refused(r);
         } catch (IllegalStateException e) {
-            LOG.error("Event CRF migration failed for crf={} by user={}", crfOid, me.getName(), e);
+            LOG.error("Event CRF migration failed for crf={} by user={}", logSafe(crfOid), me.getName(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Moving the event CRFs failed; nothing was changed."));
         }
@@ -156,5 +156,10 @@ public class EventCrfMigrationApiController {
             return ResponseEntity.status(r.status()).body(new ValidationErrorBody(r.getMessage(), r.errors()));
         }
         return ResponseEntity.status(r.status()).body(Map.of("message", r.getMessage()));
+    }
+
+    /** Request values reach the log with line breaks and other control characters replaced. */
+    private static String logSafe(Object value) {
+        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
     }
 }

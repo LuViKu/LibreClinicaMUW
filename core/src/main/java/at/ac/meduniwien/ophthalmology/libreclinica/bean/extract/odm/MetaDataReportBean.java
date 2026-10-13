@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.LinkedHashMap;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -119,7 +120,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         xml.append(nls);
         addStudyGlobalVariables();
         addBasicDefinitions();
-        addStudyMetaDataVersion(isDataset);
+        addStudyMetaDataVersion();
         xml.append(indent + "</Study>");
         xml.append(nls);
     }
@@ -235,7 +236,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
     }
 
     
-    public void addStudyMetaDataVersion(boolean isDataset) {
+    public void addStudyMetaDataVersion() {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
         String currentIndent = indent + indent;
@@ -262,13 +263,12 @@ public class MetaDataReportBean extends OdmXmlReportBean {
 
         //
         addProtocol(currentIndent + indent);
-        boolean isStudy = meta.getStudy().getParentStudyId() > 0 ? false : true;
         if (meta.getStudyEventDefs().size() > 0) {
-            addStudyEventDef(isStudy, currentIndent + indent);
+            addStudyEventDef(currentIndent + indent);
             if (meta.getItemGroupDefs().size() > 0) {
-                addFormDef(isStudy, currentIndent + indent);
-                addItemGroupDef(isStudy, currentIndent + indent);
-                addItemDef(isStudy, currentIndent + indent);
+                addFormDef(currentIndent + indent);
+                addItemGroupDef(currentIndent + indent);
+                addItemDef(currentIndent + indent);
                 addCodeList(currentIndent + indent);
                 if ("oc1.2".equalsIgnoreCase(ODMVersion)) {
                     addMultiSelectList(currentIndent + indent);
@@ -285,9 +285,9 @@ public class MetaDataReportBean extends OdmXmlReportBean {
             }
         }
         else if(odmstudy.getOid().equals(MetadataUnit.FAKE_STUDY_OID)){
-        	 addFormDef(isStudy, currentIndent + indent);
-             addItemGroupDef(isStudy, currentIndent + indent);
-             addItemDef(isStudy, currentIndent + indent);
+        	 addFormDef(currentIndent + indent);
+             addItemGroupDef(currentIndent + indent);
+             addItemDef(currentIndent + indent);
         }
         	
         	
@@ -315,15 +315,15 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         xml.append(nls);
     }
 
-    public void addStudyEventDef(boolean isStudy, String currentIndent) {
+    public void addStudyEventDef(String currentIndent) {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
-        ArrayList<StudyEventDefBean> seds = (ArrayList<StudyEventDefBean>) odmstudy.getMetaDataVersion().getStudyEventDefs();
+        List<StudyEventDefBean> seds = odmstudy.getMetaDataVersion().getStudyEventDefs();
         for (StudyEventDefBean sed : seds) {
             xml.append(currentIndent + "<StudyEventDef OID=\"" + StringEscapeUtils.escapeXml(sed.getOid()) + "\"  Name=\""
                 + StringEscapeUtils.escapeXml(sed.getName()) + "\" Repeating=\"" + sed.getRepeating() + "\" Type=\"" + sed.getType() + "\">");
             xml.append(nls);
-            ArrayList<ElementRefBean> forms = (ArrayList<ElementRefBean>) sed.getFormRefs();
+            List<ElementRefBean> forms = sed.getFormRefs();
             for (ElementRefBean form : forms) {
                 xml.append(currentIndent + indent + "<FormRef FormOID=\"" + StringEscapeUtils.escapeXml(form.getElementDefOID()) + "\" Mandatory=\""
                     + form.getMandatory() + "\"/>");
@@ -339,15 +339,15 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         }
     }
 
-    public void addFormDef(boolean isStudy, String currentIndent) {
+    public void addFormDef(String currentIndent) {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
-        ArrayList<FormDefBean> forms = (ArrayList<FormDefBean>) odmstudy.getMetaDataVersion().getFormDefs();
+        List<FormDefBean> forms = odmstudy.getMetaDataVersion().getFormDefs();
         for (FormDefBean form : forms) {
             xml.append(currentIndent + "<FormDef OID=\"" + StringEscapeUtils.escapeXml(form.getOid()) + "\" Name=\""
                 + StringEscapeUtils.escapeXml(form.getName()) + "\" Repeating=\"" + form.getRepeating() + "\">");
             xml.append(nls);
-            ArrayList<ElementRefBean> igs = (ArrayList<ElementRefBean>) form.getItemGroupRefs();
+            List<ElementRefBean> igs = form.getItemGroupRefs();
             for (ElementRefBean ig : igs) {
                 xml.append(currentIndent + indent + "<ItemGroupRef ItemGroupOID=\"" + StringEscapeUtils.escapeXml(ig.getElementDefOID()) + "\" Mandatory=\""
                     + ig.getMandatory() + "\"/>");
@@ -361,39 +361,10 @@ public class MetaDataReportBean extends OdmXmlReportBean {
             xml.append(nls);
         }
     }
-/**
- * The form specific formdef tag
- * @param isStudy
- * @param currentIndent
- * @param formOID
- */
-    public void addFormDef(boolean isStudy, String currentIndent,String formOID) {
+	public void addItemGroupDef(String currentIndent) {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
-        ArrayList<FormDefBean> forms = (ArrayList<FormDefBean>) odmstudy.getMetaDataVersion().getFormDefs();
-        for (FormDefBean form : forms) {
-            xml.append(currentIndent + "<FormDef OID=\"" + StringEscapeUtils.escapeXml(form.getOid()) + "\" Name=\""
-                + StringEscapeUtils.escapeXml(form.getName()) + "\" Repeating=\"" + form.getRepeating() + "\">");
-            xml.append(nls);
-            ArrayList<ElementRefBean> igs = (ArrayList<ElementRefBean>) form.getItemGroupRefs();
-            for (ElementRefBean ig : igs) {
-                xml.append(currentIndent + indent + "<ItemGroupRef ItemGroupOID=\"" + StringEscapeUtils.escapeXml(ig.getElementDefOID()) + "\" Mandatory=\""
-                    + ig.getMandatory() + "\"/>");
-                xml.append(nls);
-            }
-            // add FormDetails for oc1.3
-            if ("oc1.3".equals(this.getODMVersion()) && isStudy) {
-                this.addFormDetails(form.getFormDetails(), currentIndent + indent);
-            }
-            xml.append(currentIndent + "</FormDef>");
-            xml.append(nls);
-        }
-    }
-    
-	public void addItemGroupDef(boolean isStudy, String currentIndent) {
-        StringBuffer xml = this.getXmlOutput();
-        String indent = this.getIndent();
-        ArrayList<ItemGroupDefBean> igs = (ArrayList<ItemGroupDefBean>) odmstudy.getMetaDataVersion().getItemGroupDefs();
+        List<ItemGroupDefBean> igs = odmstudy.getMetaDataVersion().getItemGroupDefs();
         for (ItemGroupDefBean ig : igs) {
             if (ig.getComment().length() > 0) {
                 xml.append(currentIndent + "<ItemGroupDef OID=\"" + StringEscapeUtils.escapeXml(ig.getOid()) + "\" Name=\""
@@ -406,7 +377,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
                     + this.getSasNameValidator().getValidName(ig.getPreSASDatasetName()) + "\">");
             }
             xml.append(nls);
-            ArrayList<ElementRefBean> items = (ArrayList<ElementRefBean>) ig.getItemRefs();
+            List<ElementRefBean> items = ig.getItemRefs();
             for (ElementRefBean item : items) {
                 xml.append(currentIndent + indent + "<ItemRef ItemOID=\"" + StringEscapeUtils.escapeXml(item.getElementDefOID()) + "\" OrderNumber=\""
                     + item.getOrderNumber() + "\" Mandatory=\"" + item.getMandatory() + "\"/>");
@@ -421,10 +392,10 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         }
     }
 
-	public void addItemDef(boolean isStudy, String currentIndent) {
+	public void addItemDef(String currentIndent) {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
-        ArrayList<ItemDefBean> items = (ArrayList<ItemDefBean>) odmstudy.getMetaDataVersion().getItemDefs();
+        List<ItemDefBean> items = odmstudy.getMetaDataVersion().getItemDefs();
         String ODMVersion = this.getODMVersion();
         for (ItemDefBean item : items) {
             xml.append(currentIndent + "<ItemDef OID=\"" + StringEscapeUtils.escapeXml(item.getOid()) + "\" Name=\""
@@ -486,7 +457,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
             }
             // add RangeCheck
             if (item.getRangeCheck() != null) {
-                ArrayList<RangeCheckBean> rcs = (ArrayList<RangeCheckBean>) item.getRangeCheck();
+                List<RangeCheckBean> rcs = item.getRangeCheck();
                 for (RangeCheckBean rc : rcs) {
                     if (rc.getComparator().length() > 0) {
                         if (!hasNode) {
@@ -566,7 +537,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
         if (odmstudy.getMetaDataVersion().getCodeLists() != null) {
-            ArrayList<CodeListBean> cls = (ArrayList<CodeListBean>) odmstudy.getMetaDataVersion().getCodeLists();
+            List<CodeListBean> cls = odmstudy.getMetaDataVersion().getCodeLists();
             if (cls.size() > 0) {
                 for (CodeListBean cl : cls) {
                     boolean isString = cl.getDataType().equalsIgnoreCase("text") ? true : false;
@@ -574,7 +545,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
                         + StringEscapeUtils.escapeXml(cl.getName()) + "\" DataType=\"" + cl.getDataType() + "\" SASFormatName=\""
                         + this.getSasFormValidator().getValidSASFormatName(cl.getName(), isString) + "\">");
                     xml.append(nls);
-                    ArrayList<CodeListItemBean> clis = (ArrayList<CodeListItemBean>) cl.getCodeListItems();
+                    List<CodeListItemBean> clis = cl.getCodeListItems();
                     if (clis != null && clis.size() > 0) {
                         for (CodeListItemBean cli : clis) {
                             xml.append(currentIndent + indent + "<CodeListItem CodedValue=\"" + StringEscapeUtils.escapeXml(cli.getCodedVale()) + "\">");
@@ -606,7 +577,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
     public void addMultiSelectList(String currentIndent) {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
-        ArrayList<MultiSelectListBean> lists = (ArrayList<MultiSelectListBean>) odmstudy.getMetaDataVersion().getMultiSelectLists();
+        List<MultiSelectListBean> lists = odmstudy.getMetaDataVersion().getMultiSelectLists();
         if (lists != null) {
             if (lists.size() > 0) {
                 for (MultiSelectListBean l : lists) {
@@ -623,7 +594,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
                     xml.append(">");
                     xml.append(nls);
 
-                    ArrayList<MultiSelectListItemBean> mslis = (ArrayList<MultiSelectListItemBean>) l.getMultiSelectListItems();
+                    List<MultiSelectListItemBean> mslis = l.getMultiSelectListItems();
                     if (mslis != null && mslis.size() > 0) {
                         for (MultiSelectListItemBean msli : mslis) {
                             xml.append(currentIndent + indent + "<OpenClinica:MultiSelectListItem CodedOptionValue=\""
@@ -955,7 +926,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
 
         xml.append(currentIndent+ indent+"<OpenClinica:SectionDetails>");
         xml.append(nls);
-        ArrayList<SectionDetails> sections = (ArrayList<SectionDetails>) detail.getSectionDetails();
+        List<SectionDetails> sections = detail.getSectionDetails();
         for (SectionDetails ig : sections) {
             xml.append(currentIndent + indent +indent +"<OpenClinica:Section SectionLabel=\""
                 +StringEscapeUtils.escapeXml(ig.getSectionLabel()) +   "\" SectionTitle=\""
@@ -1015,7 +986,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         String temp = "";
         Integer itemp = -1;
         Integer itemp2 = -1;
-        ArrayList<PresentInFormBean> informs = (ArrayList<PresentInFormBean>) detail.getPresentInForms();
+        List<PresentInFormBean> informs = detail.getPresentInForms();
         xml.append(currentIndent + "<OpenClinica:ItemGroupDetails ItemGroupOID=\"" + StringEscapeUtils.escapeXml(detail.getOid()) + "\">");
         xml.append(nls);
         for (PresentInFormBean inform : informs) {
@@ -1052,7 +1023,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         String indent = this.getIndent();
         String temp = "";
         Integer itemp = -1;
-        ArrayList<ItemPresentInFormBean> informs = (ArrayList<ItemPresentInFormBean>) detail.getItemPresentInForm();
+        List<ItemPresentInFormBean> informs = detail.getItemPresentInForm();
         xml.append(currentIndent + "<OpenClinica:ItemDetails ItemOID=\"" + StringEscapeUtils.escapeXml(detail.getOid()) + "\">");
         xml.append(nls);
         for (ItemPresentInFormBean inform : informs) {
@@ -1128,7 +1099,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
     public void addStudyGroupClassList(String currentIndent) {
         StringBuffer xml = this.getXmlOutput();
         String indent = this.getIndent();
-        ArrayList<StudyGroupClassListBean> lists = (ArrayList<StudyGroupClassListBean>) odmstudy.getMetaDataVersion().getStudyGroupClassLists();
+        List<StudyGroupClassListBean> lists = odmstudy.getMetaDataVersion().getStudyGroupClassLists();
         if (lists != null) {
             if (lists.size() > 0) {
                 for (StudyGroupClassListBean l : lists) {
@@ -1147,7 +1118,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
                     }
                     xml.append(">");
                     xml.append(nls);
-                    for (StudyGroupItemBean i : (ArrayList<StudyGroupItemBean>) l.getStudyGroupItems()) {
+                    for (StudyGroupItemBean i : l.getStudyGroupItems()) {
                         xml.append(currentIndent + indent + "<OpenClinica:StudyGroupItem ");
                         if (i.getName() != null) {
                             xml.append("Name=\"" + StringEscapeUtils.escapeXml(i.getName()) + "\" ");
@@ -1176,7 +1147,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
      * l.getStatus() + "\" "); } if (l.getType() != null) { xml.append("OpenClinica:Type=\"" +
      * StringEscapeUtils.escapeXml(l.getType()) + "\" "); } if (l.getSubjectAssignment() != null) {
      * xml.append("OpenClinica:SubjectAssignment=\"" + StringEscapeUtils.escapeXml(l.getSubjectAssignment()) + "\" "); }
-     * xml.append(">"); xml.append(nls); for (StudyGroupItemBean i : (ArrayList<StudyGroupItemBean>) l.getStudyGroupItems()) {
+     * xml.append(">"); xml.append(nls); for (StudyGroupItemBean i : l.getStudyGroupItems()) {
      * xml.append(currentIndent + indent + "<OpenClinica:StudyGroupItem "); if (i.getName() != null) {
      * xml.append("OpenClinica:Name=\"" + StringEscapeUtils.escapeXml(i.getName()) + "\" "); } if (i.getDescription() != null)
      * { xml.append("OpenClinica:Description=\"" + StringEscapeUtils.escapeXml(i.getDescription()) + "\" "); }

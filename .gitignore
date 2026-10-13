@@ -127,3 +127,7 @@ docker/config-ci/
 # Local env files (credentials for probes, compose overrides) — never commit
 .env
 *.env
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Privilege;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Term;
 
 /**
@@ -46,32 +45,32 @@ public class ResponseType extends Term {
 	private static final long serialVersionUID = 213278797848776832L;
 
 	@Deprecated
-	public static final ResponseType TEXT = new ResponseType(1, "text", null);
+	public static final ResponseType TEXT = new ResponseType(1, "text");
 
     @Deprecated
-    public static final ResponseType TEXT_AREA = new ResponseType(2, "text area", null);
+    public static final ResponseType TEXT_AREA = new ResponseType(2, "text area");
 
     @Deprecated
-    public static final ResponseType SINGLE_SELECT = new ResponseType(3, "single-select", null);
+    public static final ResponseType SINGLE_SELECT = new ResponseType(3, "single-select");
 
     @Deprecated
-    public static final ResponseType MULTI_SELECT = new ResponseType(4, "multi-select", null);
+    public static final ResponseType MULTI_SELECT = new ResponseType(4, "multi-select");
 
     @Deprecated
-    public static final ResponseType CHECKBOX = new ResponseType(5, "checkbox", null);
+    public static final ResponseType CHECKBOX = new ResponseType(5, "checkbox");
 
     @Deprecated
-    public static final ResponseType RADIOBUTTON = new ResponseType(6, "radio", null);
+    public static final ResponseType RADIOBUTTON = new ResponseType(6, "radio");
 
     @Deprecated
-    public static final ResponseType FILE = new ResponseType(7, "file", null);
+    public static final ResponseType FILE = new ResponseType(7, "file");
 
     private static final ResponseType[] members = { TEXT, TEXT_AREA, SINGLE_SELECT, MULTI_SELECT, CHECKBOX, RADIOBUTTON, FILE };
 
     @Deprecated
     public static final List<ResponseType> list = Arrays.asList(members);
     
-    private ResponseType(int id, String name, Privilege[] myPrivs) {
+    private ResponseType(int id, String name) {
         super(id, name);
     }
 

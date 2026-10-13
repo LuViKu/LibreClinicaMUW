@@ -68,7 +68,7 @@ public enum Status implements CodedEnum {
     }
     
     public String getI18nDescription(Locale locale) {
-        if (!"".equals(this.description)) {
+        if (this.description != null && !this.description.isEmpty()) {
             ResourceBundle resterm = ResourceBundleProvider.getTermsBundle(locale);
             String des = resterm.getString(this.description);
             if(des != null) {

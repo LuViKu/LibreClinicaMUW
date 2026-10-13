@@ -42,7 +42,7 @@ public class InstantOnChangeFrontStr extends AbstractFrontStr implements Seriali
         if(itemId == null || itemId <=0 || option == null || option.length()<=0) {
             return "";
         } else {
-            StringBuffer buf = new StringBuffer(igOid == null || "".equals(igOid)? "IG_" : igOid);
+            StringBuffer buf = new StringBuffer(igOid == null || igOid.isEmpty()? "IG_" : igOid);
             buf.append(this.frontStrDelimiter.getCode());
                 buf.append(itemId);
                 buf.append(this.frontStrDelimiter.getCode());

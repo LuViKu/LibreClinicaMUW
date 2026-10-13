@@ -515,7 +515,7 @@ public class ImportApiController {
 
         // The legacy pipeline: ImportCRFDataServlet#confirm, then
         // VerifyImportedCRFDataServlet#save.
-        boolean eventCRFStatusesValid = dataService.eventCRFStatusesValid(odm, me);
+        boolean eventCRFStatusesValid = dataService.eventCRFStatusesValid(odm);
         // Creates the event CRFs of forms not started yet (UpsertOn NotStarted).
         List<EventCRFBean> eventCRFBeans = dataService.fetchEventCRFBeans(odm, me);
         HashMap<Integer, String> importedCRFStatuses = dataService.fetchEventCRFStatuses(odm);

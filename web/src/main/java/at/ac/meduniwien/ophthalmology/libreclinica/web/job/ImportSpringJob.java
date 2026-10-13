@@ -173,7 +173,7 @@ public class ImportSpringJob extends QuartzJobBean {
             String studyOid = dataMap.getString(STUDY_OID);
             String localeStr = dataMap.getString(ExampleSpringJob.LOCALE);
             if (localeStr != null) {
-                locale = new Locale(localeStr);
+                locale = Locale.of(localeStr);
                 ResourceBundleProvider.updateLocale(locale);
                 respage = ResourceBundleProvider.getPageMessagesBundle();
                 resword = ResourceBundleProvider.getWordsBundle();
@@ -188,7 +188,7 @@ public class ImportSpringJob extends QuartzJobBean {
             // might also need study id here for the data service?
             File fileDirectory = new File(SQLInitServlet.getField("filePath") + DIR_PATH + File.separator);
             // File fileDirectory = new File(IMPORT_DIR);
-            if ("".equals(directory)) { // avoid NPEs
+            if (directory != null && directory.isEmpty()) { // avoid NPEs
                 // do nothing here?
             } else {
                 // there is a separator at the end of IMPORT_DIR already...
@@ -247,7 +247,7 @@ public class ImportSpringJob extends QuartzJobBean {
 
                 auditEventDAO.createRowForExtractDataJobSuccess(triggerBean, auditMessages.get(1));
                 try {
-                    if (contactEmail != null && !"".equals(contactEmail)) {
+                    if (contactEmail != null && !contactEmail.isEmpty()) {
                         mailSender.sendEmail(contactEmail, respage.getString("job_ran_for") + " " + triggerBean.getFullName(),
                                 generateMsg(auditMessages.get(0), contactEmail), true);
                         logger.debug("email body: " + auditMessages.get(1));
@@ -284,6 +284,13 @@ public class ImportSpringJob extends QuartzJobBean {
                 logger.error("Error in mailSender {}", ose.getMessage(), ose);
 
             }
+        }
+    }
+
+    /** Unmarshals one ODM file and always closes the stream it opened. */
+    private static ODMContainer unmarshalClinicalData(OdmJaxbContext odmJaxbContext, File f) throws Exception {
+        try (FileInputStream in = new FileInputStream(f)) {
+            return odmJaxbContext.unmarshalClinicalData(in);
         }
     }
 
@@ -353,7 +360,7 @@ public class ImportSpringJob extends QuartzJobBean {
             try {
 
                 // schemaValidator.validateAgainstSchema(f, xsdFile);
-                odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
+                odmContainer = unmarshalClinicalData(odmJaxbContext, f);
 
                 logger.debug("Found crf data container for study oid: " + odmContainer.getCrfDataPostImportContainer().getStudyOID());
                 logger.debug("found length of subject list: " + odmContainer.getCrfDataPostImportContainer().getSubjectData().size());
@@ -363,7 +370,7 @@ public class ImportSpringJob extends QuartzJobBean {
                     schemaValidator.validateAgainstSchema(f, xsdFile2);
                     // for backwards compatibility, we also try to validate vs
                     // 1.2.1 ODM 06/2008
-                    odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
+                    odmContainer = unmarshalClinicalData(odmJaxbContext, f);
                 } catch (Exception me2) {
                     // not sure if we want to report me2
 
@@ -429,7 +436,7 @@ public class ImportSpringJob extends QuartzJobBean {
             // validation errors, the same as in the ImportCRFDataServlet. DRY?
             List<EventCRFBean> eventCRFBeans = getImportCRFDataService(dataSource).fetchEventCRFBeans(odmContainer, ub);
             ArrayList<Integer> permittedEventCRFIds = new ArrayList<Integer>();
-            Boolean eventCRFStatusesValid = getImportCRFDataService(dataSource).eventCRFStatusesValid(odmContainer, ub);
+            boolean eventCRFStatusesValid = getImportCRFDataService(dataSource).eventCRFStatusesValid(odmContainer);
             List<DisplayItemBeanWrapper> displayItemBeanWrappers = new ArrayList<DisplayItemBeanWrapper>();
             HashMap<String, String> totalValidationErrors = new HashMap<String, String>();
             HashMap<String, String> hardValidationErrors = new HashMap<String, String>();
@@ -593,7 +600,7 @@ public class ImportSpringJob extends QuartzJobBean {
                 // message into two parts
                 // a shorter version for the audit and
                 // a longer version for the email
-                msg.append(triggerService.generateSummaryStatsMessage(ssBean, respage) + "<br/>");
+                msg.append(triggerService.generateSummaryStatsMessage(ssBean) + "<br/>");
                 // session.setAttribute("summaryStats", ssBean);
                 // will have to set hard edit checks here as well
                 // session.setAttribute("subjectData",

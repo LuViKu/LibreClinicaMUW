@@ -28,21 +28,21 @@ public class DiscrepancyNoteType extends Term {
 	 */
 	private static final long serialVersionUID = -4221511046697392582L;
 
-	public static final DiscrepancyNoteType INVALID = new DiscrepancyNoteType(0, "Invalid", null);
+	public static final DiscrepancyNoteType INVALID = new DiscrepancyNoteType(0, "Invalid");
 
-    public static final DiscrepancyNoteType FAILEDVAL = new DiscrepancyNoteType(1, "Failed_Validation_Check", null);
+    public static final DiscrepancyNoteType FAILEDVAL = new DiscrepancyNoteType(1, "Failed_Validation_Check");
 
-    //public static final DiscrepancyNoteType INCOMPLETE = new DiscrepancyNoteType(2, "Incomplete", null);
+    //public static final DiscrepancyNoteType INCOMPLETE = new DiscrepancyNoteType(2, "Incomplete");
 
-    //public static final DiscrepancyNoteType UNCLEAR = new DiscrepancyNoteType(3, "Unclear/Unreadable", null);
+    //public static final DiscrepancyNoteType UNCLEAR = new DiscrepancyNoteType(3, "Unclear/Unreadable");
 
-    public static final DiscrepancyNoteType ANNOTATION = new DiscrepancyNoteType(2, "Annotation", null);
+    public static final DiscrepancyNoteType ANNOTATION = new DiscrepancyNoteType(2, "Annotation");
 
-    public static final DiscrepancyNoteType QUERY = new DiscrepancyNoteType(3, "query", null);
+    public static final DiscrepancyNoteType QUERY = new DiscrepancyNoteType(3, "query");
 
-    public static final DiscrepancyNoteType REASON_FOR_CHANGE = new DiscrepancyNoteType(4, "reason_for_change", null);
+    public static final DiscrepancyNoteType REASON_FOR_CHANGE = new DiscrepancyNoteType(4, "reason_for_change");
 
-    //public static final DiscrepancyNoteType OTHER = new DiscrepancyNoteType(5, "Other", null);
+    //public static final DiscrepancyNoteType OTHER = new DiscrepancyNoteType(5, "Other");
 
     //private static final DiscrepancyNoteType[] members = { FAILEDVAL, INCOMPLETE, UNCLEAR, ANNOTATION, QUERY, REASON_FOR_CHANGE, OTHER };
 
@@ -52,7 +52,7 @@ public class DiscrepancyNoteType extends Term {
 
     private List<Privilege> privileges;
 
-    private DiscrepancyNoteType(int id, String name, Privilege[] myPrivs) {
+    private DiscrepancyNoteType(int id, String name) {
         super(id, name);
 
     }

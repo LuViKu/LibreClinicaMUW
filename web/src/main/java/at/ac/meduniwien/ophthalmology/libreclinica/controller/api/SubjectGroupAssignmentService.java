@@ -226,8 +226,7 @@ final class SubjectGroupAssignmentService {
      */
     int reconcile(int studySubjectId,
                   UserAccountBean actor,
-                  List<UpdateSubjectGroupsRequest.Assignment> desired,
-                  StudyGroupClassDAO sgcDao) {
+                  List<UpdateSubjectGroupsRequest.Assignment> desired) {
         Objects.requireNonNull(actor, "actor");
         SubjectGroupMapDAO sgmDao = new SubjectGroupMapDAO(dataSource);
         ArrayList<SubjectGroupMapBean> existing = sgmDao.findAllByStudySubject(studySubjectId);

@@ -499,7 +499,7 @@ public class RulesImportApiController {
         session.removeAttribute(SESSION_EXPIRY_PREFIX + token);
 
         String committedAt = Instant.now().toString();
-        writeAudit(me, currentStudy, token, rulesCreated, rulesReplaced,
+        writeAudit(me, token, rulesCreated, rulesReplaced,
                 ruleSetsCreated, ruleSetsReplaced, ignoreDuplicates);
 
         LOG.info("Rules import commit: token={} study={} user={} rulesCreated={} rulesReplaced={} setsCreated={} setsReplaced={} actions={} ignoreDup={}",
@@ -726,7 +726,7 @@ public class RulesImportApiController {
         return resource.getInputStream();
     }
 
-    private void writeAudit(UserAccountBean me, StudyBean study, String token,
+    private void writeAudit(UserAccountBean me, String token,
                             int rulesCreated, int rulesReplaced,
                             int ruleSetsCreated, int ruleSetsReplaced,
                             boolean ignoreDuplicates) {

@@ -361,10 +361,10 @@ public class SitesApiController {
             // StudyDAO.update never writes the location; the move is its own statement.
             setLocation(site.getId(), moveTo.id());
             site.setLocationId(moveTo.id());
-            LOG.info("Move site: siteOid={} to location id {} by user={}", siteOid, moveTo.id(), me.getName());
+            LOG.info("Move site: site id {} to location id {} by user id {}", site.getId(), moveTo.id(), me.getId());
         }
 
-        LOG.info("Update site: parentOid={} siteOid={} by user={}", parentOid, siteOid, me.getName());
+        LOG.info("Update site: parentOid={} siteOid={} (site id {}) by user={}", logSafe(parentOid), logSafe(siteOid), site.getId(), me.getName());
 
         return ResponseEntity.ok(toIdentityDto(site, parent));
     }
@@ -456,7 +456,7 @@ public class SitesApiController {
                     "Site '" + siteOid + "' is not " + (removal ? "live" : "removed")
                             + " any more; nothing was changed. Reload and check its status."));
         } catch (Exception e) {
-            LOG.error("Site {} failed for siteOid={} by user={}", operation, siteOid, me.getName(), e);
+            LOG.error("Site {} failed for siteOid={} (site id {}) by user={}", removal ? "remove" : "restore", logSafe(siteOid), siteId, me.getName(), e);
             return ResponseEntity.internalServerError().body(Map.of("message",
                     "Failed to " + (removal ? "remove" : "restore") + " the site; nothing was changed. "
                             + "See server log."));
@@ -469,9 +469,9 @@ public class SitesApiController {
             sessionStudy.setStatus(refreshed.getStatus());
         }
 
-        LOG.info("Site {}: parentOid={} siteOid={} by user={} roles={} subjects={} groupMaps={} events={} "
+        LOG.info("Site {}: parentOid={} siteOid={} (site id {}) by user={} roles={} subjects={} groupMaps={} events={} "
                         + "eventCrfs={} items={} datasets={}",
-                operation, parentOid, siteOid, me.getName(), impact.roleBindings(), impact.subjects(),
+                removal ? "remove" : "restore", logSafe(parentOid), logSafe(siteOid), siteId, me.getName(), impact.roleBindings(), impact.subjects(),
                 impact.groupMaps(), impact.events(), impact.eventCrfs(), impact.itemData(), impact.datasets());
 
         return ResponseEntity.ok(toIdentityDto(refreshed, parent));
@@ -721,5 +721,10 @@ public class SitesApiController {
             throw new IllegalStateException("could not move study id " + studyId + " (SQLSTATE "
                     + e.getSQLState() + ")", e);
         }
+    }
+
+    /** Request values reach the log with line breaks and other control characters replaced. */
+    private static String logSafe(Object value) {
+        return value == null ? null : String.valueOf(value).replaceAll("\\p{Cntrl}", "_");
     }
 }

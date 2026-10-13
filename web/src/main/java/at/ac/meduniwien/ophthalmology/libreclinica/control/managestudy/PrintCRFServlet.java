@@ -11,7 +11,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -53,7 +52,6 @@ public class PrintCRFServlet extends DataEntryServlet {
 	 * 
 	 */
 	private static final long serialVersionUID = 8875803680439989682L;
-	Locale locale;
 
     // < ResourceBundlerespage,resexception;
 

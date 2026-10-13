@@ -39,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.form.DiscrepancyValid
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormDiscrepancyNotes;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validator;
-import at.ac.meduniwien.ophthalmology.libreclinica.core.form.StringUtil;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
@@ -590,7 +589,7 @@ public class AddNewSubjectServlet extends SecureController {
                             warningCount++;
                         }
                         // date-of-birth in subject table but doesn't match DOB
-                        else if (!local_df.format(subjectWithSameId.getDateOfBirth()).toString().equals(DOB)) {
+                        else if (!local_df.format(subjectWithSameId.getDateOfBirth()).equals(DOB)) {
                             // System.out.println("comparing " +
                             // local_df.format(
                             // subjectWithSameId.getDateOfBirth()).toString());
@@ -651,7 +650,7 @@ public class AddNewSubjectServlet extends SecureController {
                 // to be inserted into both <subject> and <studysubject> tables
                 if (!showExistingRecord) {
                     // YW >>
-                    if (!StringUtil.isBlank(fp.getString(INPUT_GENDER))) {
+                    if (!StringUtils.isBlank(fp.getString(INPUT_GENDER))) {
                         subject.setGender(fp.getString(INPUT_GENDER).charAt(0));
                     } else {
                         subject.setGender(' ');
@@ -660,7 +659,7 @@ public class AddNewSubjectServlet extends SecureController {
                     subject.setUniqueIdentifier(uniqueIdentifier);
 
                     if (currentStudy.getStudyParameterConfig().getCollectDob().equals("1")) {
-                        if (!StringUtil.isBlank(fp.getString(INPUT_DOB))) {
+                        if (!StringUtils.isBlank(fp.getString(INPUT_DOB))) {
                             subject.setDateOfBirth(fp.getDate(INPUT_DOB));
                             subject.setDobCollected(true);
                         } else {
@@ -811,9 +810,9 @@ public class AddNewSubjectServlet extends SecureController {
                 String submitEnroll = fp.getString(SUBMIT_ENROLL_BUTTON);
 
                 session.removeAttribute(FORM_DISCREPANCY_NOTES_NAME);
-                if (!StringUtil.isBlank(submitEvent)) {
+                if (!StringUtils.isBlank(submitEvent)) {
                     forwardPage(Page.CREATE_NEW_STUDY_EVENT_SERVLET);
-                } else if (!StringUtil.isBlank(submitEnroll)) {
+                } else if (!StringUtils.isBlank(submitEnroll)) {
                     // NEW MANTIS ISSUE 4770
                     setUpBeans(classes);
                     Date today = new Date(System.currentTimeMillis());
@@ -964,9 +963,6 @@ public class AddNewSubjectServlet extends SecureController {
             return;
         }
         ArrayList<DiscrepancyNoteBean> fieldNotes = notes.getNotes(field);
-        if ((fieldNotes == null || fieldNotes.size() < 1 ) && event_crf_id >0){
-          	fieldNotes = notes.getNotes(field);
-        }
         // System.out.println("+++ notes size:" + fieldNotes.size() + " for field " + field);
         for (int i = 0; i < fieldNotes.size(); i++) {
             DiscrepancyNoteBean dnb = (DiscrepancyNoteBean) fieldNotes.get(i);

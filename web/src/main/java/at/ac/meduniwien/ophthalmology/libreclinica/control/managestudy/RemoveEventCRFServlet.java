@@ -194,8 +194,10 @@ public class RemoveEventCRFServlet extends SecureController {
                             dnb.setDescription("The item has been removed, this Discrepancy Note has been Closed.");
                             dnDao.create(dnb);
                             dnDao.createMapping(dnb);
-                            itemParentNote.setResolutionStatusId(ResolutionStatus.CLOSED.getId());
-                            dnDao.update(itemParentNote);
+                            if (itemParentNote != null) {
+                                itemParentNote.setResolutionStatusId(ResolutionStatus.CLOSED.getId());
+                                dnDao.update(itemParentNote);
+                            }
                         }
                     }
                 }

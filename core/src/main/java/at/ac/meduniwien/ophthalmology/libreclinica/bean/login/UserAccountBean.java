@@ -634,7 +634,7 @@ public class UserAccountBean extends AuditableEntityBean {
     }
 
     public boolean isAuthsecretAbsent() {
-        return null == authsecret || "".equals(authsecret);
+        return null == authsecret || authsecret.isEmpty();
     }
 
     public String getAuthsecret() {

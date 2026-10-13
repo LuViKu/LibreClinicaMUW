@@ -221,7 +221,7 @@ public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
 
                 // Load any database values into the DisplayItemBeans
                 if (hasDbFormValues) {
-                    currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems, (!unGroupedTable));
+                    currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems);
                     /*
                      * The highest number ordinal represents how many repeated
                      * rows there are. If the ordinal in ItemDataBeans > 1, then
@@ -312,8 +312,7 @@ public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
                 // the table involves repeating rows; thus the final boolean
                 // parameter
                 List<Element> thTags =
-                    repeatFlag ? createTheadContentsFromDisplayItems(currentDisplayItems, true) : createTheadContentsFromDisplayItems(currentDisplayItems,
-                            false);
+                    createTheadContentsFromDisplayItems(currentDisplayItems);
                 int i = 0;
                 for (Element el : thTags) {
                     i++;
@@ -585,7 +584,7 @@ public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
                 boolean unGroupedTable = displayItemGroup.getGroupMetaBean().isRepeatingGroup()?false:true;
                 // Load any database values into the DisplayItemBeans
                 if (hasDbFormValues) {
-                    currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems, (!unGroupedTable));
+                    currentDisplayItems = persistanceHandler.loadDataIntoDisplayBeans(currentDisplayItems);
                     /*
                      * The highest number ordinal represents how many repeated
                      * rows there are. If the ordinal in ItemDataBeans > 1, then
@@ -676,8 +675,7 @@ public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
                 // the table involves repeating rows; thus the final boolean
                 // parameter
                 List<Element> thTags =
-                    repeatFlag ? createTheadContentsFromDisplayItems(currentDisplayItems, true) : createTheadContentsFromDisplayItems(currentDisplayItems,
-                            false);
+                    createTheadContentsFromDisplayItems(currentDisplayItems);
                 int i = 0;
                 for (Element el : thTags) {
                     i++;
@@ -764,10 +762,11 @@ public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
                     table.addContent(newRow);
                 }
             
-               if(!hasStoredRepeatedRows)
-                for(int ii=0;ii<repeatNumber;ii++){
-                    divRoot.addContent( createTableWithoutData(bodylist,headerlist,subHeadList,ii,unGroupedTable));
+                if (!hasStoredRepeatedRows) {
+                    for (int ii = 0; ii < repeatNumber; ii++) {
+                        divRoot.addContent(createTableWithoutData(bodylist, headerlist, subHeadList, ii, unGroupedTable));
                     }
+                }
                 // The final true parameter is for disabling D Note icons from
                 // being clicked
                 if (hasStoredRepeatedRows) {
@@ -999,7 +998,7 @@ public class PrintHorizontalFormBuilder extends DefaultFormBuilder {
         element.setAttribute("class",cssClasses);
 
     }
-    public List<Element> createTheadContentsFromDisplayItems(List<DisplayItemBean> displayBeans, boolean generateExtraColumn) {
+    public List<Element> createTheadContentsFromDisplayItems(List<DisplayItemBean> displayBeans) {
         List<Element> elements = new ArrayList<Element>();
         ItemFormMetadataBean itemFormBean;
         // Get the names for the table's headers;

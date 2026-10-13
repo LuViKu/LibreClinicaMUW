@@ -319,7 +319,7 @@ public class CreateNewStudyEventServlet extends SecureController {
             	studySubject = (StudySubjectBean) request.getAttribute(INPUT_STUDY_SUBJECT);
             }
             // << tbh
-            if (studySubject.getLabel() == "") {
+            if (studySubject.getLabel() == null || studySubject.getLabel().isEmpty()) {
             	// add an error here, tbh
             	Validator.addError(errors, INPUT_STUDY_SUBJECT, respage.getString("must_enter_subject_ID_for_identifying"));
             }
@@ -348,7 +348,7 @@ public class CreateNewStudyEventServlet extends SecureController {
             }
 
             // YW, 3-12-2008, 2220 fix >>
-            if (!"".equals(strEnd) && !errors.containsKey(INPUT_STARTDATE_PREFIX) && !errors.containsKey(INPUT_ENDDATE_PREFIX)) {
+            if (!strEnd.isEmpty() && !errors.containsKey(INPUT_STARTDATE_PREFIX) && !errors.containsKey(INPUT_ENDDATE_PREFIX)) {
                 end = getInputEndDate();
                 if (!fp.getString(INPUT_STARTDATE_PREFIX + "Date").equals(fp.getString(INPUT_ENDDATE_PREFIX + "Date"))) {
                     if (end.before(start)) {
@@ -466,7 +466,7 @@ public class CreateNewStudyEventServlet extends SecureController {
                 studyEvent.setStudySubjectId(studySubject.getId());
 
                 // YW 08-17-2007 <<
-                if ("-1".equals(getInputStartHour()) && "-1".equals(getInputStartMinute()) && "".equals(getInputStartHalf())) {
+                if ("-1".equals(getInputStartHour()) && "-1".equals(getInputStartMinute()) && getInputStartHalf().isEmpty()) {
                     studyEvent.setStartTimeFlag(false);
                 } else {
                     studyEvent.setStartTimeFlag(true);
@@ -481,9 +481,9 @@ public class CreateNewStudyEventServlet extends SecureController {
                 }
                 // tbh
                 // YW, 3-12-2008, 2220 fix <<
-                if (!"".equals(strEnd)) {
+                if (!strEnd.isEmpty()) {
                     // YW >>
-                    if ("-1".equals(getInputEndHour()) && "-1".equals(getInputEndMinute()) && "".equals(getInputEndHalf())) {
+                    if ("-1".equals(getInputEndHour()) && "-1".equals(getInputEndMinute()) && getInputEndHalf().isEmpty()) {
                         studyEvent.setEndTimeFlag(false);
                     } else {
                         studyEvent.setEndTimeFlag(true);
@@ -534,7 +534,7 @@ public class CreateNewStudyEventServlet extends SecureController {
                                 // YW 11-14-2007
                                 if ("-1".equals(fp.getString(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Hour"))
                                     && "-1".equals(fp.getString(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Minute"))
-                                    && "".equals(fp.getString(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Half"))) {
+                                    && fp.getString(INPUT_STARTDATE_PREFIX_SCHEDULED[i] + "Half").isEmpty()) {
                                     studyEventScheduled.setStartTimeFlag(false);
                                 } else {
                                     studyEventScheduled.setStartTimeFlag(true);
@@ -543,11 +543,11 @@ public class CreateNewStudyEventServlet extends SecureController {
 
                                 studyEventScheduled.setDateStarted(startScheduled[i]);
                                 // YW, 3-12-2008, 2220 fix<<
-                                if (!"".equals(strEndScheduled[i])) {
+                                if (!strEndScheduled[i].isEmpty()) {
                                     endScheduled[i] = fp.getDateTime(INPUT_ENDDATE_PREFIX_SCHEDULED[i]);
                                     if ("-1".equals(fp.getString(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Hour"))
                                         && "-1".equals(fp.getString(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Minute"))
-                                        && "".equals(fp.getString(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Half"))) {
+                                        && fp.getString(INPUT_ENDDATE_PREFIX_SCHEDULED[i] + "Half").isEmpty()) {
                                         studyEventScheduled.setEndTimeFlag(false);
                                     } else {
                                         studyEventScheduled.setEndTimeFlag(true);

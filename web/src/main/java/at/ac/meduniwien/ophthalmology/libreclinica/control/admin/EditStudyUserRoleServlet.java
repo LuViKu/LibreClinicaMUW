@@ -74,19 +74,22 @@ public class EditStudyUserRoleServlet extends SecureController {
 
         StudyUserRoleBean studyUserRole = userDao.findRoleByUserNameAndStudyId(uName, studyId);
         StudyBean study = studyDao.findByPK(studyUserRole.getStudyId());
-        
-        if (study != null) {
 
-            // Study Name will depend on whether it is study site or parent study role
-            if (study.isSite(study.getParentStudyId())) {
+        if (study == null) {
+            addPageMessage(respage.getString("the_user_has_no_role_in_study"));
+            forwardPage(Page.LIST_USER_ACCOUNTS_SERVLET);
+            return;
+        }
 
-                // Include parent study name
-                StudyBean parentStudy = studyDao.findByPK(study.getParentStudyId());
-                studyUserRole.setStudyName(parentStudy.getName() + " : " + study.getName());
+        // Study Name will depend on whether it is study site or parent study role
+        if (study.isSite(study.getParentStudyId())) {
 
-            } else { // When parent study role study name is sufficient
-                studyUserRole.setStudyName(study.getName());
-            }
+            // Include parent study name
+            StudyBean parentStudy = studyDao.findByPK(study.getParentStudyId());
+            studyUserRole.setStudyName(parentStudy.getName() + " : " + study.getName());
+
+        } else { // When parent study role study name is sufficient
+            studyUserRole.setStudyName(study.getName());
         }
 
         if (!studyUserRole.isActive()) {

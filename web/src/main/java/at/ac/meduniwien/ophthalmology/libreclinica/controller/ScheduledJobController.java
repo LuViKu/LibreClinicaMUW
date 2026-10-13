@@ -229,7 +229,7 @@ public class ScheduledJobController {
     	JobKey jobKey = new JobKey(theJobName, theJobGroupName);
     	TriggerKey triggerKey = new TriggerKey(triggerName, triggerGroupName);
         scheduler.getJobDetail(jobKey);
-        logger.debug("About to pause the job-->" + theJobName + "Job Group Name -->" + theJobGroupName);
+        logger.debug("About to pause the job-->{} Job Group Name -->{}", logSafe(theJobName), logSafe(theJobGroupName));
 
         // Only an export job's simple trigger is cancelled here; any other
         // trigger (a cron trigger, for one) is left as it is.
@@ -317,4 +317,9 @@ public class ScheduledJobController {
         return new SimpleDateFormat(longFormatString(), locale);
     }
 
+
+    /** Request values reach the log with line breaks and control characters replaced. */
+    private static String logSafe(String value) {
+        return value == null ? null : value.replaceAll("[\\r\\n]", "_").replaceAll("\\p{Cntrl}", "_");
+    }
 }

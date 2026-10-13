@@ -79,7 +79,7 @@ public class PauseJobServlet extends SecureController {
        // String gName = fp.getString("gname");
         String gName= request.getParameter("gname");
         String finalGroupName = "";
-        if ("".equals(gName) || "0".equals(gName)) {
+        if ((gName != null && gName.isEmpty()) || "0".equals(gName)) {
             finalGroupName = XsltTriggerService.TRIGGER_GROUP_NAME;
         } else {// should equal 1
             finalGroupName = groupImportName;
@@ -115,7 +115,7 @@ public class PauseJobServlet extends SecureController {
         // all validation done on JSP side
         // forward back to view job servlet here
         // set a message
-        if ("".equals(gName) || "0".equals(gName)) {
+        if ((gName != null && gName.isEmpty()) || "0".equals(gName)) {
             forwardPage(Page.VIEW_JOB_SERVLET);
         } else {
             forwardPage(Page.VIEW_IMPORT_JOB_SERVLET);

@@ -47,16 +47,16 @@ public class ShowActionProcessor implements ActionProcessor {
                 // and RUN_ON_SCHEDULE), persisting `dynamics_item_form_metadata` rows that
                 // operators believed were only being previewed. dryRun() returns
                 // ruleAction unchanged — the same value the caller already passed in.
-                return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                return dryRun(ruleAction);
             }
         }
         case SAVE: {
             if (ruleRunnerMode == RuleRunnerMode.DATA_ENTRY) {
-                return saveAndReturnMessage(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                return saveAndReturnMessage(ruleAction, itemDataBean, ub);
             }else  if (ruleRunnerMode == RuleRunnerMode.RUN_ON_SCHEDULE) {
                     return null;
             } else {
-                return save(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                return save(ruleAction, itemDataBean, ub);
             }
         }
         default:
@@ -64,18 +64,17 @@ public class ShowActionProcessor implements ActionProcessor {
         }
     }
 
-    private RuleActionBean save(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+    private RuleActionBean save(RuleActionBean ruleAction, ItemDataBean itemDataBean, UserAccountBean ub) {
         getItemMetadataService().showNew(itemDataBean.getId(), ((ShowActionBean) ruleAction).getProperties(), ub, ruleSet);
         return ruleAction;
     }
 
-    private RuleActionBean saveAndReturnMessage(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy,
-            UserAccountBean ub) {
+    private RuleActionBean saveAndReturnMessage(RuleActionBean ruleAction, ItemDataBean itemDataBean, UserAccountBean ub) {
         getItemMetadataService().showNew(itemDataBean.getId(), ((ShowActionBean) ruleAction).getProperties(), ub, ruleSet);
         return ruleAction;
     }
 
-    private RuleActionBean dryRun(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+    private RuleActionBean dryRun(RuleActionBean ruleAction) {
         return ruleAction;
     }
 

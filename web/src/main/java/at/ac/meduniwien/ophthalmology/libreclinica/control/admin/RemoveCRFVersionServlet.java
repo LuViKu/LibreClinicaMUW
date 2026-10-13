@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -185,18 +186,17 @@ public class RemoveCRFVersionServlet extends SecureController {
         }
     }
     public static void updateEventDef(EventDefinitionCRFBean edcBean, EventDefinitionCRFDAO edcDao, ArrayList<CRFVersionBean> versionList){
-        ArrayList<Integer> idList = new ArrayList<Integer>();
-        CRFVersionBean temp = (CRFVersionBean)versionList.get(0);
+        if (versionList == null || versionList.isEmpty()) {
+            return;
+        }
+        List<Integer> idList = new ArrayList<Integer>();
+        CRFVersionBean temp = versionList.get(0);
         String selectedVersionIds = edcBean.getSelectedVersionIds();
 		if (selectedVersionIds == null || selectedVersionIds.trim().isEmpty()){
             edcBean.setDefaultVersionId(temp.getId());
             edcDao.update(edcBean);
         } else {
-            String sversionIds = selectedVersionIds;
-            String[] ids = sversionIds.split("\\,");
-            for (String id : ids) {
-                idList.add(Integer.valueOf(id));
-            }
+            idList.addAll(parseIds(selectedVersionIds));
             for(CRFVersionBean versionBean : versionList) {
                 if (idList.contains(versionBean.getId())) {
                     edcBean.setDefaultVersionId(versionBean.getId());
@@ -212,18 +212,18 @@ public class RemoveCRFVersionServlet extends SecureController {
     // These are changes for setting the correct default crf version Id to event
     // when existing default version is locked
     public static void updateEventDef(EventDefinitionCRFBean edcBean, EventDefinitionCRFDAO edcDao, ArrayList<CRFVersionBean> versionList, int crfVIdToLock) {
-        ArrayList<Integer> idList = new ArrayList<Integer>();
-        CRFVersionBean temp = null;
-        if ((null != versionList) && (versionList.size() > 0)) {
-            temp = (CRFVersionBean) versionList.get(0);
+        if (versionList == null || versionList.isEmpty()) {
+            return;
         }
+        List<Integer> idList = new ArrayList<Integer>();
+        CRFVersionBean temp = versionList.get(0);
         // Check the first version in list if it is getting locked
         // here. If not, make that as default version. Otherwise get the next
         // element in list and make that as the default version.
 
         String selectedVersionIds = edcBean.getSelectedVersionIds();
 		if (selectedVersionIds == null || selectedVersionIds.trim().isEmpty()){
-            if ((null != temp) && (temp.getId() == crfVIdToLock) && (null != versionList) && (versionList.size() > 1)) {
+            if (temp.getId() == crfVIdToLock && versionList.size() > 1) {
                 CRFVersionBean temp2 = versionList.get(1);
                 edcBean.setDefaultVersionId(temp2.getId());
             } else {
@@ -231,11 +231,7 @@ public class RemoveCRFVersionServlet extends SecureController {
             }
             edcDao.update(edcBean);
         } else {
-            String sversionIds = selectedVersionIds;
-            String[] ids = sversionIds.split("\\,");
-            for (String id : ids) {
-                idList.add(Integer.valueOf(id));
-            }
+            idList.addAll(parseIds(selectedVersionIds));
             for(int i = 0; i < versionList.size(); i++){
                 CRFVersionBean versionBean = (CRFVersionBean)versionList.get(i);
                 if (idList.contains(versionBean.getId())){
@@ -245,5 +241,26 @@ public class RemoveCRFVersionServlet extends SecureController {
                 }
             }
         }
+    }
+    /**
+     * Parses a comma separated list of ids. Blank and non-numeric tokens are skipped.
+     */
+    static List<Integer> parseIds(String csv) {
+        List<Integer> ids = new ArrayList<Integer>();
+        if (csv == null) {
+            return ids;
+        }
+        for (String token : csv.split(",")) {
+            String t = token.trim();
+            if (t.isEmpty()) {
+                continue;
+            }
+            try {
+                ids.add(Integer.valueOf(t));
+            } catch (NumberFormatException e) {
+                // ignore a malformed id
+            }
+        }
+        return ids;
     }
 }

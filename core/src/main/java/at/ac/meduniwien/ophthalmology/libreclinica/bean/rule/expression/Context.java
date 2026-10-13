@@ -17,7 +17,7 @@ import java.util.HashMap;
 @SuppressWarnings("all")
 public enum Context {
 
-    OC_RULES_V1(1, "OpenClinica rules v1.0");
+    OC_RULES_V1(1);
 
     private int code;
 
@@ -29,10 +29,6 @@ public enum Context {
     }
 
     Context(int code) {
-        this(code, null);
-    }
-
-    Context(int code, String longName) {
         this.code = code;
     }
 

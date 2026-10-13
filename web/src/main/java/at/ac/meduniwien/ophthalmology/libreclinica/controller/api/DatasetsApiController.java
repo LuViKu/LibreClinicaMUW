@@ -780,7 +780,7 @@ public class DatasetsApiController {
                 eb.getMetadata();
                 eb.computeReport(answer);
                 HashMap<String, Integer> answerMap = extractService.createSPSSFile(
-                        db, eb, study, parentStudy, sysTimeBegin, runDir, answer, "", me);
+                        db, eb, sysTimeBegin, runDir, answer, "", me);
                 fileId = firstValueOrZero(answerMap);
             }
             default -> throw new IllegalStateException("Unhandled format: " + format);

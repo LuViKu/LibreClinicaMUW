@@ -145,7 +145,8 @@ public class JobsAdminApiController {
                 scheduler.deleteJob(jobKey);
             }
             LOG.info("Deleted legacy export job '{}' ({}) by user={}",
-                    name.replaceAll("[\r\n]", "_"), LEGACY_EXPORT_GROUP, ub.getName());
+                    name.replace("\r", "_").replace("\n", "_"), LEGACY_EXPORT_GROUP,
+                    ub.getName().replace("\r", "_").replace("\n", "_"));
             return ResponseEntity.noContent().build();
         } catch (SchedulerException e) {
             LOG.warn("Deleting a legacy export job failed", e);
