@@ -42,6 +42,43 @@ out_dir = prepare_bscan_dcm(Path("/uploads/patient.e2e"), Path("/tmp/work"))
 See [decision-record.md DR-024](../docs/development/modernization/decision-record.md)
 for the full split rationale.
 
+## Series view of a multimodal export
+
+A Spectralis export holds a whole session: OCT volumes, OCT line scans and the en-face
+modalities (IR, BAF, BR, IRAF, qAF, ICGA, FA) for both eyes. Two functions list and preview its
+series (contract: `docs/development/e2e-multimodal-split.md`, Contract 1). They walk the chunk
+headers only and keep file offsets, so a 600 MB export is described in about a second and
+under 100 MB of memory; no pixel data is decoded until a frame is rendered.
+
+```python
+from muw_e2e_converter import describe_e2e, render_series_png
+
+d = describe_e2e(Path("/uploads/3f2b8c1e.e2e"), expected_label="EIAMD005")
+# {"headerPatient": "empty" | "matches" | "differs",
+#  "series": [{"seriesKey": "s3", "seriesModality": "OCT", "deviceModality": "IR",
+#              "scanPattern": "OCT ART Volume", "laterality": "OD",
+#              "acquiredAt": "2026-09-30T10:12:03", "frames": 97, "width": 1024,
+#              "height": 496, "octVolumeIndex": 0}, ...]}
+
+png = render_series_png(Path("/uploads/3f2b8c1e.e2e"), "s3", frame=0)  # bytes
+```
+
+* `describe_e2e(path, expected_label) -> dict`. `headerPatient` compares the header patient ID
+  with `expected_label` (case-insensitive; `differs` if any header ID differs) and is the only
+  trace of it: the ID, names and birth date are never returned or logged. Series are ordered
+  OD, OS, unknown eye; then `OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA, OTHER`; then time.
+  `seriesKey` is `s<ordinal>` over the series ids sorted numerically, so the same bytes always
+  give the same keys. `seriesModality` is `OCT` (scan pattern contains `Volume`), `OCT_LINE`
+  (any other series with OCT B-scans), the device modality (`qAF` becomes `QAF`) or `OTHER`.
+  `frames` is the number of B-scans for an OCT series and the number of en-face images
+  otherwise (a time sequence is one series); `width`/`height` are those of one frame.
+  `acquiredAt` is the series' earliest frame time (naive ISO date-time) or `null`.
+  `octVolumeIndex` is the index into `E2E.read_oct_volume()` (the `scan_index` of
+  `read_e2e_volume` / `/preprocess`) for `OCT` and `OCT_LINE`, else `null`.
+* `render_series_png(path, series_key, frame=0) -> bytes`: the en-face frame; the B-scan of an
+  OCT line scan; the IR localizer of an OCT volume. 8-bit greyscale PNG with no text or other
+  ancillary chunks. Raises `KeyError` (unknown series key) or `IndexError` (frame out of range).
+
 ## Deployment
 
 ```sh
