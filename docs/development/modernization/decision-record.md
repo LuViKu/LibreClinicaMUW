@@ -1176,3 +1176,29 @@ every thickness of such a file would be about 1.5× too large, silently.
 - DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache. De facto EhCache 3 (3.10.8) since B.5; decide with the Spring Boot 4 migration (DR-037)
 - DR-016 — JIT vs LOOKUP_ONLY provisioning default for SSO users (decide during Phase D execution after MedUni Wien admin-process review)
 - DR-017 — Authority/role mapping from SSO attributes (institution-specific; document a mapping-rule format)
+
+## DR-041 — A multimodal Spectralis export is uploaded once and split into one item per series on the server
+
+**Status:** Accepted (2026-10-13). Design and contracts: [e2e-multimodal-split.md](../e2e-multimodal-split.md).
+
+**Context.** For the drusen study, each patient is exported from the Spectralis as a folder of `.E2E` files. One file holds a whole session for both eyes: OCT volumes and line scans, IR, BAF, BR, IRAF, qAF, ICGA and FA, at 10–640 MB per file. Until now an E2E counted only as OCT:
+
+- the clients uploaded the same file once per OCT volume;
+- no other series became an item;
+- the app refused files over 200 MiB.
+
+The header patient ID of these exports is unreliable: empty in 13 of the first 22 files, and different from the folder in 5.
+
+**Decision.**
+
+- **One upload.** Each file is uploaded once, streamed, with files of up to 2 GiB accepted.
+- **Split on the server.** The converter sidecar lists the series from the file's own per-series metadata (device modality and scan pattern), without returning any identifying data. The app creates one inbox item per series.
+- **Subject.** The subject label is the patient's folder name. A header ID that differs from it parks the whole file for a person to decide.
+- **Modality and jobs.** A series reaches its catalogue modality through a new `imaging_modality.e2e_series` token. Only OCT volumes start retinal-inference jobs.
+- **Clients.** The Export Watcher and the browser upload both use this one contract. The browser de-identification path for internet-facing deployments is unchanged.
+
+**Consequences.**
+
+- Every series in an export is visible in the inbox and can tick its own "performed" item once the study is configured.
+- The three readers no longer have to agree on volume numbering for this path, because the server is the only one that splits.
+- Several items now share one stored file, so retention deletes the file only when the last item referencing it is gone.

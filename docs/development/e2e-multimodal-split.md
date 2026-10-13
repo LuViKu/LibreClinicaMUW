@@ -1,0 +1,191 @@
+# Multimodal Spectralis exports: one upload, one item per series
+
+**Status:** in progress, 2026-10-13. Decision record: [DR-041](modernization/decision-record.md#dr-041--a-multimodal-spectralis-export-is-uploaded-once-and-split-into-one-item-per-series-on-the-server).
+
+## Why
+
+The drusen study exports each patient from the Spectralis as one folder of `.E2E` files (`<root>/EIAMD005/EIAMD01D.E2E`). One file holds a whole multimodal session for both eyes. A survey of the first 22 exports found these series:
+
+| Device modality | Scan pattern | Series |
+|---|---|---|
+| ICGA | Images | 202 |
+| qAF | Time Sequence | 79 |
+| IR | OCT ART Volume (the OCT volume and its IR localizer) | 73 |
+| IR | OCT B-Scan (line scan) | 68 |
+| BAF | Images | 38 |
+| BR | Images | 37 |
+| IR | Images | 36 |
+| IRAF | Images | 26 |
+| FA | Images | 17 |
+| qAF | Images | 6 |
+| ICGA | Time Sequence | 3 |
+| IRAF | Time Sequence | 1 |
+
+Files are 10–640 MB. The header patient ID is empty in 13 of 22 files, matches the folder in 4 and differs in 5. One of those 5 is not shaped like a study label.
+
+Before this change:
+
+- **Only OCT volumes became items.** Each one was a separate upload of the same file.
+- **The other series were never items.**
+- **The app refused anything over 200 MiB.**
+- **Both clients read whole files into memory.**
+
+## Decisions (maintainer, 2026-10-13)
+
+1. **Every series becomes its own item, per eye.**
+   - The kinds are OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA and FA.
+   - A time sequence is one item that holds its frames.
+2. **A file is uploaded once and the server splits it.** This applies to the Export Watcher and to the browser upload alike.
+3. **The folder name is the subject label.**
+   - When the header patient ID is empty or equal to the folder name, the file can be bound automatically.
+   - When it differs, every item of that file is parked in the inbox.
+4. **The drusen study is not configured yet.** Items park in the inbox until the study exists. The design must still bind them by modality once it does.
+
+## Series kinds
+
+The kind is taken from the file's own per-series metadata (`oct-converter` `metadata['enface_modality']` and `metadata['scan_pattern']`, keyed by series):
+
+| `seriesModality` | Rule |
+|---|---|
+| `OCT` | scan pattern contains `Volume` |
+| `OCT_LINE` | scan pattern is `OCT B-Scan` (or any other single-B-scan OCT pattern) |
+| `IR`, `BAF`, `BR`, `IRAF`, `QAF`, `ICGA`, `FA` | otherwise, the device modality `IR`, `BAF`, `BR`, `IRAF`, `qAF`, `ICGA`, `FA` |
+| `OTHER` | anything else; the device modality is kept in `deviceModality` |
+
+## Contract 1: app → converter sidecar
+
+These endpoints sit on the service that already serves `/preprocess`: `retinal-preprocess` in development, `retinal-inference` in production. They use the same preprocess token.
+
+Files are not uploaded again. The sidecar reads the stored file from the E2E upload directory, which it already mounts read-only (`/var/lib/libreclinica/e2e-uploads`).
+
+`storedName` must be a bare file name: `^[A-Za-z0-9-]+\.e2e$` (the app stores files as `<uuid>.e2e`). Anything else is refused with 400. No paths are accepted.
+
+### `POST /e2e/describe`
+
+Request (JSON):
+
+```json
+{ "storedName": "3f2b8c1e-....e2e", "expectedLabel": "EIAMD005" }
+```
+
+Response:
+
+```json
+{
+  "headerPatient": "empty | matches | differs",
+  "series": [
+    {
+      "seriesKey": "s3",
+      "seriesModality": "OCT",
+      "deviceModality": "IR",
+      "scanPattern": "OCT ART Volume",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T10:12:03",
+      "frames": 97,
+      "width": 1024,
+      "height": 496,
+      "octVolumeIndex": 0
+    }
+  ]
+}
+```
+
+- **No identifying data.** The response never carries a name, a patient ID or a birth date. `headerPatient` compares the header ID with `expectedLabel` inside the sidecar.
+- **`seriesKey`** is stable for a given file: the same bytes always give the same keys. It is opaque to the app, and it is unique within the file.
+- **`octVolumeIndex`** is the index into `oct-converter`'s `read_oct_volume()`. It is the `scan_index` that the existing `/preprocess` call takes. It is `null` for en-face series.
+- **`laterality`** is `OD`, `OS` or `null`.
+- **`acquiredAt`** is ISO local date-time, or `null`.
+- **Order.** Series are ordered by eye (`OD` first), then by modality in the order of the table above, then by time.
+
+### `GET /e2e/series-image?storedName=…&seriesKey=…&frame=0`
+
+Returns `image/png` with `frame` defaulting to 0:
+
+- an en-face series gives that frame;
+- an OCT line scan gives the B-scan;
+- an OCT volume gives its IR localizer.
+
+For an out-of-range frame or an unknown key it answers 404. The PNG carries no metadata.
+
+## Contract 2: clients → app
+
+`POST /pages/api/v1/public/upload/commit` (watcher, public page) and `POST /pages/api/v1/ingest/upload/commit` (staff page) gain a split mode.
+
+Multipart fields:
+
+- `file`: the whole `.E2E`, streamed.
+- `split=true`
+- `patientId`: the subject label, taken from the folder name.
+- `device=spectralis`
+- Optionally `studyEventId`, to bind every series to one visit (the staff page's batch visit), or `park=true`.
+
+`scanDate`, `laterality` and `scanIndex` are not sent in split mode. The server takes them per series from `/e2e/describe`.
+
+Response `201`:
+
+```json
+{
+  "sha256": "…",
+  "headerPatient": "empty | matches | differs",
+  "parked": true,
+  "items": [
+    {
+      "ingestItemId": 123,
+      "seriesKey": "s3",
+      "seriesModality": "OCT",
+      "laterality": "OD",
+      "acquisitionDate": "2026-09-30",
+      "frames": 97,
+      "imagingModalityId": null,
+      "status": "UNBOUND",
+      "jobs": []
+    }
+  ]
+}
+```
+
+- `409` when a file with the same SHA-256 was already split. The body is `{duplicate:true, existingIngestItemIds:[…]}`.
+- `GET …/preflight?sha256=…&split=true` answers whether the file is already there, so a client can skip uploading it.
+
+### Server rules
+
+1. **Store once.** The file is streamed to `e2eUploadsPath/<uuid>.e2e` once, and the SHA-256 is computed while it streams.
+2. **Describe.** The server calls `/e2e/describe` with the folder label.
+3. **Create one item per series.** Each `ingest_item` row has:
+   - kind `e2e`, the same stored path and SHA-256;
+   - `e2e_series_key`, `series_modality` and `series_frames` (new columns);
+   - laterality and acquisition date from the series;
+   - `scan_index = octVolumeIndex` for OCT and OCT_LINE, `null` otherwise.
+
+   Deduplication is unique on `(sha256, e2e_series_key)`. The existing `(sha256, scan_index)` uniqueness is kept for non-split rows.
+4. **Bind or park.**
+   - If `headerPatient` is `differs`, every item is parked.
+   - If `park=true` was sent, or no visit can be resolved, every item is parked.
+   - Otherwise, when `studyEventId` was sent, every item is bound to that visit.
+   - Otherwise each series resolves its own visit from label and date, using the existing resolution.
+5. **Modality.** A new nullable column `imaging_modality.e2e_series` holds one `seriesModality`. A series item gets the study's active catalogue entry with that token. Parked items get none, and binding from the inbox resolves it. When nothing matches, the item stays without a modality, as today.
+6. **Jobs.** Only `OCT` items get retinal-inference jobs, from the existing imaging plan. They go through `/preprocess` with `scan_index`, as today.
+7. **Limits.** Uploads of up to 2 GiB are accepted (servlet multipart config and nginx). Requests stream to disk and are not buffered in memory.
+8. **Retention.** A stored file shared by several items is deleted only when no item references it any more.
+9. **Inbox.** Items show their series modality and frame count. Staff can preview a series through an app endpoint that checks inbox visibility and proxies `/e2e/series-image`.
+
+## Contract 3: clients
+
+**Export Watcher** (`deploy/export-watcher/ExportWatcher.ps1`):
+
+- **Subject.** An E2E file directly under the watch folder has no subject: it is skipped and reported. An E2E file in a sub-folder takes the first folder name below the watch folder as its subject.
+- **Upload.** For each settled file, the watcher checks the preflight by a streamed SHA-256, then makes one streamed commit with `split=true`. The upload uses `StreamContent` and a timeout sized for 2 GiB. The watcher no longer loops over volumes, and no file is read whole into memory.
+- **Moving files.** A `201` or `409` moves the file to `_uploaded`, as before.
+
+**Browser upload** (`UploadWorkbench`):
+
+- **Selecting files.** A folder picker and folder drag-and-drop. For an E2E file, the top folder name is the subject.
+- **Hashing.** The SHA-256 is computed in chunks, never by reading the whole file into memory. Large files are processed one at a time.
+- **Rows.** One row per E2E file, showing the subject from the folder. After commit, the row lists its series items (modality, eye, frames, status).
+- **Size.** Files over 2 GiB are refused in the browser before upload.
+- **De-identification.** The browser de-identification path used on internet-facing deployments keeps its current per-volume behaviour. Split mode applies where the browser does not de-identify.
+
+## Out of scope
+
+- **Study setup.** Configuring the drusen study (visits, catalogue entries with `e2e_series`, CRF items) happens once the study exists.
+- **Device-specific analysis** of qAF, ICGA or FA.
