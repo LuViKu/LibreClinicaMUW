@@ -210,3 +210,56 @@ Built as specified, with these details worth knowing:
 
 - **Study setup.** Configuring the drusen study (visits, catalogue entries with `e2e_series`, CRF items) happens once the study exists.
 - **Device-specific analysis** of qAF, ICGA or FA.
+
+## Amendment 2026-10-13 (b): one DICOM per series, browser preview, leaving series out
+
+These are maintainer decisions taken after the first build. They change the storage model and add a preview to the browser upload.
+
+### One DICOM per series; the E2E becomes a time-limited source copy
+
+**Storage.**
+
+- After `describe`, the server has the sidecar convert the whole file in **one pass**. Each kept series becomes its own DICOM, and the series items are ordinary DICOM items with their own stored file. The OCT jobs run through the existing DICOM OCT path (DR-039). `/preprocess` no longer reads the E2E.
+- The original `.E2E` moves to a source area (`core.retinalInference.e2eSourcePath`, default `/var/lib/libreclinica/e2e-source`). It is not served and not analysed there.
+- Each item records `e2e_source_sha256`. A retention job deletes source files older than `core.retinalInference.e2eSourceRetentionDays` (default 90).
+- Duplicate detection stays on the E2E's SHA-256 through `e2e_source_sha256`. The same export uploaded again is refused even after its source file is gone.
+
+**DICOM content.**
+
+- Patient data is only the study label: `PatientID` and `PatientName`. There is no birth date, no sex and no other name.
+- **Laterality and dates.** Each DICOM carries the series' laterality and acquisition date/time.
+- **OCT volume.** The existing `write_bscan_dcm` output: 16-bit, with the same pixel values the analysis receives today (oct-converter's log-compressed intensity), plus `geometry.json` as now.
+- **OCT line scan.** The same writer, with one frame.
+- **En-face images and time sequences** (IR, BAF, BR, IRAF, qAF, ICGA, FA). Ophthalmic Photography 8-bit (SOP class 1.2.840.10008.5.1.4.1.1.77.1.5.1), MONOCHROME2, uncompressed, multi-frame when the series has several images.
+
+**Sidecar contract.** `POST /e2e/convert`:
+
+- **Request:** `{storedName, label, seriesKeys}` (the kept series).
+- **Behaviour:** the sidecar writes `<seriesKey>.dcm` (plus `<seriesKey>.geometry.json` for OCT) into `/var/lib/libreclinica/e2e-convert/<storedName-without-extension>/`. Both the sidecar and the app mount that directory read-write.
+- **Response:** `{files:[{seriesKey, file, sha256, bytes, frames, sopClassUid}]}`.
+- **Errors:** an unknown key is a 400. The output directory is created fresh, and a failed conversion removes it.
+
+### Browser preview and leaving series out
+
+**Browser preview.**
+
+- The browser reads the series list from the file's chunk directory with `File.slice`, never the whole file. It produces exactly `describe_e2e`'s list: the same `seriesKey`, order, `seriesModality`, laterality, `acquiredAt` and frames.
+- **The label it reads** is `headerLabel`, from the surname slot only, under the same token rule.
+- **Thumbnails, one per series:**
+  - en-face: the raw 8-bit pixels of the series' first image;
+  - OCT volume: its IR localizer;
+  - OCT line scan: the B-scan, decoded from UFloat16 with oct-converter's log curve.
+- **Before upload,** the row lists the series per eye, each with a checkbox. The user can untick series.
+
+**Leaving series out.**
+
+- The commit sends `excludeSeries` (comma-separated `seriesKey`s). The server checks every key against its own `describe`, and an unknown key is a 400 with nothing stored. Excluded series are not converted, not stored and not itemised.
+- If every series is excluded, the commit is a 400 and nothing is stored.
+- The response lists `excluded`.
+
+**Parity.**
+
+- Shared synthetic fixtures live in `testdata/e2e-synthetic/` (`*.e2e` built by `muw-e2e-converter/tests/e2e_synth.py`, with the expected `describe_e2e` output as `*.describe.json`). They contain no real data.
+- The Python suite and the SPA suite both assert their parser against these files, so the browser and the server cannot drift apart.
+
+**Typed responses.** The split commit and preflight return typed DTOs, so `api.ts` generates their types and the SPA uses the generated ones.
