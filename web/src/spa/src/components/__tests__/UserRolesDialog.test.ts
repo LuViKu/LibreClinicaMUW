@@ -35,7 +35,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiGet, apiPut } from '@/api/client'
+import { ApiError, apiGet, apiPut } from '@/api/client'
 import UserRolesDialog from '@/components/UserRolesDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUsersStore } from '@/stores/users'
@@ -339,6 +339,124 @@ describe('UserRolesDialog — system administrator', () => {
     expect(offered).toEqual(['S9', 'S9_A'])
     const labels = Array.from(picker.options).map((o) => o.textContent?.trim())
     expect(labels).toContain('Unbound Study › Site A')
+    wrapper.unmount()
+  })
+})
+
+/**
+ * A study-wide role and site roles in one study tree do not go together:
+ * the picker greys out the overlapping choices and says why, a site card
+ * names its study, and a 409 from the server is shown.
+ */
+describe('UserRolesDialog — no overlapping study and site roles', () => {
+  const ADMIN_STUDIES = [
+    { oid: 'S_HAE', name: 'HealthAEye', uniqueIdentifier: 'hae', principalInvestigator: 'PI', createdDate: null,
+      status: 'AVAILABLE', parentOid: null, sites: [
+        { oid: 'S_HAEVIE', name: 'Wien', uniqueIdentifier: 'hae-vie', principalInvestigator: 'PI',
+          createdDate: null, status: 'AVAILABLE', parentOid: 'S_HAE', sites: [] },
+        { oid: 'S_HAEGRZ', name: 'Graz', uniqueIdentifier: 'hae-grz', principalInvestigator: 'PI',
+          createdDate: null, status: 'AVAILABLE', parentOid: 'S_HAE', sites: [] },
+      ] },
+    { oid: 'S_NAMD', name: 'nAMD', uniqueIdentifier: 'namd', principalInvestigator: 'PI', createdDate: null,
+      status: 'AVAILABLE', parentOid: null, sites: [
+        { oid: 'S_NAMDVIE', name: 'Wien', uniqueIdentifier: 'namd-vie', principalInvestigator: 'PI',
+          createdDate: null, status: 'AVAILABLE', parentOid: 'S_NAMD', sites: [] },
+      ] },
+  ]
+  const STUDY_WIDE_HAE: RoleBinding = {
+    studyId: 10, studyOid: 'S_HAE', studyName: 'HealthAEye', siteLabel: null, role: 'Investigator',
+    active: true, parentStudyName: null,
+  }
+  const SITE_NAMD_VIE: RoleBinding = {
+    studyId: 21, studyOid: 'S_NAMDVIE', studyName: 'Wien', siteLabel: 'Wien', role: 'CRC',
+    active: true, parentStudyName: 'nAMD',
+  }
+
+  let roles: RoleBinding[] = []
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedAuth()
+    const auth = useAuthStore()
+    auth.user = { username: 'admin', role: 'Administrator', userType: 'SYSADMIN' } as unknown as ReturnType<
+      typeof useAuthStore
+    >['user']
+    roles = [STUDY_WIDE_HAE, SITE_NAMD_VIE]
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPut).mockReset()
+    vi.mocked(apiGet).mockImplementation(async (path: string) => {
+      if (path === '/pages/api/v1/admin/studies') return ADMIN_STUDIES
+      if (path === '/pages/api/v1/users/alice/roles') return roles
+      throw new Error(`unexpected GET ${path}`)
+    })
+  })
+
+  function option(value: string): HTMLOptionElement {
+    const picker = document.body.querySelector('#add-role-study') as HTMLSelectElement
+    return Array.from(picker.options).find((o) => o.value === value)!
+  }
+
+  it('greys out the sites of a study the user holds a study-wide role in, and a study with site roles', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    expect(option('S_HAEVIE').disabled).toBe(true)
+    expect(option('S_HAEVIE').textContent).toContain('Holds a study-wide role – it covers all sites')
+    expect(option('S_HAEGRZ').disabled).toBe(true)
+    expect(option('S_NAMD').disabled).toBe(true)
+    expect(option('S_NAMD').textContent).toContain('Holds roles at its sites – remove those first')
+    wrapper.unmount()
+  })
+
+  it('leaves the other choices open', async () => {
+    roles = [SITE_NAMD_VIE]
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    expect(option('S_HAE').disabled).toBe(false)
+    expect(option('S_HAEVIE').disabled).toBe(false)
+    expect(option('S_HAEVIE').textContent?.trim()).toBe('HealthAEye › Wien')
+    wrapper.unmount()
+  })
+
+  it('names the study of a site on its card', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const card = document.body.querySelector('[data-testid="role-row-S_NAMDVIE"]') as HTMLElement
+    expect(card.textContent).toContain('nAMD › Wien')
+    const wide = document.body.querySelector('[data-testid="role-row-S_HAE"]') as HTMLElement
+    expect(wide.textContent).toContain('HealthAEye')
+    expect(wide.textContent).not.toContain('›')
+    wrapper.unmount()
+  })
+
+  it('shows the server refusal when a grant overlaps', async () => {
+    roles = []
+    vi.mocked(apiPut).mockRejectedValueOnce(new ApiError(409, 'Conflict', {
+      message: 'alice already has a study-wide role in HealthAEye; it covers all its sites',
+    }))
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const picker = document.body.querySelector('#add-role-study') as HTMLSelectElement
+    picker.value = 'S_HAEVIE'
+    picker.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+    const invBox = checkboxFor('Investigator')!
+    invBox.checked = true
+    invBox.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+    const buttons = Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
+    buttons.find((b) => b.textContent?.trim() === 'Add study')!.click()
+    await flushPromises()
+
+    expect(document.body.textContent).toContain(
+      'alice already has a study-wide role in HealthAEye; it covers all its sites')
     wrapper.unmount()
   })
 })

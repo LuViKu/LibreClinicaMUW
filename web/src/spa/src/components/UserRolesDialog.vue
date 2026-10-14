@@ -12,6 +12,7 @@ import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStudiesStore } from '@/stores/adminStudies'
 import { useConfirm } from '@/composables/useConfirm'
+import type { StudyOption } from '@/types/auth'
 import type { LegacyRole, RoleBinding, StudyUser, UserRole } from '@/types/user'
 
 /**
@@ -35,6 +36,12 @@ import type { LegacyRole, RoleBinding, StudyUser, UserRole } from '@/types/user'
  * page; `auth.availableStudies` holds only the studies the administrator
  * is bound to, which for an administrator without study roles is none.
  * Anyone else is refused by the server anyway, and keeps the old list.
+ *
+ * A user holds either a study-wide role or site roles in one study tree,
+ * never both (the server refuses the overlap with 409): the picker greys
+ * out a site whose parent the user is bound to, and a parent at whose
+ * sites the user holds roles, and says why. Overlaps from before the rule
+ * stay as they are.
  *
  * The legacy data entry roles `ra` and `ra2` cannot be granted here. The
  * server projects them as Investigator; a binding that holds one says so
@@ -120,8 +127,11 @@ watch(
 
 interface StudyGroup {
   studyOid: string
+  /** "Parent › Site" for a site, else the study's name. */
   studyLabel: string
   siteLabel: string | null
+  /** Name of the parent study for a site binding, else null. */
+  parentStudyName: string | null
   roles: UserRole[]
   /** Legacy data entry roles held on the study; never counted in `roles`. */
   legacyRoles: LegacyRole[]
@@ -137,8 +147,11 @@ const bindingsByStudy = computed<StudyGroup[]>(() => {
     if (!group) {
       group = {
         studyOid: b.studyOid,
-        studyLabel: b.studyName ?? b.studyOid,
+        studyLabel: b.parentStudyName
+          ? `${b.parentStudyName} › ${b.studyName ?? b.studyOid}`
+          : (b.studyName ?? b.studyOid),
         siteLabel: b.siteLabel,
+        parentStudyName: b.parentStudyName ?? null,
         roles: [],
         legacyRoles: [],
       }
@@ -153,13 +166,50 @@ const bindingsByStudy = computed<StudyGroup[]>(() => {
   return Array.from(map.values())
 })
 
+const grantSource = computed<StudyOption[]>(() =>
+  auth.isSysAdmin && !adminStudies.error ? adminStudies.openable : auth.availableStudies,
+)
+
 /* Studies the admin may add — exclude any the user already has any
    active binding for. */
 const availableForGrant = computed(() => {
   const taken = new Set(bindingsByStudy.value.map((g) => g.studyOid))
-  const source = auth.isSysAdmin && !adminStudies.error ? adminStudies.openable : auth.availableStudies
-  return source.filter((s) => !taken.has(s.oid))
+  return grantSource.value.filter((s) => !taken.has(s.oid))
 })
+
+/**
+ * Why a study cannot be added, or null when it can: a site whose parent
+ * the user holds a study-wide role on, or a parent at whose sites the user
+ * holds roles. A binding's parent is found through the study list, or by
+ * the parent name the binding carries when the list does not hold it.
+ */
+const overlapReason = computed<Map<string, string>>(() => {
+  const byOid = new Map(grantSource.value.map((s) => [s.oid, s]))
+  const boundOids = new Set<string>()
+  const parentsWithSiteRoles = new Set<string>()
+  const parentNamesWithSiteRoles = new Set<string>()
+  for (const g of bindingsByStudy.value) {
+    boundOids.add(g.studyOid)
+    const parentOid = byOid.get(g.studyOid)?.parentOid
+    if (parentOid) parentsWithSiteRoles.add(parentOid)
+    else if (g.parentStudyName) parentNamesWithSiteRoles.add(g.parentStudyName)
+  }
+  const out = new Map<string, string>()
+  for (const s of availableForGrant.value) {
+    if (s.parentOid) {
+      if (boundOids.has(s.parentOid)) out.set(s.oid, t('manageUsers.roles.overlapStudyWide'))
+    } else if (parentsWithSiteRoles.has(s.oid) || parentNamesWithSiteRoles.has(s.name)) {
+      out.set(s.oid, t('manageUsers.roles.overlapSites'))
+    }
+  }
+  return out
+})
+
+function grantOptionLabel(s: StudyOption): string {
+  const name = s.parentName ? `${s.parentName} › ${s.name}` : s.name
+  const reason = overlapReason.value.get(s.oid)
+  return reason ? `${name} (${reason})` : name
+}
 
 /** Effective selected roles for a study group — local edits win
  *  over the persisted set. */
@@ -339,7 +389,6 @@ function close() {
                 </div>
                 <div class="text-xs text-slate-500">
                   <span>{{ group.studyOid }}</span>
-                  <span v-if="group.siteLabel"> · {{ group.siteLabel }}</span>
                 </div>
               </div>
               <button
@@ -428,8 +477,13 @@ function close() {
             <FieldLabel for="add-role-study" required>{{ t('manageUsers.roles.study') }}</FieldLabel>
             <SelectInput id="add-role-study" v-model="addStudyOid" :disabled="isSubmitting">
               <option value="">{{ t('manageUsers.roles.studyPlaceholder') }}</option>
-              <option v-for="s in availableForGrant" :key="s.oid" :value="s.oid">
-                {{ s.parentName ? `${s.parentName} › ${s.name}` : s.name }}
+              <option
+                v-for="s in availableForGrant"
+                :key="s.oid"
+                :value="s.oid"
+                :disabled="overlapReason.has(s.oid)"
+              >
+                {{ grantOptionLabel(s) }}
               </option>
             </SelectInput>
           </div>
