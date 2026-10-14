@@ -260,7 +260,8 @@ public class MeApiController {
                     protocolTypeKey,
                     enabledModules,
                     studySettings,
-                    permissionsOf(ClinicalWriteAuthorization.roleIdOf(session))
+                    permissionsOf(ClinicalWriteAuthorization.roleIdOf(session)),
+                    parentOidOf(currentStudy)
             );
         }
 
@@ -990,5 +991,17 @@ public class MeApiController {
         static PasswordChangeRequirement none()       { return new PasswordChangeRequirement(false, null); }
         static PasswordChangeRequirement firstLogin() { return new PasswordChangeRequirement(true,  MeDto.REASON_FIRST_LOGIN); }
         static PasswordChangeRequirement rotation()   { return new PasswordChangeRequirement(true,  MeDto.REASON_ROTATION); }
+    }
+
+    /** The parent study's OID of a site; null for a top-level study or one whose parent cannot be read. */
+    private String parentOidOf(StudyBean study) {
+        if (study.getParentStudyId() <= 0) return null;
+        try {
+            StudyBean parent = new StudyDAO(dataSource).findByPK(study.getParentStudyId());
+            return parent == null || parent.getId() == 0 ? null : parent.getOid();
+        } catch (Exception e) {
+            LOG.warn("Failed to read the parent of study={}: {}", study.getOid(), e.getMessage());
+            return null;
+        }
     }
 }

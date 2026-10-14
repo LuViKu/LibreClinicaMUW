@@ -85,6 +85,7 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
                         .content("{\"oid\":\"S_PICK_IT\"}").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeStudy.oid").value("S_PICK_IT"))
+                .andExpect(jsonPath("$.activeStudy.parentOid").doesNotExist())
                 .andExpect(jsonPath("$.role").value("Administrator"))
                 .andExpect(jsonPath("$.userType").value("SYSADMIN"));
 
@@ -100,7 +101,10 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
         mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
                         .content("{\"oid\":\"S_PICK_IT_A\"}").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.activeStudy.oid").value("S_PICK_IT_A"));
+                .andExpect(jsonPath("$.activeStudy.oid").value("S_PICK_IT_A"))
+                // The study design lives at the parent; the SPA reads it there.
+                .andExpect(jsonPath("$.activeStudy.isSite").value(true))
+                .andExpect(jsonPath("$.activeStudy.parentOid").value("S_PICK_IT"));
         assertEquals(site, ((StudyBean) Objects.requireNonNull(session.getAttribute("study"))).getId());
         assertEquals(Role.STUDYDIRECTOR, ((StudyUserRoleBean) Objects.requireNonNull(session.getAttribute("userRole"))).getRole());
     }

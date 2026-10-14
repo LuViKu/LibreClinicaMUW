@@ -4919,6 +4919,7 @@ export interface components {
                 [key: string]: string;
             };
             permissions?: components["schemas"]["PermissionsDto"];
+            parentOid?: string;
         };
         ManageableLocationDto: {
             /** Format: int32 */
