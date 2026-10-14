@@ -175,8 +175,14 @@ export interface ProfileFieldError {
  * has not yet been re-run against the M1 backend changes.
  */
 export type ActiveStudySummary =
-  Required<components['schemas']['ActiveStudyDto']>
+  Required<Omit<components['schemas']['ActiveStudyDto'], 'parentOid'>>
   & {
+    /**
+     * The parent study's OID when the active study is a site, else null
+     * (absent from an older server). The study design (visit definitions)
+     * is read at the parent: its endpoints answer 409 for a site.
+     */
+    parentOid?: string | null
     /**
      * Single-role projection of the binding the user holds in this
      * study. Optional because the M1 wire shape does not yet emit it

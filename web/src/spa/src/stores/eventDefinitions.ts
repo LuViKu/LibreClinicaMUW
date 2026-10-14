@@ -30,6 +30,8 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
   const rows = ref<EventDefinition[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  /** The study the rows were loaded for; a list for another study is not reused. */
+  const loadedFor = ref<string | null>(null)
 
   async function load(studyOid: string): Promise<void> {
     isLoading.value = true
@@ -38,8 +40,10 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
       rows.value = await apiGet<EventDefinition[]>(
         `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions`,
       )
+      loadedFor.value = studyOid
     } catch (e) {
       rows.value = []
+      loadedFor.value = null
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
         throw e
       }
@@ -265,7 +269,14 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
    * doesn't show study-A event definitions on study B's view. Called
    * by {@link useAuthStore.pickStudy} before re-bootstrapping.
    */
+  /** Loads the study's definitions unless they are already the ones held. */
+  async function ensure(studyOid: string): Promise<void> {
+    if (!studyOid || (loadedFor.value === studyOid && !error.value)) return
+    await load(studyOid)
+  }
+
   function reset() {
+    loadedFor.value = null
     rows.value = []
     isLoading.value = false
     error.value = null
@@ -381,6 +392,8 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
   }
 
   return {
+    loadedFor,
+    ensure,
     rows,
     isLoading,
     error,
