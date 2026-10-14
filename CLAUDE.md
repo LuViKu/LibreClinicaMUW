@@ -20,7 +20,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.5.0-beta.18-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.19-muw` | continues with `-muw` suffix |
 
 ## Build & run
 
@@ -55,7 +55,7 @@ cd /build && mvn "$@"
 
 mounting the worktree read-only at `/src` and `.m2-cache` at `/root/.m2`.
 
-Unit tests run by default (`mvn test`). As of 1.5.0-beta.18-muw (2026-10-13): **core 574, web 1540**. To skip: `mvn -DskipTests=true …` for fast iteration.
+Unit tests run by default (`mvn test`). As of 1.5.0-beta.19-muw (2026-10-13): **core 574, web 1540**. To skip: `mvn -DskipTests=true …` for fast iteration.
 
 Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
