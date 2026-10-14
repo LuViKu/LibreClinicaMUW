@@ -2419,6 +2419,7 @@
     "editRow": "Edit",
     "onlyActive": "Active only",
     "studyWide": "Study-wide",
+    "studyWideScope": "{study} (study-wide)",
     "activeYes": "Active",
     "activeNo": "Inactive",
     "role": {
@@ -2452,9 +2453,12 @@
       "email": "Email",
       "phone": "Phone",
       "affiliation": "Institutional affiliation",
-      "role": "Initial role on this study",
+      "role": "Initial role",
       "submit": "Create user",
-      "studyMissing": "Pick an active study before inviting a user.",
+      "study": "Study / site",
+      "studyPlaceholder": "Select a study or site…",
+      "studyRequired": "Select a study or site.",
+      "studyNone": "There is no study you can grant a role on.",
       "emailNotWiredNote": "Welcome email delivery is not yet wired — copy the one-time password and share it with the new user via a secure channel.",
       "ssoNotWiredNote": "No password is generated. After submit, the user signs in via the institutional SSO portal — make sure their institutional identity is provisioned at the IdP.",
       "successIntro": "User created. Share this one-time password with the new user; they will be required to change it on first login.",
@@ -2534,7 +2538,9 @@
         "ra": "Data Entry Person (legacy)",
         "ra2": "Data Entry Person 2 (legacy)"
       },
-      "legacyHint": "Legacy role: saving the row keeps it. Untick it to remove it; it cannot be granted again here."
+      "legacyHint": "Legacy role: saving the row keeps it. Untick it to remove it; it cannot be granted again here.",
+      "overlapStudyWide": "Holds a study-wide role – it covers all sites",
+      "overlapSites": "Holds roles at its sites – remove those first"
     },
     "userType": {
       "label": "Account type",
