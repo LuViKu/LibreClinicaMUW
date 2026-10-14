@@ -4486,6 +4486,8 @@ export interface components {
             ownerUsername?: string;
             updatedDate?: string;
             updaterUsername?: string;
+            /** @description Every active binding of the user, one label each: the study's name for a study-wide binding, "Study › Site" for a site. Filled on the user list only. */
+            scopes?: string[];
         };
         RoleAssignmentRequest: {
             studyOid?: string;
@@ -4506,6 +4508,8 @@ export interface components {
              * @enum {string|null}
              */
             legacyRole?: "ra" | "ra2" | null;
+            /** @description Name of the parent study when the binding is on a site; null for a study-wide binding. */
+            parentStudyName?: string | null;
         };
         UploaderWriteRequest: {
             /**
@@ -5151,6 +5155,8 @@ export interface components {
             runWebservices?: boolean;
             sendEmail?: boolean;
             externalId?: string;
+            /** @description OID of the study or site of the initial binding; an alternative to studyId. One of the two is required, and when both are given they must name the same study. */
+            studyOid?: string | null;
         };
         UnlockUserRequest: {
             sendEmail?: boolean;
@@ -6520,6 +6526,8 @@ export interface components {
             studyEye?: string;
             enrolledOn?: string;
             lastVisitAt?: string;
+            /** @description Name of the parent study when the enrolment sits on a site; null for a top-level study. */
+            parentStudyName?: string | null;
         };
         PatientsListResponse: {
             /** Format: int64 */
