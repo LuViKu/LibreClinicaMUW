@@ -49,7 +49,15 @@ LOG = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_STORED_NAME_RE = re.compile(r"[A-Za-z0-9-]+\.e2e", re.IGNORECASE)
+_STORED_NAME_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def _is_stored_name(name: str | None) -> bool:
+    """A bare ``<letters, digits, hyphens>.e2e`` name; checked without a regex and length-capped."""
+    if not name or len(name) > 128 or not name.lower().endswith(".e2e"):
+        return False
+    stem = name[:-4]
+    return bool(stem) and all(c in _STORED_NAME_CHARS for c in stem)
 _SERIES_KEY_RE = re.compile(r"s[0-9]{1,6}")
 
 
@@ -82,7 +90,7 @@ def _check_enabled() -> None:
 
 def _stored_file(stored_name: str) -> Path:
     """The stored file below the upload directory; 400 for a bad name, 404 when absent."""
-    if not _STORED_NAME_RE.fullmatch(stored_name or ""):
+    if not _is_stored_name(stored_name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="storedName must be a bare file name like <uuid>.e2e",

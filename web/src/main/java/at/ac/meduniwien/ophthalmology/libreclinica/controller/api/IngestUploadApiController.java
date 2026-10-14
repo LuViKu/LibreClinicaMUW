@@ -38,6 +38,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -193,8 +195,10 @@ public class IngestUploadApiController {
     @GetMapping(value = "/preflight", params = "split=true", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(operationId = "preflightSplitStaffUpload",
             summary = "Is this multimodal .e2e already split into one item per series?")
+    @Parameter(name = "split", in = ParameterIn.QUERY, required = true,
+            description = "Must be true: the export is split into one item per series (DR-041).",
+            schema = @Schema(type = "boolean", allowableValues = "true"))
     public E2eSplitPreflightResponse preflightSplitStaffUpload(@RequestParam("sha256") String sha256,
-                                                               @RequestParam("split") boolean split,
                                                                HttpSession session) {
         ResponseEntity<?> guard = guards(session);
         if (guard != null) throw SplitUploadRejection.from(guard);
@@ -328,9 +332,11 @@ public class IngestUploadApiController {
                         content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
                 @ApiResponse(responseCode = "503", description = "The converter or the DICOM service is not configured or not reachable.",
                         content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class)))})
+    @Parameter(name = "split", in = ParameterIn.QUERY, required = true,
+            description = "Must be true: the export is split into one item per series (DR-041).",
+            schema = @Schema(type = "boolean", allowableValues = "true"))
     public E2eSplitCommitResponse commitSplitStaffUpload(
             @RequestPart("file") MultipartFile file,
-            @RequestParam("split") boolean split,
             @RequestParam(value = "patientId", required = false) String patientId,
             @RequestParam(value = "scanDate", required = false) String scanDate,
             @RequestParam(value = "studyDate", required = false) String studyDate,

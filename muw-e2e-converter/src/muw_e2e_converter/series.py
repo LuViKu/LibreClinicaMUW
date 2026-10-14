@@ -25,6 +25,7 @@ Design notes:
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 import struct
@@ -39,6 +40,8 @@ import numpy as np
 from oct_converter.readers import E2E
 from oct_converter.readers.binary_structs import e2e_binary as _eb
 from PIL import Image
+
+LOG = logging.getLogger(__name__)
 
 __all__ = ["SERIES_MODALITY_ORDER", "describe_e2e", "render_series_png"]
 
@@ -243,16 +246,16 @@ def _scan(path: Path) -> _Index:
                     try:
                         parsed = _eb.device_name.parse(f.read(min(chunk.size, _TEXT_CHUNK_CAP)))
                         device_name = _text(parsed, 0)
-                    except Exception:
-                        pass
+                    except Exception:  # an unreadable device-name chunk only leaves the name unset
+                        LOG.debug("device-name chunk not readable", exc_info=True)
             elif ctype == _CHUNK_EXAMINED:
                 if series.examined is None:
                     try:
                         parsed = _eb.examined_structure.parse(
                             f.read(min(chunk.size, _TEXT_CHUNK_CAP)))
                         series.examined = _text(parsed, 0)
-                    except Exception:
-                        pass
+                    except Exception:  # an unreadable examined-structure chunk only leaves it unset
+                        LOG.debug("examined-structure chunk not readable", exc_info=True)
             elif ctype in _CHUNK_DEVICE_STRINGS:
                 # oct-converter takes the FIRST such chunk's value, even when it is empty
                 if not device_model_seen:

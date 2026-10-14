@@ -31,6 +31,7 @@ from __future__ import annotations
 import gc
 import hashlib
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -324,6 +325,15 @@ def _verify(path: Path, *, frames: int, rows: int, cols: int, bits: int, pixel_s
         raise RuntimeError("written DICOM patient identity is not the label")
 
 
+
+def _inside(root: Path, name: str) -> Path:
+    """``root/name`` for a bare output name, refusing anything that would leave ``root``."""
+    base = os.path.realpath(root)
+    target = os.path.normpath(os.path.join(base, name))
+    if not target.startswith(base + os.sep):
+        raise ValueError("output name leaves the output directory")
+    return Path(target)
+
 def convert_series(
     path: str | Path,
     label: str | None,
@@ -357,7 +367,7 @@ def convert_series(
 
     name = clean_label(label)
     sha = (source_sha256 or _file_sha256(p)).lower()
-    out = Path(out_dir)
+    out = Path(os.path.realpath(out_dir))
     out.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
 
@@ -365,7 +375,7 @@ def convert_series(
         d = idx.by_key[key]
         s = d.series
         seed = f"{sha}|{key}"
-        dcm = out / f"{key}.dcm"
+        dcm = _inside(out, f"{key}.dcm")
         entry: dict[str, Any] = {"seriesKey": key, "file": dcm.name, "seriesModality": d.modality}
 
         if d.modality in ("OCT", "OCT_LINE"):
@@ -385,7 +395,7 @@ def convert_series(
                                       e2e_path=None, scan_index=int(d.oct_index or 0))
                 geom["source_format"] = "e2e"
                 geom["spacing_order"] = "standard"  # our writer: [axial, lateral]
-                geo = out / f"{key}.geometry.json"
+                geo = _inside(out, f"{key}.geometry.json")
                 geo.write_text(json.dumps(geom, indent=2, sort_keys=True), encoding="utf-8")
                 entry["geometryFile"] = geo.name
                 del ds

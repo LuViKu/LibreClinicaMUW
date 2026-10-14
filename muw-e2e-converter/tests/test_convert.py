@@ -285,3 +285,21 @@ def test_truncated_file_series_is_not_offered(tmp_path: Path) -> None:
     keys = [s["seriesKey"] for s in describe_e2e(path)["series"]]
     out = convert_series(path, LABEL, keys, tmp_path / "o")
     assert len(out) == len(keys)
+
+
+def test_a_malformed_series_key_is_refused_before_anything_is_written(tmp_path):
+    from muw_e2e_converter.convert import convert_series
+
+    out = tmp_path / "out"
+    with pytest.raises(ValueError):
+        convert_series(tmp_path / "missing.e2e", "EIAMD005", ["../evil"], out)
+    assert not out.exists()
+
+
+def test_output_names_cannot_leave_the_output_directory(tmp_path):
+    from muw_e2e_converter.convert import _inside
+
+    assert _inside(tmp_path, "s1.dcm") == tmp_path.resolve() / "s1.dcm"
+    for bad in ("../s1.dcm", "/etc/passwd", "a/../../s1.dcm"):
+        with pytest.raises(ValueError):
+            _inside(tmp_path, bad)

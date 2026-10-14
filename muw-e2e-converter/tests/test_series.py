@@ -233,4 +233,5 @@ def test_png_carries_no_metadata(e2e: Path) -> None:
             chunks.append(data[pos + 4:pos + 8])
             pos += 12 + length
         assert set(chunks) <= {b"IHDR", b"IDAT", b"IEND"}, chunks
-        assert Image.open(io.BytesIO(data)).info == {}
+        info = Image.open(io.BytesIO(data)).info
+        assert info == {}
