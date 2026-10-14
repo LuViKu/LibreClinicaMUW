@@ -161,7 +161,7 @@ Stop the service and start the previous image tag (set `--image-tag` back to the
 
 ## Still open at this release
 
-- **CI results:** to be filled in from the CI run on the release commit.
+- **CI results.** CI run [38633669190](https://github.com/LuViKu/LibreClinicaMUW/actions/runs/38633669190) on `bc5af01ff` (lc-develop after #433) passed all seven jobs: Maven build and unit tests (core 591, web 1,541), integration tests on PostgreSQL 14 and 17 (web integration profile 4,613, core 671), the compose smoke test (`api.ts` against the live spec, no drift; E2E smoke 28, accessibility 17, DICOM 4), the SPA (2,598 vitest tests, 4 skipped) and the three Python sidecar suites (muw-e2e-converter 83, dicom-scp 107, retinal-inference 338). CodeQL and the security scan passed on the same commit.
 - **The drusen study is not configured yet.** Its visits, a catalogue entry per series type with its `e2e_series` token, and the CRF items for "performed" are study-team work. Until then its series wait in the inbox.
 - **OCT contrast.** `oct-converter` log-compresses OCT intensities, which is not Heyex's display curve, so OCT images look flatter than in Heyex. Analysis keeps 16-bit precision. Whether the models expect another intensity scaling needs a comparison with a Heyex DICOM export of the same scan. See [heidelberg-e2e-format-notes.md](../development/heidelberg-e2e-format-notes.md).
 - **Development setup only.** The DICOM sidecar needs the same token in `DICOM_SCP_INGEST_TOKEN` and `core.dicom.ingest.token`. The shipped development `datainfo.properties` leaves it blank. Production is not affected: with `--dicom`, the setup script pairs the two.
