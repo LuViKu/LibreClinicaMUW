@@ -366,7 +366,7 @@ class JsonWireContractTest {
         @GetMapping("/contract/non-null")
         StudyUserDto nonNull() {
             return new StudyUserDto("7", "u", null, null, null, null, null, null, null, true, false,
-                    null, null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null);
         }
 
         @GetMapping("/contract/non-null-audit")

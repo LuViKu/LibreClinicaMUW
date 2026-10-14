@@ -489,6 +489,7 @@ public class PatientsApiController {
                 + "       ss.study_subject_id AS ssid, "
                 + "       s.oc_oid AS study_oid, "
                 + "       s.name AS study_name, "
+                + "       ps.name AS parent_study_name, "
                 + "       ss.label AS label, "
                 + "       ss.study_eye AS study_eye, "
                 + "       ss.enrollment_date AS enrolled_on, "
@@ -496,6 +497,7 @@ public class PatientsApiController {
                 + "         WHERE se.study_subject_id = ss.study_subject_id) AS last_visit_at "
                 + "  FROM study_subject ss "
                 + "  JOIN study s ON s.study_id = ss.study_id "
+                + "  LEFT JOIN study ps ON ps.study_id = s.parent_study_id "
                 + " WHERE ss.subject_id IN " + subIn
                 + "   AND ss.study_id IN " + studyIn
                 + " ORDER BY ss.subject_id ASC, ss.enrollment_date ASC NULLS LAST, ss.study_subject_id ASC";
@@ -514,7 +516,8 @@ public class PatientsApiController {
                             rs.getString("label"),
                             rs.getString("study_eye"),
                             enrDate == null ? null : enrDate.toLocalDate().toString(),
-                            lastVisit == null ? null : lastVisit.toInstant().toString());
+                            lastVisit == null ? null : lastVisit.toInstant().toString(),
+                            rs.getString("parent_study_name"));
                     out.computeIfAbsent(sid, _ -> new ArrayList<>()).add(e);
                 }
             }

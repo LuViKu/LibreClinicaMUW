@@ -195,6 +195,38 @@ class PatientsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     /* =============================================================== */
+    /* 200 — a site enrolment names the study the site belongs to       */
+    /* =============================================================== */
+
+    @Test
+    void siteEnrolmentCarriesItsParentStudyName() throws Exception {
+        // M-004 (subject_id=4) sits on study #1; add an enrolment on the
+        // site under it.
+        addEnrolment(secondStudyId, 4, "M-004-GA", "OS");
+        String parentName = studyName(1);
+
+        for (String url : new String[] {"/api/v1/patients/4", "/api/v1/patients?pageSize=100"}) {
+            mockMvc().perform(get(url).session(adminSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$..enrolments[?(@.studyOid=='" + SECOND_STUDY_OID
+                            + "' && @.label=='M-004-GA')].parentStudyName").value(Matchers.hasItem(parentName)))
+                    .andExpect(jsonPath("$..enrolments[?(@.studyOid=='S_DEFAULTS1')]"
+                            + ".parentStudyName").value(Matchers.everyItem(Matchers.nullValue())));
+        }
+    }
+
+    private static String studyName(int studyId) throws SQLException {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement("SELECT name FROM study WHERE study_id = ?")) {
+            ps.setInt(1, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        }
+    }
+
+    /* =============================================================== */
     /* 200 — measurements ordered by date with numericValue coerced     */
     /* =============================================================== */
 

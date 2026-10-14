@@ -122,6 +122,14 @@ function openRoles(u: StudyUser) {
   rolesOpen.value = true
 }
 
+/**
+ * One scope of the Prüfzentrum column. The server sends "Study › Site" for
+ * a site binding and the study's name for a study-wide one, which says so.
+ */
+function scopeLabel(scope: string): string {
+  return scope.includes('›') ? scope : t('manageUsers.studyWideScope', { study: scope })
+}
+
 function roleVariant(r: UserRole): 'investigator' | 'monitor' | 'data-manager' | 'neutral' {
   switch (r) {
     case 'Investigator':  return 'investigator'
@@ -287,7 +295,13 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
           <td class="px-3 py-2">
             <StatusPill :variant="u.legacyRole ? 'neutral' : roleVariant(u.role)">{{ t(userRoleLabelKey(u)) }}</StatusPill>
           </td>
-          <td class="px-3 py-2 text-slate-600">{{ u.siteLabel ?? t('manageUsers.studyWide') }}</td>
+          <td class="px-3 py-2 text-slate-600 text-xs" :data-testid="`user-scopes-${u.username}`">
+            <template v-if="u.scopes">
+              <div v-for="scope in u.scopes" :key="scope">{{ scopeLabel(scope) }}</div>
+              <span v-if="u.scopes.length === 0" class="text-slate-400">—</span>
+            </template>
+            <template v-else>{{ u.siteLabel ?? t('manageUsers.studyWide') }}</template>
+          </td>
           <td class="px-3 py-2">
             <StatusPill :variant="authVariant(u.auth)">{{ t(`manageUsers.auth.${u.auth}`) }}</StatusPill>
           </td>

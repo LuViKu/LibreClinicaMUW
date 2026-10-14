@@ -205,6 +205,10 @@ public class UsersApiController {
         // user_id → best-row-so-far. The best row is the one whose
         // projected SPA role ranks highest in ROLE_PRIORITY.
         Map<Integer, StudyUserDto> bestByUser = new LinkedHashMap<>();
+        // user_id → the labels of every active binding the caller may see,
+        // whatever the role / site filters keep: the Prüfzentrum column
+        // lists them all, not just the best row's.
+        Map<Integer, java.util.TreeSet<String>> scopesByUser = new HashMap<>();
 
         for (StudyUserRoleBean sur : bindings) {
             // A4 — skip bindings outside the visible study tree. For
@@ -241,6 +245,11 @@ public class UsersApiController {
                 legacyRole = null;
             }
             String siteLabel = roleStudy != null && roleStudy.getParentStudyId() > 0 ? roleStudy.getName() : null;
+            java.util.TreeSet<String> userScopes = scopesByUser.computeIfAbsent(ua.getId(),
+                    id -> new java.util.TreeSet<>());
+            if (roleStudy != null && roleStudy.getId() > 0) {
+                userScopes.add(scopeLabel(roleStudy, studyCache, studyDao));
+            }
             String auth = authForUser(ua);
             String lastLogin = ua.getLastVisitDate() == null ? null
                     : java.time.Instant.ofEpochMilli(ua.getLastVisitDate().getTime())
@@ -266,7 +275,26 @@ public class UsersApiController {
             }
         }
 
-        return ResponseEntity.ok(new ArrayList<>(bestByUser.values()));
+        List<StudyUserDto> out = new ArrayList<>(bestByUser.size());
+        for (Map.Entry<Integer, StudyUserDto> e : bestByUser.entrySet()) {
+            java.util.TreeSet<String> scopes = scopesByUser.get(e.getKey());
+            out.add(e.getValue().withScopes(scopes == null ? List.of() : new ArrayList<>(scopes)));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * What a binding on {@code study} covers, for the user list: the
+     * study's name for a study-wide binding, {@code "Parent › Site"} for a
+     * site.
+     */
+    private static String scopeLabel(StudyBean study, Map<Integer, StudyBean> studyCache, StudyDAO studyDao) {
+        if (study.getParentStudyId() <= 0) return study.getName();
+        StudyBean parent = studyCache.computeIfAbsent(study.getParentStudyId(),
+                id -> (StudyBean) studyDao.findByPK(id));
+        return parent == null || parent.getId() == 0
+                ? study.getName()
+                : parent.getName() + " \u203A " + study.getName();
     }
 
     /**
@@ -343,11 +371,9 @@ public class UsersApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        if (currentStudy == null || currentStudy.getId() == 0) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "message", "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
-        }
+        // The caller's active study plays no part: the request names the
+        // study of the initial binding (studyId or studyOid), so an
+        // administrator without an open study can create accounts too.
         if (!UserAdminAuthorization.roleMayAdministerUsers(me)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit user administration — sysadmin only"));
@@ -369,8 +395,9 @@ public class UsersApiController {
         // DAO-bound validation — uniqueness + study existence + role legality.
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean initialStudy = resolveInitialStudy(body, studyDao);
         List<ValidationErrorBody.FieldError> daoErrors =
-                validateCreateUserAgainstDb(body, userDao, studyDao);
+                validateCreateUserAgainstDb(body, initialStudy, userDao);
         if (!daoErrors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", daoErrors));
@@ -396,7 +423,7 @@ public class UsersApiController {
         }
 
         Role legacyRole = RoleMapper.fromSpaRole(body.role());
-        StudyBean initialStudy = (StudyBean) studyDao.findByPK(body.studyId());
+        int initialStudyId = initialStudy.getId();
 
         // Resolve user-type. Default USER. SYSADMIN allowed. TECHADMIN
         // requires the caller themselves be tech-admin (legacy parity).
@@ -463,12 +490,12 @@ public class UsersApiController {
         }
 
         StudyUserRoleBean initialBinding = new StudyUserRoleBean();
-        initialBinding.setStudyId(body.studyId());
+        initialBinding.setStudyId(initialStudyId);
         initialBinding.setRoleName(legacyRole.getName());
         initialBinding.setStatus(Status.AVAILABLE);
         initialBinding.setOwner(me);
         newUser.addRole(initialBinding);
-        newUser.setActiveStudyId(body.studyId());
+        newUser.setActiveStudyId(initialStudyId);
 
         UserAccountBean persisted = userDao.create(newUser);
         if (persisted == null || persisted.getId() == 0) {
@@ -485,14 +512,15 @@ public class UsersApiController {
         }
 
         LOG.info("Create user: username={} by admin={} initialStudy={} initialRole={}",
-                persisted.getName(), me.getName(), body.studyId(), legacyRole.getName());
+                persisted.getName(), me.getName(), initialStudyId, legacyRole.getName());
 
         String spaRole = RoleMapper.toSpaRole(legacyRole.getName());
         boolean isSite = initialStudy.getParentStudyId() > 0;
         String siteLabel = isSite ? initialStudy.getName() : null;
         UserAccountBean created = userDao.findByPK(persisted.getId());
         StudyUserDto dto = toStudyUserDto(created.getId() > 0 ? created : persisted, spaRole, null, siteLabel,
-                authForUser(persisted), null, true, false, new Usernames(userDao));
+                authForUser(persisted), null, true, false, new Usernames(userDao))
+                .withScopes(List.of(scopeLabel(initialStudy, new HashMap<>(), studyDao)));
 
         Map<String, Object> response = new HashMap<>();
         response.put("user", dto);
@@ -546,7 +574,12 @@ public class UsersApiController {
                     "phone", "Phone must be 64 characters or fewer"));
         }
 
-        if (body.studyId() == null || body.studyId() <= 0) {
+        // The initial binding's study is named by the caller, by id or by
+        // OID. There is no default: the caller's active study is not a
+        // stand-in for one it did not choose.
+        boolean hasStudyId = body.studyId() != null && body.studyId() > 0;
+        boolean hasStudyOid = body.studyOid() != null && !body.studyOid().isBlank();
+        if (!hasStudyId && !hasStudyOid) {
             out.add(new ValidationErrorBody.FieldError(
                     "studyId", "Initial studyId is required"));
         }
@@ -587,8 +620,19 @@ public class UsersApiController {
         return out;
     }
 
+    /**
+     * The study of the initial binding: the one {@code studyOid} names when
+     * given, else the one {@code studyId} names. Null when neither finds one.
+     */
+    private static StudyBean resolveInitialStudy(CreateUserRequest body, StudyDAO studyDao) {
+        StudyBean study = body.studyOid() != null && !body.studyOid().isBlank()
+                ? (StudyBean) studyDao.findByOid(body.studyOid().trim())
+                : (StudyBean) studyDao.findByPK(body.studyId());
+        return study == null || study.getId() == 0 ? null : study;
+    }
+
     private static List<ValidationErrorBody.FieldError> validateCreateUserAgainstDb(
-            CreateUserRequest body, UserAccountDAO userDao, StudyDAO studyDao) {
+            CreateUserRequest body, StudyBean study, UserAccountDAO userDao) {
 
         List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
@@ -598,10 +642,12 @@ public class UsersApiController {
                     "username", "Username already exists"));
         }
 
-        StudyBean study = (StudyBean) studyDao.findByPK(body.studyId());
-        if (study == null || study.getId() == 0) {
+        if (study == null) {
             out.add(new ValidationErrorBody.FieldError(
                     "studyId", "No study with that id"));
+        } else if (body.studyId() != null && body.studyId() > 0 && body.studyId() != study.getId()) {
+            out.add(new ValidationErrorBody.FieldError(
+                    "studyId", "studyId and studyOid name different studies"));
         } else {
             Role legacyRole = RoleMapper.fromSpaRole(body.role());
             if (legacyRole != null
@@ -934,6 +980,21 @@ public class UsersApiController {
                                     + "' cannot be granted at site level — assign at the parent study"))));
         }
 
+        // A new binding must not overlap one the user holds in the same
+        // study tree. A further role on a study the user is already bound
+        // to is no new binding and passes.
+        try {
+            if (activeRawRoles(username, study.getId()).isEmpty()) {
+                ResponseEntity<?> overlap = overlapRefusal(username, study, studyDao);
+                if (overlap != null) return overlap;
+            }
+        } catch (SQLException e) {
+            LOG.warn("Failed to read current grants for (study={}, user={}): {}",
+                    study.getId(), target.getName(), e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load current role grants"));
+        }
+
         // ra and ra2 project as Investigator (RoleMapper), so granting
         // Investigator next to one may be a client sending back the label it
         // was shown. That change goes through PUT, which has to say what
@@ -1077,6 +1138,49 @@ public class UsersApiController {
             }
         }
         return out;
+    }
+
+    /**
+     * The 409 that refuses a new binding of {@code username} on
+     * {@code study} because it would overlap another in the same study
+     * tree, or null when it would not. A study-wide role covers every
+     * site, so a site role next to one says nothing new, and a study-wide
+     * role next to site roles makes them meaningless. Only active rows
+     * count; bindings that already overlap are left as they are.
+     */
+    private ResponseEntity<?> overlapRefusal(String username, StudyBean study, StudyDAO studyDao)
+            throws SQLException {
+        if (study.getParentStudyId() > 0) {
+            if (!hasActiveRowOn(username,
+                    "SELECT 1 FROM study_user_role WHERE user_name = ? AND study_id = ? AND status_id = 1",
+                    study.getParentStudyId())) {
+                return null;
+            }
+            StudyBean parent = (StudyBean) studyDao.findByPK(study.getParentStudyId());
+            return ResponseEntity.status(409).body(Map.of("message",
+                    username + " already has a study-wide role in " + parent.getName()
+                            + "; it covers all its sites"));
+        }
+        if (!hasActiveRowOn(username,
+                "SELECT 1 FROM study_user_role sur JOIN study s ON s.study_id = sur.study_id "
+                        + "WHERE sur.user_name = ? AND s.parent_study_id = ? AND sur.status_id = 1",
+                study.getId())) {
+            return null;
+        }
+        return ResponseEntity.status(409).body(Map.of("message",
+                username + " has roles at sites of " + study.getName()
+                        + "; remove those first or keep the site roles"));
+    }
+
+    private boolean hasActiveRowOn(String username, String sql, int studyId) throws SQLException {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql + " LIMIT 1")) {
+            ps.setString(1, username);
+            ps.setInt(2, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
     }
 
     /** The role a stored {@code role_name} stands for, read as the DAO reads it. */
@@ -1356,6 +1460,22 @@ public class UsersApiController {
                     "Failed to load current role grants"));
         }
 
+        // A first binding on the study must not overlap one the user holds
+        // in the same study tree; changing the roles of a binding the user
+        // already has is allowed, overlapping or not.
+        if (current.isEmpty() && !resolved.isEmpty()) {
+            ResponseEntity<?> overlap;
+            try {
+                overlap = overlapRefusal(username, study, studyDao);
+            } catch (SQLException sqlEx) {
+                LOG.warn("Failed to read the study-tree grants for (study={}, user={}): {}",
+                        study.getId(), username, sqlEx.getMessage());
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Failed to load current role grants"));
+            }
+            if (overlap != null) return overlap;
+        }
+
         // ra and ra2 cannot be granted from here and project as Investigator,
         // so a client unaware of them would send Investigator back and leave
         // them out. They change only when the request says what becomes of
@@ -1487,6 +1607,8 @@ public class UsersApiController {
     private static RoleBindingDto toRoleBindingDto(StudyUserRoleBean sur, StudyDAO studyDao) {
         StudyBean study = sur.getStudyId() > 0
                 ? (StudyBean) studyDao.findByPK(sur.getStudyId()) : null;
+        StudyBean parent = study != null && study.getParentStudyId() > 0
+                ? (StudyBean) studyDao.findByPK(study.getParentStudyId()) : null;
         String spaRole = sur.getRole() != null
                 ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
         boolean active = sur.getStatus() != null
@@ -1499,7 +1621,8 @@ public class UsersApiController {
                 study != null && study.getParentStudyId() > 0 ? study.getName() : null,
                 spaRole,
                 active,
-                legacyRole);
+                legacyRole,
+                parent == null || parent.getId() == 0 ? null : parent.getName());
     }
 
     /* ----------------------------------------------------------------- */
@@ -2162,7 +2285,8 @@ public class UsersApiController {
                 details ? isoDate(ua.getCreatedDate()) : null,
                 details ? usernames.of(ua.getOwnerId()) : null,
                 details ? isoDate(ua.getUpdatedDate()) : null,
-                details ? usernames.of(ua.getUpdaterId()) : null);
+                details ? usernames.of(ua.getUpdaterId()) : null,
+                null);
     }
 
     /** {@code USER}, {@code SYSADMIN} or {@code TECHADMIN}; see {@link #currentUserType}. */

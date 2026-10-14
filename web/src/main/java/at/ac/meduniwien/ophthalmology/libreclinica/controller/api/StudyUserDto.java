@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -82,5 +84,16 @@ public record StudyUserDto(
         String createdDate,
         String ownerUsername,
         String updatedDate,
-        String updaterUsername
-) {}
+        String updaterUsername,
+        @Schema(description = "Every active binding of the user, one label each: the study's name for a "
+                + "study-wide binding, \"Study › Site\" for a site. Filled on the user list only.")
+        List<String> scopes
+) {
+
+    /** This row with {@code scopes} replaced. */
+    public StudyUserDto withScopes(List<String> newScopes) {
+        return new StudyUserDto(id, username, displayName, email, role, legacyRole, siteLabel, auth,
+                lastLoginAt, active, locked, firstName, lastName, phone, institutionalAffiliation,
+                userType, createdDate, ownerUsername, updatedDate, updaterUsername, newScopes);
+    }
+}

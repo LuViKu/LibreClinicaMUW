@@ -93,3 +93,35 @@ describe('ManageUsersView — role column', () => {
     expect(roleCell(wrapper, 'clerk-two')).toBeNull()
   })
 })
+
+describe('ManageUsersView — Prüfzentrum column', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    useAuthStore().user = { username: 'admin', role: 'Administrator', userType: 'SYSADMIN' } as unknown as ReturnType<
+      typeof useAuthStore
+    >['user']
+    useUsersStore().rows = [
+      user('both', { siteLabel: 'Wien', scopes: ['HealthAEye', 'nAMD › Wien'] }),
+      user('unbound', { scopes: [] }),
+      user('older', { siteLabel: 'Graz' }),
+    ]
+  })
+
+  function scopeCell(wrapper: ReturnType<typeof mountView>, username: string): string {
+    return wrapper.find(`[data-testid="user-scopes-${username}"]`).text()
+  }
+
+  it('lists every scope, naming a study-wide one as such', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    const lines = wrapper.find('[data-testid="user-scopes-both"]').findAll('div').map((d) => d.text())
+    expect(lines).toEqual(['HealthAEye (study-wide)', 'nAMD › Wien'])
+  })
+
+  it('shows a dash for no binding and falls back to the site label without scopes', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(scopeCell(wrapper, 'unbound')).toBe('—')
+    expect(scopeCell(wrapper, 'older')).toBe('Graz')
+  })
+})

@@ -56,6 +56,11 @@ public record PatientDto(
      * <p>{@code lastVisitAt} is the most recent
      * {@code study_event.date_start} for this enrolment as an ISO
      * date-time; null when the subject hasn't had any visits scheduled.
+     *
+     * <p>{@code studyName} is the name of the study row the subject sits
+     * on, which for a site is the site's own name ("Wien");
+     * {@code parentStudyName} then carries the study it belongs to, so
+     * the SPA can say "HealthAEye › Wien".
      */
     @Schema(name = "PatientEnrolmentDto")
     public record Enrolment(
@@ -64,6 +69,9 @@ public record PatientDto(
             String label,
             String studyEye,
             String enrolledOn,
-            String lastVisitAt
+            String lastVisitAt,
+            @Schema(nullable = true,
+                    description = "Name of the parent study when the enrolment sits on a site; null for a top-level study.")
+            String parentStudyName
     ) {}
 }

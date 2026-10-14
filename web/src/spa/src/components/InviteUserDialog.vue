@@ -10,7 +10,8 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
-import type { AccountType } from '@/types/auth'
+import { useAdminStudiesStore } from '@/stores/adminStudies'
+import type { AccountType, StudyOption } from '@/types/auth'
 import type { UserRole } from '@/types/user'
 
 /**
@@ -27,6 +28,12 @@ import type { UserRole } from '@/types/user'
  * panel on success. The default is to NOT send (since email isn't wired
  * yet), so the admin always gets the password to distribute manually.
  *
+ * The study or site of the initial binding is chosen here, from the
+ * studies the caller may grant (the role dialog's list: every open study
+ * and site for a system administrator, else the caller's own). Nothing is
+ * preselected and nothing falls back to the caller's active study: the
+ * field is required, and the server refuses a request without one.
+ *
  * The account type makes the new user an ordinary user (the default), a
  * business administrator or, offered only to a technical administrator,
  * a technical administrator: the legacy create form's User Type, and the
@@ -41,6 +48,7 @@ const emit = defineEmits<{ 'update:open': [v: boolean]; close: [] }>()
 const { t } = useI18n()
 const users = useUsersStore()
 const auth = useAuthStore()
+const adminStudies = useAdminStudiesStore()
 
 type AuthMethod = 'local' | 'sso'
 
@@ -52,6 +60,8 @@ interface Form {
   institutionalAffiliation: string
   phone: string
   role: UserRole
+  /** OID of the study or site of the initial binding; '' until chosen. */
+  studyOid: string
   /**
    * Phase E.6 (DR-014 follow-up). 'sso' reveals the externalId input
    * and tells the backend to pre-bind the row to the institutional
@@ -84,6 +94,7 @@ function initialForm(): Form {
     institutionalAffiliation: '',
     phone: '',
     role: 'Investigator',
+    studyOid: '',
     authMethod: 'local',
     externalId: '',
     userType: 'USER',
@@ -101,16 +112,23 @@ function resetState() {
 // Reset when the dialog opens so a previous result doesn't bleed in.
 watch(
   () => props.open,
-  (next) => { if (next) resetState() },
+  (next) => {
+    if (!next) return
+    resetState()
+    if (auth.isSysAdmin) void adminStudies.ensureLoaded()
+    else if (auth.availableStudies.length === 0) void auth.loadStudies()
+  },
+  { immediate: true },
 )
 
-const studyId = computed(() => {
-  // We bind the new user to the admin's currently active study. The
-  // store mirrors backend session state — if for some reason the
-  // admin hasn't picked a study, we surface a guard message.
-  const active = auth.user?.activeStudy
-  return active?.id && active.id > 0 ? active.id : null
-})
+/** The studies and sites the caller may bind the new account to. */
+const studyOptions = computed<StudyOption[]>(() =>
+  auth.isSysAdmin && !adminStudies.error ? adminStudies.openable : auth.availableStudies,
+)
+
+function studyOptionLabel(s: StudyOption): string {
+  return s.parentName ? `${s.parentName} › ${s.name}` : s.name
+}
 
 const isSso = computed(() => form.value.authMethod === 'sso')
 
@@ -120,8 +138,7 @@ const canSubmit = computed(() => {
     form.value.firstName.trim().length > 0 &&
     form.value.lastName.trim().length > 0 &&
     form.value.email.trim().length > 0 &&
-    form.value.institutionalAffiliation.trim().length > 0 &&
-    studyId.value != null
+    form.value.institutionalAffiliation.trim().length > 0
   if (!baseOk) return false
   if (isSso.value) {
     // Phase E.6: SSO branch requires a non-blank eppn-shaped value.
@@ -148,9 +165,15 @@ const roleOptions: { v: UserRole; l: () => string }[] = [
 ]
 
 async function submit() {
-  if (!canSubmit.value || studyId.value == null) return
+  if (!canSubmit.value) return
   fieldErrors.value = {}
   formError.value = null
+  // Required, and checked here rather than by disabling the button, so
+  // the field says what is missing.
+  if (form.value.studyOid === '') {
+    fieldErrors.value = { studyId: t('manageUsers.invite.studyRequired') }
+    return
+  }
   isSubmitting.value = true
   try {
     // Phase E.6: when the operator picked SSO, forward the eppn AND
@@ -167,7 +190,7 @@ async function submit() {
       email: form.value.email.trim(),
       institutionalAffiliation: form.value.institutionalAffiliation.trim(),
       phone: form.value.phone.trim() === '' ? null : form.value.phone.trim(),
-      studyId: studyId.value,
+      studyOid: form.value.studyOid,
       role: form.value.role,
       userType: form.value.userType,
       // Local-only sends sendEmail:false (returns one-time password).
@@ -238,8 +261,8 @@ async function copyPassword() {
     </div>
 
     <div v-else class="space-y-4">
-      <div v-if="studyId == null" class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        {{ t('manageUsers.invite.studyMissing') }}
+      <div v-if="!adminStudies.isLoading && studyOptions.length === 0" class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        {{ t('manageUsers.invite.studyNone') }}
       </div>
 
       <!-- Phase E.6: auth-method radio group. Local is the legacy
@@ -298,6 +321,14 @@ async function copyPassword() {
           <FieldLabel for="invite-username" required>{{ t('manageUsers.invite.username') }}</FieldLabel>
           <TextInput id="invite-username" v-model="form.username" autocomplete="off" />
           <ErrorText v-if="fieldErrors.username">{{ fieldErrors.username }}</ErrorText>
+        </div>
+        <div class="col-span-2">
+          <FieldLabel for="invite-study" required>{{ t('manageUsers.invite.study') }}</FieldLabel>
+          <SelectInput id="invite-study" v-model="form.studyOid" :error="!!fieldErrors.studyId">
+            <option value="">{{ t('manageUsers.invite.studyPlaceholder') }}</option>
+            <option v-for="s in studyOptions" :key="s.oid" :value="s.oid">{{ studyOptionLabel(s) }}</option>
+          </SelectInput>
+          <ErrorText v-if="fieldErrors.studyId">{{ fieldErrors.studyId }}</ErrorText>
         </div>
         <div>
           <FieldLabel for="invite-role" required>{{ t('manageUsers.invite.role') }}</FieldLabel>

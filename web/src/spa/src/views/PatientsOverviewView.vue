@@ -192,7 +192,7 @@ function rowAriaLabel(p: PatientListItem): string {
                 :variant="pillVariant(e.studyEye)"
                 compact
               >
-                {{ e.studyName }}<span v-if="e.studyEye" class="ml-1 font-mono">{{ e.studyEye }}</span>
+                {{ e.parentStudyName ? `${e.parentStudyName} › ${e.studyName}` : e.studyName }}<span v-if="e.studyEye" class="ml-1 font-mono">{{ e.studyEye }}</span>
               </StatusPill>
               <span v-if="p.enrolments.length === 0" class="text-slate-400 text-xs">—</span>
             </div>

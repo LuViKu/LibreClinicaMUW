@@ -100,7 +100,7 @@ const DETAIL: PatientDetail = {
   yearOfBirth: 1962,
   enrolments: [
     { studyOid: 'S_IAMD', studyName: 'iAMD', label: 'M-007', studyEye: 'OD', enrolledOn: '2024-01-15', lastVisitAt: '2024-06-01T10:00:00Z' },
-    { studyOid: 'S_GA', studyName: 'GA Cohort', label: 'M-001', studyEye: 'OU', enrolledOn: '2025-03-01', lastVisitAt: '2025-09-01T10:00:00Z' },
+    { studyOid: 'S_GA', studyName: 'GA Cohort', label: 'M-001', studyEye: 'OU', enrolledOn: '2025-03-01', lastVisitAt: '2025-09-01T10:00:00Z', parentStudyName: 'GA Programme' },
   ],
   eyeTransitions: [
     {
@@ -203,6 +203,18 @@ describe('PatientDetailModal', () => {
     // current badge.
     expect((odPills[1] as HTMLElement).textContent).toContain('GA Cohort')
     expect((odPills[1] as HTMLElement).textContent).toContain('M-001')
+    wrapper.unmount()
+  })
+
+  it('names the study of a site on its pills, enrolment and transition alike', async () => {
+    const { wrapper } = await mountModal()
+    // S_GA is a site of "GA Programme": the OS enrolment pill and the OD
+    // transition pill both say so; the top-level iAMD pill does not.
+    const odPills = document.body.querySelectorAll('[data-testid^="pill-OD-"]')
+    const osPills = document.body.querySelectorAll('[data-testid^="pill-OS-"]')
+    expect((odPills[0] as HTMLElement).textContent).not.toContain('›')
+    expect((odPills[1] as HTMLElement).textContent).toContain('GA Programme › GA Cohort')
+    expect((osPills[0] as HTMLElement).textContent).toContain('GA Programme › GA Cohort')
     wrapper.unmount()
   })
 

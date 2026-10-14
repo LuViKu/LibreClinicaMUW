@@ -29,7 +29,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiPost } from '@/api/client'
+import { apiGet, apiPost } from '@/api/client'
 import InviteUserDialog from '@/components/InviteUserDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import enMessages from '@/locales/en.json'
@@ -57,6 +57,23 @@ function seedAuthWithStudy() {
       site: null,
     },
   } as unknown as ReturnType<typeof useAuthStore>['user']
+  auth.availableStudies = STUDIES
+}
+
+/** The studies the caller may grant: a parent, its site, another study. */
+const STUDIES = [
+  { oid: 'S_DEFAULTS1', name: 'Default Study', uniqueIdentifier: 'default', parentOid: null, parentName: null,
+    role: 'Data Manager', isSite: false, isActive: true },
+  { oid: 'S_WIEN', name: 'Wien', uniqueIdentifier: 'wien', parentOid: 'S_DEFAULTS1', parentName: 'Default Study',
+    role: 'Data Manager', isSite: true, isActive: false },
+  { oid: 'S_OTHER', name: 'Other Study', uniqueIdentifier: 'other', parentOid: null, parentName: null,
+    role: 'Data Manager', isSite: false, isActive: false },
+] as ReturnType<typeof useAuthStore>['availableStudies']
+
+function pickStudy(oid: string) {
+  const select = document.body.querySelector('#invite-study') as HTMLSelectElement
+  select.value = oid
+  select.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 function mountDialog() {
@@ -147,6 +164,7 @@ describe('InviteUserDialog — SSO branch (Phase E.6)', () => {
     await flushPromises()
 
     setVal('#invite-externalid', 'New.User@meduniwien.ac.at')
+    pickStudy('S_DEFAULTS1')
     await nextTick()
 
     // Submit button is the last (success-action) button — last button in the footer with text "Create user".
@@ -164,7 +182,8 @@ describe('InviteUserDialog — SSO branch (Phase E.6)', () => {
     expect(payload.externalId).toBe('New.User@meduniwien.ac.at')
     // Phone optional, role default.
     expect(payload.username).toBe('newuser')
-    expect(payload.studyId).toBe(1)
+    expect(payload.studyOid).toBe('S_DEFAULTS1')
+    expect(payload.studyId).toBeUndefined()
     expect(payload.role).toBe('Investigator')
 
     wrapper.unmount()
@@ -199,6 +218,7 @@ describe('InviteUserDialog — SSO branch (Phase E.6)', () => {
     setVal('#invite-lastname', 'User')
     setVal('#invite-email', 'newuser@example.org')
     setVal('#invite-affiliation', 'Dept. of Ophthalmology')
+    pickStudy('S_DEFAULTS1')
     await nextTick()
 
     const buttons = Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
@@ -284,6 +304,7 @@ describe('InviteUserDialog — account type', () => {
     setVal('#invite-lastname', 'Admin')
     setVal('#invite-email', 'newadmin@example.org')
     setVal('#invite-affiliation', 'Dept. of Ophthalmology')
+    pickStudy('S_DEFAULTS1')
   }
 
   function userTypeSelect(): HTMLSelectElement {
@@ -330,9 +351,102 @@ describe('InviteUserDialog — account type', () => {
 
     const auth = useAuthStore()
     auth.user = { ...auth.user, userType: 'TECHADMIN' } as unknown as ReturnType<typeof useAuthStore>['user']
+    vi.mocked(apiGet).mockResolvedValue([])
     const again = mountDialog()
     await flushPromises()
     expect(options()).toEqual(['USER', 'SYSADMIN', 'TECHADMIN'])
     again.unmount()
+  })
+})
+
+/**
+ * The study of the initial binding: chosen in the dialog, never taken
+ * from the caller's active study.
+ */
+describe('InviteUserDialog — study / site', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedAuthWithStudy()
+    vi.mocked(apiPost).mockReset()
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPost).mockResolvedValue({
+      user: { id: '44', username: 'newbie', displayName: 'New Bie', email: null, role: 'Investigator',
+        siteLabel: 'Wien', auth: 'pending-invite', lastLoginAt: null, active: true, locked: false },
+      generatedPassword: 'P@ssw0rd!',
+    })
+  })
+
+  function fillAllButStudy() {
+    const setVal = (sel: string, val: string) => {
+      const el = document.body.querySelector(sel) as HTMLInputElement
+      el.value = val
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    setVal('#invite-username', 'newbie')
+    setVal('#invite-firstname', 'New')
+    setVal('#invite-lastname', 'Bie')
+    setVal('#invite-email', 'newbie@example.org')
+    setVal('#invite-affiliation', 'Dept. of Ophthalmology')
+  }
+
+  function submitButton(): HTMLButtonElement {
+    const buttons = Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
+    return buttons.find((b) => b.textContent?.trim() === 'Create user')!
+  }
+
+  it('preselects nothing and labels a site with its study', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    const select = document.body.querySelector('#invite-study') as HTMLSelectElement
+    expect(select.value).toBe('')
+    const labels = Array.from(select.options).map((o) => o.textContent?.trim())
+    expect(labels).toEqual(['Select a study or site…', 'Default Study', 'Default Study › Wien', 'Other Study'])
+    wrapper.unmount()
+  })
+
+  it('refuses to submit without a study and says so', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    fillAllButStudy()
+    await nextTick()
+    submitButton().click()
+    await flushPromises()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Select a study or site.')
+    wrapper.unmount()
+  })
+
+  it('sends the chosen site, not the active study', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    fillAllButStudy()
+    pickStudy('S_WIEN')
+    await nextTick()
+    submitButton().click()
+    await flushPromises()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    const [, payload] = vi.mocked(apiPost).mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload.studyOid).toBe('S_WIEN')
+    expect(payload.studyId).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('offers a system administrator every open study and site', async () => {
+    const auth = useAuthStore()
+    auth.user = { ...auth.user, userType: 'SYSADMIN' } as unknown as ReturnType<typeof useAuthStore>['user']
+    vi.mocked(apiGet).mockResolvedValue([
+      { oid: 'S_HAE', name: 'HealthAEye', uniqueIdentifier: 'hae', principalInvestigator: null, createdDate: null,
+        status: 'AVAILABLE', parentOid: null, sites: [
+          { oid: 'S_HAEVIE', name: 'Wien', uniqueIdentifier: 'hae-vie', principalInvestigator: null,
+            createdDate: null, status: 'AVAILABLE', parentOid: 'S_HAE', sites: [] },
+        ] },
+    ])
+    const wrapper = mountDialog()
+    await flushPromises()
+    const select = document.body.querySelector('#invite-study') as HTMLSelectElement
+    expect(select.value).toBe('')
+    expect(Array.from(select.options).map((o) => o.textContent?.trim()))
+      .toEqual(['Select a study or site…', 'HealthAEye', 'HealthAEye › Wien'])
+    wrapper.unmount()
   })
 })

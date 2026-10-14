@@ -36,7 +36,7 @@ export type StudyUser =
   Omit<Required<components['schemas']['StudyUserDto']>,
        'role' | 'auth' | 'email' | 'siteLabel' | 'lastLoginAt'
        | 'firstName' | 'lastName' | 'phone' | 'institutionalAffiliation' | 'userType'
-       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername' | 'legacyRole'>
+       | 'createdDate' | 'ownerUsername' | 'updatedDate' | 'updaterUsername' | 'legacyRole' | 'scopes'>
   & {
     role: UserRole
     auth: UserAuth
@@ -66,6 +66,12 @@ export type StudyUser =
      * Investigator, which the role is not; show this instead.
      */
     legacyRole?: LegacyRole | null
+    /**
+     * Every active binding of the user, one label each: the study's name
+     * for a study-wide binding, "Study › Site" for a site. The users list
+     * fills it; other responses leave it out.
+     */
+    scopes?: string[]
   }
 
 /**
@@ -85,7 +91,10 @@ export interface CreateUserInput {
   email: string
   institutionalAffiliation: string
   phone?: string | null
-  studyId: number
+  /** The study or site of the initial binding, by id; or name it by `studyOid`. */
+  studyId?: number
+  /** The study or site of the initial binding, by OID. No default: one of the two is required. */
+  studyOid?: string
   role: UserRole
   userType?: AccountType
   userSource?: 'local'
@@ -138,6 +147,8 @@ export interface RoleBinding {
    * `legacyRoles` when saving the study's roles to keep it.
    */
   legacyRole?: LegacyRole | null
+  /** Name of the parent study when the binding is on a site; null for a study-wide binding. */
+  parentStudyName?: string | null
 }
 
 /**
