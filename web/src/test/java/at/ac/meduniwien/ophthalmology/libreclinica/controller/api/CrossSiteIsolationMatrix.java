@@ -156,6 +156,27 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
         }
     }
 
+    /**
+     * Gives {@code ingestId} a source-E2E SHA-256 unique to the item, as a series item of a split
+     * E2E has, and returns it. Idempotent. The series key stays unset, so the per-volume preflight
+     * of the same item still finds it.
+     */
+    private static String splitShaOf(int ingestId) {
+        try (java.sql.Connection cn = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = cn.prepareStatement(
+                     "UPDATE ingest_item SET e2e_source_sha256 = COALESCE(e2e_source_sha256,"
+                             + " encode(sha256(convert_to('isolation-split-' || ingest_item_id, 'UTF8')), 'hex'))"
+                             + " WHERE ingest_item_id = ? RETURNING e2e_source_sha256")) {
+            ps.setInt(1, ingestId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static String shaOf(int ingestId) {
         try (java.sql.Connection cn = DATA_SOURCE.getConnection();
              java.sql.PreparedStatement ps = cn.prepareStatement("SELECT sha256 FROM ingest_item WHERE ingest_item_id = ?")) {
@@ -387,12 +408,13 @@ final class CrossSiteIsolationMatrix extends CrossSiteIsolationSupport {
                 .param("patientId", f.pid).param("scanDate", java.time.LocalDate.now().toString()).param("studyDate", java.time.LocalDate.now().toString())
                 .param("laterality", "OD").param("scanIndex", "0").param("eventCrfId", String.valueOf(f.eventCrf))
                 .param("studyEventId", String.valueOf(f.event))).write();
-        // DR-041 split mode. The fixture has no split items and this test runs no converter sidecar, so
-        // neither handler has a positive control here; E2eSplitUploadDatabaseIT covers both for the owner.
+        // DR-041 split mode. The split preflight looks items up by the source E2E's SHA-256, which the
+        // fixture's bound item is given here; the split commit needs the converter sidecar, which this
+        // test does not run, so it has no positive control (E2eSplitUploadDatabaseIT covers the owner).
         c("IngestUploadApiController#preflightSplitStaffUpload",
-                f -> get(u + "preflight?split=true&sha256=" + shaOf(f.ingestBound)))
-                .alsoRefused(x -> x.ok() && x.body.contains("\"exists\":false"))
-                .noControl("the fixture has no split items (split preflight is covered by E2eSplitUploadDatabaseIT)");
+                f -> get(u + "preflight?split=true&sha256=" + splitShaOf(f.ingestBound)))
+                .ownOk(x -> x.ok() && x.body.contains("\"exists\":true"))
+                .alsoRefused(x -> x.ok() && x.body.contains("\"exists\":false"));
         c("IngestUploadApiController#commitSplitStaffUpload", f -> multipart(u + "commit")
                 .file(new MockMultipartFile("file", "scan.e2e", "application/octet-stream",
                         "CMDb-isolation-probe".getBytes(java.nio.charset.StandardCharsets.US_ASCII)))

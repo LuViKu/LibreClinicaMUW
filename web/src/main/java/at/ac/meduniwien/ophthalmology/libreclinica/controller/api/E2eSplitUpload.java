@@ -154,13 +154,14 @@ final class E2eSplitUpload {
     }
 
     /**
-     * Preflight for a split file: is it already here? Only items the caller may name are listed
-     * ({@code visible} null = all); {@code exists} is true when any item exists, so a hidden
-     * duplicate still stops the upload.
+     * Preflight for a split file: is it already here, as far as the caller may see? Like the
+     * per-volume preflight, it answers only for items the caller may name ({@code visible} null =
+     * all), so another site's or location's file is not revealed. A hidden duplicate is still
+     * refused at commit (409).
      */
     static E2eSplitPreflightResponse preflight(DataSource dataSource, String sha256, LongPredicate visible) {
-        List<Long> all = existingItems(dataSource, sha256);
-        return new E2eSplitPreflightResponse(!all.isEmpty(), true, visibleOnly(all, visible));
+        List<Long> shown = visibleOnly(existingItems(dataSource, sha256), visible);
+        return new E2eSplitPreflightResponse(!shown.isEmpty(), true, shown);
     }
 
     private static List<Long> visibleOnly(List<Long> ids, LongPredicate visible) {

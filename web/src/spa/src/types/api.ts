@@ -9937,7 +9937,6 @@ export interface operations {
     commitSplitUpload: {
         parameters: {
             query: {
-                split: boolean;
                 patientId?: string;
                 scanDate?: string;
                 studyDate?: string;
@@ -9946,6 +9945,8 @@ export interface operations {
                 studyEventId?: number;
                 park?: boolean;
                 excludeSeries?: string;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
                 scanIndex?: number;
                 device?: string;
                 disambiguated?: boolean;
@@ -10468,7 +10469,6 @@ export interface operations {
     commitSplitStaffUpload: {
         parameters: {
             query: {
-                split: boolean;
                 patientId?: string;
                 scanDate?: string;
                 studyDate?: string;
@@ -10477,6 +10477,8 @@ export interface operations {
                 studyEventId?: number;
                 park?: boolean;
                 excludeSeries?: string;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
                 scanIndex?: number;
                 device?: string;
                 deidConfirmed?: string;
@@ -12977,7 +12979,8 @@ export interface operations {
             query: {
                 sha256: string;
                 scanIndex?: number;
-                split: boolean;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
             };
             header?: never;
             path?: never;
@@ -13384,7 +13387,8 @@ export interface operations {
             query: {
                 sha256: string;
                 scanIndex?: number;
-                split: boolean;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
             };
             header?: never;
             path?: never;
