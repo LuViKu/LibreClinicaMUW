@@ -107,9 +107,11 @@ describe('uploadWorkbench store', () => {
     expect(dicom.hints?.deviceKey).toBe('clarus')
 
     const oct = store.rows.find((r) => r.kind === 'e2e')!
-    expect(oct.scan).toBeDefined()
-    expect(typeof oct.patientId).toBe('string')
-    expect(['OD', 'OS']).toContain(oct.laterality)
+    // DR-041: an E2E is one split row; the browser reads nothing of its header.
+    expect(oct.split).toBe(true)
+    expect(oct.scan).toBeUndefined()
+    expect(oct.patientId).toBe('')
+    expect(oct.state).toBe('suggested') // no folder: sent without a patientId, the server reads the label
   })
 
   it('shows an unsupported file refused rather than dropping it silently', async () => {
@@ -145,16 +147,17 @@ describe('uploadWorkbench store', () => {
     expect(store.rows.every((r) => r.state === 'committed')).toBe(true)
   })
 
-  it('an OCT scan under a batch visit keeps its header label and volume index', async () => {
+  it('an E2E under a batch visit is sent split, with the visit as studyEventId only', async () => {
     const store = useUploadWorkbenchStore()
     await store.addFiles([e2eFile()])
     const oct = store.rows[0]
     store.setBatchVisit({ ...VISIT, eventCrfId: 77 })
     await store.confirm(oct.rowId)
     const req = api.commitFile.mock.calls[0][1] as Record<string, unknown>
-    // The open CRF wins over the planned visit, as on the OCT page.
-    expect(req).toMatchObject({ eventCrfId: 77, studyEventId: null, scanIndex: oct.scan!.scanIndex, park: false })
-    expect(req.patientId).toBe(oct.patientId || null)
+    expect(req).toMatchObject({ split: true, device: 'spectralis', studyEventId: 42, park: false })
+    expect(req).not.toHaveProperty('scanIndex')
+    expect(req).not.toHaveProperty('eventCrfId')
+    expect(req.patientId).toBe('HAE-001') // no folder: the batch visit's subject
   })
 
   it('a typed label resolves the rows that carry none', async () => {
@@ -238,11 +241,13 @@ describe('uploadWorkbench store', () => {
     expect(store.rows[0].state).toBe('nopatient')
 
     api.commitFile.mockResolvedValue({ ingestItemId: 9, jobId: 31, kind: 'e2e', format: 'e2e', status: 'queued' })
-    await store.addFiles([e2eFile()])
-    const oct = store.rows.find((r) => r.kind === 'e2e')!
-    store.setBatchVisit(VISIT)
-    await store.confirm(oct.rowId)
-    await store.undo(oct.rowId)
+    store.rows.splice(0)
+    // The OCT job undo still serves the de-identifying path's per-volume rows.
+    store.rows.push({
+      rowId: 'v1', file: e2eFile(), kind: 'e2e', format: 'e2e', patientId: 'HAE-001', date: null, laterality: 'OD',
+      state: 'committed', jobId: 31, ingestItemId: 9,
+    })
+    await store.undo('v1')
     expect(api.undoJob).toHaveBeenCalledWith('staff', 31)
   })
 

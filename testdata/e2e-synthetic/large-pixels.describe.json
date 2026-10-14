@@ -1,0 +1,30 @@
+{
+  "headerPatient": "none",
+  "headerLabel": "SYNTH007",
+  "series": [
+    {
+      "seriesKey": "s0",
+      "seriesModality": "OCT",
+      "deviceModality": "IR",
+      "scanPattern": "OCT ART Volume",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T14:00:00",
+      "frames": 3,
+      "width": 128,
+      "height": 64,
+      "octVolumeIndex": 0
+    },
+    {
+      "seriesKey": "s1",
+      "seriesModality": "BAF",
+      "deviceModality": "BAF",
+      "scanPattern": "Images",
+      "laterality": "OD",
+      "acquiredAt": "2026-09-30T14:10:00",
+      "frames": 4,
+      "width": 160,
+      "height": 160,
+      "octVolumeIndex": null
+    }
+  ]
+}

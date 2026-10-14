@@ -87,7 +87,7 @@ class BscanVolume:
     axial_mm: float  # row spacing (depth)
     lateral_mm: float  # column spacing
     slice_mm: float  # spacing between B-scans
-    laterality: str  # 'OD' | 'OS'
+    laterality: str | None  # 'OD' | 'OS'; None only from convert_series (no eye in the file)
     n_bscans: int
     rows: int
     cols: int
@@ -112,6 +112,9 @@ class BscanVolume:
     examined_structure: str | None = None  # examined_structure (e.g. "Retina")
     scan_pattern: str | None = None  # scan_pattern (e.g. "OCT ART Volume")
     series_uid_seed: str | None = None  # Heidelberg LOC-... UID, used as a stable hash for SeriesInstanceUID
+    # Per-B-scan geometry records (posX1... scaley) of this volume; build_geometry reads them
+    # from here when set (convert_series), else it re-reads the file.
+    bscan_data: tuple | None = None
 
 
 def _derive_spacing_mm(bscan_data: list[dict], n_bscans: int) -> tuple[float, float, float]:
@@ -342,7 +345,15 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
     )
 
 
-def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
+def write_bscan_dcm(
+    bv: BscanVolume,
+    out_dir: Path,
+    *,
+    patient_label: str | None = None,
+    file_name: str = "bscan.dcm",
+    uid_seed: str | None = None,
+    study_uid_seed: str | None = None,
+) -> Path:
     """Write ``bv`` as a multi-frame Spectralis-flavoured DICOM at out_dir/bscan.dcm.
 
     2026-06-24 — switched the SOPClassUID from Multi-frame Grayscale Byte
@@ -388,7 +399,14 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     # the same UID — important for SR / SEG cross-references); a
     # fresh random UID otherwise.
     ds.StudyInstanceUID = generate_uid()
-    if bv.series_uid_seed:
+    if uid_seed:
+        # convert_series: every UID is a function of the source file and the series, so
+        # converting the same export again gives byte-identical files.
+        ds.StudyInstanceUID = generate_uid(entropy_srcs=[study_uid_seed or uid_seed, "study"])
+        ds.SeriesInstanceUID = generate_uid(entropy_srcs=[uid_seed, "series"])
+        ds.SOPInstanceUID = generate_uid(entropy_srcs=[uid_seed, "sop"])
+        fm.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
+    elif bv.series_uid_seed:
         # Map the LOC-... string to a stable DICOM UID under the
         # pydicom default org-root (consistent across runs / hosts).
         import hashlib as _h
@@ -417,8 +435,9 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     # Image-module ImageLaterality (0020,0062) — Cornerstone-style
     # web viewers + most strict OPT-IOD validators read this twin
     # of the Series-module Laterality (0020,0060). Keep both.
-    ds.ImageLaterality = "R" if bv.laterality == "OD" else "L"
-    ds.Laterality = "OD" if bv.laterality == "OD" else "OS"
+    if bv.laterality is not None:
+        ds.ImageLaterality = "R" if bv.laterality == "OD" else "L"
+        ds.Laterality = "OD" if bv.laterality == "OD" else "OS"
 
     # IOD-required image-type discriminator. The IOWA binary requires
     # the first value "DERIVED" / "ORIGINAL" to be present.
@@ -597,8 +616,14 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
         ds.SeriesTime = bv.acquisition_time
         ds.AcquisitionTime = bv.acquisition_time
 
+    if patient_label is not None:
+        # convert_series: the study label is the only identity the file carries (redact_dicom
+        # blanked everything above; birth date, sex and age stay blank).
+        ds.PatientName = patient_label
+        ds.PatientID = patient_label
+
     out_dir.mkdir(parents=True, exist_ok=True)
-    dcm_path = out_dir / "bscan.dcm"
+    dcm_path = out_dir / file_name
     pydicom.dcmwrite(str(dcm_path), ds, enforce_file_format=True)
     return out_dir
 

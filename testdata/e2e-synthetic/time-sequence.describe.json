@@ -1,0 +1,30 @@
+{
+  "headerPatient": "none",
+  "headerLabel": "SYNTH004",
+  "series": [
+    {
+      "seriesKey": "s0",
+      "seriesModality": "QAF",
+      "deviceModality": "qAF",
+      "scanPattern": "Time Sequence",
+      "laterality": "OS",
+      "acquiredAt": "2026-09-30T12:00:00.123454",
+      "frames": 4,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    },
+    {
+      "seriesKey": "s1",
+      "seriesModality": "ICGA",
+      "deviceModality": "ICGA",
+      "scanPattern": "Time Sequence",
+      "laterality": "OS",
+      "acquiredAt": "2026-09-30T12:10:00",
+      "frames": 6,
+      "width": 8,
+      "height": 8,
+      "octVolumeIndex": null
+    }
+  ]
+}

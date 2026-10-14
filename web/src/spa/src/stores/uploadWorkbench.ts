@@ -22,9 +22,22 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
-import { parseE2e, type E2eScan } from '@/lib/e2eParser'
+import type { E2eScan } from '@/lib/e2eParser'
 import { sniffFile, type UploadFormat, type UploadKind } from '@/lib/fileKind'
 import { readDicomHints, type DicomHints } from '@/lib/dicomHeader'
+import { sha256OfFileChunked } from '@/lib/chunkedSha256'
+import { scanE2eCached } from '@/lib/e2eSeries'
+import {
+  allSeriesExcluded,
+  excludedFromResponse,
+  excludedKeysOf,
+  failedPreview,
+  previewOf,
+  resolveLabelOf,
+  type SeriesPreview,
+  type SeriesVisit,
+} from '@/lib/e2eSplitPreview'
+import { subjectFolderOf, type PickedFile } from '@/lib/folderEntries'
 import { analyzeInBackground, deidentifyInBackground } from '@/lib/deid/deidClient'
 import { isDeidError } from '@/lib/deid/errors'
 import { deidFilename } from '@/lib/deid/filename'
@@ -41,9 +54,11 @@ import {
   undoItem,
   undoJob,
   type EventCandidate,
+  type HeaderPatient,
   type ResolveCandidate,
   type ResolveRowRequest,
   type ResolveScanResult,
+  type SplitItem,
   type UploadMode,
 } from '@/api/uploadWorkbench'
 
@@ -63,12 +78,44 @@ export type RowState =
 
 export type Laterality = 'OD' | 'OS' | 'OU'
 
+/**
+ * DR-041 — the largest file the server accepts. A bigger one is refused here,
+ * before a byte travels, with a message the person can act on.
+ */
+export const MAX_SPLIT_BYTES = 2 * 1024 * 1024 * 1024
+
 export interface UploadRow {
   rowId: string
   file: File
   kind?: UploadKind
   format?: UploadFormat
-  /** OCT rows: the parsed volume. One file yields one row per volume. */
+  /**
+   * DR-041 — a whole Spectralis export, uploaded once and split into one item
+   * per series by the server. Used wherever the browser does not de-identify;
+   * such a row has no parsed volume and no header read.
+   */
+  split?: boolean
+  /** Where the file was found when a folder was picked or dropped, e.g. "iAMD/EIAMD005/x.E2E". */
+  relativePath?: string | null
+  /** Split rows, after the upload: the series the server made of the file. */
+  items?: SplitItem[]
+  /** Split rows, after the upload: how the file's header label compared with the folder (the value itself never reaches the browser). */
+  headerPatient?: HeaderPatient
+  /**
+   * Split rows, after the upload: the label of the subject the server matched,
+   * else null (the file named no subject this page may see: it is in the inbox).
+   */
+  subjectLabel?: string | null
+  /** Split rows, after the upload: every item is in the inbox. */
+  parked?: boolean
+  /**
+   * Split rows: the series list read from the file in the browser (range reads only), with the
+   * label check and the per-series visit suggestion. Absent until the file has been read.
+   */
+  preview?: SeriesPreview
+  /** Split rows: the `seriesKey`s the person unticked. After the upload, the ones the server left out. */
+  excludedKeys?: string[]
+  /** OCT rows (de-identifying deployment): the parsed volume. One file yields one row per volume. */
   scan?: E2eScan
   /** DICOM rows: what the header said. */
   hints?: DicomHints
@@ -112,7 +159,14 @@ export interface UploadRow {
 
 /** A row the batch confirm may send: ready, and — where required — confirmed against its preview. */
 export function isConfirmable(r: UploadRow): boolean {
-  return r.state === 'suggested' && !!r.selectedEvent && (!r.needsDeidConfirm || r.deidConfirmed === true)
+  // A split row needs no visit of its own: the server resolves each series, or parks it.
+  return r.state === 'suggested' && (!!r.selectedEvent || r.split === true) && (!r.needsDeidConfirm || r.deidConfirmed === true)
+    && !hasNoSeriesLeft(r)
+}
+
+/** A split row whose series are all unticked: there is nothing to upload. */
+export function hasNoSeriesLeft(r: UploadRow): boolean {
+  return r.split === true && allSeriesExcluded(r.preview, r.excludedKeys)
 }
 
 /** The visit a batch is filed against. */
@@ -198,12 +252,23 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
 
   /* ---------------- adding files ---------------- */
 
-  async function addFiles(files: File[]): Promise<void> {
+  /**
+   * Add files to the list. A {@link PickedFile} carries the path the file was
+   * found at when a folder was picked or dropped; a plain File has none (or
+   * its own `webkitRelativePath`, which a folder picker sets).
+   */
+  async function addFiles(files: Array<File | PickedFile>): Promise<void> {
     if (files.length === 0) return
-    const seeds = files.map((f) => ({ rowId: generateRowId(), file: f }))
+    const seeds = files.map((f) => {
+      const picked: PickedFile = f instanceof Blob
+        ? { file: f as File, relativePath: (f as File).webkitRelativePath || null }
+        : f
+      return { rowId: generateRowId(), file: picked.file, relativePath: picked.relativePath }
+    })
     for (const seed of seeds) {
       rows.value.push({
-        rowId: seed.rowId, file: seed.file, patientId: '', date: null, laterality: null, state: 'parsing',
+        rowId: seed.rowId, file: seed.file, relativePath: seed.relativePath,
+        patientId: '', date: null, laterality: null, state: 'parsing',
       })
     }
     if (deidRequired.value) {
@@ -211,14 +276,89 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       // several hundred-MB exports in parallel are how a clinic PC runs out of memory.
       for (const seed of seeds) await classify(seed.rowId, seed.file)
     } else {
+      // Only the first bytes of each file are read here.
       await Promise.all(seeds.map((seed) => classify(seed.rowId, seed.file)))
     }
+    await readSeriesPreviews()
     await hashAndPreflight()
     if (batchVisit.value) {
       applyBatchVisit(batchVisit.value)
     } else {
       await resolveAwaiting()
+      await suggestSeriesVisits()
     }
+  }
+
+  /* ---------------- browser preview of split rows ---------------- */
+
+  /**
+   * Read each split file's series list in the browser, one file at a time. Range
+   * reads only (lib/e2eSeries): the directory and a few small chunks, never the
+   * whole file. A file that cannot be read keeps its row and is sent whole, as before.
+   */
+  async function readSeriesPreviews(): Promise<void> {
+    for (const r of rows.value.filter((x) => x.split && x.state === 'parsing' && x.preview === undefined)) {
+      let preview: SeriesPreview
+      try {
+        const index = await scanE2eCached(r.file)
+        preview = previewOf(index.describe(), subjectFolderOf(r.relativePath ?? null))
+      } catch {
+        preview = failedPreview()
+      }
+      patch(r.rowId, { preview, excludedKeys: [] })
+    }
+  }
+
+  /**
+   * Ask /resolve once per file for the visit each series would land on: the subject
+   * (the folder, else the label read from the file) and that series' own date. Best
+   * effort: the server decides again on upload.
+   */
+  async function suggestSeriesVisits(): Promise<void> {
+    for (const r of rows.value) {
+      const preview = r.preview
+      if (!r.split || !preview || preview.status !== 'ready' || !REVIEWABLE.has(r.state)) continue
+      const label = resolveLabelOf(subjectFolderOf(r.relativePath ?? null), preview)
+      if (!label) continue
+      const wanted = preview.series.map((s) => ({
+        key: s.seriesKey,
+        req: { patientId: label, scanDate: s.acquiredAt ? s.acquiredAt.slice(0, 10) : null, laterality: s.laterality },
+      }))
+      const unique = new Map<string, ResolveRowRequest>()
+      for (const w of wanted) unique.set(`${w.req.scanDate}|${w.req.laterality}`, w.req)
+      const reqs = [...unique.values()]
+      try {
+        const res = await resolveRows(mode.value, reqs)
+        const visits: Record<string, SeriesVisit> = {}
+        for (const w of wanted) {
+          const result = res.scans[reqs.indexOf(unique.get(`${w.req.scanDate}|${w.req.laterality}`)!)]
+          if (!result) continue
+          const cand = result.candidates.length === 1 ? result.candidates[0] : undefined
+          const ev = cand?.matchingEvent ?? null
+          visits[w.key] = {
+            state: result.state,
+            subjectLabel: cand?.subjectLabel ?? null,
+            visitLabel: ev?.definitionLabel ?? null,
+            visitDate: ev?.dateStart ?? null,
+          }
+        }
+        patch(r.rowId, { preview: { ...preview, visits } })
+      } catch (e) {
+        if (e instanceof UploadTokenError) return
+      }
+    }
+  }
+
+  /** Tick or untick series of a split row. */
+  function setSeriesIncluded(rowId: string, seriesKeys: readonly string[], included: boolean): void {
+    const row = rows.value.find((r) => r.rowId === rowId)
+    if (!row || !row.split || row.state === 'committing' || row.state === 'committed') return
+    const off = new Set(row.excludedKeys ?? [])
+    for (const k of seriesKeys) {
+      if (included) off.delete(k)
+      else off.add(k)
+    }
+    patch(rowId, { excludedKeys: [...off] })
   }
 
   /** Replace a seed row by what the file turned out to be. */
@@ -238,19 +378,18 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       return
     }
     if (sniffed.kind === 'e2e') {
-      try {
-        const scans = await parseE2e(file)
-        if (scans.length === 0) {
-          replaceSeedWithError(rowId, file, 'noVolumes')
-          return
-        }
-        replaceSeed(rowId, scans.map((scan) => ({
-          file, kind: 'e2e' as const, format: 'e2e' as const, scan,
-          patientId: scan.patientId, date: isoLocalDate(scan.scanDate), laterality: scan.laterality,
-        })))
-      } catch {
-        replaceSeedWithError(rowId, file, 'headerError')
+      // DR-041: one row per file. The server splits it into series and reads
+      // the header; the browser reads the series list with range reads (see
+      // readSeriesPreviews) and never the whole file.
+      if (file.size > MAX_SPLIT_BYTES) {
+        replaceSeedWithError(rowId, file, 'tooLarge')
+        return
       }
+      const relativePath = rows.value.find((r) => r.rowId === rowId)?.relativePath ?? null
+      replaceSeed(rowId, [{
+        file, kind: 'e2e', format: 'e2e', split: true, relativePath,
+        patientId: subjectFolderOf(relativePath) ?? '', date: null, laterality: null,
+      }])
       return
     }
     if (sniffed.kind === 'dicom') {
@@ -387,7 +526,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     const idx = rows.value.findIndex((r) => r.rowId === rowId)
     if (idx === -1) return
     rows.value.splice(idx, 1, {
-      rowId, file, patientId: '', date: null, laterality: null, state: 'error', error,
+      rowId, file, relativePath: rows.value[idx].relativePath, patientId: '', date: null, laterality: null, state: 'error', error,
     })
   }
 
@@ -410,7 +549,8 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       let hash = seen.get(r.file)
       if (hash == null) {
         try {
-          hash = await sha256OfFile(r.file)
+          // A split row is a whole export of up to 2 GiB: hashed in slices, one file at a time.
+          hash = r.split ? await sha256OfFileChunked(r.file) : await sha256OfFile(r.file)
           seen.set(r.file, hash)
         } catch {
           continue
@@ -421,13 +561,20 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     dedupSessionRows()
     for (const r of rows.value.filter((x) => x.state === 'parsing' && x.fileHash != null)) {
       try {
-        const pf = await preflight(mode.value, r.fileHash!, r.kind === 'e2e' ? r.scan!.scanIndex : null)
-        if (pf.exists) {
-          patch(r.rowId, {
-            state: 'duplicate',
-            existingIngestItemId: pf.ingestItemId ?? undefined,
-            existingJobId: pf.jobId ?? undefined,
-          })
+        if (r.split) {
+          const pf = await preflight(mode.value, r.fileHash!, null, { split: true })
+          if (pf.exists) {
+            patch(r.rowId, { state: 'duplicate', existingIngestItemId: pf.existingIngestItemIds?.[0] })
+          }
+        } else {
+          const pf = await preflight(mode.value, r.fileHash!, r.kind === 'e2e' ? r.scan!.scanIndex : null)
+          if (pf.exists) {
+            patch(r.rowId, {
+              state: 'duplicate',
+              existingIngestItemId: pf.ingestItemId ?? undefined,
+              existingJobId: pf.jobId ?? undefined,
+            })
+          }
         }
       } catch (e) {
         // Best-effort: the commit-time unique index still gates the race. But a
@@ -459,7 +606,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     if (awaiting.length === 0) return
     const headerless = awaiting.filter((r) => !r.patientId.trim())
     const targets = awaiting.filter((r) => r.patientId.trim().length > 0)
-    for (const r of headerless) patch(r.rowId, { state: 'nopatient', candidates: [] })
+    for (const r of headerless) {
+      // A split file in no folder is not stuck: the server reads the subject from
+      // the file's own header, or parks it. It goes out without a patientId.
+      if (r.split) patch(r.rowId, { state: 'suggested', candidates: [], selectedCandidate: undefined, selectedEvent: null })
+      else patch(r.rowId, { state: 'nopatient', candidates: [] })
+    }
     if (targets.length === 0) return
 
     const payload: ResolveRowRequest[] = targets.map((r) => ({
@@ -492,8 +644,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   function applyResolveResult(rowId: string, result: ResolveScanResult): void {
     const [first] = result.candidates
     const auto = result.candidates.length === 1 ? first : undefined
+    // A split row found its subject: it needs no visit here, because the server
+    // resolves each series by label and date, or parks it. Only a person's pick
+    // (or the batch visit) pins every series to one visit.
+    const splitRow = rows.value.find((r) => r.rowId === rowId)?.split === true
     patch(rowId, {
-      state: result.state,
+      state: splitRow && result.state === 'novisit' && auto ? 'suggested' : result.state,
       candidates: result.candidates,
       selectedCandidate: auto,
       selectedEvent: auto?.matchingEvent ?? null,
@@ -556,7 +712,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
           candidates: [candidate],
           selectedCandidate: candidate,
           selectedEvent: event,
-          patientId: r.kind === 'e2e' ? r.patientId : (r.patientId || v.subjectLabel),
+          patientId: r.kind === 'e2e' && !r.split ? r.patientId : (r.patientId || v.subjectLabel),
         })
       }
     }
@@ -579,7 +735,9 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     if (!label) return
     let touched = false
     for (const r of rows.value) {
-      if (r.kind !== 'e2e' && (r.state === 'nopatient' || r.state === 'novisit' || r.state === 'suggested' || r.state === 'ambiguous')
+      // An .E2E row never takes the typed label: its subject is its folder or the file's own header.
+      const takesHint = r.kind !== 'e2e'
+      if (takesHint && (r.state === 'nopatient' || r.state === 'novisit' || r.state === 'suggested' || r.state === 'ambiguous')
           && r.patientId !== label && !batchVisit.value) {
         patch(r.rowId, { patientId: label, state: 'parsing', candidates: undefined, selectedCandidate: undefined, selectedEvent: undefined })
         touched = true
@@ -596,11 +754,12 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
 
   async function confirm(rowId: string): Promise<void> {
     const row = rows.value.find((r) => r.rowId === rowId)
-    if (!row || row.state !== 'suggested' || !row.selectedEvent) return
+    if (!row || row.state !== 'suggested' || (!row.selectedEvent && !row.split)) return
+    if (hasNoSeriesLeft(row)) return
     // Where de-identification is required, nothing is sent until the operator
     // has looked at the preview and ticked it.
     if (row.needsDeidConfirm && row.deidConfirmed !== true) return
-    await commitRow(row, row.selectedEvent.eventCrfId, row.selectedEvent.studyEventId, false)
+    await commitRow(row, row.selectedEvent?.eventCrfId ?? null, row.selectedEvent?.studyEventId ?? null, false)
   }
 
   async function confirmAll(): Promise<void> {
@@ -608,7 +767,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     // Sequential rather than parallel: a batch of widefield exports in flight
     // at once is how a phone on clinic Wi-Fi times out on all of them.
     for (const r of targets) {
-      const refused = await commitRow(r, r.selectedEvent!.eventCrfId, r.selectedEvent!.studyEventId, false)
+      const refused = await commitRow(r, r.selectedEvent?.eventCrfId ?? null, r.selectedEvent?.studyEventId ?? null, false)
       // A refused token refuses the rest of the batch too: stop, the files stay
       // as they are, and a person sends them again with a new link.
       if (refused) break
@@ -620,6 +779,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     const row = rows.value.find((r) => r.rowId === rowId)
     if (!row || !REVIEWABLE.has(row.state)) return
     if (row.needsDeidConfirm && row.deidConfirmed !== true) return
+    if (hasNoSeriesLeft(row)) return
     await commitRow(row, null, null, true)
   }
 
@@ -631,6 +791,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     withoutVisit: boolean,
   ): Promise<boolean> {
     if (!row.kind) return false
+    if (hasNoSeriesLeft(row)) return false // every series unticked: nothing to upload
     let tokenRefused = false
     // The OCT route accepts exactly one of {park, eventCrfId, studyEventId};
     // prefer the open CRF, fall back to the planned visit.
@@ -662,6 +823,38 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
       } else {
         upload = { file: row.file, patientId: row.patientId.trim() || null }
       }
+      const progress = (pct: number): void => {
+        uploadPct.value.set(row.rowId, pct)
+        uploadPct.value = new Map(uploadPct.value)
+      }
+      if (row.split) {
+        // DR-041 contract 2: the whole file, streamed once. No scan date, eye or
+        // volume index (the server reads them per series), and the visit only as
+        // studyEventId. Without one the server resolves each series or parks it.
+        const excluded = excludedKeysOf(row.preview, row.excludedKeys)
+        const splitRes = await commitFile(mode.value, {
+          file: row.file,
+          patientId: row.patientId.trim() || null,
+          split: true,
+          device: 'spectralis',
+          studyEventId: withoutVisit ? null : studyEventId,
+          park: withoutVisit,
+          ...(excluded.length > 0 ? { excludeSeries: excluded } : {}),
+        }, progress)
+        const items = splitRes.items ?? []
+        patch(row.rowId, {
+          state: 'committed',
+          // The server's own list of what it left out wins over what was sent.
+          excludedKeys: excludedFromResponse(splitRes.excluded) ?? excluded,
+          items,
+          headerPatient: splitRes.headerPatient as HeaderPatient,
+          subjectLabel: splitRes.subjectLabel ?? null,
+          parked: splitRes.parked,
+          ingestItemId: items[0]?.ingestItemId,
+          committedAt: new Date(),
+        })
+        return false
+      }
       const res = await commitFile(mode.value, {
         ...upload,
         scanDate: row.date,
@@ -670,10 +863,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
         eventCrfId: boundEventCrfId,
         studyEventId: boundStudyEventId,
         park: row.kind === 'e2e' && withoutVisit,
-      }, (pct) => {
-        uploadPct.value.set(row.rowId, pct)
-        uploadPct.value = new Map(uploadPct.value)
-      })
+      }, progress)
       patch(row.rowId, {
         // A held file is in the inbox, not on the visit: say so rather than
         // showing the visit the operator picked as done.
@@ -693,10 +883,10 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
         tokenRefused = true
         patch(row.rowId, { state: stateBefore })
       } else if (status === 409) {
-        const body = (e as { body?: { existingIngestItemId?: number; existingJobId?: number } }).body
+        const body = (e as { body?: { existingIngestItemId?: number; existingIngestItemIds?: number[]; existingJobId?: number } }).body
         patch(row.rowId, {
           state: 'duplicate',
-          existingIngestItemId: body?.existingIngestItemId ?? undefined,
+          existingIngestItemId: body?.existingIngestItemId ?? body?.existingIngestItemIds?.[0] ?? undefined,
           existingJobId: body?.existingJobId ?? undefined,
         })
       } else if (isDeidError(e)) {
@@ -717,8 +907,35 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
   async function undo(rowId: string): Promise<void> {
     const row = rows.value.find((r) => r.rowId === rowId)
     if (!row || row.state !== 'committed') return
-    if (row.jobId == null && row.ingestItemId == null) return
+    if (row.jobId == null && row.ingestItemId == null && !row.items?.length) return
     patch(rowId, { state: 'committing' })
+    if (row.split) {
+      // DR-041: one file made several items; taking the upload back deletes
+      // them all, one request each. A failure leaves the ones still there.
+      const remaining: SplitItem[] = []
+      let failure: unknown = null
+      for (const item of row.items ?? []) {
+        try {
+          await undoItem(mode.value, item.ingestItemId)
+        } catch (e) {
+          remaining.push(item)
+          failure ??= e
+        }
+      }
+      if (remaining.length > 0) {
+        patch(rowId, {
+          state: 'committed', items: remaining, ingestItemId: remaining[0].ingestItemId,
+          error: failure instanceof Error && failure.message ? failure.message : 'undoFailed',
+        })
+        return
+      }
+      patch(rowId, {
+        state: row.selectedCandidate || !row.patientId ? 'suggested' : 'nopatient',
+        items: undefined, headerPatient: undefined, subjectLabel: undefined, parked: undefined,
+        ingestItemId: undefined, committedAt: undefined, error: undefined,
+      })
+      return
+    }
     try {
       if (row.jobId != null) await undoJob(mode.value, row.jobId)
       else await undoItem(mode.value, row.ingestItemId as number)
@@ -844,7 +1061,7 @@ export const useUploadWorkbenchStore = defineStore('uploadWorkbench', () => {
     isParsing, reviewReady, counts,
     setDeidConfirmed, setAllDeidConfirmed,
     setMode, addFiles, setBatchVisit, setPatientIdHint, applyPatientIdHint, setDateHint,
-    setRowLaterality, resolveRowByLabel,
+    setRowLaterality, resolveRowByLabel, setSeriesIncluded,
     confirm, confirmAll, park, undo, dismiss, reset,
     assignFromSearch, pickStudyCandidate, setManualVisit,
   }

@@ -8,9 +8,15 @@
  * store reads the bytes and says what a file is, and a file it cannot name is
  * shown refused rather than silently dropped. On a phone the {@code capture}
  * -less input lets the browser offer the camera roll.
+ *
+ * DR-041: a second input ({@code webkitdirectory}) picks a whole folder, and a
+ * dropped folder is walked recursively. Each file keeps the path it was found
+ * at, because the folder that contains an E2E file is its subject.
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { filesFromDataTransfer, fromFileList, type PickedFile } from '@/lib/folderEntries'
 
 const { t } = useI18n()
 
@@ -19,16 +25,15 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const emit = defineEmits<{ 'files-added': [files: File[]] }>()
+const emit = defineEmits<{ 'files-added': [files: PickedFile[]] }>()
 
 const ACCEPT = '.e2e,.dcm,.dicom,image/jpeg,image/png'
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const folderInput = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 
-function emitFiles(files: FileList | File[] | null): void {
-  if (!files) return
-  const list = Array.from(files)
+function emitFiles(list: PickedFile[]): void {
   if (list.length === 0) return
   emit('files-added', list)
 }
@@ -37,16 +42,22 @@ function onClickBrowse(): void {
   fileInput.value?.click()
 }
 
+function onClickBrowseFolder(): void {
+  folderInput.value?.click()
+}
+
 function onInputChange(e: Event): void {
   const target = e.target as HTMLInputElement
-  emitFiles(target.files)
+  emitFiles(fromFileList(target.files))
   target.value = ''
 }
 
 function onDrop(e: DragEvent): void {
   e.preventDefault()
   isDragging.value = false
-  emitFiles(e.dataTransfer?.files ?? null)
+  // The entries are taken synchronously inside filesFromDataTransfer: the
+  // browser empties the transfer once this handler returns.
+  void filesFromDataTransfer(e.dataTransfer).then(emitFiles)
 }
 
 function onDragOver(e: DragEvent): void {
@@ -82,6 +93,12 @@ function onDragLeave(): void {
       class="ml-auto px-3 py-1.5 text-[12px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 min-h-8"
       @click="onClickBrowse"
     >{{ t('uploadPortal.dropzone.browse') }}</button>
+    <button
+      type="button"
+      class="px-3 py-1.5 text-[12px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 min-h-8"
+      data-testid="upload-dropzone-folder-button"
+      @click="onClickBrowseFolder"
+    >{{ t('uploadPortal.dropzone.browseFolder') }}</button>
     <input
       ref="fileInput"
       type="file"
@@ -89,6 +106,15 @@ function onDragLeave(): void {
       multiple
       :accept="ACCEPT"
       data-testid="upload-dropzone-input"
+      @change="onInputChange"
+    />
+    <input
+      ref="folderInput"
+      type="file"
+      class="hidden"
+      multiple
+      webkitdirectory
+      data-testid="upload-dropzone-folder-input"
       @change="onInputChange"
     />
   </div>
@@ -116,7 +142,15 @@ function onDragLeave(): void {
         class="text-muw-blue font-medium underline underline-offset-2 hover:text-muw-blue-700 min-h-8 px-1"
         @click="onClickBrowse"
       >{{ t('uploadPortal.dropzone.heroBrowse') }}</button>
+      {{ t('uploadPortal.dropzone.heroOr') }}
+      <button
+        type="button"
+        class="text-muw-blue font-medium underline underline-offset-2 hover:text-muw-blue-700 min-h-8 px-1"
+        data-testid="upload-dropzone-folder-button"
+        @click="onClickBrowseFolder"
+      >{{ t('uploadPortal.dropzone.browseFolder') }}</button>
     </div>
+    <p class="text-[12px] text-slate-500 mt-2 max-w-xl" data-testid="upload-folder-help">{{ t('uploadPortal.dropzone.folderHelp') }}</p>
     <div class="flex flex-wrap items-center justify-center gap-2 mt-5 text-[12px] text-slate-400">
       <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-white ring-1 ring-slate-200 font-mono">.e2e</span>
       <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-white ring-1 ring-slate-200 font-mono">.dcm</span>
@@ -130,6 +164,15 @@ function onDragLeave(): void {
       multiple
       :accept="ACCEPT"
       data-testid="upload-dropzone-input"
+      @change="onInputChange"
+    />
+    <input
+      ref="folderInput"
+      type="file"
+      class="hidden"
+      multiple
+      webkitdirectory
+      data-testid="upload-dropzone-folder-input"
       @change="onInputChange"
     />
   </div>

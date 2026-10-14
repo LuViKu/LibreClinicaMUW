@@ -13,6 +13,7 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.job.ArchivedFileRetentionScheduler;
+import at.ac.meduniwien.ophthalmology.libreclinica.job.E2eSourceRetentionScheduler;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.ImageIngestRetentionScheduler;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobExecutionExceptionListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTriggerListener;
@@ -111,5 +112,16 @@ public class QuartzConfig {
     @DependsOn("schedulerFactoryBean")
     public ImageIngestRetentionScheduler imageIngestRetentionScheduler(Scheduler scheduler) {
         return new ImageIngestRetentionScheduler(scheduler);
+    }
+
+    /**
+     * DR-041 - register the daily sweep of E2E source copies: the original
+     * {@code .E2E} of a split upload is kept for
+     * {@code core.retinalInference.e2eSourceRetentionDays} and then deleted.
+     */
+    @Bean
+    @DependsOn("schedulerFactoryBean")
+    public E2eSourceRetentionScheduler e2eSourceRetentionScheduler(Scheduler scheduler) {
+        return new E2eSourceRetentionScheduler(scheduler);
     }
 }

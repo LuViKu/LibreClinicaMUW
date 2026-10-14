@@ -283,6 +283,30 @@ public final class VisitImagingPlan {
     }
 
     /**
+     * DR-041 — the one active catalogue entry of a study that takes this E2E
+     * series kind ({@code imaging_modality.e2e_series}, e.g. {@code OCT},
+     * {@code IR}, {@code FA}), or null when there is none or more than one — a
+     * guess between two would be filed as a fact.
+     */
+    public static Integer modalityByE2eSeries(Connection c, int studyId, String seriesModality)
+            throws SQLException {
+        if (seriesModality == null || seriesModality.isBlank()) return null;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT imaging_modality_id FROM imaging_modality "
+                        + " WHERE study_id = ? AND COALESCE(status_id, 1) = 1 "
+                        + "   AND upper(e2e_series) = upper(?) "
+                        + " ORDER BY ordinal, code")) {
+            ps.setInt(1, studyId);
+            ps.setString(2, seriesModality.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int id = rs.getInt(1);
+                return rs.next() ? null : Integer.valueOf(id);
+            }
+        }
+    }
+
+    /**
      * DR-039 — the catalogue entry an unclassified OCT volume is filed under,
      * or null when that cannot be said without guessing.
      *

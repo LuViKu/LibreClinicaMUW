@@ -144,7 +144,7 @@ above for the host-hardening scope split.
    stay on the build host where they belong — a few MB instead of
    ~150 MB on disk). Seeds `/opt/libreclinica/config/` from
    `docker/config/`. Creates
-   `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference,retinal-artifacts,dicom-ingest,ingest}` and
+   `/var/lib/libreclinica/{postgres,e2e-uploads,e2e-convert,e2e-source,retinal-inference,retinal-artifacts,dicom-ingest,ingest}` and
    `/var/backups/libreclinica/`. The sparse-checkout pattern is
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.
@@ -447,17 +447,29 @@ upload front door the page uses (DR-029), so nothing changes server-side:
 - **sweep** every 20 s; a file counts as finished when its size has not
   changed since the last sweep and it can be opened without sharing;
 - **identify** `.dcm` from the header (PatientID, StudyDate, laterality —
-  the Optomed bridge's reader) and `.e2e` from the Heidelberg chunk
-  directory (patient id, acquisition date and laterality per OCT volume —
-  a port of the page's own reader), one upload per volume;
-- **one `/resolve` per sweep** for every scan found, because lookups on the
-  public front door are budgeted at 30 per hour per client; exactly one
-  subject with exactly one visit that day → bound on arrival, otherwise the
-  reconciliation inbox with label and date as hints (an `.e2e` without a
-  visit is *parked*: no inference until somebody binds it);
-- `201` and `409` (already there) move the file to `_uploaded\`; anything
-  else is retried on later sweeps and after five attempts moved to
-  `_failed\`. Nothing is ever deleted.
+  the Optomed bridge's reader). An `.e2e` is **not read** by the watcher: the
+  platform takes its subject from the study label in the file's header, and a
+  patient folder, if there is one, must agree (see below);
+- **`.dcm`: one `/resolve` per sweep** for every scan found, because lookups
+  on the public front door are budgeted at 30 per hour per client; exactly
+  one subject with exactly one visit that day → bound on arrival, otherwise
+  the reconciliation inbox with label and date as hints;
+- **`.e2e` (DR-041): one upload per file, split on the platform.** The
+  watcher computes the file's SHA-256 (streamed), asks
+  `GET /public/upload/preflight?sha256=…&split=true` and, if the platform
+  does not have it yet, sends the whole file in **one streamed**
+  `POST /public/upload/commit` (`split=true`, `device`, and `patientId` = the
+  folder name only for a file in a sub-folder), up to **2 GiB**; the file is
+  never read into memory (the watcher has no preview and always sends every series; leaving series out is possible in the browser upload only). The platform splits it into one item per series
+  (OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA, FA, per eye),
+  binds them when it can and parks them in the inbox when the header's label
+  differs from the folder name, the file carries no usable label and has no
+  folder, the label names no single subject, or no visit can be found. The request's time limit is sized from the
+  file (10 minutes plus the file at 1 MiB/s: about 44 minutes for 2 GiB);
+- `201` and `409` (already there) move the file to `_uploaded\` — a
+  preflight hit does too, without a byte sent; anything else is retried on
+  later sweeps and after five attempts moved to `_failed\`. A file over
+  2 GiB goes to `_failed\` at once, unsent. Nothing is ever deleted.
 - A Clarus export is **three objects per capture**: the photograph, a Raw
   Data object with the vendor's sensor data (about 8 MB) and a small OT Raw
   Data object stamped with the export time. Only the photograph is an image
@@ -467,8 +479,33 @@ upload front door the page uses (DR-029), so nothing changes server-side:
 **One watcher per PC**, each pointed at that PC's own export folder: on the
 Clarus PC it runs beside the Optomed bridge, on the Spectralis PC alone.
 The convention is the one every device ingress here uses — **the patient id
-typed into the device is the study subject label** (Clarus: PatientID; HEYEX:
-the patient id, or after anonymisation the surname slot, where MUW keeps it).
+typed into the device is the study subject label** (Clarus: PatientID).
+
+**Spectralis: the label in the file, folders optional.** The subject of an
+`.E2E` is the study label in the **surname slot** of the file's patient
+record, which the platform reads. The first-name and patient-id slots can hold
+a clinic number, so they are never used, sent or stored. Exports may sit in
+one shared watch folder (any number of patients, flat) or in one folder per
+patient:
+
+```
+D:\LibreClinica-Export\            <- watch folder
+    EIAMD01D.E2E                   <- uploaded, no patientId: the platform reads the label
+    EIAMD02D.E2E
+    EIAMD005\                      <- patient folder
+        EIAMD03D.E2E               <- uploaded with patientId=EIAMD005
+```
+
+A file **directly in the watch folder** is uploaded without a `patientId`. A
+file in a sub-folder is uploaded with `patientId` = the name of the folder
+that directly contains it (however deep it sits below the watch folder), and
+the platform parks every series of it in the inbox when that name differs from
+the label in the header. A file whose header carries no usable label takes the
+folder name as its label; with neither, it is parked with no subject. A label
+read from the file is stored only when it names exactly one visible subject;
+an unmatched one is dropped. Uploaded files are filed in an `_uploaded\` (or
+`_failed\`) folder **next to the file** (the watch folder itself, or the
+patient folder); the retention setting reaches those as well.
 
 ```powershell
 # On each acquisition PC, as the user who exports. Copy deploy/export-watcher/
@@ -485,12 +522,15 @@ uploader token, which every PC needs in multi-location mode (see "Uploader
 tokens and locations" below). Settings are in
 `%ProgramData%\LibreClinica\export-watcher.json`, the log beside them (counts
 and pseudonymous labels only, never names or filenames).
-Before switching it on, check the readers on a real export:
+Before switching it on, check the rules on a real export:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\ExportWatcher.ps1 -SelfTest -File D:\LibreClinica-Export\some.E2E
-# prints one line per volume: label, date, laterality — nothing is uploaded
-# (a Clarus Raw Data object prints "[non-image object: set aside]")
+# .dcm: one line with label, date, laterality (a Clarus Raw Data object prints
+#       "[non-image object: set aside]")
+# .E2E: the folder it would send as patientId (none for a file directly in the
+#       watch folder) and the file's SHA-256 - the header is not read.
+#       Nothing is uploaded either way.
 ```
 
 Like the bridge, the watcher reports to the **System Status** page every two
@@ -989,15 +1029,43 @@ AEAD ciphers, session tickets off), HSTS `max-age=31536000` (plus `includeSubDom
 scripts), `X-Forwarded-For` set to the address nginx saw, and the SSO identity headers blanked.
 
 Only the internet-facing deployment additionally gets (in `internet-facing.conf`; the internal one keeps
-its old 1024m body limit, default timeouts and no rate limits): a 2 MB default request body (1 GiB /
-200 MiB only on the upload routes; see [nginx/README.md](nginx/README.md)), header/body timeouts, per-IP
+its old 1024m body limit, default timeouts and no rate limits): a 2 MB default request body (2 GiB on the
+image/OCT upload routes, 1 GiB on the CRF/import routes; see [nginx/README.md](nginx/README.md)), header/body timeouts, per-IP
 rate limits (login 20/min, `RequestAccount`/`Contact` 6/min, 50 r/s overall, 100 concurrent requests),
 and a `default_server` that refuses an unknown `Host` / TLS SNI (the DMZ proxy must send the public name
 as both).
 
+### Multimodal Spectralis exports: one DICOM per series, the `.E2E` as a time-limited source copy
+
+An `.E2E` upload (watcher or browser, `split=true`) is converted on the server into **one DICOM per series**
+(DR-041, [the design](../docs/development/e2e-multimodal-split.md)). The directories involved, all under
+`/var/lib/libreclinica/` and created by `setup-ubuntu-host.sh`:
+
+| Directory | Who mounts it | What is in it |
+|---|---|---|
+| `e2e-uploads` | app (read-write), `retinal-inference` (read-only) | The uploaded `.E2E` while it is described and converted (seconds to minutes). Empty in normal operation: a successful upload moves the file to `e2e-source`, a failed one deletes it. |
+| `e2e-convert` | app **and** `retinal-inference`, both read-write | `<upload uuid>/<seriesKey>.dcm` (+ `.geometry.json` for an OCT volume) written by `POST /e2e/convert`. The app imports the files into the ingest store and removes the directory; a failed conversion removes it too. |
+| `e2e-source` | **app only** | The original `.E2E` of each split upload, kept for `core.retinalInference.e2eSourceRetentionDays`. Nothing serves or analyses it. Mode `0700`. |
+| `ingest/dicom` | app, `dicom-scp` | The converted DICOMs, as for any DICOM upload (the DICOM sidecar pseudonymises each in place and renders its preview). |
+
+**Retention of the source copy.** `core.retinalInference.e2eSourceRetentionDays` (in
+`/opt/libreclinica/config/datainfo.properties`, default **90**) is how long the original `.E2E` is kept. A nightly
+job (03:45) deletes `<uuid>.e2e` files in `e2e-source` older than that (by modification time, which the
+move into the directory sets to the upload time) and writes one audit row per pass (type `e2e_source_deleted`,
+visible in the system audit log). The **items made from the file stay**: each is a DICOM with its own
+stored file and its own retention (a dismissed item is removed after `core.ingest.retention.dismissedDays`),
+and each keeps the file's SHA-256 (`ingest_item.e2e_source_sha256`), so uploading the same export again is still
+answered `409` and the watcher's preflight still finds it. To keep source copies longer, raise the setting before the
+window passes; a deleted source cannot be recovered except from a backup (`e2e-source` is in the nightly file
+archive). `core.retinalInference.e2eSourcePath` and `core.retinalInference.e2eConvertPath` move the directories
+(the compose binds and the sidecar's `RETINAL_INFERENCE_E2E_CONVERT_PATH` must follow).
+
+An orphan `<uuid>.e2e` in `e2e-uploads` or a leftover directory in `e2e-convert` can only come from a crash in the
+middle of an upload; both are safe to delete when no upload is running.
+
 ### Backups
 
-- Nightly 03:00: database dump **and** the file stores (`e2e-uploads`, `retinal-artifacts`,
+- Nightly 03:00: database dump **and** the file stores (`e2e-uploads`, `e2e-source`, `retinal-artifacts`,
   `retinal-inference`, `ingest`, `dicom-ingest`, `app-data`), each encrypted to `BACKUP_AGE_RECIPIENT`
   (`libreclinica-<stamp>.sql.gz.age`, `libreclinica-files-<stamp>.tar.gz.age`). Nothing is written in clear.
 - A **full** archive of the file stores each night: size it accordingly (OCT volumes are large). Retention

@@ -617,4 +617,14 @@ public final class AuditTypeIds {
 
     /** The single-location startup placed rows without a location at the one location. */
     public static final int LOCATION_BACKFILLED              = 208;
+
+    /*
+     * 209 (lc-muw-2026-10-14-e2e-source.xml): written by E2eSourceRetentionService (core, which
+     * repeats it as AUDIT_TYPE_E2E_SOURCE_DELETED) when the nightly pass deleted E2E source copies
+     * past core.retinalInference.e2eSourceRetentionDays. audit_table "e2e_source", entity_id 0,
+     * new_value the count; no user. Admin filter.
+     */
+
+    /** The retention pass deleted E2E source copies (the items made from them stay). */
+    public static final int E2E_SOURCE_DELETED              = 209;
 }

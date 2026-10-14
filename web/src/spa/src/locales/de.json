@@ -335,6 +335,7 @@
         "rateLimited": "die Plattform hat gebremst (HTTP 429)",
         "uploadFailed": "die letzte Upload-Runde hatte Fehler",
         "unreadableFiles": "hat Dateien, die es nicht lesen kann",
+        "fileTooLarge": "hat eine .E2E-Datei über 2 GiB, die nicht hochgeladen werden kann (nach _failed verschoben)",
         "watchFolderMissing": "der Exportordner fehlt",
         "worklistNotImported": "der Optomed Client hat die letzte Worklist nicht übernommen",
         "worklistFailed": "die Worklist konnte nicht abgerufen werden",
@@ -3917,9 +3918,67 @@
       "heroTitle": "Dateien hierher ziehen",
       "heroBrowsePrefix": "oder",
       "heroBrowse": "Dateien wählen",
+      "heroOr": "oder",
+      "browseFolder": "Ordner wählen",
+      "folderHelp": "Das Patientenkürzel wird aus der .E2E-Datei selbst gelesen, ein gemeinsamer Ordner genügt also. Liegt eine Datei in einem Patientenordner (z. B. EIAMD005/Datei.E2E), muss der Ordnername zum Kürzel in der Datei passen, sonst landet die Datei im Eingang. Ordner können auch hierher gezogen werden. Jede Serie einer .E2E-Datei wird ein eigener Eintrag.",
       "heroNote": "mehrere Dateien gleichzeitig · Header werden lokal im Browser gelesen",
       "slimDropMore": "Weitere Dateien hierher ziehen",
       "browse": "Durchsuchen"
+    },
+    "split": {
+      "summary": "{count} Serien",
+      "frames": "{n} Bild | {n} Bilder",
+      "autoVisit": "Die Visite wird je Serie vom Server zugeordnet; sonst landet die Serie im Eingang.",
+      "labelFromFile": "Der Patient wird beim Senden aus der Datei gelesen; eine Datei ohne bekannten Patienten landet im Eingang.",
+      "noSubject": "Kein Patient — im Eingang abgelegt. Das Patientenkürzel der Datei ist hier unbekannt oder fehlt.",
+      "headerDiffers": "Das Kürzel in der Datei weicht vom Ordnernamen ab — alle Serien liegen im Eingang und müssen von Hand zugeordnet werden.",
+      "parked": "Alle Serien liegen im Eingang.",
+      "tooLarge": "{file} ist größer als 2 GiB und kann nicht hochgeladen werden.",
+      "preview": {
+        "title": "Serien in dieser Datei",
+        "selected": "{n} von {total} ausgewählt",
+        "labelInFile": "Kürzel in der Datei:",
+        "labelMatches": "Das Kürzel in der Datei stimmt mit dem Ordner überein.",
+        "labelDiffers": "Das Kürzel in der Datei ({label}) weicht vom Ordner ({folder}) ab: Der Server legt alle Serien im Eingang ab, Sie ordnen sie von Hand zu.",
+        "labelFolderUsed": "Die Datei enthält kein lesbares Kürzel; der Ordnername {folder} wird verwendet.",
+        "labelNone": "Die Datei enthält kein lesbares Kürzel und liegt in keinem Ordner: Alle Serien landen im Eingang.",
+        "noneSelected": "Wählen Sie mindestens eine Serie aus, um diese Datei hochzuladen.",
+        "byModality": "Nach Modalität auswählen",
+        "all": "Alle",
+        "none": "Keine",
+        "includeAria": "{series} hochladen",
+        "eye": {
+          "OD": "Rechtes Auge (OD)",
+          "OS": "Linkes Auge (OS)",
+          "none": "Auge nicht angegeben"
+        },
+        "visit": {
+          "picked": "Visite: {visit}",
+          "suggested": "Visite: {visit} {date}",
+          "none": "Keine Visite für dieses Datum: Eingang",
+          "noSubject": "Patient nicht gefunden: Eingang",
+          "ambiguous": "Mehrere Treffer: der Server entscheidet"
+        },
+        "leftOut": "{n} Serien vom Upload ausgenommen",
+        "leftOutTag": "ausgenommen",
+        "readFailed": "Die Serienliste konnte hier nicht gelesen werden; die ganze Datei wird gesendet."
+      },
+      "modality": {
+        "OCT": "OCT-Volumen",
+        "OCT_LINE": "OCT-Linienscan",
+        "IR": "IR",
+        "BAF": "BAF",
+        "BR": "BR",
+        "IRAF": "IRAF",
+        "QAF": "qAF",
+        "ICGA": "ICGA",
+        "FA": "FA",
+        "OTHER": "Andere"
+      },
+      "status": {
+        "UNBOUND": "Im Eingang",
+        "BOUND": "Zugeordnet"
+      }
     },
     "batch": {
       "title": "Visite für diese Dateien",

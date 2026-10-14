@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-041 (amendment 2026-10-13 b): a multimodal Spectralis export is converted
+        into one DICOM per series; the original .E2E is kept only as a time-limited
+        source copy.
+
+          ingest_item.e2e_source_sha256  SHA-256 of the .E2E the item was made from.
+                                         Duplicate detection (409) and the split
+                                         preflight use it, so the same export is
+                                         refused again after its source file has been
+                                         deleted by the retention job.
+          audit type 209                 e2e_source_deleted: one row per retention
+                                         pass that deleted source files (audit_table
+                                         'e2e_source', no user).
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-14-ingest-item-e2e-source-sha256">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="e2e_source_sha256"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item.e2e_source_sha256: digest of the .E2E a split item was made from (DR-041).</comment>
+        <addColumn tableName="ingest_item">
+            <column name="e2e_source_sha256" type="VARCHAR(64)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="e2e_source_sha256"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-14-ingest-item-e2e-source-sha256-index" dbms="postgresql">
+        <comment>One item per (source digest, series): looks up an export by digest (duplicate detection, split
+            preflight) and refuses two concurrent uploads of the same export.</comment>
+        <sql>
+            CREATE UNIQUE INDEX IF NOT EXISTS u_ingest_item_e2e_source_series
+                ON ingest_item (e2e_source_sha256, e2e_series_key)
+             WHERE e2e_source_sha256 IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS u_ingest_item_e2e_source_series;</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-14-audit-type-e2e-source-deleted" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 209;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit type 209: the retention pass deleted E2E source copies.</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="209"/>
+            <column name="name" value="e2e_source_deleted"/>
+            <column name="display_name" value="E2E source copies deleted"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 209</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

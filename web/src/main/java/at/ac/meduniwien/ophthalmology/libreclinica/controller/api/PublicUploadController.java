@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,8 +30,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.FileKindSniffer;
@@ -177,6 +185,25 @@ public class PublicUploadController {
                 DeviceScope.itemsOf(dataSource, UploaderSources.of(servletRequest))));
     }
 
+    /**
+     * DR-041 - is this multimodal {@code .e2e} already split into one item per series? Answered before
+     * the bytes travel; the digest is the export's, and the answer holds after its source file has
+     * been deleted.
+     */
+    @GetMapping(value = "/preflight", params = "split=true", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(operationId = "preflightSplitUpload",
+            summary = "Is this multimodal .e2e already split into one item per series?")
+    @Parameter(name = "split", in = ParameterIn.QUERY, required = true,
+            description = "Must be true: the export is split into one item per series (DR-041).",
+            schema = @Schema(type = "boolean", allowableValues = "true"))
+    public E2eSplitPreflightResponse preflightSplitUpload(@RequestParam("sha256") String sha256,
+                                                          HttpServletRequest servletRequest) {
+        if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
+            throw SplitUploadRejection.of(400, "sha256 must be 64 hex characters");
+        }
+        return oct.preflightSplit(sha256, DeviceScope.itemsOf(dataSource, UploaderSources.of(servletRequest)));
+    }
+
     /* ---------------- the upload ---------------- */
 
     /**
@@ -254,6 +281,77 @@ public class PublicUploadController {
             LOG.info("public upload: ingest_item {} ({}) {}", c.ingestItemId(), c.format(), c.status());
         }
         return UploadRoute.respond(outcome);
+    }
+
+    /**
+     * DR-041 - a multimodal Spectralis {@code .e2e}, uploaded once and converted on the server into one
+     * DICOM per series (see {@link E2eSplitUpload}). Multipart fields: {@code file}, {@code split=true},
+     * {@code patientId} (the folder the file was found in; optional, the subject comes from the file's
+     * own header label), {@code studyEventId} or {@code park}, and {@code excludeSeries}, a
+     * comma-separated list of the {@code seriesKey}s to leave out. {@code scanDate}, {@code laterality}
+     * and {@code scanIndex} are not used: the server takes them per series.
+     */
+    @PostMapping(value = "/commit", params = "split=true", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(operationId = "commitSplitUpload",
+            summary = "Upload a multimodal .e2e once; it is converted to one DICOM per series",
+            responses = {
+                @ApiResponse(responseCode = "201", description = "One item per kept series."),
+                @ApiResponse(responseCode = "400", description = "Unknown or malformed excludeSeries key, or every series excluded; nothing stored.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "404", description = "The visit does not exist (or is not visible).",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "409", description = "An export with this SHA-256 was already split.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitDuplicateResponse.class))),
+                @ApiResponse(responseCode = "422", description = "The file holds no image series.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "502", description = "The converter or the DICOM service answered with an error.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class))),
+                @ApiResponse(responseCode = "503", description = "The converter or the DICOM service is not configured or not reachable.",
+                        content = @Content(schema = @Schema(implementation = E2eSplitErrorResponse.class)))})
+    @Parameter(name = "split", in = ParameterIn.QUERY, required = true,
+            description = "Must be true: the export is split into one item per series (DR-041).",
+            schema = @Schema(type = "boolean", allowableValues = "true"))
+    public E2eSplitCommitResponse commitSplitUpload(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "patientId", required = false) String patientId,
+            @RequestParam(value = "scanDate", required = false) String scanDate,
+            @RequestParam(value = "studyDate", required = false) String studyDate,
+            @RequestParam(value = "laterality", required = false) String laterality,
+            @RequestParam(value = "eventCrfId", required = false) Integer eventCrfId,
+            @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
+            @RequestParam(value = "park", defaultValue = "false") boolean park,
+            @RequestParam(value = "excludeSeries", required = false) String excludeSeries,
+            HttpServletRequest servletRequest) {
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            throw SplitUploadRejection.from(DeidUploadGate.accountlessClosed());
+        }
+        IngestSourceService.Source source = UploaderSources.of(servletRequest);
+        if (file == null || file.isEmpty()) {
+            throw SplitUploadRejection.of(400, "file is required");
+        }
+        FileKindSniffer.Sniffed sniffed = UploadRoute.sniff(file);
+        if (sniffed == null) {
+            throw SplitUploadRejection.of(400, UploadRoute.UNSUPPORTED_MESSAGE);
+        }
+        if (sniffed.kind() != IngestArtifactStore.Kind.E2E) {
+            throw SplitUploadRejection.of(400, "split=true is only for .e2e files");
+        }
+        if (!UploadRoute.isBlank(scanDate) || !UploadRoute.isBlank(studyDate) || !UploadRoute.isBlank(laterality)) {
+            throw SplitUploadRejection.of(400, "scanDate and laterality are taken from the file with split=true");
+        }
+        // A tokened request works for its location: a visit of another place reads as one that does not exist.
+        Set<Integer> atLocation = DeviceScope.atLocation(dataSource, source);
+        String pid = patientId;
+        if (UploadRoute.isBlank(pid) && studyEventId != null && visitAtLocation(atLocation, studyEventId)) {
+            pid = UploadRoute.subjectLabelForStudyEvent(dataSource, studyEventId);
+        }
+        if (UploadRoute.isBlank(pid) && eventCrfId != null) {
+            Integer se = UploadRoute.studyEventIdForEventCrf(dataSource, eventCrfId);
+            if (se != null && visitAtLocation(atLocation, se)) pid = UploadRoute.subjectLabelForStudyEvent(dataSource, se);
+        }
+        return oct.commitSplitFrom(source, file, pid, studyEventId, eventCrfId, park, excludeSeries);
     }
 
     /** True when nothing narrows the request (no source), or the visit is of a subject enrolled at its location. */
