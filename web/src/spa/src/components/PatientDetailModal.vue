@@ -169,6 +169,17 @@ const eyeTimelines = computed<EyeTimeline[]>(() => {
   return (['OD', 'OS'] as const).map((eye) => buildEyeTimeline(d, eye))
 })
 
+/**
+ * The name a pill shows: "Study › Site" when the study row is a site
+ * (the enrolment on it names the parent), else the study's own name.
+ * Transitions carry only the row's name, so their parent comes from the
+ * patient's enrolment on the same row.
+ */
+function scopeName(d: PatientDetail, studyOid: string, studyName: string): string {
+  const parent = d.enrolments.find((e) => e.studyOid === studyOid && e.parentStudyName)?.parentStudyName
+  return parent ? `${parent} › ${studyName}` : studyName
+}
+
 function buildEyeTimeline(d: PatientDetail, eye: 'OD' | 'OS'): EyeTimeline {
   const transitionsForEye = d.eyeTransitions
     .filter((tx) => tx.eye === eye)
@@ -193,7 +204,7 @@ function buildEyeTimeline(d: PatientDetail, eye: 'OD' | 'OS'): EyeTimeline {
     const first = transitionsForEye[0]
     pills.push({
       studyOid: first.fromStudyOid,
-      studyName: first.fromStudyName,
+      studyName: scopeName(d, first.fromStudyOid, first.fromStudyName),
       label: first.fromLabel,
       eventAt: null,
       kind: 'enrolment',
@@ -202,7 +213,7 @@ function buildEyeTimeline(d: PatientDetail, eye: 'OD' | 'OS'): EyeTimeline {
     for (const tx of transitionsForEye) {
       pills.push({
         studyOid: tx.toStudyOid,
-        studyName: tx.toStudyName,
+        studyName: scopeName(d, tx.toStudyOid, tx.toStudyName),
         label: tx.toLabel,
         eventAt: tx.eventAt,
         kind: 'transition',
@@ -221,7 +232,7 @@ function buildEyeTimeline(d: PatientDetail, eye: 'OD' | 'OS'): EyeTimeline {
       const start = enrolmentsForEye[0]
       pills.push({
         studyOid: start.studyOid,
-        studyName: start.studyName,
+        studyName: scopeName(d, start.studyOid, start.studyName),
         label: start.label,
         eventAt: null,
         kind: 'enrolment',
