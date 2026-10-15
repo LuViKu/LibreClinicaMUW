@@ -656,7 +656,15 @@ const canScheduleEvent = computed(() => {
       || r === 'Data Manager',
   )
 })
-const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
+/**
+ * The study whose design (visit definitions) applies: the parent of an
+ * active site, whose own OID the design endpoints refuse (409).
+ */
+const designStudyOid = computed(() => {
+  const active = auth.user?.activeStudy
+  if (!active) return ''
+  return active.isSite && active.parentOid ? active.parentOid : active.oid
+})
 
 async function onEventScheduled() {
   if (subject.value) {
@@ -1364,7 +1372,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           <CameraWorklistStatus
             v-if="!subjectRemoved"
             :subject-id="subject.id"
-            :study-oid="activeStudyOid"
+            :study-oid="designStudyOid"
             :can-schedule="canScheduleEvent"
             :events-signature="eventsSignature"
             @changed="onEventScheduled"
@@ -1723,7 +1731,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       v-if="subject && canScheduleEvent"
       v-model:open="scheduleDialogOpen"
       :subject-id="subject.id"
-      :study-oid="activeStudyOid"
+      :study-oid="designStudyOid"
       @scheduled="onEventScheduled"
     />
 
@@ -1744,7 +1752,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       v-if="groupEditOpen && subject"
       :open="true"
       :study-subject-oid="subject.id"
-      :study-oid="activeStudyOid"
+      :study-oid="designStudyOid"
       :current-assignments="subject.groupAssignments ?? []"
       @close="groupEditOpen = false"
       @saved="onGroupsSaved"

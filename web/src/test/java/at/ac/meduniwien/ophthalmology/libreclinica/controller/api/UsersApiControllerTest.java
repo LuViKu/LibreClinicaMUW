@@ -82,15 +82,20 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
-    void createReturns400WhenNoActiveStudy() throws Exception {
+    void createNeedsNoActiveStudyButAStudyInTheRequest() throws Exception {
+        // The request names the initial binding's study; the caller's
+        // active study is neither required nor used in its place.
+        org.springframework.mock.web.MockHttpSession session =
+                (org.springframework.mock.web.MockHttpSession) authenticatedSessionWithoutStudy(1, "root");
+        ((at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean) session.getAttribute("userBean"))
+                .addUserType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType.SYSADMIN);
         mockMvcWith().perform(post("/api/v1/users")
                 .contentType("application/json")
                 .content("{\"username\":\"newuser\"}")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSessionWithoutStudy(1, "root")))
+                .session(session))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message")
-                        .value(containsString("No active study")));
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errors[?(@.field == 'studyId')]").exists());
     }
 
     @Test

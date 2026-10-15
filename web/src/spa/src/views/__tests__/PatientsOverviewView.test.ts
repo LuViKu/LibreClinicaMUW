@@ -100,7 +100,7 @@ const LIST = {
       gender: 'M',
       yearOfBirth: 1971,
       enrolments: [
-        { studyOid: 'S_IAMD', studyName: 'iAMD', label: 'M-014', studyEye: 'OS', enrolledOn: '2024-03-15', lastVisitAt: '2024-08-01T11:00:00Z' },
+        { studyOid: 'S_IAMDVIE', studyName: 'Wien', label: 'M-014', studyEye: 'OS', enrolledOn: '2024-03-15', lastVisitAt: '2024-08-01T11:00:00Z', parentStudyName: 'iAMD' },
       ],
     },
   ],
@@ -126,6 +126,18 @@ describe('PatientsOverviewView', () => {
     const row101 = w.find('[data-testid="patient-row-101"]')
     expect(row101.text()).toContain('GA Cohort')
     expect(row101.text()).toContain('iAMD')
+    expect(row101.text()).not.toContain('›')
+  })
+
+  it('names the study of a site enrolment', async () => {
+    const w = await mountView()
+    const store = usePatientsOverviewStore()
+    store.list = LIST.patients
+    store.totalCount = LIST.totalCount
+    await flushPromises()
+    const row102 = w.find('[data-testid="patient-row-102"]')
+    expect(row102.text()).toContain('iAMD › Wien')
+    expect(row102.text()).toContain('OS')
   })
 
   it('renders the empty state when the list is empty', async () => {

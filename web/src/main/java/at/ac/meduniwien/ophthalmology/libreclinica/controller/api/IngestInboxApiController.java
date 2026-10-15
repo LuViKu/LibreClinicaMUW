@@ -203,14 +203,16 @@ public class IngestInboxApiController {
                             */
                            boolean octVolume,
                            /* The file's Manufacturer / ManufacturerModelName; DICOM only. */
-                           String manufacturer, String manufacturerModel) {
+                           String manufacturer, String manufacturerModel,
+                           /* DR-041 - a series of a split multimodal .e2e: its kind, frames and opaque key. */
+                           String seriesModality, Integer seriesFrames, String seriesKey) {
 
         /** The same row with the scan's analyses filled in (the visit page's list). */
         InboxRow withAnalyses(List<ScanAnalysis> list) {
             return new InboxRow(id, kind, sourceKind, device, patientId, laterality, acquisitionDate,
                     acquisitionDateSource, modality, originalFilename, byteSize, scanIndex, receivedAt,
                     previewUrl, hasPreview, suggestion, twin, analysable, list,
-                    octVolume, manufacturer, manufacturerModel);
+                    octVolume, manufacturer, manufacturerModel, seriesModality, seriesFrames, seriesKey);
         }
     }
 
@@ -286,7 +288,7 @@ public class IngestInboxApiController {
         StringBuilder sql = new StringBuilder(
                 "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                         + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
-                        + "oct_volume, manufacturer, manufacturer_model, "
+                        + "oct_volume, manufacturer, manufacturer_model, series_modality, series_frames, e2e_series_key, "
                         + "received_at, preview_png_path, " + TWIN_COLUMN
                         + "  FROM ingest_item WHERE status = ?");
         // Cross-site isolation: only the rows this session may see (IngestItemVisibility).
@@ -383,7 +385,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
-                        + "oct_volume, manufacturer, manufacturer_model, "
+                        + "oct_volume, manufacturer, manufacturer_model, series_modality, series_frames, e2e_series_key, "
                              + "received_at, preview_png_path, bound_study_subject_id, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE ingest_item_id = ?")) {
             ps.setLong(1, id);
@@ -458,7 +460,7 @@ public class IngestInboxApiController {
              PreparedStatement ps = c.prepareStatement(
                      "SELECT ingest_item_id, kind, source_kind, device, patient_id, laterality, "
                              + "acquisition_date, acquisition_date_source, modality, original_filename, byte_size, scan_index, "
-                        + "oct_volume, manufacturer, manufacturer_model, "
+                        + "oct_volume, manufacturer, manufacturer_model, series_modality, series_frames, e2e_series_key, "
                              + "received_at, preview_png_path, " + TWIN_COLUMN
                              + "  FROM ingest_item WHERE bound_study_event_id = ? AND status = 'BOUND' "
                              + " ORDER BY laterality NULLS LAST, received_at")) {
@@ -1018,6 +1020,9 @@ public class IngestInboxApiController {
         boolean oct = rs.getBoolean("oct_volume");
         Boolean octVolume = rs.wasNull() ? null : oct;
         String kind = rs.getString("kind");
+        String seriesModality = rs.getString("series_modality");
+        int frames = rs.getInt("series_frames");
+        Integer seriesFrames = rs.wasNull() ? null : frames;
         return new InboxRow(
                 id,
                 kind,
@@ -1041,7 +1046,10 @@ public class IngestInboxApiController {
                 null,
                 "dicom".equalsIgnoreCase(kind) && Boolean.TRUE.equals(octVolume),
                 rs.getString("manufacturer"),
-                rs.getString("manufacturer_model"));
+                rs.getString("manufacturer_model"),
+                seriesModality,
+                seriesFrames,
+                rs.getString("e2e_series_key"));
     }
 
     /**

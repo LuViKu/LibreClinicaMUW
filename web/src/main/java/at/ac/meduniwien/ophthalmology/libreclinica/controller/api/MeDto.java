@@ -194,7 +194,14 @@ public record MeDto(
              * What the session's binding on this study may write, by the
              * rules the write endpoints apply ({@link PermissionsDto}).
              */
-            PermissionsDto permissions) {}
+            PermissionsDto permissions,
+            /**
+             * The parent study's OID when the active study is a site, else
+             * null. The study design (visit definitions, group classes) lives
+             * at the parent, and its endpoints refuse a site OID (409), so the
+             * SPA asks the parent for it.
+             */
+            String parentOid) {}
 
     /**
      * What the session's binding on the active study may write, computed

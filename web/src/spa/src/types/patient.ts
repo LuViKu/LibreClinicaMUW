@@ -38,6 +38,12 @@ export interface PatientEnrolment {
   enrolledOn: string
   /** ISO instant. Null when no event has been recorded yet. */
   lastVisitAt: string | null
+  /**
+   * Name of the study the site belongs to when the enrolment sits on a
+   * site (`studyName` is then the site's own name); null or absent for a
+   * top-level study.
+   */
+  parentStudyName?: string | null
 }
 
 export interface PatientListItem {

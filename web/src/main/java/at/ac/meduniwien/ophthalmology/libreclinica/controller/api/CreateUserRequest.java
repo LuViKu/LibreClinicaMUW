@@ -20,7 +20,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * <p>{@code studyId} + {@code role} encode the initial study/role
  * binding bundled with the user create (legacy
  * {@code CreateUserAccountServlet:359–372}). Subsequent role
- * assignments use the A7.5 endpoints.
+ * assignments use the A7.5 endpoints. The study may be named by its
+ * OID ({@code studyOid}) instead, which is what the SPA's study pickers
+ * carry; there is no fallback to the caller's active study.
  *
  * <p>{@code sendEmail} mirrors the legacy {@code displayPwd} switch:
  * <ul>
@@ -64,5 +66,9 @@ public record CreateUserRequest(
         String authtype,
         Boolean runWebservices,
         Boolean sendEmail,
-        String externalId
+        String externalId,
+        @Schema(nullable = true,
+                description = "OID of the study or site of the initial binding; an alternative to studyId. "
+                        + "One of the two is required, and when both are given they must name the same study.")
+        String studyOid
 ) {}

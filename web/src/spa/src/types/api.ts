@@ -1509,7 +1509,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["commitUpload"];
+        /** Upload a multimodal .e2e once; it is converted to one DICOM per series */
+        post: operations["commitSplitUpload"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1782,7 +1783,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["commitStaffUpload"];
+        /** Upload a multimodal .e2e once; it is converted to one DICOM per series */
+        post: operations["commitSplitStaffUpload"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3263,7 +3265,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["preflightUpload"];
+        /** Is this multimodal .e2e already split into one item per series? */
+        get: operations["preflightSplitUpload"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3552,7 +3555,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["preflightStaffUpload"];
+        /** Is this multimodal .e2e already split into one item per series? */
+        get: operations["preflightSplitStaffUpload"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4482,6 +4486,8 @@ export interface components {
             ownerUsername?: string;
             updatedDate?: string;
             updaterUsername?: string;
+            /** @description Every active binding of the user, one label each: the study's name for a study-wide binding, "Study › Site" for a site. Filled on the user list only. */
+            scopes?: string[];
         };
         RoleAssignmentRequest: {
             studyOid?: string;
@@ -4502,6 +4508,8 @@ export interface components {
              * @enum {string|null}
              */
             legacyRole?: "ra" | "ra2" | null;
+            /** @description Name of the parent study when the binding is on a site; null for a study-wide binding. */
+            parentStudyName?: string | null;
         };
         UploaderWriteRequest: {
             /**
@@ -4915,6 +4923,7 @@ export interface components {
                 [key: string]: string;
             };
             permissions?: components["schemas"]["PermissionsDto"];
+            parentOid?: string;
         };
         ManageableLocationDto: {
             /** Format: int32 */
@@ -5147,6 +5156,8 @@ export interface components {
             runWebservices?: boolean;
             sendEmail?: boolean;
             externalId?: string;
+            /** @description OID of the study or site of the initial binding; an alternative to studyId. One of the two is required, and when both are given they must name the same study. */
+            studyOid?: string | null;
         };
         UnlockUserRequest: {
             sendEmail?: boolean;
@@ -5545,6 +5556,74 @@ export interface components {
             patientId?: string;
             scanDate?: string;
             laterality?: string;
+        };
+        E2eSplitErrorResponse: {
+            message: string;
+        };
+        E2eSplitDuplicateResponse: {
+            message: string;
+            duplicate: boolean;
+            /** @description The items the caller may see; may be empty. */
+            existingIngestItemIds: number[];
+        };
+        E2eSplitCommitResponse: {
+            /** @description SHA-256 of the uploaded .e2e. */
+            sha256: string;
+            /** @description none, empty, matches or differs: the file's label against the folder. */
+            headerPatient: string;
+            /** @description The matched subject's own label; null when the file resolved to no single visible subject. */
+            subjectLabel?: string | null;
+            /** @description True when no item was bound to a visit. */
+            parked: boolean;
+            /** @description One item per kept series. */
+            items: components["schemas"]["E2eSplitItemDto"][];
+            /** @description The seriesKeys left out by excludeSeries: not converted, not stored, no item. */
+            excluded: string[];
+            /** @description Always e2e (what the client uploaded). */
+            kind: string;
+            /** @description Always e2e. */
+            format: string;
+        };
+        E2eSplitItemDto: {
+            /** Format: int64 */
+            ingestItemId: number;
+            /** @description The converter's opaque key of the series within the export. */
+            seriesKey: string;
+            /** @description OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA or OTHER. */
+            seriesModality: string;
+            /** @description OD or OS; null when the export names no eye. */
+            laterality?: string | null;
+            /** @description ISO date the series was acquired. */
+            acquisitionDate?: string | null;
+            /**
+             * Format: int32
+             * @description Number of frames in the series' DICOM.
+             */
+            frames?: number | null;
+            /**
+             * Format: int32
+             * @description The study's catalogue entry; null while parked or unmatched.
+             */
+            imagingModalityId?: number | null;
+            /** @description BOUND or UNBOUND (parked in the inbox). */
+            status: string;
+            /** @description Analysis jobs started for an OCT volume. */
+            jobs: components["schemas"]["E2eSplitJobDto"][];
+            /** @description True when the same picture was already here under another label (parked). */
+            heldBack: boolean;
+            /**
+             * Format: int64
+             * @description The earlier item that shows the same picture, when held back.
+             */
+            sameImageAs?: number | null;
+        };
+        E2eSplitJobDto: {
+            /** Format: int64 */
+            jobId: number;
+            /** @description fluid, ga, onl, pr, layers, ... */
+            task: string;
+            /** @description queued or remote_pending at upload */
+            status: string;
         };
         PasswordChangeRequest: {
             currentPassword?: string;
@@ -6421,6 +6500,14 @@ export interface components {
             value?: string;
             firedAt?: string;
         };
+        E2eSplitPreflightResponse: {
+            /** @description True when items from an export with this SHA-256 exist (also after its source file was deleted). */
+            exists: boolean;
+            /** @description Always true: this is the split preflight. */
+            split: boolean;
+            /** @description The items the caller may see; may be empty although exists is true. */
+            existingIngestItemIds: number[];
+        };
         PatientDto: {
             /** Format: int32 */
             subjectId?: number;
@@ -6440,6 +6527,8 @@ export interface components {
             studyEye?: string;
             enrolledOn?: string;
             lastVisitAt?: string;
+            /** @description Name of the parent study when the enrolment sits on a site; null for a top-level study. */
+            parentStudyName?: string | null;
         };
         PatientsListResponse: {
             /** Format: int64 */
@@ -9854,17 +9943,20 @@ export interface operations {
             };
         };
     };
-    commitUpload: {
+    commitSplitUpload: {
         parameters: {
-            query?: {
+            query: {
                 patientId?: string;
                 scanDate?: string;
                 studyDate?: string;
                 laterality?: string;
-                scanIndex?: number;
                 eventCrfId?: number;
                 studyEventId?: number;
                 park?: boolean;
+                excludeSeries?: string;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
+                scanIndex?: number;
                 device?: string;
                 disambiguated?: boolean;
                 candidateCount?: number;
@@ -9882,13 +9974,67 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description One item per kept series. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["E2eSplitCommitResponse"];
+                };
+            };
+            /** @description Unknown or malformed excludeSeries key, or every series excluded; nothing stored. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description The visit does not exist (or is not visible). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description An export with this SHA-256 was already split. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitDuplicateResponse"];
+                };
+            };
+            /** @description The file holds no image series. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description The converter or the DICOM service answered with an error. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description The converter or the DICOM service is not configured or not reachable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
                 };
             };
         };
@@ -10329,17 +10475,20 @@ export interface operations {
             };
         };
     };
-    commitStaffUpload: {
+    commitSplitStaffUpload: {
         parameters: {
-            query?: {
+            query: {
                 patientId?: string;
                 scanDate?: string;
                 studyDate?: string;
                 laterality?: string;
-                scanIndex?: number;
                 eventCrfId?: number;
                 studyEventId?: number;
                 park?: boolean;
+                excludeSeries?: string;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
+                scanIndex?: number;
                 device?: string;
                 deidConfirmed?: string;
                 deidSha256?: string;
@@ -10357,13 +10506,67 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description One item per kept series. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["E2eSplitCommitResponse"];
+                };
+            };
+            /** @description Unknown or malformed excludeSeries key, or every series excluded; nothing stored. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description The visit does not exist (or is not visible). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description An export with this SHA-256 was already split. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitDuplicateResponse"];
+                };
+            };
+            /** @description The file holds no image series. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description The converter or the DICOM service answered with an error. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
+                };
+            };
+            /** @description The converter or the DICOM service is not configured or not reachable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2eSplitErrorResponse"];
                 };
             };
         };
@@ -12780,11 +12983,13 @@ export interface operations {
             };
         };
     };
-    preflightUpload: {
+    preflightSplitUpload: {
         parameters: {
             query: {
                 sha256: string;
                 scanIndex?: number;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
             };
             header?: never;
             path?: never;
@@ -12798,7 +13003,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["E2eSplitPreflightResponse"] | Record<string, never>;
                 };
             };
         };
@@ -13186,11 +13391,13 @@ export interface operations {
             };
         };
     };
-    preflightStaffUpload: {
+    preflightSplitStaffUpload: {
         parameters: {
             query: {
                 sha256: string;
                 scanIndex?: number;
+                /** @description Must be true: the export is split into one item per series (DR-041). */
+                split: "true";
             };
             header?: never;
             path?: never;
@@ -13204,7 +13411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["E2eSplitPreflightResponse"] | Record<string, never>;
                 };
             };
         };

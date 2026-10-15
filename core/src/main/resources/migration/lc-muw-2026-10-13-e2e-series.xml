@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-041: a multimodal Spectralis export is uploaded once and split into
+        one ingest_item per series. All items of one file share the stored path
+        and the sha256; e2e_series_key tells them apart.
+
+          ingest_item.e2e_series_key  opaque key of the series within the file
+          ingest_item.series_modality OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA, OTHER
+          ingest_item.series_frames   number of frames in the series
+          imaging_modality.e2e_series the series_modality a catalogue entry accepts
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-13-ingest-item-e2e-series-columns">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingest_item" columnName="e2e_series_key"/>
+            </not>
+        </preConditions>
+        <comment>ingest_item: per-series columns for split E2E exports (DR-041).</comment>
+        <addColumn tableName="ingest_item">
+            <column name="e2e_series_key" type="VARCHAR(32)"/>
+            <column name="series_modality" type="VARCHAR(16)"/>
+            <column name="series_frames" type="INT"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="ingest_item" columnName="series_frames"/>
+            <dropColumn tableName="ingest_item" columnName="series_modality"/>
+            <dropColumn tableName="ingest_item" columnName="e2e_series_key"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-13-imaging-modality-e2e-series">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="imaging_modality" columnName="e2e_series"/>
+            </not>
+        </preConditions>
+        <comment>imaging_modality.e2e_series: the E2E series kind a catalogue entry takes (DR-041).</comment>
+        <addColumn tableName="imaging_modality">
+            <column name="e2e_series" type="VARCHAR(16)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="imaging_modality" columnName="e2e_series"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        The old (sha256, scan) uniqueness would make two non-OCT series of one
+        file collide (scan_index NULL for both), so it now covers only rows that
+        are not split series. Split rows are unique on (sha256, e2e_series_key).
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-10-13-ingest-item-dedup-non-split" dbms="postgresql">
+        <comment>u_ingest_item_sha_scan applies to rows without e2e_series_key only.</comment>
+        <sql>
+            DROP INDEX IF EXISTS u_ingest_item_sha_scan;
+            CREATE UNIQUE INDEX u_ingest_item_sha_scan
+                ON ingest_item (sha256, COALESCE(scan_index, -1))
+             WHERE sha256 IS NOT NULL AND e2e_series_key IS NULL;
+        </sql>
+        <rollback>
+            <sql>
+                DROP INDEX IF EXISTS u_ingest_item_sha_scan;
+                CREATE UNIQUE INDEX u_ingest_item_sha_scan
+                    ON ingest_item (sha256, COALESCE(scan_index, -1))
+                 WHERE sha256 IS NOT NULL;
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-10-13-ingest-item-sha-series-unique" dbms="postgresql">
+        <comment>One row per (digest, series) for split E2E files.</comment>
+        <sql>
+            CREATE UNIQUE INDEX u_ingest_item_sha_series
+                ON ingest_item (sha256, e2e_series_key)
+             WHERE e2e_series_key IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS u_ingest_item_sha_series;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

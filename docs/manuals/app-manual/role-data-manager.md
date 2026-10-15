@@ -419,6 +419,68 @@ visits offered are those of the studies you can see.
    a visit can go to the Eingang with **Ohne Visite hochladen**; a sent row can be
    taken back with **Rückgängig** for a minute.
 
+### Spectralis exports: the label is read from the file, every series an item
+
+A Spectralis `.E2E` file holds a whole multimodal session for both eyes (DR-041).
+Upload it once and the server splits it:
+
+- **Select a folder.** Use **Ordner wählen**, or drag a folder onto the page.
+  Sub-folders are read too. **Dateien wählen** still picks single files.
+- **The file names its subject.** The server reads the study label from the
+  file's own header (the surname field of the patient record), so one shared
+  folder with many patients works, and so do patient folders. A file in a folder
+  such as `iAMD/EIAMD005/EIAMD01D.E2E` is sent together with the folder that
+  directly contains it (`EIAMD005`); that name must equal the label in the file,
+  otherwise all its series wait in the Eingang. A file in no folder is sent
+  without one and the server uses the label in the file. The first-name and
+  patient-ID fields of the header are never used. The row shows the subject the
+  server found after **Bestätigen**, or *no subject, parked in the inbox* when
+  the label belongs to nobody you may see (that label is not stored).
+- **One row per file.** The browser does not load the file into memory: it
+  computes the checksum in 8 MiB slices, one file at a time, and asks the server
+  whether the file is already there (**Bereits hochgeladen**). Files over 2 GiB
+  are refused with a message before anything is sent.
+- **Check what is in the file before it is sent.** Each row also shows the series
+  the file holds, read in the browser from the file's directory with a few small
+  reads (never the whole file). They are listed per eye, each with a thumbnail,
+  its modality, number of images, date and time, the visit it would land on, and
+  a tick:
+  - everything is ticked; untick the series you do not want uploaded;
+  - **All** / **None** next to an eye, and one button per modality, tick or
+    untick a group at once;
+  - unticked series are not stored, not converted and not listed afterwards; the
+    row names them as *left out*;
+  - if every series is unticked the row cannot be confirmed;
+  - the row shows the label read from the file, and warns when it differs from
+    the folder: the server then puts every series in the inbox. If the series
+    list cannot be read in the browser, the row says so and the whole file is
+    sent.
+  To bring a left-out series in later, upload the file again; the server refuses
+  a file it already has, so ask your administrator first.
+- **Every series becomes an item.** After **Bestätigen**, the row lists the
+  series the server made: OCT volume, OCT line scan, IR, BAF, BR, IRAF, qAF, ICGA
+  and FA, per eye, with frame count and status. A time sequence is one item.
+- **Visit.** With a batch visit set, every series is filed against it. Without
+  one, the server assigns each series by label and date, or leaves it in the
+  Eingang.
+- **Label differs.** If the label inside the file differs from the folder
+  name, the row says so and **all** its series wait in the Eingang for you to
+  assign them. A file whose header has no usable label takes its folder name as
+  the label; with neither, it is parked.
+- **Undo.** **Rückgängig** within a minute deletes all items of the file.
+- **What is kept.** Each series is stored as a DICOM image of its own, the
+  items you see in the Eingang. The original `.E2E` file is kept on the server
+  for a limited time (90 days by default, set by the administrator) and then
+  deleted automatically; the items stay. Uploading the same file again is still
+  recognised afterwards. Nothing serves or analyses the original file.
+- **Leaving series out.** Unticked series are left out of the upload (they are
+  not stored and make no item). This is done in the browser page only; the Export
+  Watcher on the acquisition PC always uploads the whole file.
+
+On an installation that de-identifies in the browser (internet-facing
+deployments), this does not apply: the file is stripped in the browser and the
+page keeps one row per OCT volume, with a preview to confirm.
+
 A DICOM export is pseudonymised before it is kept: the visit's subject label
 replaces the patient name and ID from the hospital system, the date of birth and
 staff names are cleared. If the DICOM service is not running the page refuses

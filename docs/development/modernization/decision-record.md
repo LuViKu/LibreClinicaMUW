@@ -1168,6 +1168,43 @@ every thickness of such a file would be about 1.5× too large, silently.
 
 ---
 
+## DR-041 — A multimodal Spectralis export is uploaded once and split into one item per series on the server
+
+**Status:** Accepted (2026-10-13). Design and contracts: [e2e-multimodal-split.md](../e2e-multimodal-split.md).
+
+**Context.** For the drusen study, each patient is exported from the Spectralis as a folder of `.E2E` files. One file holds a whole session for both eyes: OCT volumes and line scans, IR, BAF, BR, IRAF, qAF, ICGA and FA, at 10–640 MB per file. Until now an E2E counted only as OCT:
+
+- the clients uploaded the same file once per OCT volume;
+- no other series became an item;
+- the app refused files over 200 MiB.
+
+The header patient ID of these exports is unreliable: empty in 13 of the first 22 files, and different from the folder in 5.
+
+**Decision.**
+
+- **One upload.** Each file is uploaded once, streamed, with files of up to 2 GiB accepted.
+- **Split on the server.** The converter sidecar lists the series from the file's own per-series metadata (device modality and scan pattern), without returning any identifying data. The app creates one inbox item per series.
+- **Subject.** ~~The subject label is the patient's folder name.~~ Amended 2026-10-13: the subject is the study label in the header's **surname** slot (the first-name and patient-ID slots are never used, sent, stored or logged). A folder, if the file sits in one, must agree with that label, otherwise the whole file is parked for a person to decide; a file in no folder is bound by its label alone. See the format notes (`heidelberg-e2e-format-notes.md`).
+- **Modality and jobs.** A series reaches its catalogue modality through a new `imaging_modality.e2e_series` token. Only OCT volumes start retinal-inference jobs.
+- **Clients.** The Export Watcher and the browser upload both use this one contract (the browser additionally previews the series and can leave some out with `excludeSeries`). The browser de-identification path for internet-facing deployments is unchanged.
+
+**Consequences.**
+
+- Every series in an export is visible in the inbox and can tick its own "performed" item once the study is configured.
+- The three readers no longer have to agree on volume numbering for this path, because the server is the only one that splits.
+- ~~Several items now share one stored file, so retention deletes the file only when the last item referencing it is gone.~~ Superseded by the amendment of 2026-10-13 (b), below.
+
+**Amendment 2026-10-13 (b) - one DICOM per series; the `.E2E` becomes a time-limited source copy.** The server converts the kept series of an upload, in one pass, into one DICOM each (OCT volumes and line scans through the existing Ophthalmic Tomography writer, everything else as Ophthalmic Photography 8 bit), and files each as an ordinary DICOM item with its own stored file. The client may leave series out (`excludeSeries`); the server checks every key against its own listing.
+
+Consequences, replacing the one above:
+
+- Items no longer share a stored file. The existing dismissed-item retention and the undo delete an item's own DICOM with its row; the shared-file logic stays only for rows of the first layout.
+- OCT volumes are analysed through the DICOM OCT path (DR-039), like any DICOM OCT upload. The sidecar no longer reads the `.E2E` for `/preprocess`.
+- The original `.E2E` is kept in `core.retinalInference.e2eSourcePath` (not served, not analysed, mounted by the app only) for `core.retinalInference.e2eSourceRetentionDays` (default 90) and then deleted by a nightly job. This is a deliberate retention decision: the source holds the patient chunk, so keeping it is bounded in time, audited (type 209), and the app alone can read it. Every item keeps `e2e_source_sha256`, so a duplicate upload is still refused after the source is gone.
+- The DICOMs carry the study label as `PatientID`/`PatientName` and nothing else about the person (the E2E's first-name and patient-ID slots are never read); the DICOM sidecar then replaces even that with the matched subject's label, or blanks it while the file is parked.
+- Converting uses one series' worth of memory instead of the whole file decoded (a real 600 MB export: 0.4 GB resident against 2.1 GB for one `read_oct_volume()`), and uses each series' own B-scan geometry, which the old path took from the file's first volume.
+- The split commit and preflight answer with typed DTOs, so the SPA's `api.ts` is generated from them.
+
 ## Future decisions (open)
 
 *Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*

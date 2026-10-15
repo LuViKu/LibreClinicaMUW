@@ -60,6 +60,12 @@ services:
       # back through the same in-container path. The host bind makes
       # the two containers share the file via ./docker/e2e-uploads/.
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads
+      # One DICOM per series: retinal-preprocess writes the converted series here, the app
+      # imports them into the ingest store and removes the directory (read-write on both).
+      - ./docker/e2e-convert:/var/lib/libreclinica/e2e-convert
+      # The original .E2E of a split upload, kept for core.retinalInference.e2eSourceRetentionDays.
+      # App only: no sidecar mounts it, and nothing serves or analyses it.
+      - ./docker/e2e-source:/var/lib/libreclinica/e2e-source
       # DR-022: retinal artifact store — the preprocess sidecar writes the
       # per-source-scan companion files under bscans/<e2eUuid>/ and the run
       # branch persists segmentation outputs under segs/<jobUuid>/ here.
@@ -227,6 +233,8 @@ services:
       # Same RO bind as the main service so the preprocess sidecar can read
       # the .e2e the libreclinica controller persisted.
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+      # POST /e2e/convert writes <stem>/<seriesKey>.dcm here (RETINAL_INFERENCE_E2E_CONVERT_PATH).
+      - ./docker/e2e-convert:/var/lib/libreclinica/e2e-convert
       - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
       # Writable bind for the per-source-scan companion files.
       - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts

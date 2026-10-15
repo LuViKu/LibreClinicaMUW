@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 import EyeBadge from '@/components/octportal/EyeBadge.vue'
 import PortalStatusPill from '@/components/octportal/PortalStatusPill.vue'
 import StudyChip from '@/components/octportal/StudyChip.vue'
-import { useUploadWorkbenchStore, type UploadRow } from '@/stores/uploadWorkbench'
+import { hasNoSeriesLeft, useUploadWorkbenchStore, type UploadRow } from '@/stores/uploadWorkbench'
 import { formatDate } from '@/lib/dateFormat'
 
 const store = useUploadWorkbenchStore()
@@ -37,7 +37,15 @@ const emit = defineEmits<{
 
 const candidate = computed(() => props.row.selectedCandidate)
 const studyName = computed(() => candidate.value?.studyName ?? '')
-const subjectLabel = computed(() => candidate.value?.subjectLabel ?? props.row.patientId ?? '')
+// A committed split row shows the subject the server matched, never a typed or folder value.
+const subjectLabel = computed(() =>
+  props.row.split && props.row.state === 'committed'
+    ? (props.row.subjectLabel ?? '')
+    : (candidate.value?.subjectLabel ?? props.row.patientId ?? ''))
+/** A split file in no folder, not yet sent: the server reads the label from the file. */
+const flatSplit = computed(() => props.row.split === true && !props.row.selectedCandidate && !props.row.patientId)
+/** Every series of a split row is unticked: there is nothing to send. */
+const noSeriesLeft = computed(() => hasNoSeriesLeft(props.row))
 const eventLabel = computed(() => props.row.selectedEvent?.definitionLabel ?? '')
 const isOct = computed(() => props.row.kind === 'e2e')
 
@@ -69,6 +77,7 @@ const errorText = computed(() => {
     undoFailed: t('uploadPortal.row.undoFailed'),
     invalidVisit: t('uploadPortal.row.invalidVisit'),
     noSubject: t('uploadPortal.row.noSubject'),
+    tooLarge: t('uploadPortal.split.tooLarge', { file: props.row.file.name }),
   }
   return keyed[e] ?? e
 })
@@ -81,7 +90,11 @@ const withoutVisitLabel = computed(() =>
 <template>
   <div class="flex items-center gap-4 flex-1 min-w-0">
     <div class="flex-1 min-w-0">
-      <template v-if="props.row.state === 'suggested'">
+      <template v-if="props.row.state === 'suggested' && flatSplit">
+        <div class="text-[12px] text-slate-600" data-testid="row-split-fromfile">{{ t('uploadPortal.split.labelFromFile') }}</div>
+      </template>
+
+      <template v-else-if="props.row.state === 'suggested'">
         <div class="flex items-center gap-2 mb-1.5 flex-wrap">
           <StudyChip v-if="studyName" :name="studyName" />
           <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
@@ -94,7 +107,12 @@ const withoutVisitLabel = computed(() =>
           </span>
           <PortalStatusPill tone="ok">{{ t('octPortal.assignment.patientFound') }}</PortalStatusPill>
         </div>
-        <div class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 pl-2.5 pr-2 py-1.5">
+        <div
+          v-if="props.row.split && !props.row.selectedEvent"
+          class="text-[12px] text-slate-600"
+          data-testid="row-split-auto"
+        >{{ t('uploadPortal.split.autoVisit') }}</div>
+        <div v-else class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 pl-2.5 pr-2 py-1.5">
           <span class="text-amber-600">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
               <rect width="18" height="18" x="3" y="4" rx="2" />
@@ -252,8 +270,8 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             :data-testid="`action-confirm-${props.row.rowId}`"
-            :disabled="props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true"
-            :title="props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true ? t('uploadPortal.deid.confirmFirst') : undefined"
+            :disabled="(props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true) || noSeriesLeft"
+            :title="noSeriesLeft ? t('uploadPortal.split.preview.noneSelected') : props.row.needsDeidConfirm === true && props.row.deidConfirmed !== true ? t('uploadPortal.deid.confirmFirst') : undefined"
             @click="emit('confirm', props.row.rowId)"
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
@@ -291,6 +309,7 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
+            :disabled="noSeriesLeft"
             @click="emit('park', props.row.rowId)"
           >{{ withoutVisitLabel }}</button>
         </div>
@@ -316,6 +335,7 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
+            :disabled="noSeriesLeft"
             @click="emit('park', props.row.rowId)"
           >{{ isOct ? t('octPortal.actions.park') : t('uploadPortal.actions.uploadWithoutVisit') }}</button>
         </div>
@@ -333,6 +353,7 @@ const withoutVisitLabel = computed(() =>
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
+            :disabled="noSeriesLeft"
             @click="emit('park', props.row.rowId)"
           >{{ withoutVisitLabel }}</button>
         </div>

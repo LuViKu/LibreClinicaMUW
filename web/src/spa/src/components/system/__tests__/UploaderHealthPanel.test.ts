@@ -52,7 +52,7 @@ const RESPONSE: UploadersResponse = {
     uploader({ id: 1 }),
     uploader({
       id: 2, name: 'SPECTRALIS-PC', status: 'warning', pendingFiles: 4, oldestPendingMinutes: 42, failedFiles: 2,
-      issues: ['server-unreachable', 'files-failed', 'pending-stale', 'disk-low', 'brand-new-code'],
+      issues: ['server-unreachable', 'files-failed', 'pending-stale', 'disk-low', 'file-too-large', 'brand-new-code'],
       diskFreeBytes: 3 * GIB,
     }),
     uploader({ id: 3, kind: 'optomed-bridge', name: 'CLARUS-PC', status: 'stopped', stopReason: 'session-end', running: false }),
@@ -115,6 +115,8 @@ describe('UploaderHealthPanel', () => {
     expect(issues).toContain('files were moved to _failed after five attempts')
     expect(issues).toContain('files have been waiting 30 minutes or longer')
     expect(issues).toContain("the PC's disk is almost full")
+    expect(issues).toContain('over 2 GiB')
+    expect(issues).not.toContain('file-too-large')
     expect(issues).toContain('brand-new-code')
   })
 

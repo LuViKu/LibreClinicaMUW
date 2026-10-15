@@ -42,6 +42,69 @@ out_dir = prepare_bscan_dcm(Path("/uploads/patient.e2e"), Path("/tmp/work"))
 See [decision-record.md DR-024](../docs/development/modernization/decision-record.md)
 for the full split rationale.
 
+## Series view of a multimodal export
+
+A Spectralis export holds a whole session: OCT volumes, OCT line scans and the en-face
+modalities (IR, BAF, BR, IRAF, qAF, ICGA, FA) for both eyes. Two functions list and preview its
+series (contract: `docs/development/e2e-multimodal-split.md`, Contract 1). They walk the chunk
+headers only and keep file offsets, so a 600 MB export is described in about a second and
+under 100 MB of memory; no pixel data is decoded until a frame is rendered.
+
+```python
+from muw_e2e_converter import describe_e2e, render_series_png
+
+d = describe_e2e(Path("/uploads/3f2b8c1e.e2e"), expected_label="EIAMD005")  # label optional
+# {"headerPatient": "none" | "empty" | "matches" | "differs",
+#  "headerLabel": "EIAMD005" | None,
+#  "series": [{"seriesKey": "s3", "seriesModality": "OCT", "deviceModality": "IR",
+#              "scanPattern": "OCT ART Volume", "laterality": "OD",
+#              "acquiredAt": "2026-09-30T10:12:03", "frames": 97, "width": 1024,
+#              "height": 496, "octVolumeIndex": 0}, ...]}
+
+png = render_series_png(Path("/uploads/3f2b8c1e.e2e"), "s3", frame=0)  # bytes
+```
+
+* `describe_e2e(path, expected_label=None) -> dict`. `headerLabel` is the surname slot of the
+  patient chunk (type 9, offset 31, 51 bytes) when every patient chunk carries the same
+  non-empty surname and it is a printable-ASCII token of 1-24 characters without spaces, else
+  `None`. `headerPatient` compares `expected_label` with the surname only (case-insensitive):
+  `none` without an expected label, else `empty`, `matches` or `differs`. The first-name and
+  patient-ID slots and the birth date are never read, returned or logged. Series are ordered
+  OD, OS, unknown eye; then `OCT, OCT_LINE, IR, BAF, BR, IRAF, QAF, ICGA, FA, OTHER`; then time.
+  `seriesKey` is `s<ordinal>` over the series ids sorted numerically, so the same bytes always
+  give the same keys. `seriesModality` is `OCT` (scan pattern contains `Volume`), `OCT_LINE`
+  (any other series with OCT B-scans), the device modality (`qAF` becomes `QAF`) or `OTHER`.
+  `frames` is the number of B-scans for an OCT series and the number of en-face images
+  otherwise (a time sequence is one series); `width`/`height` are those of one frame.
+  `acquiredAt` is the series' earliest frame time (naive ISO date-time) or `null`.
+  `octVolumeIndex` is the index into `E2E.read_oct_volume()` (the `scan_index` of
+  `read_e2e_volume` / `/preprocess`) for `OCT` and `OCT_LINE`, else `null`.
+* `render_series_png(path, series_key, frame=0) -> bytes`: the en-face frame; the B-scan of an
+  OCT line scan; the IR localizer of an OCT volume. 8-bit greyscale PNG with no text or other
+  ancillary chunks. Raises `KeyError` (unknown series key) or `IndexError` (frame out of range).
+
+## One DICOM per series: `convert_series`
+
+```python
+from muw_e2e_converter import convert_series
+
+files = convert_series(Path("/uploads/3f2b8c1e.e2e"), "EIAMD005", ["s0", "s4"], Path("/convert/3f2b8c1e"))
+# [{"seriesKey": "s0", "file": "s0.dcm", "sha256": "...", "bytes": 98700000, "frames": 97,
+#   "sopClassUid": "1.2.840.10008.5.1.4.1.1.77.1.5.4", "seriesModality": "OCT",
+#   "geometryFile": "s0.geometry.json"}, ...]
+```
+
+Walks the chunk index once and decodes each requested series once, one at a time (memory stays near
+one volume's raw words; `read_oct_volume()`, which holds every volume decoded, is not used). An OCT
+volume or line scan is written by `write_bscan_dcm` with the pixel values `read_e2e_volume` gives; the scale
+`65535 / max` is taken from the set of distinct raw values, so no float64 volume is held. An OCT volume also
+gets `<seriesKey>.geometry.json` (`build_geometry`, from the series' own B-scan records). Everything else
+becomes an Ophthalmic Photography 8 Bit image (MONOCHROME2, uncompressed, multi-frame for several images).
+`PatientID`/`PatientName` are the label and nothing else; UIDs derive from the file's SHA-256 and the series
+key (re-converting gives identical bytes). Each written file is read back and checked. `KeyError` for an
+unknown key (nothing written), `ValueError` for a malformed or empty key list. HTTP form:
+`retinal-inference` `POST /e2e/convert`.
+
 ## Deployment
 
 ```sh

@@ -81,7 +81,7 @@ async function load(): Promise<void> {
 
 onMounted(() => {
   void load()
-  if (eventDefinitions.rows.length === 0 && props.studyOid) {
+  if (props.studyOid && eventDefinitions.loadedFor !== props.studyOid) {
     // The store rethrows 401/403 so a caller can react; here nothing can
     // — the page's own subject load surfaces an expired session, and this
     // strip merely loses its schedule button.

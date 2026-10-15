@@ -37,10 +37,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.E2eDeidentificationVerifier;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.ImageFingerprint;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestArtifactStore;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.DicomDescribeClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestItemRepository;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestResolutionService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.E2eSidecarClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
@@ -228,7 +230,7 @@ public class PublicOctUploadController {
                 patientId.isBlank() ? scan.patientId() : patientId, candidates, r.state());
     }
 
-    private IngestResolutionService resolution() {
+    IngestResolutionService resolution() {
         return new IngestResolutionService(studySubjectFinder);
     }
 
@@ -281,6 +283,60 @@ public class PublicOctUploadController {
         return DeviceScope.maskDuplicate(dataSource, source,
                 commitFile(file, patientId, scanDateRaw, laterality, scanIndex, eventCrfId, studyEventId, park,
                         disambiguated, candidateCount, null, source));
+    }
+
+    /** DR-041 — nullable (hand-built controllers): without it a split upload answers 503. */
+    private E2eSidecarClient e2eSidecar;
+    /** DR-041 - the DICOM sidecar a converted series is described by; defaults to the configured one. */
+    private DicomDescribeClient dicomDescribe;
+
+    @Autowired(required = false)
+    void setE2eSidecar(E2eSidecarClient e2eSidecar) {
+        this.e2eSidecar = e2eSidecar;
+    }
+
+    /** Test seam (and wiring): the client used to describe and pseudonymise the converted DICOMs. */
+    @Autowired(required = false)
+    void setDicomDescribe(DicomDescribeClient dicomDescribe) {
+        this.dicomDescribe = dicomDescribe;
+    }
+
+    private E2eSplitUpload split() {
+        return new E2eSplitUpload(dataSource, this,
+                e2eSidecar != null ? e2eSidecar : new E2eSidecarClient(),
+                dicomDescribe != null ? dicomDescribe : new DicomDescribeClient(),
+                new IngestArtifactStore(), remoteClient, inferenceController);
+    }
+
+    /**
+     * The account-less split commit (DR-041); closed when de-identification is required, like
+     * {@link #commitFrom}.
+     *
+     * @throws SplitUploadRejection for every outcome but the 201
+     */
+    E2eSplitCommitResponse commitSplitFrom(IngestSourceService.Source source, MultipartFile file, String patientId,
+                                           Integer studyEventId, Integer eventCrfId, boolean park,
+                                           String excludeSeries) {
+        if (DeidentificationPolicy.required(deidPolicy)) {
+            throw SplitUploadRejection.from(DeidUploadGate.accountlessClosed());
+        }
+        return split().commit(file, patientId, studyEventId, eventCrfId, park, excludeSeries,
+                DeviceScope.studies(dataSource, StudyScopeConfig.PORTAL_KEY, source),
+                DeviceScope.itemsOf(dataSource, source), source, IngestBindService.Actor.system());
+    }
+
+    /** The staff split commit; {@code resolveScope} is what the session may see, {@code visible} its items. */
+    E2eSplitCommitResponse commitSplitStaff(MultipartFile file, String patientId, Integer studyEventId,
+                                            Integer eventCrfId, boolean park, String excludeSeries,
+                                            Set<Integer> resolveScope, java.util.function.LongPredicate visible,
+                                            IngestBindService.Actor actor) {
+        return split().commit(file, patientId, studyEventId, eventCrfId, park, excludeSeries, resolveScope,
+                visible, null, actor);
+    }
+
+    /** DR-041 preflight: is a file with this digest already split? */
+    E2eSplitPreflightResponse preflightSplit(String sha256, java.util.function.LongPredicate visible) {
+        return E2eSplitUpload.preflight(dataSource, sha256, visible);
     }
 
     /**
@@ -1137,7 +1193,7 @@ public class PublicOctUploadController {
         // delete, which is the one thing an inbox must never contain.
         if (ingestItemId != null) deleteIngestItemIfUnreferenced(ingestItemId);
 
-        if (e2ePath != null && !e2ePath.isBlank()) {
+        if (e2ePath != null && !e2ePath.isBlank() && !pathStillReferenced(e2ePath)) {
             try {
                 Files.deleteIfExists(Paths.get(e2ePath));
             } catch (IOException ioEx) {
@@ -1208,7 +1264,7 @@ public class PublicOctUploadController {
             return ResponseEntity.status(409).body(Map.of(
                     "message", "This upload already has work attached to it"));
         }
-        if (storedPath != null && !storedPath.isBlank()) {
+        if (storedPath != null && !storedPath.isBlank() && !pathStillReferenced(storedPath)) {
             try {
                 Files.deleteIfExists(Paths.get(storedPath));
             } catch (IOException ioEx) {
@@ -1217,6 +1273,28 @@ public class PublicOctUploadController {
             }
         }
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * DR-041 - several items (the series of one multimodal .e2e) share one
+     * stored file, so a file is unlinked only when no ingest_item and no job
+     * still names it. When the lookup fails the file is kept.
+     */
+    private boolean pathStillReferenced(String path) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT EXISTS (SELECT 1 FROM ingest_item WHERE stored_path = ? OR preview_png_path = ?) "
+                             + "    OR EXISTS (SELECT 1 FROM retinal_inference_job WHERE e2e_path = ?)")) {
+            ps.setString(1, path);
+            ps.setString(2, path);
+            ps.setString(3, path);
+            try (ResultSet rs = ps.executeQuery()) {
+                return !rs.next() || rs.getBoolean(1);
+            }
+        } catch (SQLException e) {
+            LOG.warn("could not check whether a stored file is still referenced: {}", e.getMessage());
+            return true;
+        }
     }
 
     /**
@@ -1255,7 +1333,7 @@ public class PublicOctUploadController {
     }
 
     /** True when there is no narrowing, or the subject is enrolled at a study in the set. */
-    private boolean subjectAtLocation(Set<Integer> atLocation, int studySubjectId) {
+    boolean subjectAtLocation(Set<Integer> atLocation, int studySubjectId) {
         if (atLocation == null) return true;
         try (Connection c = dataSource.getConnection()) {
             return DeviceScope.subjectAllowed(c, atLocation, studySubjectId);
@@ -1266,7 +1344,7 @@ public class PublicOctUploadController {
     }
 
     /** {@code null} → null on parse failure. */
-    private static LocalDate parseLocalDate(String raw) {
+    static LocalDate parseLocalDate(String raw) {
         if (raw == null) return null;
         String s = raw.trim();
         if (s.isEmpty()) return null;
@@ -1299,7 +1377,7 @@ public class PublicOctUploadController {
      * study_subject_id for the supplied study_event, or null if no
      * such row exists.
      */
-    private Integer resolveStudySubjectFromStudyEvent(int studyEventId) {
+    Integer resolveStudySubjectFromStudyEvent(int studyEventId) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT study_subject_id FROM study_event WHERE study_event_id = ?")) {
@@ -1376,7 +1454,7 @@ public class PublicOctUploadController {
      * operator supplied, so nothing is lost; the inbox row simply stays
      * unbound rather than claiming a binding the platform could not confirm.
      */
-    private static ImageIngestBinding.EventTarget resolveBindTarget(
+    static ImageIngestBinding.EventTarget resolveBindTarget(
             Connection c, Integer eventCrfId, Integer studyEventId) throws SQLException {
         if (studyEventId != null) {
             return ImageIngestBinding.resolveEventTarget(c, studyEventId);
@@ -1394,7 +1472,7 @@ public class PublicOctUploadController {
     }
 
     /** Bytes on disk, or 0 when the file cannot be measured. */
-    private static long fileSize(Path p) {
+    static long fileSize(Path p) {
         try {
             return Files.size(p);
         } catch (IOException cannotMeasure) {
@@ -1436,6 +1514,7 @@ public class PublicOctUploadController {
                              + "    WHERE j.ingest_item_id = ii.ingest_item_id) AS job_id "
                              + "  FROM ingest_item ii "
                              + " WHERE ii.sha256 = ? AND COALESCE(ii.scan_index, -1) = ? "
+                             + "   AND ii.e2e_series_key IS NULL "
                              + " LIMIT 1")) {
             ps.setString(1, sha256);
             ps.setInt(2, scanIndex);
@@ -1450,7 +1529,7 @@ public class PublicOctUploadController {
         }
     }
 
-    private long insertJob(Connection c, Integer eventCrfId, Integer studyEventId, String task,
+    long insertJob(Connection c, Integer eventCrfId, Integer studyEventId, String task,
                            String e2ePath, String lat, String status, int scanIndex,
                            String e2eSha256, long ingestItemId) throws SQLException {
         String sql = "INSERT INTO retinal_inference_job ("
@@ -1537,7 +1616,7 @@ public class PublicOctUploadController {
      * user — this endpoint is unauthenticated, so user_id stays NULL,
      * which requires a separate INSERT.
      */
-    private void writePublicOctUploadAuditRow(long jobId, Integer studySubjectId,
+    void writePublicOctUploadAuditRow(long jobId, Integer studySubjectId,
                                               String patientId, String laterality,
                                               String status) {
         writePublicOctUploadAuditRow("retinal_inference_job", jobId, studySubjectId,
@@ -1550,7 +1629,7 @@ public class PublicOctUploadController {
      *                   is the ingest_item; saying which table avoids an
      *                   entity id that silently means something else.
      */
-    private void writePublicOctUploadAuditRow(String auditTable, long entityId,
+    void writePublicOctUploadAuditRow(String auditTable, long entityId,
                                               Integer studySubjectId, String patientId,
                                               String laterality, String status) {
         // entity_name carries the column we're recording (status), matching
@@ -1586,7 +1665,7 @@ public class PublicOctUploadController {
      * count so the audit timeline can render a "chose X of N" line without
      * a second look-up.
      */
-    private void writeAmbiguousDisambiguationAuditRow(int studySubjectId, int candidateCount) {
+    void writeAmbiguousDisambiguationAuditRow(int studySubjectId, int candidateCount) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
@@ -1605,7 +1684,7 @@ public class PublicOctUploadController {
         }
     }
 
-    private static String uploadsDir() {
+    static String uploadsDir() {
         try {
             String raw = CoreResources.getField("core.retinalInference.e2eUploadsPath");
             if (raw != null && !raw.isBlank()) return raw.trim();

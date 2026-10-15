@@ -99,9 +99,7 @@ function resetForm() {
 }
 
 onMounted(() => {
-  if (eventDefinitions.rows.length === 0 && props.studyOid) {
-    void eventDefinitions.load(props.studyOid)
-  }
+  void eventDefinitions.ensure(props.studyOid).catch(() => undefined)
 })
 
 watch(
@@ -109,9 +107,8 @@ watch(
   (isOpen) => {
     if (isOpen) {
       resetForm()
-      if (eventDefinitions.rows.length === 0 && props.studyOid) {
-        void eventDefinitions.load(props.studyOid)
-      }
+      // Definitions held for another study, or a failed load, are fetched again.
+      void eventDefinitions.ensure(props.studyOid).catch(() => undefined)
     }
   },
 )
@@ -217,6 +214,9 @@ async function onSubmit() {
         </SelectInput>
         <ErrorText v-if="fieldErrors.eventDefinitionOid">
           {{ fieldErrors.eventDefinitionOid }}
+        </ErrorText>
+        <ErrorText v-else-if="!eventDefinitions.isLoading && eventDefinitions.error">
+          {{ eventDefinitions.error }}
         </ErrorText>
         <p
           v-else-if="!eventDefinitions.isLoading && eligibleDefinitions.length === 0"

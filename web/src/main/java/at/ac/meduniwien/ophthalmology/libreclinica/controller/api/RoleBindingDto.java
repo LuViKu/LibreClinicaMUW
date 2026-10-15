@@ -37,5 +37,8 @@ public record RoleBindingDto(
         boolean active,
         @Schema(nullable = true, allowableValues = {"ra", "ra2"},
                 description = "The legacy data entry role the binding holds, or null.")
-        String legacyRole
+        String legacyRole,
+        @Schema(nullable = true,
+                description = "Name of the parent study when the binding is on a site; null for a study-wide binding.")
+        String parentStudyName
 ) {}

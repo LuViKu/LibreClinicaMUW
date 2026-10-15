@@ -164,6 +164,11 @@ ENV_FILE=${CONFIG_DIR}/env
 BACKUP_DIR=/var/backups/libreclinica
 PG_DATA_DIR=/var/lib/libreclinica/postgres
 E2E_UPLOADS_DIR=/var/lib/libreclinica/e2e-uploads
+# One DICOM per series (e2e-multimodal-split, amendment b): the app converts an uploaded .E2E
+# through e2e-convert (shared read-write with retinal-inference) and keeps the original for
+# core.retinalInference.e2eSourceRetentionDays in e2e-source (app only).
+E2E_CONVERT_DIR=/var/lib/libreclinica/e2e-convert
+E2E_SOURCE_DIR=/var/lib/libreclinica/e2e-source
 RETINAL_OUTPUT_DIR=/var/lib/libreclinica/retinal-inference
 # The remaining file stores (deploy/compose.production.yaml binds every store
 # under /var/lib/libreclinica at the same path in every container that
@@ -578,6 +583,8 @@ install -d -m 0750 -o libreclinica -g libreclinica "$CONFIG_DIR"
 install -d -m 0750 -o libreclinica -g libreclinica "$BACKUP_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$PG_DATA_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$E2E_UPLOADS_DIR"
+install -d -m 0755 -o libreclinica -g libreclinica "$E2E_CONVERT_DIR"
+install -d -m 0700 -o libreclinica -g libreclinica "$E2E_SOURCE_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_OUTPUT_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_ARTIFACTS_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$DICOM_INGEST_DIR"
@@ -1315,7 +1322,7 @@ RSYNC_TARGET=${BACKUP_RSYNC_TARGET:-}
 WITH_FILES=${LIBRECLINICA_BACKUP_FILES:-false}
 # Stores worth keeping. Not postgres (the dump covers it), tomcat-logs, monitor
 # or home.
-STORES=(e2e-uploads retinal-artifacts retinal-inference ingest dicom-ingest app-data)
+STORES=(e2e-uploads e2e-source retinal-artifacts retinal-inference ingest dicom-ingest app-data)
 STAMP=$(date +%Y%m%dT%H%M%S)
 SUFFIX=""
 rc=0
