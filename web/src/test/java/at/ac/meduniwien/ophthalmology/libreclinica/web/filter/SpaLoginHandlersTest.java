@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 import javax.sql.DataSource;
@@ -49,6 +50,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SessionManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
 /**
  * The login answers as {@code applicationContext-security.xml} wires them.
@@ -74,12 +76,16 @@ class SpaLoginHandlersTest {
                 "at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-security.xml"));
         beans.registerSingleton("dataSource", mock(DataSource.class));
         savedStaticDataSource = SessionManager.getStaticDataSource();
+        // A StudyUserRoleBean names its role through the thread's bundles. Bind
+        // a locale here rather than rely on an earlier test leaving one behind.
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
     }
 
     @AfterEach
     void restoreTheStaticDataSource() {
         // An SPA login hands its data source to SessionManager.
         SessionManager.setStaticDataSource(savedStaticDataSource);
+        ResourceBundleProvider.clearLocale();
     }
 
     private AuthenticationSuccessHandler success() {
