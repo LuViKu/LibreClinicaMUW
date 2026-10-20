@@ -55,7 +55,7 @@ cd /build && mvn "$@"
 
 mounting the worktree read-only at `/src` and `.m2-cache` at `/root/.m2`.
 
-Unit tests run by default (`mvn test`). As of 1.5.0-beta.19-muw (2026-10-14): **core 591, web 1541**. To skip: `mvn -DskipTests=true …` for fast iteration.
+Unit tests run by default (`mvn test`). As of 1.5.0-beta.20-muw (2026-10-20): **core 593, web 1541**. To skip: `mvn -DskipTests=true …` for fast iteration.
 
 Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
@@ -119,7 +119,7 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 
 ## Things to know
 
-- **Test coverage is uneven, not thin** — 2132 unit tests run by default (core 591, web 1541; measured 2026-10-14), plus a Testcontainers database suite in `web/src/test/**/*DatabaseIT.java` (the web integration profile runs 4613 tests). The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
+- **Test coverage is uneven, not thin** — 2134 unit tests run by default (core 593, web 1541; measured 2026-10-20), plus a Testcontainers database suite in `web/src/test/**/*DatabaseIT.java` (the web integration profile runs 4613 tests). The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
 - **`@SuppressWarnings("all")` sits on ~1,244 main-source Java files, and javac ignores it; VS Code's compiler (Eclipse JDT) honours it.** "all" is not a javac lint key, so the annotation hides warnings only in the IDE, never from `javac -Xlint`. Removing it therefore cannot change javac's output, and doing so proves nothing (an earlier note here drew the opposite conclusion from exactly that test). Do not add more; remove it from a file when you work on it.
 - **A default build hides deprecations.** It prints only "Some input files use or override a deprecated API". To measure, compile with `-Xlint:deprecation` and raise `-Xmaxwarns` (javac prints at most 100 by default). Measured on Hibernate 6.4.10, 2026-09-30: core has 128 deprecation warnings. They include exactly the 49 Hibernate calls CodeQL flags (`createNativeQuery(String)` 30, `Session.createQuery(String)` 15, `save` 2, `saveOrUpdate` 2) and 61 uses of `@GenericGenerator`'s `strategy()`. So the 49 are present-day deprecations, not forward-looking; the Hibernate 6.6 move (`chore/muw-libs-openpdf-boot-bom`) retires 47 of them.
 - **The `pages` dispatcher has no `String` and no `Resource` message converter** (its list is `[ByteArray, Marshalling (JAXB), Jackson]`, `WebMvcConfig.apiMessageConverters`). A controller there must not take a text `@RequestPart`, nor return a `String` with a non-JSON content type or a `Resource`: those answer 500/415. Read multipart text fields with `@RequestParam`, write `byte[]`. Tests build MockMvc on the production list (`ProductionMvc` / `PagesDispatcherMvc`), not on MockMvc's defaults, which hide this. Do not add a global `StringHttpMessageConverter`: it changes how every `@ResponseBody String` is written.

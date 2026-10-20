@@ -73,6 +73,6 @@ Do this outside clinic hours. The restart takes the app down for a few minutes, 
 
 ## Still open at this release
 
-- **CI results:** to be filled in from the CI run on the release commit.
+- **CI results.** CI run [39434976227](https://github.com/LuViKu/LibreClinicaMUW/actions/runs/39434976227) on `e6b1a830d` (lc-develop after #436) passed all seven jobs. The first attempt of the Maven job failed on a connection reset from Maven Central and passed on rerun. Counts: Maven build and unit tests (core 593, web 1,541) and the SPA (2,607 vitest tests, 4 skipped). The integration tests on PostgreSQL 14 and 17, the compose smoke test and the three Python sidecar suites passed; their logs could not be fetched for counts. The security scan (Trivy, Gitleaks, OWASP dependency-check) passed on #438, which accepts CVE-2026-40984 in micrometer-core as a Trivy false positive: the build ships 1.17.1, Trivy misreads the root POM as 1.14.14.
 - **The legacy *Reassign subject* screen** does not offer the parent study when a subject sits at a site, so moving a subject from a site to its study changes nothing. Left as it is for now.
 - **Carried over from beta.19 and still open:** see the [beta.19 notes](release-notes-1.5.0-beta.19-muw.md#still-open-at-this-release).
