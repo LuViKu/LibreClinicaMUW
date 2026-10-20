@@ -15,8 +15,6 @@ import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
-@SuppressWarnings("all")
-
 public class ResourceBundleProvider {
     /**
      * The locale bound to the calling thread. It was a plain HashMap keyed by Thread,
@@ -38,21 +36,38 @@ public class ResourceBundleProvider {
             return;
         }
         CURRENT_LOCALE.set(l);
-        if (!resBundleSetMap.containsKey(l)) {
-            HashMap<String, ResourceBundle> resBundleSet = new HashMap<String, ResourceBundle>();
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.audit_events", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.audit_events", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.exceptions", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.exceptions", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.format", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.format", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.words", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.words", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow", l));
-            resBundleSet.put("at.ac.meduniwien.ophthalmology.libreclinica.i18n.licensing", ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.licensing", l));
+        bundlesFor(l);
+    }
 
-            resBundleSetMap.put(l, resBundleSet);
-        }
+    /** The bundle names {@link #bundlesFor} loads for each locale. */
+    private static final String[] BUNDLE_NAMES = {
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.audit_events",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.exceptions",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.format",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.words",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow",
+        "at.ac.meduniwien.ophthalmology.libreclinica.i18n.licensing",
+    };
+
+    /**
+     * The bundles of a locale, loaded the first time the locale is asked for.
+     * They used to be loaded only by {@link #updateLocale}, so asking for a
+     * locale no request had set yet (as {@code POST /me/password} does with
+     * {@code Locale.ENGLISH} on a German-speaking installation) failed with a
+     * NullPointerException.
+     */
+    private static HashMap<String, ResourceBundle> bundlesFor(Locale l) {
+        return resBundleSetMap.computeIfAbsent(l, locale -> {
+            HashMap<String, ResourceBundle> resBundleSet = new HashMap<String, ResourceBundle>();
+            for (String name : BUNDLE_NAMES) {
+                resBundleSet.put(name, ResourceBundle.getBundle(name, locale));
+            }
+            return resBundleSet;
+        });
     }
 
     public static Locale getLocale() {
@@ -162,7 +177,7 @@ public class ResourceBundleProvider {
      * @return The corresponding ResourceBundle
      */
     private static ResourceBundle getResBundle(String name, Locale locale) {
-        return resBundleSetMap.get(locale).get(name);
+        return bundlesFor(locale).get(name);
     }
 
     /**
