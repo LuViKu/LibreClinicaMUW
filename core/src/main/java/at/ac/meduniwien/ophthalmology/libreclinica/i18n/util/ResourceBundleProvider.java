@@ -39,6 +39,9 @@ public class ResourceBundleProvider {
         bundlesFor(l);
     }
 
+    /** The locale of a thread that has none bound; LocaleResolver's default too. */
+    private static final Locale DEFAULT_LOCALE = Locale.ENGLISH;
+
     /** The bundle names {@link #bundlesFor} loads for each locale. */
     private static final String[] BUNDLE_NAMES = {
         "at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin",
@@ -164,8 +167,11 @@ public class ResourceBundleProvider {
      * @return
      */
     private static ResourceBundle getResBundle(String name) {
-
-        return resBundleSetMap.get(CURRENT_LOCALE.get()).get(name);
+        Locale bound = CURRENT_LOCALE.get();
+        // A thread no request has bound (a scheduled job, a test) used to fail
+        // with a NullPointerException here. It gets the application's default
+        // locale, the one LocaleResolver falls back to.
+        return bundlesFor(bound != null ? bound : DEFAULT_LOCALE).get(name);
     }
 
     /**

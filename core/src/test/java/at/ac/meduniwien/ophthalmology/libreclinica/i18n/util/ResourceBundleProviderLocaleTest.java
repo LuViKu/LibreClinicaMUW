@@ -37,4 +37,13 @@ public class ResourceBundleProviderLocaleTest {
         // and the calling thread's own locale is left alone
         assertNull(ResourceBundleProvider.getLocale());
     }
+
+    @Test
+    public void aThreadWithNoLocaleGetsTheDefault() {
+        ResourceBundleProvider.clearLocale();
+
+        assertNotNull(ResourceBundleProvider.getTermsBundle());
+        assertNotNull(ResourceBundleProvider.getTermsBundle().getString("Study_Director"));
+        assertNull(ResourceBundleProvider.getLocale());
+    }
 }
