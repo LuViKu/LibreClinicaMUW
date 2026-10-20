@@ -32,6 +32,7 @@
       "rolesLabel": "Rollen",
       "rolesAriaLabel": "Zugewiesene Rollen",
       "manual": "Handbuch",
+      "changePassword": "Passwort ändern",
       "signOut": "Abmelden",
       "version": "Version {version}",
       "build": "Build {date} · {hash}"
@@ -2901,6 +2902,7 @@
     },
     "submit": "Passwort ändern",
     "submitting": "Wird gespeichert…",
+    "cancel": "Abbrechen",
     "complianceTell": "Passwortänderungen werden im Audit-Trail gemäß 21 CFR Part 11 §11.10 protokolliert.",
     "errors": {
       "saveFailed": "Passwort konnte nicht geändert werden. Bitte erneut versuchen.",
