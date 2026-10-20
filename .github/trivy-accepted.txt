@@ -16,3 +16,12 @@
 # a patch. Re-examine on expiry, or at once if an XSLT view is ever added.
 CVE-2026-47884 exp:2027-01-07
 
+
+# micrometer-core, HIGH, accepted 2026-10-20 as a false positive. Trivy reads
+# the root pom.xml statically, cannot resolve the spring-boot-dependencies
+# BOM ("Dependency version cannot be determined") and reports 1.14.14. The
+# build resolves micrometer-core 1.17.1, the version Spring Boot 4.1.1
+# manages (`mvn -pl web -am dependency:tree -Dincludes=io.micrometer`), and
+# the flaw is fixed from 1.15.12 and 1.16.6. Re-examine on expiry, or at once
+# if micrometer is ever pinned below 1.15.12.
+CVE-2026-40984 exp:2027-01-20
