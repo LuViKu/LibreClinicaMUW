@@ -31,6 +31,7 @@
     "profile": {
       "rolesLabel": "Roles",
       "rolesAriaLabel": "Assigned roles",
+      "changePassword": "Change password",
       "manual": "Manual",
       "signOut": "Sign out",
       "version": "Version {version}",
@@ -2901,6 +2902,7 @@
     },
     "submit": "Change password",
     "submitting": "Saving…",
+    "cancel": "Cancel",
     "complianceTell": "Password changes are recorded in the audit log per 21 CFR Part 11 §11.10.",
     "errors": {
       "saveFailed": "Could not change your password. Please try again.",

@@ -115,6 +115,12 @@ export const useAuthStore = defineStore('auth', () => {
   const isSysAdmin = computed(
     () => user.value?.userType === 'SYSADMIN' || user.value?.userType === 'TECHADMIN',
   )
+  /**
+   * The account's password is LibreClinica's to change: a local account.
+   * SSO and LDAP credentials belong to the identity provider or directory,
+   * and `POST /me/password` answers 403 for them.
+   */
+  const canChangeOwnPassword = computed(() => user.value?.source === 'local')
   /** Only a technical administrator may make another one. */
   const isTechAdmin = computed(() => user.value?.userType === 'TECHADMIN')
   /**
@@ -525,6 +531,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAnonymous,
     needsStudyPick,
     needsPasswordChange,
+    canChangeOwnPassword,
     isSysAdmin,
     isTechAdmin,
     manageableLocations,

@@ -604,12 +604,13 @@ export function guard(
   // Must be reachable while needsPasswordChange === true (the legacy
   // SecureController.passwdTimeOut() forwards every request to the
   // ResetPassword JSP in that state; we mirror by routing every
-  // navigation here). Anonymous users go to login; authenticated
-  // users whose password is already up to date are bounced home.
+  // navigation here). Anonymous users go to login. A local account may
+  // also come here by choice, from the profile menu; an SSO or LDAP
+  // account, whose password is not ours to change, is bounced home.
   if (to.name === 'change-password') {
     if (auth.isAnonymous) return { name: 'login' }
     if (auth.needsProfile) return { name: 'first-login' }
-    return auth.needsPasswordChange ? true : { name: 'home' }
+    return auth.needsPasswordChange || auth.canChangeOwnPassword ? true : { name: 'home' }
   }
 
   if (isPublic) return true

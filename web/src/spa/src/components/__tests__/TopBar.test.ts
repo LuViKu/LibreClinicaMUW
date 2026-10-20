@@ -30,6 +30,7 @@ async function mountAt(path: string, extra: Record<string, unknown> = {}) {
       { path: '/admin/system-status', component: { template: '<div />' } },
       { path: '/system/audit-log', component: { template: '<div />' } },
       { path: '/uploaders', component: { template: '<div />' } },
+      { path: '/change-password', component: { template: '<div />' } },
     ],
   })
   await router.push(path)
@@ -116,5 +117,17 @@ describe('TopBar', () => {
     const line = w.get('[data-testid="topbar-version"]')
     expect(line.text()).toContain('1.5.0-beta.6-muw')
     expect(line.text()).toContain('abc1234')
+  })
+
+  it('offers the password change in the profile menu only when the parent allows it', async () => {
+    const local = await mountAt('/notes', { canChangePassword: true })
+    await local.get('[data-testid="topbar-profile-trigger"]').trigger('click')
+    const link = local.get('[data-testid="topbar-change-password"]')
+    expect(link.text()).toBe('Change password')
+    expect(link.attributes('href')).toBe('/change-password')
+
+    const sso = await mountAt('/notes')
+    await sso.get('[data-testid="topbar-profile-trigger"]').trigger('click')
+    expect(sso.find('[data-testid="topbar-change-password"]').exists()).toBe(false)
   })
 })

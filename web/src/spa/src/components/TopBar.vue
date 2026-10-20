@@ -46,6 +46,11 @@ interface Props {
    * home → card → view → home.
    */
   navItems?: NavItem[]
+  /**
+   * Show "Change password" in the popover. Only a local account's password
+   * is LibreClinica's to change; the parent decides.
+   */
+  canChangePassword?: boolean
   /** Optional logout handler — surfaced inside the popover. */
   onLogout?: () => void
   /**
@@ -67,6 +72,7 @@ const props = withDefaults(defineProps<Props>(), {
   userName: '',
   userRoles: () => [],
   userRole: null,
+  canChangePassword: false,
   onLogout: undefined,
   onReportBug: undefined,
 })
@@ -451,6 +457,19 @@ function onReportBugClick() {
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
               {{ t('topBar.profile.manual') }}
+            </RouterLink>
+            <RouterLink
+              v-if="canChangePassword"
+              to="/change-password"
+              class="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center gap-2"
+              data-testid="topbar-change-password"
+              @click="closePopover"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              {{ t('topBar.profile.changePassword') }}
             </RouterLink>
           </div>
 

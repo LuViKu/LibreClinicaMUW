@@ -17,6 +17,10 @@
  * On success the backend returns a refreshed MeDto with
  * {@code mustChangePassword=false}, the router guard releases, and we
  * push to `/`.
+ *
+ * A local account also reaches this view by choice, from the profile
+ * menu. Then nothing forces the change: the banner is left out and a
+ * cancel link leads back.
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -42,6 +46,14 @@ const fieldErrors = ref<Partial<Record<PasswordChangeFieldError['field'], string
 const submitError = ref<string | null>(null)
 
 const reason = computed(() => auth.user?.passwordChangeReason ?? 'first-login')
+
+/** Opened from the profile menu rather than forced by the router guard. */
+const isVoluntary = computed(() => !auth.needsPasswordChange)
+
+function cancel() {
+  if (window.history.length > 1) router.back()
+  else router.push({ name: 'home' })
+}
 
 const bannerTitle = computed(() =>
   reason.value === 'rotation'
@@ -103,6 +115,7 @@ async function submit() {
 
       <!-- Reason banner — copy switches on auth.user.passwordChangeReason -->
       <div
+        v-if="!isVoluntary"
         class="mb-5 rounded-md border px-3 py-2.5 text-xs leading-relaxed"
         :class="reason === 'rotation'
           ? 'border-amber-200 bg-amber-50 text-amber-900'
@@ -186,6 +199,15 @@ async function submit() {
           {{ isSubmitting
             ? t('changePassword.submitting')
             : t('changePassword.submit') }}
+        </button>
+        <button
+          v-if="isVoluntary"
+          type="button"
+          class="block w-full text-center px-4 py-2 text-sm text-slate-600 hover:text-slate-900 rounded-md muw-focus"
+          data-testid="change-password-cancel"
+          @click="cancel"
+        >
+          {{ t('changePassword.cancel') }}
         </button>
       </form>
 
