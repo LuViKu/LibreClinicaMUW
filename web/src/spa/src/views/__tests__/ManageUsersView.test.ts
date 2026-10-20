@@ -125,3 +125,38 @@ describe('ManageUsersView — Prüfzentrum column', () => {
     expect(scopeCell(wrapper, 'older')).toBe('Graz')
   })
 })
+
+describe('ManageUsersView — password reset', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    useAuthStore().user = { username: 'admin', role: 'Administrator', userType: 'SYSADMIN' } as unknown as ReturnType<
+      typeof useAuthStore
+    >['user']
+    useUsersStore().rows = [
+      user('signedin', { auth: 'local' }),
+      user('invited', { auth: 'pending-invite' }),
+      user('shib', { auth: 'sso' }),
+      user('gone', { auth: 'local', active: false }),
+    ]
+  })
+
+  function hasReset(wrapper: ReturnType<typeof mountView>, username: string): boolean {
+    const row = wrapper.findAll('tr').find((tr) => tr.text().includes(username))!
+    return row.findAll('button').some((b) => b.text() === 'Reset password')
+  }
+
+  it('offers a reset to a local account, including one whose invitation is still open', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(hasReset(wrapper, 'signedin')).toBe(true)
+    expect(hasReset(wrapper, 'invited')).toBe(true)
+  })
+
+  it('offers none to an SSO account or a disabled one', async () => {
+    useUsersStore().onlyActive = false
+    const wrapper = mountView()
+    await flushPromises()
+    expect(hasReset(wrapper, 'shib')).toBe(false)
+    expect(hasReset(wrapper, 'gone')).toBe(false)
+  })
+})

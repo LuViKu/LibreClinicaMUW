@@ -174,6 +174,7 @@ function openBugReport() {
       :build-date="buildDate"
       :user-name="displayUserName"
       :user-roles="userRoles"
+      :can-change-password="auth.canChangeOwnPassword"
       :on-logout="logout"
       :on-report-bug="openBugReport"
     />

@@ -69,10 +69,12 @@ async function copyRestoredPassword() {
 
 /* Phase E A7.4 — admin password reset. Only meaningful for local
    users; the per-row button hides itself when auth ∈ {sso, ldap}.
-   Re-uses the A7.3 inline-panel pattern to surface the one-time
-   password. */
+   An invited user who has not signed in yet ('pending-invite') is a
+   local account too: a lost first password is exactly when a reset
+   is needed. Re-uses the A7.3 inline-panel pattern to surface the
+   one-time password. */
 function canResetPassword(u: StudyUser): boolean {
-  return u.active && u.auth === 'local'
+  return u.active && (u.auth === 'local' || u.auth === 'pending-invite')
 }
 
 async function onResetPassword(u: StudyUser) {
