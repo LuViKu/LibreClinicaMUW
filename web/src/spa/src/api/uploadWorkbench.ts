@@ -27,6 +27,7 @@ import type {
 import { sha256OfFile } from '@/api/octPortal'
 import { listDueVisits } from '@/api/events'
 import { apiGet } from '@/api/client'
+import { localIsoToday } from '@/lib/dateFormat'
 import type { components } from '@/types/api'
 import {
   UPLOADER_TOKEN_HEADER,
@@ -240,10 +241,7 @@ export async function listVisitsForDay(mode: UploadMode, date?: string): Promise
   }))
 }
 
-export function localIsoToday(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+export { localIsoToday } from '@/lib/dateFormat'
 
 /**
  * The study labels of the subjects the signed-in user can see in the active

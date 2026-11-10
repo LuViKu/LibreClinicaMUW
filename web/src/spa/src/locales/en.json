@@ -94,7 +94,7 @@
       "signQueueTitle": "Sign-pending subjects",
       "signQueueDesc": "Review completed visits and sign them electronically.",
       "todaysCrfsTitle": "Today's pending CRFs",
-      "todaysCrfsDesc": "Visits scheduled for today or currently being entered.",
+      "todaysCrfsDesc": "Open visits dated today: scheduled or being entered.",
       "openQueriesTitle": "My queries",
       "openQueriesDesc": "Discrepancies assigned to me. Respond from the CRF entry view.",
       "todaysCrfsCountAria": "{n} visits open today",
