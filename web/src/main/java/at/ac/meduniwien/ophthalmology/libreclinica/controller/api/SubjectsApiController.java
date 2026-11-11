@@ -3315,7 +3315,8 @@ public class SubjectsApiController {
                     def == null ? null : def.getOid(),
                     def == null ? null : def.getName(),
                     status,
-                    eventOpenQueries
+                    eventOpenQueries,
+                    formatIsoDate(ev.getDateStarted())
             ));
         }
         // Order by the definition's ordinal so the matrix columns line up
