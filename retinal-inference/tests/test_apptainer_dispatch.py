@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -53,6 +56,7 @@ def test_fluid_dispatch_v25(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_gpu_device", "0", raising=False)
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+    monkeypatch.setattr(ap, "_pixel_spacing_order", lambda p: "standard")
 
     captured: dict = {}
 
@@ -86,6 +90,75 @@ def test_fluid_dispatch_v25(monkeypatch, tmp_path) -> None:
     assert any("fluid_segmentation.sif" in c for c in captured["cmd"])
     assert any("run_inference.py" in c for c in captured["cmd"])
     assert captured["env"]["CUDA_VISIBLE_DEVICES"] == "0"
+    # -e drops CUDA_VISIBLE_DEVICES; Singularity 3.x only forwards SINGULARITYENV_*.
+    assert captured["env"]["SINGULARITYENV_CUDA_VISIBLE_DEVICES"] == "0"
+    assert captured["env"]["APPTAINERENV_CUDA_VISIBLE_DEVICES"] == "0"
+    # The default thread count hangs onnxruntime under SLURM.
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("--num_threads") + 1] == "1"
+    # Our own bscan.dcm stores [axial, lateral]: no reversal.
+    assert "--optima_spacing" not in cmd
+
+
+@pytest.mark.parametrize("order, flagged", [
+    ("standard", False), ("standard-assumed", False), ("swapped", True),
+])
+def test_fluid_optima_spacing_follows_the_stored_order(monkeypatch, tmp_path, order, flagged) -> None:
+    _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+    monkeypatch.setattr(ap, "_pixel_spacing_order", lambda p: order)
+    captured: dict = {}
+
+    def fake_exec(cmd, env=None):
+        captured["cmd"] = cmd
+        out = tmp_path / "work" / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        np.savez(out / "fluidseg.npz", segmentation=np.zeros((2, 4, 4), dtype=np.uint8))
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    ap.ApptainerAdapter().full_volume("fluid", dcm_dir, "OD", out_dir_override=tmp_path / "work")
+
+    assert ("--optima_spacing" in captured["cmd"]) is flagged
+
+
+def _write_dcm(path: Path, spacing, manufacturer="Heidelberg Engineering", marker=None) -> Path:
+    import pydicom
+    from pydicom.dataset import Dataset, FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian, generate_uid
+
+    fm = FileMetaDataset()
+    fm.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.77.1.5.4"
+    fm.MediaStorageSOPInstanceUID = generate_uid()
+    fm.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds = Dataset()
+    ds.file_meta = fm
+    ds.SOPClassUID = fm.MediaStorageSOPClassUID
+    ds.SOPInstanceUID = fm.MediaStorageSOPInstanceUID
+    ds.Modality = "OPT"
+    ds.Manufacturer = manufacturer
+    ds.PixelSpacing = list(spacing)
+    if marker:
+        ds.DeidentificationMethod = marker
+    pydicom.dcmwrite(str(path), ds, enforce_file_format=True)
+    return path
+
+
+def test_pixel_spacing_order_reads_the_file(tmp_path) -> None:
+    from retinal_inference.dicom_geometry import OWN_WRITER_MARKER
+
+    # Our preprocess writer: [axial, lateral] plus its marker.
+    own = _write_dcm(tmp_path / "own.dcm", [0.00387, 0.01148], marker=OWN_WRITER_MARKER)
+    assert ap._pixel_spacing_order(own) == "standard"
+    # The vendor's OPTIMA reference DICOM (TestCase1): [lateral, axial].
+    vendor = _write_dcm(tmp_path / "vendor.dcm", [0.005674, 0.003872])
+    assert ap._pixel_spacing_order(vendor) == "swapped"
+    # Neither value is the Spectralis axial spacing: refuse, don't guess.
+    odd = _write_dcm(tmp_path / "odd.dcm", [0.01, 0.02])
+    with pytest.raises(ValueError, match="PixelSpacing"):
+        ap._pixel_spacing_order(odd)
 
 
 def test_onl_passes_dcm_file_not_dir(monkeypatch, tmp_path) -> None:
@@ -348,6 +421,7 @@ def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(_config.settings, "apptainer_slurm_account", "optima", raising=False)
     monkeypatch.setattr(_config.settings, "apptainer_gpu_device", "0", raising=False)  # ignored under SLURM
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+    monkeypatch.setattr(ap, "_pixel_spacing_order", lambda p: "standard")
 
     captured: dict = {}
 
@@ -376,3 +450,26 @@ def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     assert "apptainer" in cmd  # the apptainer invocation follows srun
     # SLURM owns GPU assignment — the dispatcher must NOT force CUDA_VISIBLE_DEVICES.
     assert "CUDA_VISIBLE_DEVICES" not in (captured["env"] or {})
+    # ... but the GPU SLURM picked is forwarded past -e, inside the job.
+    i = cmd.index("/bin/sh")
+    assert cmd[i:i + 4] == ["/bin/sh", "-c", ap._FORWARD_SLURM_GPU, "ri-gpu"]
+    assert cmd[i + 4] == "apptainer" and cmd.index("--gres=gpu:nv2080ti:1") < i
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="needs a POSIX sh")
+@pytest.mark.parametrize("job_env, expected", [
+    ({"CUDA_VISIBLE_DEVICES": "5"}, "5|5|5"),
+    ({}, "unset|unset|unset"),  # no GPU allocated: leave it unset, never empty
+])
+def test_forward_slurm_gpu_exports_the_allocated_gpu(job_env, expected) -> None:
+    # Stands in for the container command the snippet exec's.
+    show = ('printf "%s|%s|%s" "${CUDA_VISIBLE_DEVICES-unset}" '
+            '"${SINGULARITYENV_CUDA_VISIBLE_DEVICES-unset}" '
+            '"${APPTAINERENV_CUDA_VISIBLE_DEVICES-unset}"')
+    sh = shutil.which("sh")
+    env = {k: v for k, v in os.environ.items() if "CUDA_VISIBLE_DEVICES" not in k}
+    out = subprocess.run(
+        [sh, "-c", ap._FORWARD_SLURM_GPU, "ri-gpu", sh, "-c", show],
+        env={**env, **job_env}, capture_output=True, text=True, check=True,
+    ).stdout
+    assert out == expected

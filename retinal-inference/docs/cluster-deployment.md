@@ -450,7 +450,24 @@ outside SLURM) to SLURM mode. The resident server becomes a thin dispatcher; eac
 | `MAX_CONCURRENT_RUNS` | 1 direct / 4 SLURM | simultaneous `/run` executions in this process |
 
 In SLURM mode **all** GPU work goes through `srun`: the `.sif` tasks (fluid, onl,
-pr, ga) and the host-native `bm` venv. No `CUDA_VISIBLE_DEVICES` is pinned.
+pr, ga) and the host-native `bm` venv. The dispatcher pins no GPU; SLURM picks
+it. Inside the job, a `/bin/sh -c` step between `srun` and the container
+re-exports SLURM's `CUDA_VISIBLE_DEVICES` as `SINGULARITYENV_…` and
+`APPTAINERENV_…`. Without it the GPU never reaches the model: every container
+runs with `-e`, which drops `CUDA_VISIBLE_DEVICES`, so CUDA falls back to GPU 0.
+SLURM on these nodes does not hide unallocated GPUs, and GPU 0 is often busy
+with other users' jobs. Singularity 3.8, which the cluster runs, forwards only the
+`SINGULARITYENV_` prefix; direct mode sets both prefixes for the same reason.
+
+**fluid** always runs with `--num_threads 1`. With the vendor default (`0`, one
+thread per core), onnxruntime 1.11 hangs or segfaults while creating its session
+inside a SLURM job. That was reproduced on cn6 (2026-11-12) and is what the
+vendor's own help text warns about. `--optima_spacing` is passed only when the
+`bscan.dcm` stores `PixelSpacing` as `[lateral, axial]`, as the vendor's OPTIMA
+reference DICOMs do. Our own `bscan.dcm` is `[axial, lateral]`, so production
+runs without it. The flag sets the lateral spacing that fluidseg's narrow-PED
+(drusen) filter measures in, so a wrong flag removes real PEDs wider than
+300 µm.
 `/health` reports `mode` (`direct` | `slurm`), `max_concurrent_runs` and, in SLURM
 mode, `slurm_partition` / `slurm_gres` (never the account).
 
