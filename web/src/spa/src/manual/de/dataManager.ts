@@ -9,7 +9,7 @@ export const dataManagerDe: ManualChapter = {
   ],
   callout: {
     kind: 'info', title: 'Was Sie erreichen können und was nicht',
-    text: 'Sie können die **Studienteilnehmer** (Subject Matrix) öffnen, um Aufnahme und Visitenfortschritt einzusehen, aber der teilnehmerbezogene Detailbildschirm und die direkte CRF-Datenerfassung sind Bildschirme der Prüfärztin/des Prüfarztes bzw. der Administration. Das Anlegen von Benutzerkonten, das Bearbeiten der Kernidentität der Studie sowie das Sperren/Entsperren einzelner Visiten oder CRF-Versionen sind Administrations-Aktionen. Ihre Aufsichtsbefugnisse — Diskrepanzen, Audit Trail, Regeln, Export, Abgleich der Doppeldateneingabe — stehen Ihnen alle zur Verfügung.',
+    text: 'Sie können die **Studienteilnehmer** (Subject Matrix) öffnen, um Aufnahme und Visitenfortschritt einzusehen, und von dort die Seite einer teilnehmenden Person, auf der Sie eine Person entfernen, die nicht in die Studie gehört. Die direkte CRF-Datenerfassung ist ein Bildschirm der Prüfärztin/des Prüfarztes bzw. der Administration. Das Anlegen von Benutzerkonten, das Bearbeiten der Kernidentität der Studie sowie das Sperren/Entsperren einzelner Visiten oder CRF-Versionen sind Administrations-Aktionen. Ihre Aufsichtsbefugnisse — Diskrepanzen, Audit Trail, Regeln, Export, Abgleich der Doppeldateneingabe — stehen Ihnen alle zur Verfügung.',
   },
   sections: [
     {
@@ -37,10 +37,11 @@ export const dataManagerDe: ManualChapter = {
         'Filtern Sie über das Suchfeld oder die Status-Chips, oder setzen Sie das Häkchen bei **nur mit Rückfragen**, um Teilnehmende mit offenen Diskrepanzen zu finden.',
         'Bei Studien mit vielen Visiten nutzen Sie die Pfeilschaltflächen oder **Zur aktuellsten Visite springen**, um durch die Visitenspalten zu scrollen; die Teilnehmerspalte bleibt links fixiert.',
         'Öffnen Sie **Studien-Statistik** (study metrics) über die Schaltfläche neben **Export** für aggregierte Zählungen.',
+        'Eine teilnehmende Person, die nicht in die Studie gehört (etwa ein Screening ohne Einwilligung), öffnen Sie mit **Öffnen** und nehmen sie mit **Entfernen** heraus. Das Entfernen ist weich: Die Daten bleiben erhalten, der Schritt steht im Audit-Trail, und die Person verschwindet aus dieser Liste und von den Arbeitslisten der Kameras.',
       ],
       notes: [
         'Ein rotes Abzeichen auf einer Visitenzelle ist die Anzahl der **offenen Rückfragen** (open queries) zu dieser Visite — Ihr Hinweis, in Rückfragen & Diskrepanzen nachzufassen.',
-        'Der Teilnehmer-Link und die Aktion **Öffnen** verweisen auf das teilnehmerbezogene Casebook, einen Bildschirm der Prüfärztin/des Prüfarztes bzw. der Administration. Als Studienleitung nutzen Sie die Matrix, um den Fortschritt zu *überwachen*; Sie erfassen oder signieren hier keine Daten.',
+        'Der Teilnehmer-Link und die Aktion **Öffnen** führen zur Seite der teilnehmenden Person. Als Studienleitung nutzen Sie die Matrix, um den Fortschritt zu *überwachen*, und entfernen dort Teilnehmende; Daten erfassen oder signieren Sie nicht.',
       ],
     },
     {

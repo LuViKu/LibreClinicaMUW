@@ -16,7 +16,10 @@ import java.sql.SQLException;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.study.StudySettingService;
 
 /**
@@ -115,12 +118,35 @@ public final class AiArmPolicy {
      *
      * <p>Data Manager, Monitor and Administrator keep full access — they are
      * not the ones making the treatment decision the trial is measuring.
+     *
+     * <p>An account can hold several roles on one study, and the session is
+     * bound with the strongest of them (a Study Director over an Investigator,
+     * at login as in the study picker). Which one it is must not unblind
+     * anybody, so any treating role the account holds on the active study, or
+     * on its parent when that is a site, makes it a treating role here.
      */
     public static boolean isTreatingRole(HttpSession session) {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (currentRole == null || currentRole.getRole() == null) return false;
-        Role r = currentRole.getRole();
-        return r.equals(Role.INVESTIGATOR) || r.equals(Role.COORDINATOR);
+        if (currentRole != null && isTreating(currentRole.getRole())) return true;
+        UserAccountBean account = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        if (account == null || study == null || study.getId() <= 0) return false;
+        for (StudyUserRoleBean binding : account.getRoles()) {
+            if (binding == null || !onStudyOrItsParent(binding.getStudyId(), study)) continue;
+            Status status = binding.getStatus();
+            if (status != null && (status.equals(Status.DELETED) || status.equals(Status.AUTO_DELETED))) continue;
+            if (isTreating(binding.getRole())) return true;
+        }
+        return false;
+    }
+
+    private static boolean isTreating(Role role) {
+        return role != null && (role.equals(Role.INVESTIGATOR) || role.equals(Role.COORDINATOR));
+    }
+
+    private static boolean onStudyOrItsParent(int studyId, StudyBean study) {
+        return studyId == study.getId()
+                || (study.getParentStudyId() > 0 && studyId == study.getParentStudyId());
     }
 
     /**

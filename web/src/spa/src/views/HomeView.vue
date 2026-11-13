@@ -232,7 +232,7 @@ const WORKSPACES = computed<WorkspaceEntry[]>(() => [
     to: { name: 'subject-matrix' },
     titleKey: 'subjectMatrix.title',
     descKey: 'home.investigator.subjectMatrixDesc',
-    allowedRoles: ['Investigator', 'CRC', 'Monitor'],
+    allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
     group: 'study',
   },
   {
