@@ -367,7 +367,7 @@ export const manualEn: Manual = {
             'To change behaviour, open **Parameter** (`/studies/<oid>/parameters`) — subject-ID generation, discrepancy management, interviewer defaults and module toggles. Click **Save**.',
           ],
           notes: [
-            'Subject detail is open to Investigator and Administrator. Study creation, identity edit and parameters edit are **Administrator-only** and re-checked on the backend (403 on denial).',
+            'Subject detail is open to Investigator, Monitor, Data Manager and Administrator. Study creation, identity edit and parameters edit are **Administrator-only** and re-checked on the backend (403 on denial).',
             'Subject identity edits, eye transitions, event cancellations and signatures are all recorded in the audit trail.',
           ],
         },
@@ -456,7 +456,7 @@ export const manualEn: Manual = {
       ],
       callout: {
         kind: 'info', title: 'What you can and cannot reach',
-        text: 'You can open the **Subject Matrix** to see enrolment and visit progress, but the per-subject detail screen and direct CRF data entry are Investigator/Administrator screens. Creating users, editing the study\u2019s core identity, and locking/unlocking individual visits or CRF versions are Administrator actions. Your supervision powers — discrepancies, audit log, rules, export, double-data-entry reconciliation — are all available.',
+        text: 'You can open the **Subject Matrix** to see enrolment and visit progress, and a participant\u2019s page from it, where you remove a participant who does not belong in the study. You enrol participants and enter and correct CRF data (transcribing the paper CRFs, say); only an Investigator signs. Creating users, editing the study\u2019s core identity, and locking/unlocking individual visits or CRF versions are Administrator actions. Your supervision powers — discrepancies, audit log, rules, export, double-data-entry reconciliation — are all available.',
       },
       sections: [
         {
@@ -484,10 +484,11 @@ export const manualEn: Manual = {
             'Filter with the search box or the status chips, or tick **only with queries** to find subjects carrying open discrepancies.',
             'For studies with many visits, use the chevron buttons or **Jump to latest** to scroll the visit columns; the Subject column stays frozen on the left.',
             'Open **Studien-Statistik** (study metrics) from the side rail for aggregate counts.',
+            'To take out a participant who does not belong in the study (a screening without consent, say), open them with **Öffnen** (Open) and use **Entfernen** (Remove). Removal is soft: the data stays, the step is in the audit trail, and the participant leaves this list and the cameras\' worklists.',
           ],
           notes: [
             'A red badge on a visit cell is the count of **open queries** on that visit — your cue to follow up in Notes & Discrepancies.',
-            'The subject link and **Öffnen** action point at the per-subject casebook, which is an **Investigator/Administrator** screen. As a Data Manager you use the matrix to *monitor* progress; you do not enter or sign data here.',
+            'The subject link and **Öffnen** action open the participant\u2019s page. As a Data Manager you use the matrix to *monitor* progress and to remove participants; from a visit you open CRFs for entry. You do not sign.',
           ],
         },
         {

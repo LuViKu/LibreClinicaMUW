@@ -275,7 +275,7 @@ export const administratorDe: ManualChapter = {
         'Um das Verhalten zu ändern, öffnen Sie **Parameter** (`/studies/<oid>/parameters`) — Erzeugung der Subject-ID, Diskrepanzmanagement, Interviewer-Voreinstellungen und Modul-Schalter. Klicken Sie auf **Save**.',
       ],
       notes: [
-        'Das Probandendetail ist für Prüfärztin/-arzt und Administrator/-in zugänglich. Anlegen einer Studie, Bearbeiten der Identität und Bearbeiten der Parameter sind **ausschließlich Administrator/-innen vorbehalten** und werden im Backend erneut geprüft (403 bei Verweigerung).',
+        'Das Probandendetail ist für Prüfärztin/-arzt, Monitor, Studienleitung und Administrator/-in zugänglich. Anlegen einer Studie, Bearbeiten der Identität und Bearbeiten der Parameter sind **ausschließlich Administrator/-innen vorbehalten** und werden im Backend erneut geprüft (403 bei Verweigerung).',
         'Bearbeitungen der Probanden-Identität, Augen-Übergänge, Visiten-Stornierungen und Signaturen werden allesamt im Audit-Trail festgehalten.',
       ],
     },

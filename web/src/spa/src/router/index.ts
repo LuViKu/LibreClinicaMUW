@@ -64,16 +64,19 @@ const router = createRouter({
       meta: { title: 'Subject Matrix', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     {
+      // Enrolling and entering data: every role the server lets enter data
+      // (ClinicalWriteAuthorization.roleMayEnterData). The Data Manager is
+      // study management, which transcribes and corrects the paper CRFs.
       path: '/subjects/new',
       name: 'subject-new',
       component: () => import('@/views/AddSubjectView.vue'),
-      meta: { title: 'Add Subject', role: ['Investigator', 'Administrator'] as const },
+      meta: { title: 'Add Subject', role: ['Investigator', 'Data Manager', 'Administrator'] as const },
     },
     {
       path: '/event-crfs/:eventCrfOid',
       name: 'crf-entry',
       component: () => import('@/views/CrfEntryView.vue'),
-      meta: { title: 'CRF Entry', role: ['Investigator', 'Administrator'] as const },
+      meta: { title: 'CRF Entry', role: ['Investigator', 'Data Manager', 'Administrator'] as const },
     },
     /* Phase E.8 Slice L4 (2026-06-20) — print-friendly CRF view,
        SPA replacement for the legacy Print*CRF servlets. */
@@ -330,11 +333,12 @@ const router = createRouter({
     {
       // A Monitor views the subject read-only, as legacy View Subject lets a
       // monitor; the page hides every change the role cannot make, and the
-      // API refuses them.
+      // API refuses them. The Data Manager (Study Director) is the role that
+      // removes and restores a participant, which happens on this page.
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Administrator'] as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used
