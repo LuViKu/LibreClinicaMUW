@@ -32,12 +32,20 @@ import org.junit.jupiter.api.Test;
  */
 class LegacyClosedPathsDefaultTest {
 
-    /** Screens the SPA or the login flow still depends on; closing one breaks users. */
+    /**
+     * The shell and the public forms, open until the shell wave (W5) removes
+     * what still leads there: logins, SSO and an expired session land on
+     * /MainMenu, and e-mail links use sysURL. Closing one breaks users.
+     */
     private static final Set<String> MUST_STAY_OPEN = Set.of(
-            "/MainMenu",       // the login success target
-            "/Logout",         // the SPA's sign-out calls it
-            "/CreateDataset",  // DatasetListView still links it
-            "/SystemStatus");  // unauthenticated probe
+            "/MainMenu", "/ChangeStudy", "/Logout", "/UpdateProfile", "/ResetPassword",
+            "/MatchPassword", "/RequestStudy",
+            "/RequestAccount", "/Contact");
+
+    /** The catalogue areas of {@link #MUST_STAY_OPEN}; every other area is closed in wave 2. */
+    private static final Set<LegacyServletDeprecationCatalog.Bucket> OPEN_AREAS = Set.of(
+            LegacyServletDeprecationCatalog.Bucket.SHELL_AND_LOGIN,
+            LegacyServletDeprecationCatalog.Bucket.SUPPORT_FORMS);
 
     /** Wave 0 (2026-09-30): not needed, no SPA replacement planned. */
     private static final List<String> WAVE_0 = List.of(
@@ -72,15 +80,6 @@ class LegacyClosedPathsDefaultTest {
             // study audit log (director, coordinator, sysadmin in legacy; the SPA adds the monitor)
             "/AuditLogStudy",
             "/DeleteCRFVersion");
-
-    /**
-     * Administration screens wave 1 leaves open, each with its reason (see the
-     * retirement log): /ViewCRF (its "run all rules for this CRF" link has no
-     * SPA counterpart), /ViewStudy (read by other roles from open pages) and
-     * the study-scoped user screens (W3).
-     */
-    private static final List<String> WAVE_1_HELD_OPEN = List.of(
-            "/ViewCRF", "/ViewStudy", "/ListStudyUser");
 
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
@@ -126,16 +125,33 @@ class LegacyClosedPathsDefaultTest {
         assertEquals(List.of(), open, "wave 1 screens that are still open");
     }
 
+    /**
+     * Wave 2 (2026-11-13, DR-018 amendment): everything but the shell and the
+     * public forms, in one wave. The legacy-access log showed no request for
+     * any of these screens by anyone but a system administrator since
+     * telemetry began, so the per-area waves W2 to W4 were folded into one.
+     */
     @Test
-    void waveOneHoldsBackTheScreensOtherRolesStillUse() {
+    void waveTwoClosesEverythingButTheShell() {
         List<String> closed = defaultClosedPaths();
-        List<String> shut = new ArrayList<>();
-        for (String path : WAVE_1_HELD_OPEN) {
-            if (closed.contains(path)) {
-                shut.add(path);
+        List<String> open = new ArrayList<>();
+        for (LegacyServletDeprecationCatalog.Entry entry : catalog.all().values()) {
+            if (!OPEN_AREAS.contains(entry.bucket()) && !closed.contains(entry.legacyPath())) {
+                open.add(entry.legacyPath());
             }
         }
-        assertEquals(List.of(), shut, "screens held open for the legacy Data Manager and other roles were closed");
+        assertEquals(List.of(), open, "screens outside the shell that are still open");
+    }
+
+    @Test
+    void theShellIsExactlyWhatStaysOpen() {
+        Set<String> shell = new java.util.TreeSet<>();
+        for (LegacyServletDeprecationCatalog.Entry entry : catalog.all().values()) {
+            if (OPEN_AREAS.contains(entry.bucket()) && !defaultClosedPaths().contains(entry.legacyPath())) {
+                shell.add(entry.legacyPath());
+            }
+        }
+        assertEquals(new java.util.TreeSet<>(MUST_STAY_OPEN), shell);
     }
 
     @Test

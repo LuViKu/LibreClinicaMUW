@@ -1,5 +1,7 @@
 # Plan — retiring the legacy JSP layer and clearing code scanning (2026-09-30)
 
+> **Amended 2026-11-13** ([DR-018 amendment](decision-record.md#amendment-2026-11-13--one-wave-and-a-four-week-bake-in)): waves W2 to W4 closed as one wave on the evidence of the `legacy-hit` log, and the bake-in is **four weeks**, not six months. The six-month figures and the dates derived from them below are superseded; see the [retirement log](phase-e-retirement-log.md) for the current state.
+
 **Status:** [DR-018](decision-record.md#dr-018--the-legacy-jsp-layer-is-retired-in-full-admin-screens-included) is accepted. Implementation is recorded in [§14](#14-implementation-status-2026-10-02).
 
 **Goal:** the SPA is the only user interface. No JSP, no legacy servlet, no SiteMesh decorator, no jQuery 1.9 / Prototype / Scriptaculous / GWT and no Jersey remain in the WAR. Security-level code-scanning alerts on `main` are zero at every release, and every remaining quality alert is either fixed or dismissed with a reason.
@@ -87,7 +89,7 @@ The work runs in five stages, with code scanning in parallel as track S.
 - **DR-018 order:**
   1. dead code first;
   2. then close a covered screen behind `/legacy/<path>`, which is admin-only and logged;
-  3. keep the six-month bake-in;
+  3. keep the bake-in (four weeks since the [DR-018 amendment of 2026-11-13](decision-record.md#amendment-2026-11-13--one-wave-and-a-four-week-bake-in); six months before);
   4. delete only after parity is recorded and the log shows no legitimate use.
 
   Every step is recorded in `phase-e-retirement-log.md`.
@@ -291,7 +293,7 @@ Each wave closes one area once every screen in it has a recorded SPA replacement
 
 ## 8. Stage R3 — delete
 
-Six months after a wave closes, and only if the log shows no legitimate use, delete the wave's:
+Four weeks after a wave closes (six months until the DR-018 amendment of 2026-11-13), and only if the log shows no legitimate use, delete the wave's:
 
 - servlets and their `LegacyServletRegistry` entries;
 - JSPs;
