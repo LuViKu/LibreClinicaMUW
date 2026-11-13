@@ -100,7 +100,7 @@ class LegacyServletDeprecationCatalogTest {
         assertFalse(catalog.lookup("/app/subjects", null).isPresent());
         assertFalse(catalog.lookup("/images/bt_View.gif", null).isPresent());
         // The keys carry no context path; a request URI never matches.
-        assertFalse(catalog.lookup("/LibreClinica/ListUserAccounts").isPresent());
+        assertFalse(catalog.lookup("/LibreClinica/ListStudySubjects").isPresent());
     }
 
     @Test
@@ -132,7 +132,9 @@ class LegacyServletDeprecationCatalogTest {
         Set<String> missing = new TreeSet<>(registered);
         missing.removeAll(servletKeys());
         assertTrue(missing.isEmpty(), "registered legacy servlets missing from the catalogue: " + missing);
-        assertTrue(registered.size() > 200, "the registry was read: " + registered.size());
+        // A sanity bound that the registry was parsed, not a count: 155 servlets
+        // remain after the W0/W1 deletion.
+        assertTrue(registered.size() > 100, "the registry was read: " + registered.size());
     }
 
     /** Every servlet key is a registered path: a stale key names a screen no request can match. */
@@ -170,13 +172,10 @@ class LegacyServletDeprecationCatalogTest {
     void screensFoundUncoveredNameNoSpaRoute() {
         for (String path : List.of(
                 "/ViewStudy",
-                "/AuditDatabase", "/ViewLogMessage",
                 "/ViewStudyEvents")) {
             Entry entry = catalog.entry(path).orElseThrow(() -> new AssertionError(path + " not catalogued"));
             assertFalse(entry.hasSpaRoute(), path + " still names " + entry.spaRoute());
         }
-        // §16.3 found this one covered after all; it keeps its route.
-        assertEquals("/app/system/audit-log", catalog.entry("/AuditLogUser").orElseThrow().spaRoute());
     }
 
     @Test

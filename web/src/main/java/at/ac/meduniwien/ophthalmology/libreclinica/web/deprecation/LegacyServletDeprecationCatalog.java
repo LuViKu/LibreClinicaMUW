@@ -66,6 +66,8 @@ public class LegacyServletDeprecationCatalog {
      * Functional area of a legacy screen, logged with every hit so the log can
      * be aggregated per area ("the user-accounts screens still have traffic").
      * The names are part of the log format: add new ones, but do not rename.
+     * A bucket whose screens are all deleted goes with them ({@code JOB_ADMIN},
+     * the Quartz job pages, in the W0/W1 deletion); its old log lines keep the name.
      */
     public enum Bucket {
         SUBJECTS_AND_EVENTS,
@@ -81,8 +83,6 @@ public class LegacyServletDeprecationCatalog {
         ADMIN_TOOLING,
         /** Print-friendly views. */
         PRINT_PDF,
-        /** Quartz job administration. */
-        JOB_ADMIN,
         /** CRF data entry, import and the event-CRF views around it. */
         DATA_ENTRY,
         /** Source data verification (Spring MVC pages). */
@@ -160,7 +160,6 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/RemoveStudyEvent", "/app/events/:eventId", Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/RestoreStudyEvent", "/app/events/:eventId", Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/MarkEventCRFComplete", "/app/event-crfs/:eventCrfOid", Bucket.SUBJECTS_AND_EVENTS);
-        put(m, "/DeleteEventCRF", "/app/event-crfs/:eventCrfOid", Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/RestoreEventCRF", "/app/event-crfs/:eventCrfOid", Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/DoubleDataEntry", "/app/event-crfs/:eventCrfOid", Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/AdministrativeEditing", "/app/event-crfs/:eventCrfOid", Bucket.SUBJECTS_AND_EVENTS);
@@ -173,28 +172,14 @@ public class LegacyServletDeprecationCatalog {
         // UpdateStudyServletNew; the key used to be its class name.
         put(m, "/UpdateStudyNew", "/app/studies/:oid/edit", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/InitUpdateStudy", "/app/studies/:oid/edit", Bucket.STUDY_ADMIN_AND_BUILD);
-        // Admin catalogue §4: removed and restored in the SPA on /admin/studies (R1.1, #377).
-        put(m, "/RemoveStudy", "/app/admin/studies", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/RestoreStudy", "/app/admin/studies", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ListEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/DefineStudyEvent", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/InitUpdateEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/LockEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/UnlockEventDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/CreateCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/ListCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/RemoveCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        // CRF restore and edit: /crf-library (R1.2, #387).
-        put(m, "/RestoreCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/InitUpdateCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRFVersion", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/CreateCRFVersion", "/app/crf-authoring-canvas/:crfOid", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/DeleteCRFVersion", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/RemoveCRFVersion", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/RestoreCRFVersion", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/InitCreateCRFVersion", "/app/crf-authoring-canvas/:crfOid", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/AddCRFToDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RemoveCRFFromDefinition", "/app/event-definitions", Bucket.STUDY_ADMIN_AND_BUILD);
 
@@ -217,32 +202,15 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ChooseDownloadFormat", "/app/datasets/:datasetId/edit", Bucket.DATA_EXPORT);
 
         // --- USER_ACCOUNTS — SPA `/manage-users` ---
-        put(m, "/ListUserAccounts", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/CreateUserAccount", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/EditUserAccount", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/ViewUserAccount", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/DeleteUser", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/UnLockUser", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/SetUserRole", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/DeleteStudyUserRole", "/app/manage-users", Bucket.USER_ACCOUNTS);
-        put(m, "/EditStudyUserRole", "/app/manage-users", Bucket.USER_ACCOUNTS);
         put(m, "/ListStudyUser", "/app/manage-users", Bucket.USER_ACCOUNTS);
         put(m, "/AssignUserToStudy", "/app/manage-users", Bucket.USER_ACCOUNTS);
         put(m, "/SetStudyUserRole", "/app/manage-users", Bucket.USER_ACCOUNTS);
 
         // --- AUDIT_TRAIL — SPA `/audit-log`, `/system/audit-log` ---
-        put(m, "/AuditLogStudy", "/app/audit-log", Bucket.AUDIT_TRAIL);
-        put(m, "/AuditLogUser", "/app/system/audit-log", Bucket.AUDIT_TRAIL);
-        // Login history over audit_user_login: /admin/login-history (R1.1, #381).
-        put(m, "/AuditUserActivity", "/app/admin/login-history", Bucket.AUDIT_TRAIL);
-        put(m, "/AuditUserActivityData", "/app/admin/login-history", Bucket.AUDIT_TRAIL);
-        put(m, "/AuditDatabase", NONE, Bucket.AUDIT_TRAIL);
         put(m, "/ViewItemAuditLog", "/app/audit-log", Bucket.AUDIT_TRAIL);
         put(m, "/StudyAuditLog", "/app/audit-log", Bucket.AUDIT_TRAIL);
         put(m, "/StudyAuditLogData", "/app/audit-log", Bucket.AUDIT_TRAIL);
         put(m, "/ViewStudySubjectAuditLog", "/app/audit-log", Bucket.AUDIT_TRAIL);
-        // Admin catalogue §16.3: an import-job log-file viewer, not an audit log.
-        put(m, "/ViewLogMessage", NONE, Bucket.AUDIT_TRAIL);
         put(m, "/ExportExcelStudySubjectAuditLog", "/app/audit-log", Bucket.AUDIT_TRAIL);
 
         // --- DISCREPANCY_NOTES — SPA `/notes` ---
@@ -280,24 +248,12 @@ public class LegacyServletDeprecationCatalog {
 
         // --- ADMIN_TOOLING — SPA `/admin/*` ---
         put(m, "/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
-        put(m, "/ConfigurePasswordRequirements", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
-        // The lockout settings: /admin/password-policy (R1.2, #381).
-        put(m, "/Configure", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
 
         // --- PRINT_PDF — SPA `/event-crfs/:eventCrfOid/print` ---
         put(m, "/PrintEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
         put(m, "/PrintCRFById", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
         put(m, "/PrintAllEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
         put(m, "/PrintAllSiteEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
-
-        // --- JOB_ADMIN — SPA `/admin/jobs` ---
-        put(m, "/ViewAllJobs", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        put(m, "/ViewJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        put(m, "/ViewImportJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        put(m, "/ViewSingleJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        // Legacy XSLT jobs are listed and deleted on /admin/jobs; schedules are paused and
-        // resumed per dataset on /export (R1.2, #389).
-        put(m, "/PauseJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
 
         // --- Registered servlets with no SPA route recorded, added 2026-09-30
         // so that every legacy servlet is logged and can be closed. A route
@@ -322,11 +278,9 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ListEventsForSubjectsData", NONE, Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/RemoveEventCRF", NONE, Bucket.SUBJECTS_AND_EVENTS);
 
-        put(m, "/ListStudy", "/app/admin/studies", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ManageStudy", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ManageStudy1", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/DownloadStudyMetadata", "/app/", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/UpdateEventDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RemoveEventDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RestoreEventDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
@@ -334,14 +288,10 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ChangeDefinitionOrdinal", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ChangeDefinitionCRFOrdinal", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/RestoreCRFFromDefinition", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        // CRF edit and the event-CRF version migration: /crf-library (#387).
-        put(m, "/UpdateCRF", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/BatchCRFMigration", "/app/crf-library/:crfOid/migrate", Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/LockCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/UnlockCRFVersion", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/ViewCRFVersionPreview", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
         put(m, "/SectionPreview", NONE, Bucket.STUDY_ADMIN_AND_BUILD);
-        put(m, "/DownloadVersionSpreadSheet", "/app/crf-library", Bucket.STUDY_ADMIN_AND_BUILD);
 
         put(m, "/AccessFile", NONE, Bucket.DATA_EXPORT);
         put(m, "/ShowFile", NONE, Bucket.DATA_EXPORT);
@@ -351,7 +301,6 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ViewStudyUser", NONE, Bucket.USER_ACCOUNTS);
         put(m, "/RemoveStudyUserRole", NONE, Bucket.USER_ACCOUNTS);
         put(m, "/RestoreStudyUserRole", NONE, Bucket.USER_ACCOUNTS);
-        put(m, "/PrintoutCertificate", NONE, Bucket.USER_ACCOUNTS);
 
         put(m, "/DiscrepancyNoteOutputServlet", NONE, Bucket.DISCREPANCY_NOTES);
 
@@ -369,25 +318,9 @@ public class LegacyServletDeprecationCatalog {
 
         put(m, "/RequestAccount", NONE, Bucket.SUPPORT_FORMS);
 
-        put(m, "/AdminSystem", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/TechAdmin", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/SendTestEmail", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
-        // The cross-study subject registry (admin catalogue §10).
-        put(m, "/ListSubject", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/ListSubjectData", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/ViewSubject", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/UpdateSubject", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/RemoveSubject", NONE, Bucket.ADMIN_TOOLING);
-        put(m, "/RestoreSubject", NONE, Bucket.ADMIN_TOOLING);
-
         put(m, "/PrintCRF", NONE, Bucket.PRINT_PDF);
         put(m, "/PrintCRFOld", NONE, Bucket.PRINT_PDF);
         put(m, "/PrintDataEntry", NONE, Bucket.PRINT_PDF);
-
-        put(m, "/CreateJobExport", "/app/export", Bucket.JOB_ADMIN);
-        put(m, "/UpdateJobExport", "/app/export", Bucket.JOB_ADMIN);
-        put(m, "/CreateJobImport", NONE, Bucket.JOB_ADMIN);
-        put(m, "/UpdateJobImport", NONE, Bucket.JOB_ADMIN);
 
         // The shell. A login lands on /MainMenu and the SPA's logout calls
         // GET /Logout, so closing either before wave W5 breaks the SPA.
@@ -398,7 +331,6 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/ResetPassword", NONE, Bucket.SHELL_AND_LOGIN);
         put(m, "/MatchPassword", NONE, Bucket.SHELL_AND_LOGIN);
         put(m, "/RequestStudy", NONE, Bucket.SHELL_AND_LOGIN);
-        put(m, "/Enterprise", NONE, Bucket.SHELL_AND_LOGIN);
 
         // --- Spring MVC routes under /pages that render a JSP. Each also
         // covers the paths below it. ---
@@ -415,16 +347,10 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/sdvStudySubject", "/app/sdv", Bucket.SOURCE_DATA_VERIFICATION);
         put(m, "/pages/unSdvStudySubject", "/app/sdv", Bucket.SOURCE_DATA_VERIFICATION);
         put(m, "/pages/sdvStudySubjects", "/app/sdv", Bucket.SOURCE_DATA_VERIFICATION);
-        // The running-jobs page (admin, sysadmin only) is not rebuilt (plan R1.5); /admin/jobs lists and deletes.
-        put(m, "/pages/listCurrentScheduledJobs", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        put(m, "/pages/listCurrentScheduledJobsData", "/app/admin/jobs", Bucket.JOB_ADMIN);
-        put(m, "/pages/cancelScheduledJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
         put(m, "/pages/extract", NONE, Bucket.DATA_EXPORT);
         put(m, "/pages/managestudy/chooseCRFVersion", NONE, Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/pages/managestudy/confirmCRFVersionChange", NONE, Bucket.SUBJECTS_AND_EVENTS);
         put(m, "/pages/managestudy/changeCRFVersion", NONE, Bucket.SUBJECTS_AND_EVENTS);
-        put(m, "/pages/admin/listLdapUsers", NONE, Bucket.USER_ACCOUNTS);
-        put(m, "/pages/admin/selectLdapUser", NONE, Bucket.USER_ACCOUNTS);
         // The upstream demo stub that fills user.jsp with sample names (DR-018).
         put(m, "/pages/user", NONE, Bucket.USER_ACCOUNTS);
         // The OpenClinica 3.x REST API: studies, user accounts, clinical data,
