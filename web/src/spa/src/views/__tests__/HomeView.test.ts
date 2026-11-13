@@ -227,7 +227,8 @@ describe('HomeView role-aware catalogue', () => {
     expect(ids).toContain('data-export')
     // The participant list, where a Data Manager removes a participant.
     expect(ids).toContain('subject-matrix')
-    expect(ids).not.toContain('subject-new')
+    // Study management transcribes paper records, enrolment included.
+    expect(ids).toContain('subject-new')
     expect(ids).not.toContain('manage-users')
   })
 

@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest'
 
 import router, { roleSatisfies } from '../index'
 import type { UserRole } from '@/types/auth'
+import { canEnterData } from '@/types/event'
 import { canManageSubjectLifecycle } from '@/types/subject'
 
 const ROUTES_THAT_MUST_INCLUDE_ADMINISTRATOR = [
@@ -138,5 +139,31 @@ describe('router role gates — whoever may remove a participant reaches the but
   it.each(LIFECYCLE_ROLES)('%s enters the participant list and the participant page', (role) => {
     expect(admits('subject-matrix', role)).toBe(true)
     expect(admits('subject-detail', role)).toBe(true)
+  })
+})
+
+/**
+ * The SPA offers enrolment and data entry to every role canEnterData names
+ * (the participant list's add button, the visit page's start button). Each
+ * of them must get past the route, or the button bounces to home: the Data
+ * Manager did (2026-11-13), although the server lets it enter data.
+ */
+describe('router role gates — whoever may enter data reaches enrolment and the CRF', () => {
+  const DATA_ENTRY_ROLES = (['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'] as const)
+    .filter((role) => canEnterData(role))
+
+  it('names the Data Manager and not the Monitor', () => {
+    expect(DATA_ENTRY_ROLES).toContain('Data Manager')
+    expect(DATA_ENTRY_ROLES).not.toContain('Monitor')
+  })
+
+  it.each(DATA_ENTRY_ROLES)('%s enters enrolment and data entry', (role) => {
+    expect(admits('subject-new', role)).toBe(true)
+    expect(admits('crf-entry', role)).toBe(true)
+  })
+
+  it('keeps the Monitor out of both', () => {
+    expect(admits('subject-new', 'Monitor')).toBe(false)
+    expect(admits('crf-entry', 'Monitor')).toBe(false)
   })
 })

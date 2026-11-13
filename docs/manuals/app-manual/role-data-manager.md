@@ -12,8 +12,9 @@ shared navigation chrome.
 
 > **What you can and cannot reach.** You can open the **Subject Matrix** to see
 > enrolment and visit progress, and a participant's page from it, which is where
-> you remove a participant who does not belong in the study. Direct CRF data
-> entry is an Investigator/Administrator screen. Creating users, editing the study's
+> you remove a participant who does not belong in the study. You enrol participants
+> and enter and correct CRF data (transcribing the paper CRFs, say); only an
+> Investigator signs. Creating users, editing the study's
 > core identity, and locking/unlocking individual visits or CRF versions are
 > Administrator actions. Your supervision powers — discrepancies, audit log, rules,
 > export, double-data-entry reconciliation — are all available.
@@ -89,9 +90,9 @@ Administrator's and wider than a Monitor's. Common entry points:
 
 - A red badge on a visit cell is the count of **open queries** on that visit —
   your cue to follow up in Notes & Discrepancies.
-- The subject link and **Öffnen** action point at the per-subject casebook, which
-  is an **Investigator/Administrator** screen. As a Data Manager you use the matrix
-  to *monitor* progress; you do not enter or sign data here.
+- The subject link and **Öffnen** action open the participant's page. As a Data
+  Manager you use the matrix to *monitor* progress and to remove participants;
+  from a visit you open CRFs for entry. You do not sign.
 
 ---
 
