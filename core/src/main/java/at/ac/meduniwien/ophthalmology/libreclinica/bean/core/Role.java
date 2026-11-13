@@ -13,7 +13,6 @@ import java.util.*;
 
 // Internationalized name and description in Term.getName and Term.getDescription()
 // Description identifiers are taken from facilityinfo.properties
-@SuppressWarnings("all")
 public class Role extends Term {
 
 	private static final long serialVersionUID = 8374394924123285829L;
@@ -109,6 +108,27 @@ public class Role extends Term {
             return r1;
         }
         return r2;
+    }
+
+    /**
+     * How much a role may do, for choosing among the bindings one account
+     * holds on the same study: the strongest stands for the account there,
+     * at login as in the study picker. The order is the SPA's, director (its
+     * Data Manager) above coordinator (its CRC); {@link #max} keeps the legacy
+     * id order for the parent-to-site inheritance.
+     *
+     * @return -1 for null, 0 for a role outside the list (INVALID included)
+     */
+    public static int privilegeRank(Role role) {
+        if (role == null) return -1;
+        if (role.equals(ADMIN)) return 100;
+        if (role.equals(STUDYDIRECTOR)) return 80;
+        if (role.equals(COORDINATOR)) return 70;
+        if (role.equals(INVESTIGATOR)) return 50;
+        if (role.equals(RESEARCHASSISTANT)) return 40;
+        if (role.equals(RESEARCHASSISTANT2)) return 35;
+        if (role.equals(MONITOR)) return 30;
+        return 0;
     }
 
 }

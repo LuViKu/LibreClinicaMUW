@@ -11,9 +11,9 @@ Everything you do is scoped to the **study (and site)** you picked at login. See
 shared navigation chrome.
 
 > **What you can and cannot reach.** You can open the **Subject Matrix** to see
-> enrolment and visit progress, but the per-subject detail screen and direct CRF
-> data entry are Investigator/Administrator screens — clicking a subject from the
-> matrix will not open the casebook for you. Creating users, editing the study's
+> enrolment and visit progress, and a participant's page from it, which is where
+> you remove a participant who does not belong in the study. Direct CRF data
+> entry is an Investigator/Administrator screen. Creating users, editing the study's
 > core identity, and locking/unlocking individual visits or CRF versions are
 > Administrator actions. Your supervision powers — discrepancies, audit log, rules,
 > export, double-data-entry reconciliation — are all available.
@@ -47,7 +47,8 @@ Administrator's and wider than a Monitor's. Common entry points:
    waiting in the **Eingang**, and **Fällige Visiten**.
 3. Below, **In &lt;study&gt;** lists the workspaces — most build work begins at
    **Studienaufbau** (Build Study). The top bar's primary navigation reaches
-   Studienaufbau, the Eingang, Datenexport and Rückfragen from any screen.
+   Studienaufbau, Studienteilnehmer, the Eingang, Datenexport and Rückfragen
+   from any screen.
 
 ![Data Manager home dashboard](screenshots/data-manager/00-home.png)
 
@@ -67,7 +68,7 @@ Administrator's and wider than a Monitor's. Common entry points:
 
 **Steps**
 
-1. Open **Subject Matrix** from the side navigation.
+1. Open **Subject Matrix** (*Studienteilnehmer*) from the top bar or the home page.
 2. Each row is a subject; columns show **Gender**, study **Eye** (OD/OS/OU),
    **Group**, **Enrolled** date, one cell per visit, and a **signed** indicator.
 3. Filter with the search box or the status chips (*all*, *today*, *ready to
@@ -77,6 +78,10 @@ Administrator's and wider than a Monitor's. Common entry points:
    to scroll the visit columns; the Subject column stays frozen on the left.
 5. Open **Studien-Statistik** (study metrics) with the button beside **Export**
    for aggregate counts.
+6. To take out a participant who does not belong in the study (a screening
+   without consent, say), open them with **Öffnen** and use **Entfernen**
+   (Remove). Removal is soft: the data stays, the step is in the audit trail,
+   and the participant leaves this list and the cameras' worklists.
 
 ![Subject Matrix](screenshots/data-manager/01-subject-matrix.png)
 

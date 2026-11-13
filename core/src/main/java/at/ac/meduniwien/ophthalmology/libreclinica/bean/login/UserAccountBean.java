@@ -28,7 +28,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthType;
 /**
  * @author thickerson
  */
-@SuppressWarnings("all")
 public class UserAccountBean extends AuditableEntityBean {
 
     /*
@@ -488,10 +487,37 @@ public class UserAccountBean extends AuditableEntityBean {
 
             this.roles.add(sur);
 
+            // An account may hold several roles on one study. getRoleByStudy
+            // answers with one, so index the one that should stand for it
+            // there, not whichever row the database returned last: the login
+            // and every legacy page bind the session role from it, and the
+            // study picker (MeApiController.setActiveStudy) takes the strongest.
             Integer key = Integer.valueOf(sur.getStudyId());
-            Integer value = Integer.valueOf(this.roles.size() - 1);
-            rolesByStudy.put(key, value);
+            Integer held = rolesByStudy.get(key);
+            if (held == null || standsBefore(sur, this.roles.get(held.intValue()))) {
+                rolesByStudy.put(key, Integer.valueOf(this.roles.size() - 1));
+            }
         }
+    }
+
+    /**
+     * Whether {@code candidate} should stand for its study over {@code held}:
+     * an available binding over any other, a removed one last, and then the
+     * stronger role ({@link Role#privilegeRank}). On a tie the later row wins,
+     * as every row did before.
+     */
+    static boolean standsBefore(StudyUserRoleBean candidate, StudyUserRoleBean held) {
+        int byStatus = Integer.compare(liveness(candidate), liveness(held));
+        if (byStatus != 0) return byStatus > 0;
+        return Role.privilegeRank(candidate.getRole()) >= Role.privilegeRank(held.getRole());
+    }
+
+    /** 2 available, 1 any other status getRoleByStudy accepts, 0 removed or auto-removed. */
+    private static int liveness(StudyUserRoleBean binding) {
+        Status status = binding.getStatus();
+        if (status == null) return 1;
+        if (status.equals(Status.DELETED) || status.equals(Status.AUTO_DELETED)) return 0;
+        return status.equals(Status.AVAILABLE) ? 2 : 1;
     }
 
     /**

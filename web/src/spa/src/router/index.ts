@@ -330,11 +330,12 @@ const router = createRouter({
     {
       // A Monitor views the subject read-only, as legacy View Subject lets a
       // monitor; the page hides every change the role cannot make, and the
-      // API refuses them.
+      // API refuses them. The Data Manager (Study Director) is the role that
+      // removes and restores a participant, which happens on this page.
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Administrator'] as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used

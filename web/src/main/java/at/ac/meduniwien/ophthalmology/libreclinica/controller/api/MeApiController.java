@@ -585,22 +585,15 @@ public class MeApiController {
      * {@code if (rank > bestRank)} loop without nulls leaking into
      * the comparison.
      *
-     * <p>Authorization decisions on multi-role users should NOT rely
-     * on this — they walk the full binding set via
-     * {@link StudyAdminAuthorization#userMayEditStudy}. The rank only
-     * influences which role shows in the TopBar / audit metadata
-     * for the active session.
+     * <p>The session role decides more than the TopBar: which sites'
+     * participants the lists show ({@code SiteVisibilityFilter}) and
+     * whether a participant may be removed. The login binds it through
+     * {@code UserAccountBean.getRoleByStudy}, which ranks by the same
+     * {@link Role#privilegeRank}, so a fresh login and a pick in the
+     * study picker agree.
      */
     private static int privilegeRank(Role role) {
-        if (role == null) return -1;
-        if (role.equals(Role.ADMIN)) return 100;
-        if (role.equals(Role.STUDYDIRECTOR)) return 80;
-        if (role.equals(Role.COORDINATOR)) return 70;
-        if (role.equals(Role.INVESTIGATOR)) return 50;
-        if (role.equals(Role.RESEARCHASSISTANT)) return 40;
-        if (role.equals(Role.RESEARCHASSISTANT2)) return 35;
-        if (role.equals(Role.MONITOR)) return 30;
-        return 0;
+        return Role.privilegeRank(role);
     }
 
     /* ----------------------------------------------------------------- */

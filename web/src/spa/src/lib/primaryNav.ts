@@ -43,8 +43,8 @@ export const PRIMARY_NAV: Record<UserRole, PrimaryNavItem[]> = {
   Investigator: [SUBJECTS, NOTES, DUE_VISITS, INBOX],
   CRC: [SUBJECTS, NOTES, BUILD, EXPORT],
   Monitor: [SUBJECTS, SDV, NOTES, AUDIT],
-  'Data Manager': [BUILD, INBOX, EXPORT, NOTES],
-  Administrator: [USERS, SITES, EXPORT, AUDIT],
+  'Data Manager': [BUILD, SUBJECTS, INBOX, EXPORT, NOTES],
+  Administrator: [USERS, SUBJECTS, SITES, EXPORT, AUDIT],
 }
 
 /** Highest first, so a multi-role operator's strongest binding leads. */
