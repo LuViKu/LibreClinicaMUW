@@ -1629,12 +1629,12 @@ public class SubjectsApiController {
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        // Signing is an attest action: the rule that governs signing a
-        // visit, narrowed further by the preflight (roleMaySignSubject).
-        // No system-administrator short-circuit, unlike the legacy
-        // SignStudySubjectServlet: the signature attests as the binding
-        // (see ClinicalWriteAuthorization).
-        if (!EventEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
+        // Signing is the investigator's attestation (roleMaySignSubject), the
+        // rule for signing a visit too; the preflight repeats it as its
+        // user-role-can-sign check. No system-administrator short-circuit,
+        // unlike the legacy SignStudySubjectServlet: the signature attests as
+        // the binding (see ClinicalWriteAuthorization).
+        if (!roleMaySignSubject(ClinicalWriteAuthorization.roleIdOf(session))) {
             return ClinicalWriteAuthorization.forbidden("signing subjects");
         }
 

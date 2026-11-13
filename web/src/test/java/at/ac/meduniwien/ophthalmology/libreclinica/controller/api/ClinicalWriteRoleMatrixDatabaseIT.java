@@ -304,12 +304,40 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     }
 
     /**
-     * The casebook signature is the investigator's attestation. The study
-     * director (the SPA's Data Manager) passes the visit rule the endpoint
-     * applies first, so the preflight's role check is what refuses it.
+     * A signature, of the casebook or of one visit, is the investigator's
+     * attestation (2026-11). The director (the SPA's Data Manager), the
+     * coordinator and the admin binding enter data but do not sign.
      */
     static Stream<Role> bindingsThatEnterDataButDoNotSign() {
-        return Stream.of(Role.STUDYDIRECTOR, Role.COORDINATOR);
+        return Stream.of(Role.STUDYDIRECTOR, Role.COORDINATOR, Role.ADMIN);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("bindingsThatEnterDataButDoNotSign")
+    void onlyTheInvestigatorSignsASubjectOrAVisit(Role role) throws Exception {
+        mvc().perform(json(post("/api/v1/subjects/SS_M001/sign"), "{\"password\":\"x\",\"attestation\":true}")
+                        .session(investigatorHolding(role)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+        mvc().perform(json(post("/api/v1/events/1/sign"), "{\"password\":\"x\",\"attestation\":true}")
+                        .session(investigatorHolding(role)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+    }
+
+    /** The investigator gets past the role rule of both: a wrong password is what stops it here. */
+    @Test
+    void theInvestigatorGetsPastTheSignRoleRule() throws Exception {
+        MvcResult subject = mvc().perform(json(post("/api/v1/subjects/SS_M001/sign"),
+                        "{\"password\":\"wrong\",\"attestation\":true}")
+                        .session(investigatorHolding(Role.INVESTIGATOR)))
+                .andReturn();
+        MvcResult visit = mvc().perform(json(post("/api/v1/events/1/sign"),
+                        "{\"password\":\"wrong\",\"attestation\":true}")
+                        .session(investigatorHolding(Role.INVESTIGATOR)))
+                .andReturn();
+        assertTrue(subject.getResponse().getStatus() != 403, "subject sign: " + subject.getResponse().getStatus());
+        assertTrue(visit.getResponse().getStatus() != 403, "visit sign: " + visit.getResponse().getStatus());
     }
 
     @ParameterizedTest(name = "{0}")
