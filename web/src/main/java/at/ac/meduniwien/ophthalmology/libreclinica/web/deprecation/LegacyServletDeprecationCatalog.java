@@ -89,7 +89,12 @@ public class LegacyServletDeprecationCatalog {
         SOURCE_DATA_VERIFICATION,
         /** Main menu, study switch, logout, profile and password screens. */
         SHELL_AND_LOGIN,
-        /** The OpenClinica 3.x REST API under {@code /pages/auth/api}: API-key callers only. */
+        /**
+         * Heritage surface without a catalogue key: in the internet-facing
+         * mode, every {@code /pages} route not on the open list. Until its
+         * deletion (DR-018) also the OpenClinica 3.x REST API under
+         * {@code /pages/auth}.
+         */
         HERITAGE_API
     }
 
@@ -353,13 +358,6 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/managestudy/changeCRFVersion", NONE, Bucket.SUBJECTS_AND_EVENTS);
         // The upstream demo stub that fills user.jsp with sample names (DR-018).
         put(m, "/pages/user", NONE, Bucket.USER_ACCOUNTS);
-        // The OpenClinica 3.x REST API: studies, user accounts, clinical data,
-        // notes, batch CRF migration, the item-data table and system information.
-        // Each call authenticates with an account's API key (ApiSecurityFilter);
-        // nothing in the app, the SPA or the deployment calls it. It renders no
-        // JSP, but it is heritage surface all the same, so one key closes every
-        // path below /pages/auth.
-        put(m, "/pages/auth", NONE, Bucket.HERITAGE_API);
 
         Map<String, Entry> servletMap = new LinkedHashMap<>();
         Map<String, Entry> pagesMap = new LinkedHashMap<>();
