@@ -33,9 +33,13 @@ describe('eventCrfLink', () => {
   })
 
   it('sends the roles that enter data to data entry', () => {
-    for (const role of ['Investigator', 'CRC', 'Administrator'] as const) {
+    for (const role of ['Investigator', 'CRC', 'Data Manager', 'Administrator'] as const) {
       expect(eventCrfLink([role], '9'), role).toBe('/event-crfs/9')
     }
+  })
+
+  it('sends a Data Manager who also monitors to data entry', () => {
+    expect(eventCrfLink(['Data Manager', 'Monitor'], '9')).toBe('/event-crfs/9')
   })
 
   it('sends a Monitor who also enters data in the study to data entry', () => {
@@ -44,7 +48,7 @@ describe('eventCrfLink', () => {
   })
 
   it('never links a role to a CRF route it cannot open', () => {
-    for (const role of ['Investigator', 'CRC', 'Monitor', 'Administrator'] as const) {
+    for (const role of ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'] as const) {
       const target = router.resolve(eventCrfLink([role], '9', 'I_HEIGHT_CM'))
       expect(guard(authFor(role), target), role).toBe(true)
     }

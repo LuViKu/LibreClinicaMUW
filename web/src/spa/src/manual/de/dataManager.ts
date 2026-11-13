@@ -9,7 +9,7 @@ export const dataManagerDe: ManualChapter = {
   ],
   callout: {
     kind: 'info', title: 'Was Sie erreichen können und was nicht',
-    text: 'Sie können die **Studienteilnehmer** (Subject Matrix) öffnen, um Aufnahme und Visitenfortschritt einzusehen, und von dort die Seite einer teilnehmenden Person, auf der Sie eine Person entfernen, die nicht in die Studie gehört. Die direkte CRF-Datenerfassung ist ein Bildschirm der Prüfärztin/des Prüfarztes bzw. der Administration. Das Anlegen von Benutzerkonten, das Bearbeiten der Kernidentität der Studie sowie das Sperren/Entsperren einzelner Visiten oder CRF-Versionen sind Administrations-Aktionen. Ihre Aufsichtsbefugnisse — Diskrepanzen, Audit Trail, Regeln, Export, Abgleich der Doppeldateneingabe — stehen Ihnen alle zur Verfügung.',
+    text: 'Sie können die **Studienteilnehmer** (Subject Matrix) öffnen, um Aufnahme und Visitenfortschritt einzusehen, und von dort die Seite einer teilnehmenden Person, auf der Sie eine Person entfernen, die nicht in die Studie gehört. Sie nehmen Teilnehmende auf und erfassen und korrigieren CRF-Daten (etwa beim Übertragen der Papier-CRFs); signieren darf nur die Prüfärztin bzw. der Prüfarzt. Das Anlegen von Benutzerkonten, das Bearbeiten der Kernidentität der Studie sowie das Sperren/Entsperren einzelner Visiten oder CRF-Versionen sind Administrations-Aktionen. Ihre Aufsichtsbefugnisse — Diskrepanzen, Audit Trail, Regeln, Export, Abgleich der Doppeldateneingabe — stehen Ihnen alle zur Verfügung.',
   },
   sections: [
     {
@@ -41,7 +41,7 @@ export const dataManagerDe: ManualChapter = {
       ],
       notes: [
         'Ein rotes Abzeichen auf einer Visitenzelle ist die Anzahl der **offenen Rückfragen** (open queries) zu dieser Visite — Ihr Hinweis, in Rückfragen & Diskrepanzen nachzufassen.',
-        'Der Teilnehmer-Link und die Aktion **Öffnen** führen zur Seite der teilnehmenden Person. Als Studienleitung nutzen Sie die Matrix, um den Fortschritt zu *überwachen*, und entfernen dort Teilnehmende; Daten erfassen oder signieren Sie nicht.',
+        'Der Teilnehmer-Link und die Aktion **Öffnen** führen zur Seite der teilnehmenden Person. Als Studienleitung nutzen Sie die Matrix, um den Fortschritt zu *überwachen*, und entfernen dort Teilnehmende; über die Visite öffnen Sie CRFs zur Erfassung. Signieren dürfen Sie nicht.',
       ],
     },
     {

@@ -267,7 +267,8 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
         // role, enter data, edit a subject, sign a subject
         return Stream.of(
                 Arguments.of(Role.INVESTIGATOR, true, true, true),
-                Arguments.of(Role.STUDYDIRECTOR, true, true, true),
+                // Study management enters data but does not attest it (2026-11).
+                Arguments.of(Role.STUDYDIRECTOR, true, true, false),
                 Arguments.of(Role.COORDINATOR, true, true, false),
                 Arguments.of(Role.ADMIN, true, true, false),
                 Arguments.of(Role.RESEARCHASSISTANT, true, false, false),
@@ -300,6 +301,27 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
                 .andExpect(jsonPath("$.activeStudy.permissions.enterData").value(false))
                 .andExpect(jsonPath("$.activeStudy.permissions.editSubject").value(false))
                 .andExpect(jsonPath("$.activeStudy.permissions.signSubject").value(false));
+    }
+
+    /**
+     * The casebook signature is the investigator's attestation. The study
+     * director (the SPA's Data Manager) passes the visit rule the endpoint
+     * applies first, so the preflight's role check is what refuses it.
+     */
+    static Stream<Role> bindingsThatEnterDataButDoNotSign() {
+        return Stream.of(Role.STUDYDIRECTOR, Role.COORDINATOR);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("bindingsThatEnterDataButDoNotSign")
+    void onlyTheInvestigatorPassesTheSignPreflightRoleCheck(Role role) throws Exception {
+        mvc().perform(get("/api/v1/subjects/SS_M001/preflightForSign").session(investigatorHolding(role)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checks[?(@.id == 'user-role-can-sign')].status").value(hasItem("fail")));
+        mvc().perform(get("/api/v1/subjects/SS_M001/preflightForSign")
+                        .session(investigatorHolding(Role.INVESTIGATOR)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checks[?(@.id == 'user-role-can-sign')].status").value(hasItem("pass")));
     }
 
     /* ------------------------------------------------------------------ */

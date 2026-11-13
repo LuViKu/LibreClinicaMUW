@@ -68,7 +68,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *   Restore a removed CRF        x   x   x   x   .   .   .   .   {@link EventCrfRestoreAuthorization}
  *   Edit, cancel, restore or
  *     sign a visit               .   x   x   x   x   .   .   .   {@link EventEditAuthorization}
- *   Sign a subject               .   .   .   x   x   .   .   .   SubjectsApiController.roleMaySignSubject
+ *   Sign a subject               .   .   .   .   x   .   .   .   SubjectsApiController.roleMaySignSubject
  *   Edit a subject               .   x   x   x   x   .   .   .   {@link SubjectEditAuthorization}
  *   Remove, restore, lock or
  *     unlock a subject; link
@@ -136,8 +136,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *       (director, coordinator, investigator and any system administrator):
  *       the endpoint refuses with 403 what the visit-signing rule refuses,
  *       and its preflight check {@code user-role-can-sign} then blocks with
- *       412 every binding but director and investigator. A signature attests
- *       as the role held on the study.</li>
+ *       412 every binding but investigator. A signature attests as the role
+ *       held on the study, and the casebook signature is the investigator's
+ *       (the director lost it in 2026-11: study management enters and
+ *       corrects data, it does not attest it).</li>
  * </ul>
  *
  * <p>System administrators: every rule goes by the binding on the active
@@ -154,7 +156,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *
  * <p>Some older helpers are deliberately narrower than their legacy
  * servlet, and stay so: editing a subject or a visit refuses ra and ra2,
- * signing a subject refuses the coordinator and the admin binding (above),
+ * signing a subject refuses the director, the coordinator and the admin
+ * binding (above),
  * and un-verifying SDV refuses the coordinator, whom {@code SDVController}
  * admits. {@code GET /me} reports what the session's binding may do
  * ({@code activeStudy.permissions}), so that the SPA offers only what
