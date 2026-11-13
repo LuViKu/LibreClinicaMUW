@@ -185,7 +185,9 @@ public enum Page {
     /**
      * Page for view all studies.
      */
-    STUDY_LIST_SERVLET ("/ListStudy", "View All Studies"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    STUDY_LIST_SERVLET ("/MainMenu", "View All Studies"),
 
     /**
      * Page for view all sites.
@@ -271,7 +273,9 @@ public enum Page {
      * Page for listing crfs.
      */
     CRF_LIST ("/WEB-INF/jsp/admin/listCRF.jsp", "List all CRFs"),
-    CRF_LIST_SERVLET ("/ListCRF", "List all CRFs servlet"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    CRF_LIST_SERVLET ("/MainMenu", "List all CRFs servlet"),
 
     /**
      * Page for creating crf.
@@ -316,7 +320,9 @@ public enum Page {
     /**
      * Page for creating crf version.
      */
-    CREATE_CRF_VERSION_SERVLET ("/CreateCRFVersion", "Create a new CRF Version Servlet"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    CREATE_CRF_VERSION_SERVLET ("/MainMenu", "Create a new CRF Version Servlet"),
     /**
      * Page for confirming crf version.
      */
@@ -462,7 +468,9 @@ public enum Page {
     RESTORE_EVENT_CRF ("/WEB-INF/jsp/" + "managestudy/restoreEventCRF.jsp", "Restore CRF to event"),
     VIEW_EVENT_CRF ("/WEB-INF/jsp/" + "managestudy/viewEventCRF.jsp", "View Event CRF Data"),
 
-    UPDATE_SUBJECT_SERVLET ("/UpdateSubject", "update a subject"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    UPDATE_SUBJECT_SERVLET ("/MainMenu", "update a subject"),
     REASSIGN_STUDY_SUBJECT ("/WEB-INF/jsp/" + "managestudy/reassignStudySubject.jsp", "reassign a subject"),
     REASSIGN_STUDY_SUBJECT_CONFIRM ("/WEB-INF/jsp/" + "managestudy/reassignStudySubjectConfirm.jsp", "confirm reassign a subject"),
 

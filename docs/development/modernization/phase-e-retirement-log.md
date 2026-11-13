@@ -47,7 +47,10 @@ Deleted 2026-11-13, four weeks after both waves reached production (1.5.0-beta.1
 **Left in place.**
 - The study metadata API test no longer compares its document with the deleted servlet's; the comparison passed at every run until the servlet went.
 - The shell's task menu (`include/navBar.jsp`, served on the open `/MainMenu`) linked the deleted administration screens and the CRF list. Those links now point at the SPA routes the parity record names (`/app/admin/studies`, `/app/manage-users`, `/app/crf-library`, `/app/admin/jobs`); the link to the global subject registry is gone (W0: not needed).
-- Closed W2 pages still link to deleted W1 screens, and a few W2 servlets end by forwarding to one (`/ListCRF`, `/ListStudy`, `/CreateCRFVersion`, `/UpdateSubject`). An administrator using one of those pages under `/legacy/` meets a 404 there. They go with the W2 deletion.
+- Closed W2 servlets that ended by forwarding to a deleted screen (`/ListCRF`, `/ListStudy`, `/CreateCRFVersion`, `/UpdateSubject`; 26 call sites through four `Page` constants) now end on `/MainMenu`. The four constants point there until the W2 deletion; a before/after crawl showed those forwards failing mid-response otherwise. Links on closed W2 pages to deleted screens answer 404 to the administrator using them under `/legacy/`. Both go with the W2 deletion.
+- `ImportSpringJob` still writes a `/ViewLogMessage` link into its e-mail, but scheduled imports were dropped in W0 and can no longer be created.
+
+**Verified on a running build** (compose, fresh database, `manual_dm` and `manual_admin`), against lc-develop at the branch point: 233 catalogue keys requested directly by both roles and under `/legacy/` by the administrator. The only status changes are the 60 deleted paths (410 or 307 → 404; under `/legacy/` 200 → 404) and `/legacy/pages/studymodule` (200 → 302), which depends on the order of the crawl, not on this change: a fresh administrator session gets 200 on both builds. The server logged 42 request errors against 62 on the base, none on a request that did not also fail there. No 5xx, no JSP compilation error.
 
 ## W2 record
 
