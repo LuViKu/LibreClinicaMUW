@@ -11,9 +11,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.web;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Properties;
 
 import jakarta.servlet.ServletContext;
@@ -22,7 +19,6 @@ import jakarta.servlet.http.HttpServlet;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DownloadVersionSpreadSheetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean;
@@ -74,7 +70,7 @@ public class SQLInitServlet extends HttpServlet {
 
         Page.INITIAL_DATA_ENTRY_NW.getFileName();
 
-        //The crf/original/CRF Template  will be created if not exist.
+        // The crf/original and rules directories are created if they do not exist.
         String theDir = getField("filePath");
         String dir1 = "crf" + File.separator;
         String dir2 = "original" + File.separator;
@@ -89,12 +85,6 @@ public class SQLInitServlet extends HttpServlet {
         if (!(new File(theDir)).isDirectory() || !(new File(dir1)).isDirectory()
                 || !(new File(dir2)).isDirectory()) {
             (new File(theDir + dir1 + dir2)).mkdirs();
-            copyTemplate(theDir + dir1 + dir2 + DownloadVersionSpreadSheetServlet.CRF_VERSION_TEMPLATE);
-        }
-        theDir = theDir + dir1 + dir2;
-        File excelFile = new File(theDir + DownloadVersionSpreadSheetServlet.CRF_VERSION_TEMPLATE);
-        if(!excelFile.isFile()){
-            copyTemplate(theDir);
         }
 
         // 'passwd_expiration_time' and 'change_passwd_required' are now defined in the database
@@ -152,20 +142,6 @@ public class SQLInitServlet extends HttpServlet {
     public static String getDBName() {
         String name = params.getProperty("dataBase");
         return name == null ? "" : name;
-    }
-
-    public void copyTemplate(String theDir){
-        CoreResources cr = (CoreResources) SpringServletAccess.getApplicationContext(context).getBean("coreResources");
-        try (InputStream is = cr.getInputStream(DownloadVersionSpreadSheetServlet.CRF_VERSION_TEMPLATE);
-             OutputStream out = new FileOutputStream(new File(theDir))) {
-            byte[] buf = new byte[1024];
-            int len;
-            while ((len = is.read(buf)) > 0) {
-                out.write(buf, 0, len);
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
 
     /**

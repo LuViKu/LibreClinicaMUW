@@ -27,8 +27,8 @@ import org.junit.jupiter.api.Test;
  * retirement waves are closed (DR-018). These checks keep that record honest:
  * every entry must be a catalogue key (an unknown key is only logged and
  * ignored at startup, so a typo would silently leave a screen open), the
- * screens the SPA still depends on must never be closed, and a wave once
- * closed stays closed.
+ * screens the SPA still depends on must never be closed, a wave once closed
+ * stays closed, and a deleted wave stays deleted.
  */
 class LegacyClosedPathsDefaultTest {
 
@@ -47,22 +47,21 @@ class LegacyClosedPathsDefaultTest {
             LegacyServletDeprecationCatalog.Bucket.SHELL_AND_LOGIN,
             LegacyServletDeprecationCatalog.Bucket.SUPPORT_FORMS);
 
-    /** Wave 0 (2026-09-30): not needed, no SPA replacement planned. */
-    private static final List<String> WAVE_0 = List.of(
+    /**
+     * Waves 0 (2026-09-30, not needed) and 1 (2026-10-02, administration),
+     * deleted after their bake-in (DR-018 amendment, 2026-11-13): their
+     * servlets, pages and catalogue keys are gone. Listing one of them in the
+     * default again would only be reported at startup and ignored, so it must
+     * not come back, and neither may its catalogue key.
+     */
+    private static final List<String> DELETED = List.of(
+            // wave 0
             "/Enterprise", "/TechAdmin", "/AdminSystem", "/AuditDatabase",
             "/ListSubject", "/ListSubjectData", "/ViewSubject", "/UpdateSubject",
             "/RemoveSubject", "/RestoreSubject",
             "/CreateJobImport", "/UpdateJobImport", "/ViewImportJob", "/ViewLogMessage",
             "/PrintoutCertificate", "/DeleteEventCRF", "/ConfigurePasswordRequirements",
-            "/pages/auth");
-
-    /**
-     * Wave 1 (2026-10-02): administration. Every screen here was open to
-     * system administrators only, and each has an SPA replacement or a
-     * recorded "not needed" in the retirement log.
-     */
-    private static final List<String> WAVE_1 = List.of(
-            // users and accounts
+            // wave 1: users and accounts
             "/ListUserAccounts", "/CreateUserAccount", "/ViewUserAccount", "/EditUserAccount",
             "/SetUserRole", "/EditStudyUserRole", "/DeleteStudyUserRole", "/DeleteUser", "/UnLockUser",
             "/pages/admin/listLdapUsers", "/pages/admin/selectLdapUser",
@@ -73,13 +72,19 @@ class LegacyClosedPathsDefaultTest {
             // jobs
             "/ViewAllJobs", "/ViewJob", "/ViewSingleJob", "/PauseJob", "/CreateJobExport", "/UpdateJobExport",
             "/pages/listCurrentScheduledJobs", "/pages/listCurrentScheduledJobsData", "/pages/cancelScheduledJob",
-            // CRF library (D5 implemented: the SPA admits Data Manager, CRC and Administrator)
+            // CRF library
             "/ListCRF", "/CreateCRF", "/CreateCRFVersion", "/InitCreateCRFVersion", "/RemoveCRF", "/RestoreCRF",
             "/InitUpdateCRF", "/UpdateCRF", "/RemoveCRFVersion", "/RestoreCRFVersion",
             "/DownloadVersionSpreadSheet", "/BatchCRFMigration",
-            // study audit log (director, coordinator, sysadmin in legacy; the SPA adds the monitor)
+            // study audit log
             "/AuditLogStudy",
             "/DeleteCRFVersion");
+
+    /**
+     * Closed in wave 0 and not yet deleted: the OpenClinica 3.x REST API under
+     * {@code /pages/auth}, which is removed separately.
+     */
+    private static final List<String> WAVE_0_STILL_CLOSED = List.of("/pages/auth");
 
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
@@ -106,23 +111,23 @@ class LegacyClosedPathsDefaultTest {
     }
 
     @Test
-    void waveZeroStaysClosed() {
+    void theDeletedWavesAreGoneFromTheCatalogueAndTheDefault() {
         List<String> closed = defaultClosedPaths();
-        for (String path : WAVE_0) {
-            assertTrue(closed.contains(path), "wave 0 screen reopened: " + path);
+        List<String> left = new ArrayList<>();
+        for (String path : DELETED) {
+            if (catalog.entry(path).isPresent() || closed.contains(path)) {
+                left.add(path);
+            }
         }
+        assertEquals(List.of(), left, "deleted screens still in the catalogue or the closed-paths default");
     }
 
     @Test
-    void waveOneIsClosed() {
+    void theHeritageApiStaysClosedUntilItIsDeleted() {
         List<String> closed = defaultClosedPaths();
-        List<String> open = new ArrayList<>();
-        for (String path : WAVE_1) {
-            if (!closed.contains(path)) {
-                open.add(path);
-            }
+        for (String path : WAVE_0_STILL_CLOSED) {
+            assertTrue(closed.contains(path), "wave 0 screen reopened: " + path);
         }
-        assertEquals(List.of(), open, "wave 1 screens that are still open");
     }
 
     /**
@@ -152,19 +157,6 @@ class LegacyClosedPathsDefaultTest {
             }
         }
         assertEquals(new java.util.TreeSet<>(MUST_STAY_OPEN), shell);
-    }
-
-    @Test
-    void everyClosedScreenNamesAnSpaReplacementOrIsRecordedAsNotNeeded() {
-        // Not needed, by decision (plan R1.5: LDAP, replaced by SSO): no route to name.
-        Set<String> notNeeded = Set.of("/pages/admin/listLdapUsers", "/pages/admin/selectLdapUser");
-        List<String> unnamed = new ArrayList<>();
-        for (String path : WAVE_1) {
-            if (!notNeeded.contains(path) && !catalog.entry(path).orElseThrow().hasSpaRoute()) {
-                unnamed.add(path);
-            }
-        }
-        assertEquals(List.of(), unnamed, "wave 1 screens whose 410 names no SPA route");
     }
 
     /** The default of {@code libreclinica.legacy.closedPaths}, read from the one line that sets it. */

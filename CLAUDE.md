@@ -14,7 +14,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 |-------|-----|----|
 | Java | **25** (build + runtime, per Dockerfile; 21→25 bump 2026-07) | (achieved — exceeds the original Java 21 target) |
 | Framework | **Spring Boot 4.1.1** + Java config (Spring 7.0.x + Security 7.1.x; Jackson 3 / `tools.jackson`, one shared mapper in `core.util.Json`; residual security XML). Boot 4 was merged via PR #413 (DR-037) | (achieved — Phase C, then Phase F) |
-| Web | JSP + Spring MVC + 214 servlet registrations; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
+| Web | JSP + Spring MVC + 155 legacy servlet registrations (all but the shell closed, DR-018); Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
 | Persistence | Hibernate 7.4.x (jakarta, Boot-managed; `save`/`saveOrUpdate` replaced by `SessionSaveSupport`, see [the call-site review](docs/development/modernization/spring-boot-4-hibernate-7-call-sites.md)) + Liquibase 4.31.1 (pinned; LAX parsing + serial shims) + PostgreSQL 14 in production, 17 in dev/test/CI | (Liquibase 4 achieved — Phase D-Libs, 2026-10) + PostgreSQL 17 (runbook: docs/operations/postgresql-17-upgrade.md) |
 | Packaging | WAR in Tomcat 11 (Jakarta EE 11, jakarta servlet 6.1; the Docker base image is a Tomcat 11 image) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
@@ -104,7 +104,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | Path | Contents |
 |------|----------|
 | [`core/`](core/) | Domain entities, services, DAOs, Hibernate mappings, Liquibase migrations (`core/src/main/resources/migration/`) |
-| [`web/`](web/) | Spring MVC controllers, 214 servlet registrations, 413 JSPs, static assets — produces `LibreClinica-web.war` |
+| [`web/`](web/) | Spring MVC controllers, 155 legacy servlet registrations, 321 JSPs, static assets — produces `LibreClinica-web.war` |
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |

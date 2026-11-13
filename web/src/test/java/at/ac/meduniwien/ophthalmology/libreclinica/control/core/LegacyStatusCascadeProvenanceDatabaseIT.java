@@ -42,8 +42,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.LegacyServletHa
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveEventCRFServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveEventDefinitionServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveStudyEventServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveSiteServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RestoreSiteServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.RemoveStudySubjectServlet;
@@ -213,35 +211,6 @@ class LegacyStatusCascadeProvenanceDatabaseIT extends AbstractApiControllerDatab
 
         run(new RestoreSiteServlet(), "/RestoreSite", "id", String.valueOf(site), "action", "submit");
         assertEquals(AVAILABLE, queryInt("SELECT status_id FROM study WHERE study_id = " + site));
-        assertEquals(statusesBefore, statusesOf(where), "statuses after the restore: " + rowsOf(where));
-        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
-                "the restore cleared the values' provenance");
-        assertEquals(valuesBefore, valuesOf(where));
-    }
-
-    /** As the site, for a whole study removed and restored by a system administrator. */
-    @Test
-    void removingAndRestoringAStudyKeepsItsValuesProvenanceAndStatus() throws Exception {
-        int study = insertStudy(null, "legacy-prov-study");
-        update("UPDATE study_subject SET study_id = " + study + " WHERE study_subject_id = " + SUBJECT);
-        update("UPDATE study_event_definition SET study_id = " + study + " WHERE study_event_definition_id IN"
-                + " (SELECT study_event_definition_id FROM study_event WHERE study_subject_id = " + SUBJECT + ")");
-        String where = "event_crf_id IN (SELECT event_crf_id FROM event_crf WHERE study_subject_id = " + SUBJECT + ")";
-        int values = markProvenance(where);
-        update("UPDATE item_data SET status_id = 2 WHERE item_data_id = (SELECT MIN(item_data_id) FROM item_data WHERE " + where + ")");
-        String statusesBefore = statusesOf(where);
-        String valuesBefore = valuesOf(where);
-        UserAccountBean root = LegacyServletHarness.sysAdmin(1, "root");
-
-        run(new RemoveStudyServlet(), "/RemoveStudy", root, "id", String.valueOf(study), "action", "submit");
-        assertEquals(REMOVED, queryInt("SELECT status_id FROM study WHERE study_id = " + study));
-        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND status_id = " + AUTO_REMOVED),
-                "values after the removal: " + rowsOf(where));
-        assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
-                "the removal cleared the values' provenance");
-
-        run(new RestoreStudyServlet(), "/RestoreStudy", root, "id", String.valueOf(study), "action", "submit");
-        assertEquals(AVAILABLE, queryInt("SELECT status_id FROM study WHERE study_id = " + study));
         assertEquals(statusesBefore, statusesOf(where), "statuses after the restore: " + rowsOf(where));
         assertEquals(values, queryInt("SELECT COUNT(*) FROM item_data WHERE " + where + " AND source_kind = '" + KIND + "'"),
                 "the restore cleared the values' provenance");

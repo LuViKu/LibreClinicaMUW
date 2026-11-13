@@ -106,20 +106,20 @@ class LegacyAliasServletTest {
 
     @Test
     void administratorIsForwardedToTheScreen() throws Exception {
-        MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListUserAccounts",
+        MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListStudyUser",
                 sessionOf(1, "root", UserType.SYSADMIN)));
 
-        assertEquals("/ListUserAccounts", resp.getForwardedUrl());
-        assertEquals(List.of("legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users"
+        assertEquals("/ListStudyUser", resp.getForwardedUrl());
+        assertEquals(List.of("legacy-hit path=/ListStudyUser bucket=USER_ACCOUNTS spaRoute=/app/manage-users"
                 + " method=GET user=root alias=true action=forward"), hits());
     }
 
     @Test
     void techAdministratorIsForwardedToo() throws Exception {
-        MockHttpServletResponse resp = serve(aliasRequest("GET", "/Configure",
+        MockHttpServletResponse resp = serve(aliasRequest("GET", "/SystemStatus",
                 sessionOf(3, "tech", UserType.TECHADMIN)));
 
-        assertEquals("/Configure", resp.getForwardedUrl());
+        assertEquals("/SystemStatus", resp.getForwardedUrl());
     }
 
     @Test
@@ -142,18 +142,18 @@ class LegacyAliasServletTest {
 
     @Test
     void nonAdministratorIsRefusedAndLogged() throws Exception {
-        MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListUserAccounts",
+        MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListStudyUser",
                 sessionOf(7, "manual_dm", UserType.USER)));
 
         assertEquals(404, resp.getStatus());
         assertNull(resp.getForwardedUrl());
-        assertEquals(List.of("legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users"
+        assertEquals(List.of("legacy-hit path=/ListStudyUser bucket=USER_ACCOUNTS spaRoute=/app/manage-users"
                 + " method=GET user=manual_dm alias=true action=refuse"), hits());
     }
 
     @Test
     void requestWithoutASessionUserIsRefused() throws Exception {
-        MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListUserAccounts", null));
+        MockHttpServletResponse resp = serve(aliasRequest("GET", "/ListStudyUser", null));
 
         assertEquals(404, resp.getStatus());
         assertNull(resp.getForwardedUrl());
@@ -173,8 +173,8 @@ class LegacyAliasServletTest {
     void anythingButALegacyScreenOrAssetIsNotFoundEvenForAnAdministrator() throws Exception {
         MockHttpSession admin = sessionOf(1, "root", UserType.SYSADMIN);
         for (String path : List.of("/WEB-INF/web.xml", "/META-INF/context.xml", "/pages/api/v1/subjects",
-                "/app/subjects", "/includes/allIcons.jsp", "/images/", "/legacy/ListUserAccounts",
-                "/images/../WEB-INF/web.xml", "/ListUserAccounts;x=1", "/ListUserAccounts%3F", "/")) {
+                "/app/subjects", "/includes/allIcons.jsp", "/images/", "/legacy/ListStudyUser",
+                "/images/../WEB-INF/web.xml", "/ListStudyUser;x=1", "/ListStudyUser%3F", "/")) {
             MockHttpServletResponse resp = serve(aliasRequest("GET", path, admin));
             assertEquals(404, resp.getStatus(), path);
             assertNull(resp.getForwardedUrl(), path);
@@ -189,7 +189,7 @@ class LegacyAliasServletTest {
     void plainPathRules() {
         assertTrue(LegacyAliasServlet.isPlainPath("/includes/jmesa/jquery.jmesa.js"));
         assertFalse(LegacyAliasServlet.isPlainPath("/images/a b.gif"));
-        assertFalse(LegacyAliasServlet.isPlainPath("//ListUserAccounts"));
+        assertFalse(LegacyAliasServlet.isPlainPath("//ListStudyUser"));
         assertFalse(LegacyAliasServlet.isPlainPath("/images/..hidden"));
         assertFalse(LegacyAliasServlet.isPlainPath("ListUserAccounts"));
         assertFalse(LegacyAliasServlet.isPlainPath(null));

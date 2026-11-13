@@ -6,61 +6,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.control.MainMenuServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.AdminSystemServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.AuditDatabaseServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.AuditLogStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.AuditLogUserServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.AuditUserActivityDataServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.AuditUserActivityServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.BatchCRFMigrationServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ConfigurePasswordRequirementsServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ConfigureServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobExportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobImportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateUserAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteEventCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteStudyUserRoleServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteUserServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DownloadStudyMetadataServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DownloadVersionSpreadSheetServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.EditStudyUserRoleServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.EditUserAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.InitCreateCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.InitUpdateCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ListCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ListSubjectDataServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ListSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ListUserAccountsServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.PauseJobServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.PrintoutCertificateServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SendTestEmailServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SetUserRoleServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SystemStatusServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UnLockUserServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateJobExportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateJobImportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewAllJobsServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewImportJobServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewJobServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewLogMessageServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewSingleJobServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ViewUserAccountServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.AccessFileServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.ApplyFilterServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.ChooseDownloadFormat;
@@ -84,7 +32,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.ViewItemDetai
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.ViewSelectedServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ChangeStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.ContactServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.login.EnterpriseServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.LogoutServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestAccountServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.RequestStudyServlet;
@@ -110,7 +57,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListEvent
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListEventsForSubjectsDataServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListEventsForSubjectsServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListSiteServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListStudyServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListStudySubjectsManageServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListStudyUserServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy.ListSubjectGroupClassServlet;
@@ -212,7 +158,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleAssign
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleAssignmentServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetAuditServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.techadmin.TechAdminServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
 /**
@@ -257,9 +202,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg2 = ctx.addServlet("AddNewSubjectServlet", AddNewSubjectServlet.class);
             reg2.addMapping("/AddNewSubject");
 
-            ServletRegistration.Dynamic reg3 = ctx.addServlet("AdminSystemServlet", AdminSystemServlet.class);
-            reg3.addMapping("/AdminSystem");
-
             ServletRegistration.Dynamic reg4 = ctx.addServlet("AdministrativeEditingServlet", AdministrativeEditingServlet.class);
             reg4.addMapping("/AdministrativeEditing");
 
@@ -268,24 +210,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg6 = ctx.addServlet("AssignUserToStudyServlet", AssignUserToStudyServlet.class);
             reg6.addMapping("/AssignUserToStudy");
-
-            ServletRegistration.Dynamic reg7 = ctx.addServlet("AuditDatabaseServlet", AuditDatabaseServlet.class);
-            reg7.addMapping("/AuditDatabase");
-
-            ServletRegistration.Dynamic reg8 = ctx.addServlet("AuditLogStudyServlet", AuditLogStudyServlet.class);
-            reg8.addMapping("/AuditLogStudy");
-
-            ServletRegistration.Dynamic reg9 = ctx.addServlet("AuditLogUserServlet", AuditLogUserServlet.class);
-            reg9.addMapping("/AuditLogUser");
-
-            ServletRegistration.Dynamic reg10 = ctx.addServlet("AuditUserActivityDataServlet", AuditUserActivityDataServlet.class);
-            reg10.addMapping("/AuditUserActivityData");
-
-            ServletRegistration.Dynamic reg11 = ctx.addServlet("AuditUserActivityServlet", AuditUserActivityServlet.class);
-            reg11.addMapping("/AuditUserActivity");
-
-            ServletRegistration.Dynamic reg12 = ctx.addServlet("BatchCRFMigrationServlet", BatchCRFMigrationServlet.class);
-            reg12.addMapping("/BatchCRFMigration");
 
             ServletRegistration.Dynamic reg13 = ctx.addServlet("ChangeDefinitionCRFOrdinalServlet", ChangeDefinitionCRFOrdinalServlet.class);
             reg13.addMapping("/ChangeDefinitionCRFOrdinal");
@@ -302,20 +226,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg17 = ctx.addServlet("ChooseDownloadFormat", ChooseDownloadFormat.class);
             reg17.addMapping("/ChooseDownloadFormat");
 
-            ServletRegistration.Dynamic reg18 = ctx.addServlet("ConfigurePasswordRequirementsServlet", ConfigurePasswordRequirementsServlet.class);
-            reg18.addMapping("/ConfigurePasswordRequirements");
-
-            ServletRegistration.Dynamic reg19 = ctx.addServlet("ConfigureServlet", ConfigureServlet.class);
-            reg19.addMapping("/Configure");
-
             ServletRegistration.Dynamic reg20 = ctx.addServlet("ContactServlet", ContactServlet.class);
             reg20.addMapping("/Contact");
-
-            ServletRegistration.Dynamic reg21 = ctx.addServlet("CreateCRFServlet", CreateCRFServlet.class);
-            reg21.addMapping("/CreateCRF");
-
-            ServletRegistration.Dynamic reg22 = ctx.addServlet("CreateCRFVersionServlet", CreateCRFVersionServlet.class);
-            reg22.addMapping("/CreateCRFVersion");
 
             ServletRegistration.Dynamic reg23 = ctx.addServlet("CreateDatasetServlet", CreateDatasetServlet.class);
             reg23.addMapping("/CreateDataset");
@@ -332,12 +244,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg27 = ctx.addServlet("CreateFiltersTwoServlet", CreateFiltersTwoServlet.class);
             reg27.addMapping("/CreateFiltersTwo");
 
-            ServletRegistration.Dynamic reg28 = ctx.addServlet("CreateJobExportServlet", CreateJobExportServlet.class);
-            reg28.addMapping("/CreateJobExport");
-
-            ServletRegistration.Dynamic reg29 = ctx.addServlet("CreateJobImportServlet", CreateJobImportServlet.class);
-            reg29.addMapping("/CreateJobImport");
-
             ServletRegistration.Dynamic reg30 = ctx.addServlet("CreateNewStudyEventServlet", CreateNewStudyEventServlet.class);
             reg30.addMapping("/CreateNewStudyEvent");
 
@@ -353,26 +259,11 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg34 = ctx.addServlet("CreateSubjectGroupClassServlet", CreateSubjectGroupClassServlet.class);
             reg34.addMapping("/CreateSubjectGroupClass");
 
-            ServletRegistration.Dynamic reg35 = ctx.addServlet("CreateUserAccountServlet", CreateUserAccountServlet.class);
-            reg35.addMapping("/CreateUserAccount");
-
             ServletRegistration.Dynamic reg37 = ctx.addServlet("DefineStudyEventServlet", DefineStudyEventServlet.class);
             reg37.addMapping("/DefineStudyEvent");
 
-            ServletRegistration.Dynamic reg38 = ctx.addServlet("DeleteCRFVersionServlet", DeleteCRFVersionServlet.class);
-            reg38.addMapping("/DeleteCRFVersion");
-
-            ServletRegistration.Dynamic reg39 = ctx.addServlet("DeleteEventCRFServlet", DeleteEventCRFServlet.class);
-            reg39.addMapping("/DeleteEventCRF");
-
             ServletRegistration.Dynamic reg40 = ctx.addServlet("DeleteStudyEventServlet", DeleteStudyEventServlet.class);
             reg40.addMapping("/DeleteStudyEvent");
-
-            ServletRegistration.Dynamic reg41 = ctx.addServlet("DeleteStudyUserRoleServlet", DeleteStudyUserRoleServlet.class);
-            reg41.addMapping("/DeleteStudyUserRole");
-
-            ServletRegistration.Dynamic reg42 = ctx.addServlet("DeleteUserServlet", DeleteUserServlet.class);
-            reg42.addMapping("/DeleteUser");
 
             ServletRegistration.Dynamic reg43 = ctx.addServlet("DiscrepancyNoteOutputServlet", DiscrepancyNoteOutputServlet.class);
             reg43.addMapping("/DiscrepancyNoteOutputServlet");
@@ -386,12 +277,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg46 = ctx.addServlet("DownloadRuleSetXmlServlet", DownloadRuleSetXmlServlet.class);
             reg46.addMapping("/DownloadRuleSetXml");
 
-            ServletRegistration.Dynamic reg47 = ctx.addServlet("DownloadStudyMetadataServlet", DownloadStudyMetadataServlet.class);
-            reg47.addMapping("/DownloadStudyMetadata");
-
-            ServletRegistration.Dynamic reg48 = ctx.addServlet("DownloadVersionSpreadSheetServlet", DownloadVersionSpreadSheetServlet.class);
-            reg48.addMapping("/DownloadVersionSpreadSheet");
-
             ServletRegistration.Dynamic reg49 = ctx.addServlet("EditDatasetServlet", EditDatasetServlet.class);
             reg49.addMapping("/EditDataset");
 
@@ -401,17 +286,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg51 = ctx.addServlet("EditSelectedServlet", EditSelectedServlet.class);
             reg51.addMapping("/EditSelected");
 
-            ServletRegistration.Dynamic reg52 = ctx.addServlet("EditStudyUserRoleServlet", EditStudyUserRoleServlet.class);
-            reg52.addMapping("/EditStudyUserRole");
-
-            ServletRegistration.Dynamic reg53 = ctx.addServlet("EditUserAccountServlet", EditUserAccountServlet.class);
-            reg53.addMapping("/EditUserAccount");
-
             ServletRegistration.Dynamic reg54 = ctx.addServlet("EnterDataForStudyEventServlet", EnterDataForStudyEventServlet.class);
             reg54.addMapping("/EnterDataForStudyEvent");
-
-            ServletRegistration.Dynamic reg55 = ctx.addServlet("EnterpriseServlet", EnterpriseServlet.class);
-            reg55.addMapping("/Enterprise");
 
             ServletRegistration.Dynamic reg56 = ctx.addServlet("ExecuteCrossEditCheckServlet", ExecuteCrossEditCheckServlet.class);
             reg56.addMapping("/ExecuteCrossEditCheck");
@@ -437,12 +313,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg64 = ctx.addServlet("ImportRuleServlet", ImportRuleServlet.class);
             reg64.addMapping("/ImportRule");
 
-            ServletRegistration.Dynamic reg65 = ctx.addServlet("InitCreateCRFVersionServlet", InitCreateCRFVersionServlet.class);
-            reg65.addMapping("/InitCreateCRFVersion");
-
-            ServletRegistration.Dynamic reg66 = ctx.addServlet("InitUpdateCRFServlet", InitUpdateCRFServlet.class);
-            reg66.addMapping("/InitUpdateCRF");
-
             ServletRegistration.Dynamic reg67 = ctx.addServlet("InitUpdateEventDefinitionServlet", InitUpdateEventDefinitionServlet.class);
             reg67.addMapping("/InitUpdateEventDefinition");
 
@@ -454,9 +324,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg70 = ctx.addServlet("InitialDataEntryServlet", InitialDataEntryServlet.class);
             reg70.addMapping("/InitialDataEntry");
-
-            ServletRegistration.Dynamic reg71 = ctx.addServlet("ListCRFServlet", ListCRFServlet.class);
-            reg71.addMapping("/ListCRF");
 
             ServletRegistration.Dynamic reg72 = ctx.addServlet("ListDiscNotesForCRFDataServlet", ListDiscNotesForCRFDataServlet.class);
             reg72.addMapping("/ListDiscNotesForCRFData");
@@ -479,9 +346,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg78 = ctx.addServlet("ListSiteServlet", ListSiteServlet.class);
             reg78.addMapping("/ListSite");
 
-            ServletRegistration.Dynamic reg79 = ctx.addServlet("ListStudyServlet", ListStudyServlet.class);
-            reg79.addMapping("/ListStudy");
-
             ServletRegistration.Dynamic reg80 = ctx.addServlet("ListStudySubjectsManageServlet", ListStudySubjectsManageServlet.class);
             reg80.addMapping("/ListStudySubject");
 
@@ -494,17 +358,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg83 = ctx.addServlet("ListStudyUserServlet", ListStudyUserServlet.class);
             reg83.addMapping("/ListStudyUser");
 
-            ServletRegistration.Dynamic reg84 = ctx.addServlet("ListSubjectDataServlet", ListSubjectDataServlet.class);
-            reg84.addMapping("/ListSubjectData");
-
             ServletRegistration.Dynamic reg85 = ctx.addServlet("ListSubjectGroupClassServlet", ListSubjectGroupClassServlet.class);
             reg85.addMapping("/ListSubjectGroupClass");
-
-            ServletRegistration.Dynamic reg86 = ctx.addServlet("ListSubjectServlet", ListSubjectServlet.class);
-            reg86.addMapping("/ListSubject");
-
-            ServletRegistration.Dynamic reg87 = ctx.addServlet("ListUserAccountsServlet", ListUserAccountsServlet.class);
-            reg87.addMapping("/ListUserAccounts");
 
             ServletRegistration.Dynamic reg88 = ctx.addServlet("LockCRFVersionServlet", LockCRFVersionServlet.class);
             reg88.addMapping("/LockCRFVersion");
@@ -527,9 +382,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg94 = ctx.addServlet("MatchPasswordServlet", MatchPasswordServlet.class);
             reg94.addMapping("/MatchPassword");
 
-            ServletRegistration.Dynamic reg96 = ctx.addServlet("PauseJobServlet", PauseJobServlet.class);
-            reg96.addMapping("/PauseJob");
-
             ServletRegistration.Dynamic reg97 = ctx.addServlet("PrintAllEventCRFServlet", PrintAllEventCRFServlet.class);
             reg97.addMapping("/PrintAllEventCRF");
 
@@ -551,20 +403,11 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg103 = ctx.addServlet("PrintEventCRFServlet", PrintEventCRFServlet.class);
             reg103.addMapping("/PrintEventCRF");
 
-            ServletRegistration.Dynamic reg104 = ctx.addServlet("PrintoutCertificateServlet", PrintoutCertificateServlet.class);
-            reg104.addMapping("/PrintoutCertificate");
-
             ServletRegistration.Dynamic reg105 = ctx.addServlet("ReassignStudySubjectServlet", ReassignStudySubjectServlet.class);
             reg105.addMapping("/ReassignStudySubject");
 
             ServletRegistration.Dynamic reg106 = ctx.addServlet("RemoveCRFFromDefinitionServlet", RemoveCRFFromDefinitionServlet.class);
             reg106.addMapping("/RemoveCRFFromDefinition");
-
-            ServletRegistration.Dynamic reg107 = ctx.addServlet("RemoveCRFServlet", RemoveCRFServlet.class);
-            reg107.addMapping("/RemoveCRF");
-
-            ServletRegistration.Dynamic reg108 = ctx.addServlet("RemoveCRFVersionServlet", RemoveCRFVersionServlet.class);
-            reg108.addMapping("/RemoveCRFVersion");
 
             ServletRegistration.Dynamic reg109 = ctx.addServlet("RemoveDatasetServlet", RemoveDatasetServlet.class);
             reg109.addMapping("/RemoveDataset");
@@ -587,9 +430,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg115 = ctx.addServlet("RemoveStudyEventServlet", RemoveStudyEventServlet.class);
             reg115.addMapping("/RemoveStudyEvent");
 
-            ServletRegistration.Dynamic reg116 = ctx.addServlet("RemoveStudyServlet", RemoveStudyServlet.class);
-            reg116.addMapping("/RemoveStudy");
-
             ServletRegistration.Dynamic reg117 = ctx.addServlet("RemoveStudySubjectServlet", RemoveStudySubjectServlet.class);
             reg117.addMapping("/RemoveStudySubject");
 
@@ -599,12 +439,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg119 = ctx.addServlet("RemoveSubjectGroupClassServlet", RemoveSubjectGroupClassServlet.class);
             reg119.addMapping("/RemoveSubjectGroupClass");
 
-            ServletRegistration.Dynamic reg120 = ctx.addServlet("RemoveSubjectServlet", RemoveSubjectServlet.class);
-            reg120.addMapping("/RemoveSubject");
-
             ServletRegistration.Dynamic reg121 = ctx.addServlet("RequestAccountServlet", RequestAccountServlet.class);
             reg121.addMapping("/RequestAccount");
-
 
             ServletRegistration.Dynamic reg123 = ctx.addServlet("RequestStudyServlet", RequestStudyServlet.class);
             reg123.addMapping("/RequestStudy");
@@ -617,12 +453,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg126 = ctx.addServlet("RestoreCRFFromDefinitionServlet", RestoreCRFFromDefinitionServlet.class);
             reg126.addMapping("/RestoreCRFFromDefinition");
-
-            ServletRegistration.Dynamic reg127 = ctx.addServlet("RestoreCRFServlet", RestoreCRFServlet.class);
-            reg127.addMapping("/RestoreCRF");
-
-            ServletRegistration.Dynamic reg128 = ctx.addServlet("RestoreCRFVersionServlet", RestoreCRFVersionServlet.class);
-            reg128.addMapping("/RestoreCRFVersion");
 
             ServletRegistration.Dynamic reg129 = ctx.addServlet("RestoreDatasetServlet", RestoreDatasetServlet.class);
             reg129.addMapping("/RestoreDataset");
@@ -642,9 +472,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg134 = ctx.addServlet("RestoreStudyEventServlet", RestoreStudyEventServlet.class);
             reg134.addMapping("/RestoreStudyEvent");
 
-            ServletRegistration.Dynamic reg135 = ctx.addServlet("RestoreStudyServlet", RestoreStudyServlet.class);
-            reg135.addMapping("/RestoreStudy");
-
             ServletRegistration.Dynamic reg136 = ctx.addServlet("RestoreStudySubjectServlet", RestoreStudySubjectServlet.class);
             reg136.addMapping("/RestoreStudySubject");
 
@@ -653,9 +480,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg138 = ctx.addServlet("RestoreSubjectGroupClassServlet", RestoreSubjectGroupClassServlet.class);
             reg138.addMapping("/RestoreSubjectGroupClass");
-
-            ServletRegistration.Dynamic reg139 = ctx.addServlet("RestoreSubjectServlet", RestoreSubjectServlet.class);
-            reg139.addMapping("/RestoreSubject");
 
             ServletRegistration.Dynamic reg140 = ctx.addServlet("RunRuleServlet", RunRuleServlet.class);
             reg140.addMapping("/RunRule");
@@ -669,14 +493,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg143 = ctx.addServlet("SelectItemsServlet", SelectItemsServlet.class);
             reg143.addMapping("/SelectItems");
 
-            ServletRegistration.Dynamic reg144 = ctx.addServlet("SendTestEmailServlet", SendTestEmailServlet.class);
-            reg144.addMapping("/SendTestEmail");
-
             ServletRegistration.Dynamic reg145 = ctx.addServlet("SetStudyUserRoleServlet", SetStudyUserRoleServlet.class);
             reg145.addMapping("/SetStudyUserRole");
-
-            ServletRegistration.Dynamic reg146 = ctx.addServlet("SetUserRoleServlet", SetUserRoleServlet.class);
-            reg146.addMapping("/SetUserRole");
 
             ServletRegistration.Dynamic reg147 = ctx.addServlet("ShowFileServlet", ShowFileServlet.class);
             reg147.addMapping("/ShowFile");
@@ -699,14 +517,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg153 = ctx.addServlet("TableOfContentsServlet", TableOfContentsServlet.class);
             reg153.addMapping("/TableOfContents");
 
-            ServletRegistration.Dynamic reg154 = ctx.addServlet("TechAdminServlet", TechAdminServlet.class);
-            reg154.addMapping("/TechAdmin");
-
             ServletRegistration.Dynamic reg155 = ctx.addServlet("TestRuleServlet", TestRuleServlet.class);
             reg155.addMapping("/TestRule");
-
-            ServletRegistration.Dynamic reg156 = ctx.addServlet("UnLockUserServlet", UnLockUserServlet.class);
-            reg156.addMapping("/UnLockUser");
 
             ServletRegistration.Dynamic reg157 = ctx.addServlet("UnlockCRFVersionServlet", UnlockCRFVersionServlet.class);
             reg157.addMapping("/UnlockCRFVersion");
@@ -714,17 +526,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg158 = ctx.addServlet("UnlockEventDefinitionServlet", UnlockEventDefinitionServlet.class);
             reg158.addMapping("/UnlockEventDefinition");
 
-            ServletRegistration.Dynamic reg159 = ctx.addServlet("UpdateCRFServlet", UpdateCRFServlet.class);
-            reg159.addMapping("/UpdateCRF");
-
             ServletRegistration.Dynamic reg160 = ctx.addServlet("UpdateEventDefinitionServlet", UpdateEventDefinitionServlet.class);
             reg160.addMapping("/UpdateEventDefinition");
-
-            ServletRegistration.Dynamic reg161 = ctx.addServlet("UpdateJobExportServlet", UpdateJobExportServlet.class);
-            reg161.addMapping("/UpdateJobExport");
-
-            ServletRegistration.Dynamic reg162 = ctx.addServlet("UpdateJobImportServlet", UpdateJobImportServlet.class);
-            reg162.addMapping("/UpdateJobImport");
 
             ServletRegistration.Dynamic reg163 = ctx.addServlet("UpdateProfileServlet", UpdateProfileServlet.class);
             reg163.addMapping("/UpdateProfile");
@@ -750,9 +553,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg170 = ctx.addServlet("UpdateSubjectGroupClassServlet", UpdateSubjectGroupClassServlet.class);
             reg170.addMapping("/UpdateSubjectGroupClass");
 
-            ServletRegistration.Dynamic reg171 = ctx.addServlet("UpdateSubjectServlet", UpdateSubjectServlet.class);
-            reg171.addMapping("/UpdateSubject");
-
             ServletRegistration.Dynamic reg172 = ctx.addServlet("UploadFileServlet", UploadFileServlet.class);
             reg172.addMapping("/UploadFile");
 
@@ -761,9 +561,6 @@ public class LegacyServletRegistry {
 
             ServletRegistration.Dynamic reg174 = ctx.addServlet("VerifyImportedRuleServlet", VerifyImportedRuleServlet.class);
             reg174.addMapping("/VerifyImportedRule");
-
-            ServletRegistration.Dynamic reg175 = ctx.addServlet("ViewAllJobsServlet", ViewAllJobsServlet.class);
-            reg175.addMapping("/ViewAllJobs");
 
             ServletRegistration.Dynamic reg176 = ctx.addServlet("ViewCRFServlet", ViewCRFServlet.class);
             reg176.addMapping("/ViewCRF");
@@ -792,20 +589,11 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg184 = ctx.addServlet("ViewEventDefinitionServlet", ViewEventDefinitionServlet.class);
             reg184.addMapping("/ViewEventDefinition");
 
-            ServletRegistration.Dynamic reg185 = ctx.addServlet("ViewImportJobServlet", ViewImportJobServlet.class);
-            reg185.addMapping("/ViewImportJob");
-
             ServletRegistration.Dynamic reg186 = ctx.addServlet("ViewItemAuditLogServlet", ViewItemAuditLogServlet.class);
             reg186.addMapping("/ViewItemAuditLog");
 
             ServletRegistration.Dynamic reg187 = ctx.addServlet("ViewItemDetailServlet", ViewItemDetailServlet.class);
             reg187.addMapping("/ViewItemDetail");
-
-            ServletRegistration.Dynamic reg188 = ctx.addServlet("ViewJobServlet", ViewJobServlet.class);
-            reg188.addMapping("/ViewJob");
-
-            ServletRegistration.Dynamic reg189 = ctx.addServlet("ViewLogMessage", ViewLogMessageServlet.class);
-            reg189.addMapping("/ViewLogMessage");
 
             ServletRegistration.Dynamic reg190 = ctx.addServlet("ViewNoteServlet", ViewNoteServlet.class);
             reg190.addMapping("/ViewNote");
@@ -851,9 +639,6 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg203 = ctx.addServlet("ViewSelectedServlet", ViewSelectedServlet.class);
             reg203.addMapping("/ViewSelected");
 
-            ServletRegistration.Dynamic reg204 = ctx.addServlet("ViewSingleJobServlet", ViewSingleJobServlet.class);
-            reg204.addMapping("/ViewSingleJob");
-
             ServletRegistration.Dynamic reg205 = ctx.addServlet("ViewSiteServlet", ViewSiteServlet.class);
             reg205.addMapping("/ViewSite");
 
@@ -875,14 +660,8 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg211 = ctx.addServlet("ViewSubjectGroupClassServlet", ViewSubjectGroupClassServlet.class);
             reg211.addMapping("/ViewSubjectGroupClass");
 
-            ServletRegistration.Dynamic reg212 = ctx.addServlet("ViewSubjectServlet", ViewSubjectServlet.class);
-            reg212.addMapping("/ViewSubject");
-
             ServletRegistration.Dynamic reg213 = ctx.addServlet("ViewTableOfContentServlet", ViewTableOfContentServlet.class);
             reg213.addMapping("/ViewTableOfContent");
-
-            ServletRegistration.Dynamic reg214 = ctx.addServlet("ViewUserAccountServlet", ViewUserAccountServlet.class);
-            reg214.addMapping("/ViewUserAccount");
 
         };
     }

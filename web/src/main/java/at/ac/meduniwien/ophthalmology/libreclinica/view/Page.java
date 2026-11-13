@@ -15,7 +15,6 @@ package at.ac.meduniwien.ophthalmology.libreclinica.view;
  *         Provides a type-safe enumeration for JSP Page,converted from original static class.
  *         @author jnyayapathi
  */
-@SuppressWarnings("all")
 public enum Page {
 	
 	
@@ -29,7 +28,6 @@ public enum Page {
       	LOGIN("/WEB-INF/jsp/login/login.jsp", "OpenClinica Login"),
     	LOGIN_USER_ACCOUNT_DELETED("/WEB-INF/jsp/login/login.jsp" + "?action=userAccountDeleted",
                 "Unsuccessful Login Due to Account Deletion"),
-                ENTERPRISE("/WEB-INF/jsp/login/enterprise.jsp", "OpenClinica Enterprise"),
    /**
      * Page for logging out
      */
@@ -85,36 +83,15 @@ public enum Page {
 
     REQUEST_ACCOUNT_CONFIRM ("/WEB-INF/jsp/login/requestAccountConfirm.jsp", "Request account confirm"),
 
-    /**
-     * Page for creating a user account.
-     */
-    CREATE_ACCOUNT("/WEB-INF/jsp/admin/createuseraccount.jsp", "Create an account"),
 
     /**
      * Page for creating a user account.
      */
     TEST_OBJECT("/WEB-INF/jsp/admin/createtestObject.jsp", "Create an account"),
 
-    /**
-     * Page for editing a user account, and confirmation page.
-     */
-    EDIT_ACCOUNT("/WEB-INF/jsp/admin/edituseraccount.jsp", "Edit an account"),
-     EDIT_ACCOUNT_CONFIRM ("/WEB-INF/jsp/admin/edituseraccountconfirm.jsp", "Edit an account"),
 
-    /**
-     * Page for viewing all user accounts (for admin)
-     */
-    LIST_USER_ACCOUNTS ("/WEB-INF/jsp/admin/listuseraccounts.jsp", "List user accounts"),
-    LIST_USER_ACCOUNTS_SERVLET ("/ListUserAccounts", "List user accounts"),
 
-    /**
-     * Page for viewing a single user account (for admin)
-     */
-     VIEW_USER_ACCOUNT("/WEB-INF/jsp/admin/viewuseraccount.jsp", "View user account"),
- VIEW_USER_ACCOUNT_SERVLET ("/ViewUserAccount", "View user account servlet"),
 
-    CONFIGURATION ("/WEB-INF/jsp/admin/configuration.jsp", "Configuration"),
-   CONFIGURATION_PASSWORD_REQUIREMENTS("/WEB-INF/jsp/admin/configurationPasswordRequirements.jsp", "Configuration"),
 
     /**
      * Page for creating a study.
@@ -154,8 +131,6 @@ public enum Page {
     VIEW_STUDY("/WEB-INF/jsp/admin/viewStudy.jsp", "View study"),
     VIEW_FULL_STUDY("/WEB-INF/jsp/admin/viewFullStudy.jsp", "View full study"),
 
-    REMOVE_CRF("/WEB-INF/jsp/admin/removeCRF.jsp", "Remove a CRF"),
-    RESTORE_CRF ("/WEB-INF/jsp/admin/restoreCRF.jsp", "Restore a CRF"),
     /**
      * Page for confirming an existing study.
      */
@@ -187,12 +162,7 @@ public enum Page {
     VIEW_SITE("/WEB-INF/jsp/managestudy/viewSite.jsp", "View a sub Study"),
     VIEW_SITE_SERVLET ("/ViewSite", "View a sub Study"),
 
-    REMOVE_STUDY ("/WEB-INF/jsp/admin/removeStudy.jsp", "Remove a Study"),
 
-    /**
-     * Page for restoring a study.
-     */
-    RESTORE_STUDY ("/WEB-INF/jsp/admin/restoreStudy.jsp", "Restore a Study"),
     /**
      * Page for removing a sub study.
      */
@@ -202,10 +172,6 @@ public enum Page {
      * Page for restoring a sub study.
      */
     RESTORE_SITE ("/WEB-INF/jsp/managestudy/restoreSite.jsp", "Restore a sub Study"),
-    /**
-     * Page for editing a study user role.
-     */
-    EDIT_STUDY_USER_ROLE ("/WEB-INF/jsp/admin/editstudyuserrole.jsp", "Edit Study User Role"),
 
     /**
      * Page for view all users of a study and its sites.
@@ -219,7 +185,9 @@ public enum Page {
     /**
      * Page for view all studies.
      */
-    STUDY_LIST_SERVLET ("/ListStudy", "View All Studies"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    STUDY_LIST_SERVLET ("/MainMenu", "View All Studies"),
 
     /**
      * Page for view all sites.
@@ -305,49 +273,24 @@ public enum Page {
      * Page for listing crfs.
      */
     CRF_LIST ("/WEB-INF/jsp/admin/listCRF.jsp", "List all CRFs"),
-    CRF_LIST_SERVLET ("/ListCRF", "List all CRFs servlet"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    CRF_LIST_SERVLET ("/MainMenu", "List all CRFs servlet"),
 
     /**
      * Page for creating crf.
      */
     VIEW_CRF ("/WEB-INF/jsp/admin/viewCRF.jsp", "View a CRF"),
 
-    /**
-     * Page for creating crf.
-     */
-    BATCH_CRF_MIGRATION ("/WEB-INF/jsp/admin/batchCRFMigration.jsp", "batch CRF Migration"),
-    /**
-     * Page for viewing audit user activity.
-     */
-    AUDIT_USER_ACTIVITY ("/WEB-INF/jsp/admin/auditUserActivity.jsp", "Audit User Activity"),
 
-    /**
-     * Page for viewing audit database
-     */
-    AUDIT_DATABASE ("/WEB-INF/jsp/admin/auditDatabase.jsp", "Audit Database"),
 
-    /**
-     * Page for creating crf.
-     */
-     CREATE_CRF ("/WEB-INF/jsp/admin/createCRF.jsp", "Create a new CRF"),
 
-    /**
-     * Page for updating crf.
-     */
-    UPDATE_CRF ("/WEB-INF/jsp/admin/updateCRF.jsp", "Update a CRF"),
-    UPDATE_CRF_CONFIRM ("/WEB-INF/jsp/admin/updateCRFConfirm.jsp", "Update a CRF Confirm"),
 
     /**
      * Page for creating crf confirm.
      */
 
-    /**
-     * Page for creating crf version.
-     */
-    CREATE_CRF_VERSION ("/WEB-INF/jsp/admin/createCRFVersion.jsp", "Create a new CRF Version"),
 
-    REMOVE_CRF_VERSION ("/WEB-INF/jsp/admin/removeCRFVersion.jsp", "Remove CRF Version"),
-    RESTORE_CRF_VERSION ("/WEB-INF/jsp/admin/restoreCRFVersion.jsp", "Restore CRF Version"),
 
     /**
      * Page for creating crf data imports
@@ -377,19 +320,14 @@ public enum Page {
     /**
      * Page for creating crf version.
      */
-    CREATE_CRF_VERSION_SERVLET ("/CreateCRFVersion", "Create a new CRF Version Servlet"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    CREATE_CRF_VERSION_SERVLET ("/MainMenu", "Create a new CRF Version Servlet"),
     /**
      * Page for confirming crf version.
      */
     CREATE_CRF_VERSION_CONFIRM ("/WEB-INF/jsp/admin/createCRFVersionConfirm.jsp", "Create a new CRF Version Confirm"),
-    CREATE_CRF_VERSION_DONE ("/WEB-INF/jsp/admin/createCRFVersionDone.jsp", "Create a new CRF Version Done"),
-    REMOVE_CRF_VERSION_CONFIRM ("/WEB-INF/jsp/admin/removeCRFVersionConfirm.jsp", "Remove CRF Version Confirm"),
-    CREATE_CRF_VERSION_NODELETE("/WEB-INF/jsp/admin/createCRFVersionNoDelete.jsp", "Create a new CRF cannot delete version"),
-    CREATE_CRF_VERSION_ERROR ("/WEB-INF/jsp/admin/createCRFVersionError.jsp", "Create a new CRF error"),
-    REMOVE_CRF_VERSION_DEF ("/WEB-INF/jsp/admin/removeCRFVersionDef.jsp", "Remove CRF Version From Definition"),
 
-    AUDIT_LOG_USER ("/WEB-INF/jsp/admin/auditLogUser.jsp", "Audit Log display by User"),
-    AUDIT_LOG_STUDY ("/WEB-INF/jsp/admin/auditLogStudy.jsp", "Audit Log display by Study"),
     AUDIT_LOGS_STUDY ("/WEB-INF/jsp/admin/studyAuditLog.jsp", "Audit Log display by Study"),
 
     AUDIT_LOGS_ITEMS ("/WEB-INF/jsp/admin/auditItem.jsp", "Audit Log for Item"),
@@ -455,25 +393,11 @@ public enum Page {
 
 
 
-    ADMIN_SYSTEM ("/WEB-INF/jsp/" + "admin/index.jsp", "Administer System Menu"),
     MANAGE_STUDY ("/WEB-INF/jsp/" + "managestudy/index.jsp", "Manage Study Menu"),
     MANAGE_STUDY_BODY ("/WEB-INF/jsp/" + "managestudy/managestudy_body.jsp", "Manage Study Menu"),
 
-    CREATE_JOB_EXPORT ("/WEB-INF/jsp/" + "admin/createExportJob.jsp", "Create Export Job"),
-    UPDATE_JOB_EXPORT ("/WEB-INF/jsp/" + "admin/updateExportJob.jsp", "Update Export Job"),
-    CREATE_JOB_IMPORT ("/WEB-INF/jsp/" + "admin/createImportJob.jsp", "Create Import Job"),
-    UPDATE_JOB_IMPORT ("/WEB-INF/jsp/" + "admin/updateImportJob.jsp", "Update Import Job"),
-    VIEW_JOB ("/WEB-INF/jsp/" + "admin/viewJobs.jsp", "View Jobs"),
-    VIEW_ALL_JOBS ("/WEB-INF/jsp/" + "admin/viewAllJobs.jsp", "View Jobs"),
-    VIEW_IMPORT_JOB ("/WEB-INF/jsp/" + "admin/viewImportJobs.jsp", "View Import Jobs"),
-    VIEW_IMPORT_JOB_SERVLET ("/ViewImportJob", "View Import Jobs"),
-    VIEW_LOG_MESSAGE ("/WEB-INF/jsp/" + "admin/viewLogMessage.jsp", "View Log Message"),
     // below line for redirect without having to generate the table, tbh
-    VIEW_JOB_SERVLET ("/ViewJob", "View Jobs"),
-    VIEW_SINGLE_JOB ("/WEB-INF/jsp/" + "admin/viewSingleJob.jsp", "View Jobs"),
     // job creation and viewing pages, all under admin
-    TECH_ADMIN_SYSTEM ("/WEB-INF/jsp/" + "techadmin/index.jsp", "Technical Administrator Menu"),
-    ADMIN_SYSTEM_SERVLET ("/AdminSystem", "Administer System Servlet"),
     MANAGE_STUDY_SERVLET ("/ManageStudy", "Manage Study Servlet"),
 
     SUBMIT_DATA ("/WEB-INF/jsp/" + "submit/index.jsp", "Submit Data Menu"),
@@ -520,8 +444,6 @@ public enum Page {
     RESTORE_USER_ROLE_IN_STUDY ("/WEB-INF/jsp/" + "managestudy/restoreStudyUserRole.jsp", "restore a user role in a study"),
     LIST_USER_IN_STUDY_SERVLET ("/ListStudyUser", "list users in a study"),
 
-    LIST_SUBJECT_SERVLET ("/ListSubject", "list subjects in a study"),
-    VIEW_SUBJECT ("/WEB-INF/jsp/" + "admin/viewSubject.jsp", "View Subject"),
 
     VIEW_CRF_VERSION ("/WEB-INF/jsp/" + "managestudy/viewCRFVersion.jsp", "View a CRF Version"),
 
@@ -545,30 +467,20 @@ public enum Page {
     REMOVE_EVENT_CRF ("/WEB-INF/jsp/" + "managestudy/removeEventCRF.jsp", "Remove CRF from event"),
     RESTORE_EVENT_CRF ("/WEB-INF/jsp/" + "managestudy/restoreEventCRF.jsp", "Restore CRF to event"),
     VIEW_EVENT_CRF ("/WEB-INF/jsp/" + "managestudy/viewEventCRF.jsp", "View Event CRF Data"),
-    DELETE_EVENT_CRF ("/WEB-INF/jsp/" + "admin/deleteEventCRF.jsp", "Delete CRF from event"),
 
-    UPDATE_SUBJECT ("/WEB-INF/jsp/" + "admin/updateSubject.jsp", "update a subject"),
-    UPDATE_SUBJECT_SERVLET ("/UpdateSubject", "update a subject"),
-    UPDATE_SUBJECT_CONFIRM ("/WEB-INF/jsp/" + "admin/updateSubjectConfirm.jsp", "confirm update a subject"),
+    // The legacy screen this named was deleted with DR-018 waves 0 and 1; the
+    // closed wave-2 servlets that still end here land on the shell instead.
+    UPDATE_SUBJECT_SERVLET ("/MainMenu", "update a subject"),
     REASSIGN_STUDY_SUBJECT ("/WEB-INF/jsp/" + "managestudy/reassignStudySubject.jsp", "reassign a subject"),
     REASSIGN_STUDY_SUBJECT_CONFIRM ("/WEB-INF/jsp/" + "managestudy/reassignStudySubjectConfirm.jsp", "confirm reassign a subject"),
 
-    REMOVE_SUBJECT ("/WEB-INF/jsp/" + "admin/removeSubject.jsp", "remove a subject"),
-    RESTORE_SUBJECT ("/WEB-INF/jsp/" + "admin/restoreSubject.jsp", "restore a subject"),
 
-    SET_USER_ROLE ("/WEB-INF/jsp/" + "admin/setUserRole.jsp", "set a study user role for a user"),
-    /**
-     * Page for listing subjects.
-     */
-    SUBJECT_LIST ("/WEB-INF/jsp/admin/listSubject.jsp", "List all Subjects"),
-    SUBJECT_LIST_SERVLET ("/ListSubject", "List all subjects servlet"),
 
     VIEW_TABLE_OF_CONTENT ("/WEB-INF/jsp/managestudy/viewTableOfContents.jsp", "View Table Of Contents"),
     VIEW_TABLE_OF_CONTENT_SERVLET ("/ViewTableOfContent", "View Table Of Contents Servlet"),
     VIEW_SECTION_DATA_ENTRY ("/WEB-INF/jsp/managestudy/viewSectionDataEntry.jsp", "View Section Data Entry"),
     VIEW_SECTION_DATA_PREVIEW ("/WEB-INF/jsp/managestudy/viewSectionDataPreview.jsp", "View Section Data Preview"),
     // YW 07-23-2007 << for preview in the issue000937
-    VIEW_SECTION_DATA_ENTRY_PREVIEW ("/SectionPreview", "Preview CRF Servlet"),
     // YW >>
 
     VIEW_SECTION_DATA_ENTRY_PRINT ("/WEB-INF/jsp/managestudy/viewSectionDataEntryHtml.jsp", "View Section Data Entry Html"),
@@ -585,7 +497,6 @@ public enum Page {
 
     VIEW_STUDY_EVENTS_PRINT ("/WEB-INF/jsp/managestudy/viewStudyEventsPrint.jsp", "View Study Events"),
 
-    DELETE_CRF_VERSION ("/WEB-INF/jsp/admin/deleteCRFVersion.jsp", "delete CRF Version"),
 
     ADD_DISCREPANCY_NOTE ("/WEB-INF/jsp/submit/addDiscrepancyNote.jsp", "Add Discrepancy Note"),
     ADD_DISCREPANCY_NOTE_SERVLET ("/CreateDiscrepancyNote", "Add Discrepancy Note"),
