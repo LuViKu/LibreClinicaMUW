@@ -11,11 +11,17 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 
 /**
  * P2-7 — the trial-blinding gate, as a truth table.
@@ -109,5 +115,79 @@ class RetinalBlindingGateTest extends AbstractApiControllerTest {
     void onlyTheExactHiddenArmNameMasks() {
         assertFalse(AiArmPolicy.maskAiFor("ai_hidden", sessionAs(Role.INVESTIGATOR)));
         assertFalse(AiArmPolicy.maskAiFor("AI_HIDDEN ", sessionAs(Role.INVESTIGATOR)));
+    }
+
+    /* ---------------- several roles on the study ---------------- */
+
+    private static final int STUDY = 11;
+    private static final int SITE = 12;
+    private static final int OTHER_STUDY = 13;
+
+    /**
+     * The session is bound with the account's strongest role. A treating
+     * physician who is also the Study Director is bound as the Study Director,
+     * and must stay blinded all the same.
+     */
+    @Test
+    void aTreatingRoleBesideTheSessionRoleStillBlinds() {
+        MockHttpSession s = multiRoleSession(study(STUDY, 0),
+                binding(STUDY, Role.STUDYDIRECTOR, Status.AVAILABLE),
+                binding(STUDY, Role.INVESTIGATOR, Status.AVAILABLE));
+
+        assertTrue(AiArmPolicy.isTreatingRole(s));
+        assertTrue(AiArmPolicy.maskAiFor("AI_HIDDEN", s));
+    }
+
+    @Test
+    void aTreatingRoleOnTheParentBlindsAtItsSite() {
+        MockHttpSession s = multiRoleSession(study(SITE, STUDY),
+                binding(SITE, Role.MONITOR, Status.AVAILABLE),
+                binding(STUDY, Role.COORDINATOR, Status.AVAILABLE));
+
+        assertTrue(AiArmPolicy.isTreatingRole(s));
+    }
+
+    @Test
+    void aTreatingRoleOnAnotherStudyDoesNotBlindHere() {
+        MockHttpSession s = multiRoleSession(study(STUDY, 0),
+                binding(STUDY, Role.STUDYDIRECTOR, Status.AVAILABLE),
+                binding(OTHER_STUDY, Role.INVESTIGATOR, Status.AVAILABLE));
+
+        assertFalse(AiArmPolicy.isTreatingRole(s));
+    }
+
+    @Test
+    void aRemovedTreatingRoleDoesNotBlind() {
+        MockHttpSession s = multiRoleSession(study(STUDY, 0),
+                binding(STUDY, Role.STUDYDIRECTOR, Status.AVAILABLE),
+                binding(STUDY, Role.INVESTIGATOR, Status.DELETED));
+
+        assertFalse(AiArmPolicy.isTreatingRole(s));
+    }
+
+    /** A session bound the way the login binds it: the strongest role, the account, the study. */
+    private static MockHttpSession multiRoleSession(StudyBean study, StudyUserRoleBean... bindings) {
+        UserAccountBean account = new UserAccountBean();
+        account.setRoles(new ArrayList<>(List.of(bindings)));
+        MockHttpSession s = new MockHttpSession();
+        s.setAttribute("userBean", account);
+        s.setAttribute("study", study);
+        s.setAttribute("userRole", account.getRoleByStudy(study.getId()));
+        return s;
+    }
+
+    private static StudyBean study(int id, int parentId) {
+        StudyBean study = new StudyBean();
+        study.setId(id);
+        study.setParentStudyId(parentId);
+        return study;
+    }
+
+    private static StudyUserRoleBean binding(int studyId, Role role, Status status) {
+        StudyUserRoleBean binding = new StudyUserRoleBean();
+        binding.setStudyId(studyId);
+        binding.setRole(role);
+        binding.setStatus(status);
+        return binding;
     }
 }
