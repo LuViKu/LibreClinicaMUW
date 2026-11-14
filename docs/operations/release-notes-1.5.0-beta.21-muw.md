@@ -14,7 +14,7 @@ For older releases see [release-notes-1.5.0-beta.20-muw.md](release-notes-1.5.0-
 
 **Deployment-breaking:** nothing has to be set.
 - **No migrations:** the changelog count stays at 1206.
-- **Nothing to configure, no change to the host setup, nginx or the sidecars.** Retinal-inference and dicom-scp get the same tag as usual, but their code is unchanged.
+- **Nothing to configure, no change to the host setup or nginx.** Retinal-inference and dicom-scp get the same tag as usual. Retinal-inference is unchanged; dicom-scp moves to Pillow 13.0.0 (#450).
 
 Two things change for users the day it is installed:
 1. **Signing.** A Data Manager (Study Director) who signed casebooks or visits until now, or a Koordinator who signed visits, can no longer sign. Whoever signs must hold the **Investigator** role (Prüfarzt/Prüfärztin), and only that role on the study (see [Signing goes by the active role](#signing-goes-by-the-active-role)).
@@ -92,6 +92,7 @@ The DR-018 plan was to close the old screens area by area over several months, e
 
 ## Smaller items
 
+- **Security updates (#450).** Guava 33.4.8 → 33.7.2 in the app (one high-severity advisory). Pillow 12.3.0 → 13.0.0 in the dicom-scp sidecar (five critical, 24 high: heap overflows in image decoders). The security scan's Trivy check, red since early November, passes again. Nothing changes in what the app or the sidecar does.
 - **SPA dependencies (#440).** The open Dependabot alerts on the SPA's toolchain are fixed: vue-i18n 11, Vite 6, Vitest 4, and patched versions of shell-quote, launch-editor and markdown-it. The SPA builds on Node 22.23.4. Nothing changes in what the app does.
 - **Unused code went with wave 1:** the old breadcrumb builder, which nothing called, and the CRF template spreadsheet behind the deleted template download.
 
