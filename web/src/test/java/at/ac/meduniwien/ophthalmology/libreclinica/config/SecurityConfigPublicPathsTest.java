@@ -60,8 +60,13 @@ class SecurityConfigPublicPathsTest {
         assertTrue(anonymousMayReach("/pages", "/api/v1/public/oct-upload/session"));
         assertTrue(anonymousMayReach("/pages", "/api/v1/device/uploader/heartbeat"));
         assertTrue(anonymousMayReach("/pages", "/v3/api-docs/spa-api"));
-        // The heritage API authenticates each call itself (ApiSecurityFilter,
-        // HTTP Basic with an API key), so the chain lets it through.
-        assertTrue(anonymousMayReach("/pages", "/auth/api/v1/system/status"));
+    }
+
+    @Test
+    void theDeletedHeritageApiIsNoLongerPublic() {
+        // It authenticated each call itself with an API key, so the chain let
+        // it through; with the API gone (DR-018) the path needs a login.
+        assertFalse(anonymousMayReach("/pages", "/auth/api/v1/system/status"));
+        assertFalse(anonymousMayReach("/pages", "/auth/api/v1/studies/"));
     }
 }

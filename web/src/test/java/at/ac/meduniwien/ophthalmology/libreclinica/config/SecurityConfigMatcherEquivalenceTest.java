@@ -219,7 +219,9 @@ class SecurityConfigMatcherEquivalenceTest {
                 }
             }
         }
-        assertTrue(compared > 3000, "the corpus is large enough to mean something: " + compared);
+        // A size floor, not a count: 2,912 comparisons once the heritage API's
+        // six public patterns went (DR-018).
+        assertTrue(compared > 2500, "the corpus is large enough to mean something: " + compared);
         assertTrue(refused > 0, "some shapes are refused by the firewall");
         assertEquals(List.of(), differences, "matcher decisions that changed (compared " + compared
                 + ", firewall refused " + refused + ", failed closed " + failedClosed + ")");

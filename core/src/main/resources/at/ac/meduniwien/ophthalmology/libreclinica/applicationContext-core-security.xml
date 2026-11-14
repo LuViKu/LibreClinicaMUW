@@ -112,6 +112,4 @@
         </constructor-arg>
     </bean>
 
-    <bean name="apiSecurityFilter" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter"/>
-
 </beans>

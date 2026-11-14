@@ -24,15 +24,15 @@ The clock starts when the closure reaches **production**, not when it merges.
 
 | Wave | Closed in code | Reached production | Paths | SPA replacement | Delete not before | Signed off |
 |---|---|---|---|---|---|---|
-| W0 — heritage REST API (bucket HERITAGE_API) | 2026-09-30 (#371) | 2026-10-08 (1.5.0-beta.16-muw) | `/pages/auth` (seven OpenClinica 3.x controllers; API-key only, no caller in the app, the SPA or the deployment; reversible through `LIBRECLINICA_LEGACY_CLOSED_PATHS`) | none needed | 2026-11-05 (was 2027-04-08; four weeks since 2026-11-13) | pending (Lukas) |
 | W2 — everything but the shell (one wave, folding the planned W2–W4) | 2026-11-13 | next release | 164 paths: every catalogue key outside the shell and the public forms — participants and visits, data entry and double data entry, notes, SDV, print, extract and export, the rest of the study build (event definitions, sites, groups, rules, `/ViewCRF`, `/ViewStudy`), study-user roles and the audit pages; see the [W2 record](#w2-record) | per screen where the catalogue names one; otherwise none (log evidence instead of a parity record) | four weeks after it reaches production | pending (Lukas) |
 
 ## Deleted after bake-in
 
 | Wave | Deleted | Paths | Log review (hits by non-admins during bake-in) | PR | Signed off |
 |---|---|---|---|---|---|
-| W0 — not needed (the screens; the heritage REST API is still closed, above) | 2026-11-13 | the 17 paths closed in #371: `/Enterprise`, `/TechAdmin`, `/AdminSystem`, `/AuditDatabase`, `/ListSubject`, `/ListSubjectData`, `/ViewSubject`, `/UpdateSubject`, `/RemoveSubject`, `/RestoreSubject`, `/CreateJobImport`, `/UpdateJobImport`, `/ViewImportJob`, `/ViewLogMessage`, `/PrintoutCertificate`, `/DeleteEventCRF`, `/ConfigurePasswordRequirements` | none: the `legacy-hit` log from 2026-10-08 (the start of the bake-in) to 2026-11-13 holds 16 lines, all by `root` or before a login, none on a W0 or W1 path | #445 | pending (Lukas) |
+| W0 — not needed (the screens) | 2026-11-13 | the 17 paths closed in #371: `/Enterprise`, `/TechAdmin`, `/AdminSystem`, `/AuditDatabase`, `/ListSubject`, `/ListSubjectData`, `/ViewSubject`, `/UpdateSubject`, `/RemoveSubject`, `/RestoreSubject`, `/CreateJobImport`, `/UpdateJobImport`, `/ViewImportJob`, `/ViewLogMessage`, `/PrintoutCertificate`, `/DeleteEventCRF`, `/ConfigurePasswordRequirements` | none: the `legacy-hit` log from 2026-10-08 (the start of the bake-in) to 2026-11-13 holds 16 lines, all by `root` or before a login, none on a W0 or W1 path | #445 | pending (Lukas) |
 | W1 — administration | 2026-11-13 | the 43 paths closed in #396, listed in the [W1 parity record](#w1-parity-record) | none (same log review) | #445 | pending (Lukas) |
+| W0 — heritage REST API | 2026-11-13 | `/pages/auth`: the seven OpenClinica 3.x controllers (studies, user accounts, clinical data, notes, system information, the item-data table, and the two batch-migration methods under `/auth`), the API-key filter that authenticated them, and their public and internet-facing path entries | none: no `legacy-hit` line under `/pages/auth` in the whole bake-in | #447 | pending (Lukas) |
 
 ---
 
@@ -43,6 +43,8 @@ Deleted 2026-11-13, four weeks after both waves reached production (1.5.0-beta.1
 **What went.** The 55 servlets behind the 55 servlet paths, with their `LegacyServletRegistry` entries (210 registrations → 155); the two Spring MVC controllers behind the five `/pages` routes (`ScheduledJobController`, `LdapUserController`); 60 JSPs, the ones only these screens rendered or included; 57 `Page` constants; the 60 catalogue keys and their `closedPaths` entries (234 keys → 174; the startup line now reads 165 of 174 closed); the CRF template spreadsheet that only `/DownloadVersionSpreadSheet` served, and its copy at startup; three row beans (`AuditEventRow`, `AuditEventStudyRow`, `TriggerRow`) whose last users were the deleted pages; and the tests of the deleted code. `LockCRFVersionServlet` (W2) now holds the default-version helper it used to call on `RemoveCRFVersionServlet`, with that helper's tests.
 
 **What a request gets now.** A deleted path is no longer a catalogue key, so the telemetry filter neither logs nor closes it, and no servlet answers it: the container answers 404, for administrators too, also under `/legacy/`.
+
+**The heritage REST API** (#447) went in a PR of its own because it reaches into the security configuration: the six controllers under `/pages/auth`, the two `/auth` methods of `BatchCRFMigrationController` (the SPA's `/api/v1/forms/migrate` methods stay), `ApiSecurityFilter` with its bean and filter registrations, the seven DTO classes only the study API used, the public-path entries that let API-key calls past the login, and the internet-facing deny entry. A request below `/pages/auth` now needs a login like any other path and then answers 404. The `HERITAGE_API` log bucket stays: the telemetry filter still files uncatalogued `/pages` paths closed by the internet-facing mode under it. The SPA's user creation still stores an API key on each new account; nothing reads it any more.
 
 **Left in place.**
 - The study metadata API test no longer compares its document with the deleted servlet's; the comparison passed at every run until the servlet went.

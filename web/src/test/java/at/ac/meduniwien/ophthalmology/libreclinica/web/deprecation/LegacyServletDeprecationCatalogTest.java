@@ -83,13 +83,10 @@ class LegacyServletDeprecationCatalogTest {
     }
 
     @Test
-    void heritageApiIsOneKeyCoveringEverythingBelowIt() {
-        assertEquals("/pages/auth",
-                catalog.lookup("/pages", "/auth/api/v1/system/systemstatus").orElseThrow().legacyPath());
-        assertEquals("/pages/auth",
-                catalog.lookup("/pages", "/auth/api/itemdata").orElseThrow().legacyPath());
-        assertFalse(catalog.lookup("/pages", "/authx/api").isPresent());
-        // the SPA's own API stays outside it, including anything named auth
+    void theDeletedHeritageApiIsNoLongerALegacyScreen() {
+        assertFalse(catalog.lookup("/pages", "/auth/api/v1/system/systemstatus").isPresent());
+        assertFalse(catalog.lookup("/pages", "/auth/api/itemdata").isPresent());
+        // the SPA's own API was never one, including anything named auth
         assertFalse(catalog.lookup("/pages", "/api/v1/auth/logout").isPresent());
     }
 
@@ -183,6 +180,9 @@ class LegacyServletDeprecationCatalogTest {
         var byBucket = new java.util.EnumMap<Bucket, Integer>(Bucket.class);
         catalog.all().values().forEach(e -> byBucket.merge(e.bucket(), 1, Integer::sum));
         for (Bucket b : Bucket.values()) {
+            if (b == Bucket.HERITAGE_API) {
+                continue; // logged by the filter for uncatalogued /pages paths, not a catalogue area
+            }
             assertTrue(byBucket.getOrDefault(b, 0) > 0,
                     "Bucket " + b + " has no entries — was it removed by mistake?");
         }

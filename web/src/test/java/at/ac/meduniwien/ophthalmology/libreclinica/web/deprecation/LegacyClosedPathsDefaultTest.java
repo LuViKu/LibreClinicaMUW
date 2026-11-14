@@ -61,6 +61,8 @@ class LegacyClosedPathsDefaultTest {
             "/RemoveSubject", "/RestoreSubject",
             "/CreateJobImport", "/UpdateJobImport", "/ViewImportJob", "/ViewLogMessage",
             "/PrintoutCertificate", "/DeleteEventCRF", "/ConfigurePasswordRequirements",
+            // wave 0: the OpenClinica 3.x REST API, deleted separately
+            "/pages/auth",
             // wave 1: users and accounts
             "/ListUserAccounts", "/CreateUserAccount", "/ViewUserAccount", "/EditUserAccount",
             "/SetUserRole", "/EditStudyUserRole", "/DeleteStudyUserRole", "/DeleteUser", "/UnLockUser",
@@ -79,12 +81,6 @@ class LegacyClosedPathsDefaultTest {
             // study audit log
             "/AuditLogStudy",
             "/DeleteCRFVersion");
-
-    /**
-     * Closed in wave 0 and not yet deleted: the OpenClinica 3.x REST API under
-     * {@code /pages/auth}, which is removed separately.
-     */
-    private static final List<String> WAVE_0_STILL_CLOSED = List.of("/pages/auth");
 
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
@@ -120,14 +116,6 @@ class LegacyClosedPathsDefaultTest {
             }
         }
         assertEquals(List.of(), left, "deleted screens still in the catalogue or the closed-paths default");
-    }
-
-    @Test
-    void theHeritageApiStaysClosedUntilItIsDeleted() {
-        List<String> closed = defaultClosedPaths();
-        for (String path : WAVE_0_STILL_CLOSED) {
-            assertTrue(closed.contains(path), "wave 0 screen reopened: " + path);
-        }
     }
 
     /**
