@@ -46,8 +46,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * Registered in {@code ServletInfraConfig.requestIdFilter()} at
  * {@code Ordered.HIGHEST_PRECEDENCE} — strictly ahead of every other
  * filter in the chain (CharacterEncodingFilter, LocaleFilter,
- * SecurityFilterChain, OpenEntityManagerInViewFilter, OCServletFilter,
- * ApiSecurityFilter). MDC must be populated before any downstream filter
+ * SecurityFilterChain, OpenEntityManagerInViewFilter, OCServletFilter). MDC must be populated before any downstream filter
  * logs so the {@code [%X{reqId:-}]} pattern carries the id for the entire
  * request lifecycle.
  *

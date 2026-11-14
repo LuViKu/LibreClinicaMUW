@@ -83,13 +83,10 @@ class LegacyServletDeprecationCatalogTest {
     }
 
     @Test
-    void heritageApiIsOneKeyCoveringEverythingBelowIt() {
-        assertEquals("/pages/auth",
-                catalog.lookup("/pages", "/auth/api/v1/system/systemstatus").orElseThrow().legacyPath());
-        assertEquals("/pages/auth",
-                catalog.lookup("/pages", "/auth/api/itemdata").orElseThrow().legacyPath());
-        assertFalse(catalog.lookup("/pages", "/authx/api").isPresent());
-        // the SPA's own API stays outside it, including anything named auth
+    void theDeletedHeritageApiIsNoLongerALegacyScreen() {
+        assertFalse(catalog.lookup("/pages", "/auth/api/v1/system/systemstatus").isPresent());
+        assertFalse(catalog.lookup("/pages", "/auth/api/itemdata").isPresent());
+        // the SPA's own API was never one, including anything named auth
         assertFalse(catalog.lookup("/pages", "/api/v1/auth/logout").isPresent());
     }
 
@@ -100,7 +97,7 @@ class LegacyServletDeprecationCatalogTest {
         assertFalse(catalog.lookup("/app/subjects", null).isPresent());
         assertFalse(catalog.lookup("/images/bt_View.gif", null).isPresent());
         // The keys carry no context path; a request URI never matches.
-        assertFalse(catalog.lookup("/LibreClinica/ListUserAccounts").isPresent());
+        assertFalse(catalog.lookup("/LibreClinica/ListStudySubjects").isPresent());
     }
 
     @Test
@@ -132,7 +129,9 @@ class LegacyServletDeprecationCatalogTest {
         Set<String> missing = new TreeSet<>(registered);
         missing.removeAll(servletKeys());
         assertTrue(missing.isEmpty(), "registered legacy servlets missing from the catalogue: " + missing);
-        assertTrue(registered.size() > 200, "the registry was read: " + registered.size());
+        // A sanity bound that the registry was parsed, not a count: 155 servlets
+        // remain after the W0/W1 deletion.
+        assertTrue(registered.size() > 100, "the registry was read: " + registered.size());
     }
 
     /** Every servlet key is a registered path: a stale key names a screen no request can match. */
@@ -170,13 +169,10 @@ class LegacyServletDeprecationCatalogTest {
     void screensFoundUncoveredNameNoSpaRoute() {
         for (String path : List.of(
                 "/ViewStudy",
-                "/AuditDatabase", "/ViewLogMessage",
                 "/ViewStudyEvents")) {
             Entry entry = catalog.entry(path).orElseThrow(() -> new AssertionError(path + " not catalogued"));
             assertFalse(entry.hasSpaRoute(), path + " still names " + entry.spaRoute());
         }
-        // §16.3 found this one covered after all; it keeps its route.
-        assertEquals("/app/system/audit-log", catalog.entry("/AuditLogUser").orElseThrow().spaRoute());
     }
 
     @Test
@@ -184,6 +180,9 @@ class LegacyServletDeprecationCatalogTest {
         var byBucket = new java.util.EnumMap<Bucket, Integer>(Bucket.class);
         catalog.all().values().forEach(e -> byBucket.merge(e.bucket(), 1, Integer::sum));
         for (Bucket b : Bucket.values()) {
+            if (b == Bucket.HERITAGE_API) {
+                continue; // logged by the filter for uncatalogued /pages paths, not a catalogue area
+            }
             assertTrue(byBucket.getOrDefault(b, 0) > 0,
                     "Bucket " + b + " has no entries — was it removed by mistake?");
         }

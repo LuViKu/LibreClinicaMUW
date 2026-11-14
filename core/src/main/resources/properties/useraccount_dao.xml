@@ -180,9 +180,12 @@
             values ('admin',?,1,?,now(),?,now())
         </sql>
     </query>
+    <!-- The system-administrator marker is the 'admin' row without a study.
+         An 'admin' row with a study is the Administrator role on that study and
+         is managed with the other study roles: keep it (2026-11-13). -->
     <query>
         <name>removeSysAdminRole</name>
-        <sql>delete from study_user_role where user_name=? and role_name='admin'</sql>
+        <sql>delete from study_user_role where user_name=? and role_name='admin' and study_id is null</sql>
     </query>
     <query>
         <name>findStudyByUser</name>

@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import {
   AddSubjectValidationError,
+  matchesStatusFilter,
   subjectIdentifierRules,
   useSubjectsStore,
   validateAddSubject,
   type AddSubjectInput,
 } from '../subjects'
-import type { Subject } from '@/types/subject'
+import type { EventCellSnapshot, Subject } from '@/types/subject'
 
 // Mock the http client so the store tests run without a live backend.
 // We mock both `apiGet` (subject matrix hydration) and `apiPost` (Add
@@ -192,24 +193,47 @@ describe('useSubjectsStore', () => {
     }
   })
 
-  it('statusFilter "today" keeps subjects with at least one scheduled or in-progress event and drops fully-complete subjects', async () => {
-    // 2026-06-11 — HomeView's "Today's open CRFs" card sends
-    // ?filter=today. Without per-event date columns on the matrix
-    // adapter, the operator-facing semantics are "actively on the
-    // operator's plate": any event currently 'scheduled' or
-    // 'in-progress' counts. Subjects whose only events are
-    // 'complete' / 'signed' / 'not-scheduled' drop out.
-    const store = useSubjectsStore()
-    await store.load()
-    store.statusFilter = 'today'
-    const ids = store.filtered.map((s) => s.id)
-    // M-001 has 'in-progress' V3, M-002 has 'in-progress' V2,
-    // M-004 has 'in-progress' V1, M-005 has 'scheduled' V3,
-    // M-007 has 'in-progress' V2 — all kept.
-    expect(ids).toEqual(expect.arrayContaining(['M-001', 'M-002', 'M-004', 'M-005', 'M-007']))
-    // M-003 (all complete) + M-006 (all signed) drop out.
-    expect(ids).not.toContain('M-003')
-    expect(ids).not.toContain('M-006')
+  it('statusFilter "today" keeps only subjects with an open visit dated today', async () => {
+    // HomeView's "Heutige offene CRFs" card sends ?filter=today. An open
+    // visit from an earlier day is overdue ("Fällige Visiten"), not today's.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 10, 10, 9, 0))
+    try {
+      const cell = (status: EventCellSnapshot['status'], date: string | null) =>
+        ({ eventDefinitionOid: 'SE_V', label: 'V', status, openQueries: 0, date })
+      const subject = (id: string, events: EventCellSnapshot[]): Subject => ({
+        id, secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null, events,
+      } as Subject)
+      vi.mocked(apiGet).mockResolvedValueOnce([
+        subject('T-SCHEDULED', [cell('scheduled', '2026-11-10')]),
+        subject('T-ENTERING', [cell('complete', '2026-10-01'), cell('in-progress', '2026-11-10')]),
+        subject('T-OVERDUE', [cell('in-progress', '2026-11-03')]),
+        subject('T-TOMORROW', [cell('scheduled', '2026-11-11')]),
+        subject('T-DONE-TODAY', [cell('complete', '2026-11-10')]),
+        subject('T-NO-DATE', [cell('scheduled', null), cell('not-scheduled', null)]),
+      ])
+      const store = useSubjectsStore()
+      await store.load()
+      store.statusFilter = 'today'
+      expect(store.filtered.map((s) => s.id)).toEqual(['T-SCHEDULED', 'T-ENTERING'])
+
+      // "Offene Visiten" still shows every open visit, whatever its date.
+      store.statusFilter = 'open-events'
+      expect(store.filtered.map((s) => s.id)).toEqual(
+        expect.arrayContaining(['T-SCHEDULED', 'T-ENTERING', 'T-OVERDUE', 'T-TOMORROW', 'T-NO-DATE']))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('matchesStatusFilter compares with the given day', () => {
+    const s = {
+      events: [{ eventDefinitionOid: 'SE_V', label: 'V', status: 'scheduled', openQueries: 0, date: '2026-11-10' }],
+    } as unknown as Subject
+    expect(matchesStatusFilter(s, 'today', '2026-11-10')).toBe(true)
+    expect(matchesStatusFilter(s, 'today', '2026-11-11')).toBe(false)
   })
 
   it('statusFilter "ready-to-sign" keeps unsigned subjects whose events are all complete and drops already-signed ones', async () => {

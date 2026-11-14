@@ -146,7 +146,7 @@
         </query>
         <query>
                 <name>removeSysAdminRole</name>
-                <sql>delete from study_user_role where user_name=? and role_name='admin'</sql>  
+                <sql>delete from study_user_role where user_name=? and role_name='admin' and study_id is null</sql>  
         </query>
         <query>
          <name>findStudyByUser</name>

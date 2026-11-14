@@ -47,7 +47,7 @@ On pages below the register a trail in the page header names the levels above yo
 
 1. Open **Studienteilnehmer** (`/subjects`).
 2. Each row is one participant. The first columns show the **Subject-ID**, **Geschlecht** (gender), **Studienauge** (study eye — OD / OS / OU), **Group** and **Aufnahmedatum** (enrolment date). The remaining columns are one per scheduled visit, each showing a colour-coded status pill; a red badge on a visit cell counts open queries.
-3. Search by ID in the *Teilnehmer per ID suchen…* box, or narrow the list with the filter chips (*Heute*, *Signaturfreigabe*, open-events, all-complete, *Signiert*). Tick *only with queries* to show participants with open discrepancies. *Export* downloads the matrix.
+3. Search by ID in the *Teilnehmer per ID suchen…* box, or narrow the list with the filter chips (*Heute*, *Signaturfreigabe*, open-events, all-complete, *Signiert*). *Heute* shows participants with an open visit dated today; open visits from earlier days are overdue and appear under *Fällige Visiten*. Tick *only with queries* to show participants with open discrepancies. *Export* downloads the matrix.
 4. The Subject column (left) and the action column (right) stay frozen while the visit columns scroll. Use the chevron buttons or *Zur aktuellsten Visite* to slide along long visit timelines.
 5. Click the **Subject-ID** link or **Öffnen** (Open) to open a participant's casebook.
 

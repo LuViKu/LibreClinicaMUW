@@ -27,34 +27,43 @@ import org.junit.jupiter.api.Test;
  * retirement waves are closed (DR-018). These checks keep that record honest:
  * every entry must be a catalogue key (an unknown key is only logged and
  * ignored at startup, so a typo would silently leave a screen open), the
- * screens the SPA still depends on must never be closed, and a wave once
- * closed stays closed.
+ * screens the SPA still depends on must never be closed, a wave once closed
+ * stays closed, and a deleted wave stays deleted.
  */
 class LegacyClosedPathsDefaultTest {
 
-    /** Screens the SPA or the login flow still depends on; closing one breaks users. */
+    /**
+     * The shell and the public forms, open until the shell wave (W5) removes
+     * what still leads there: logins, SSO and an expired session land on
+     * /MainMenu, and e-mail links use sysURL. Closing one breaks users.
+     */
     private static final Set<String> MUST_STAY_OPEN = Set.of(
-            "/MainMenu",       // the login success target
-            "/Logout",         // the SPA's sign-out calls it
-            "/CreateDataset",  // DatasetListView still links it
-            "/SystemStatus");  // unauthenticated probe
+            "/MainMenu", "/ChangeStudy", "/Logout", "/UpdateProfile", "/ResetPassword",
+            "/MatchPassword", "/RequestStudy",
+            "/RequestAccount", "/Contact");
 
-    /** Wave 0 (2026-09-30): not needed, no SPA replacement planned. */
-    private static final List<String> WAVE_0 = List.of(
+    /** The catalogue areas of {@link #MUST_STAY_OPEN}; every other area is closed in wave 2. */
+    private static final Set<LegacyServletDeprecationCatalog.Bucket> OPEN_AREAS = Set.of(
+            LegacyServletDeprecationCatalog.Bucket.SHELL_AND_LOGIN,
+            LegacyServletDeprecationCatalog.Bucket.SUPPORT_FORMS);
+
+    /**
+     * Waves 0 (2026-09-30, not needed) and 1 (2026-10-02, administration),
+     * deleted after their bake-in (DR-018 amendment, 2026-11-13): their
+     * servlets, pages and catalogue keys are gone. Listing one of them in the
+     * default again would only be reported at startup and ignored, so it must
+     * not come back, and neither may its catalogue key.
+     */
+    private static final List<String> DELETED = List.of(
+            // wave 0
             "/Enterprise", "/TechAdmin", "/AdminSystem", "/AuditDatabase",
             "/ListSubject", "/ListSubjectData", "/ViewSubject", "/UpdateSubject",
             "/RemoveSubject", "/RestoreSubject",
             "/CreateJobImport", "/UpdateJobImport", "/ViewImportJob", "/ViewLogMessage",
             "/PrintoutCertificate", "/DeleteEventCRF", "/ConfigurePasswordRequirements",
-            "/pages/auth");
-
-    /**
-     * Wave 1 (2026-10-02): administration. Every screen here was open to
-     * system administrators only, and each has an SPA replacement or a
-     * recorded "not needed" in the retirement log.
-     */
-    private static final List<String> WAVE_1 = List.of(
-            // users and accounts
+            // wave 0: the OpenClinica 3.x REST API, deleted separately
+            "/pages/auth",
+            // wave 1: users and accounts
             "/ListUserAccounts", "/CreateUserAccount", "/ViewUserAccount", "/EditUserAccount",
             "/SetUserRole", "/EditStudyUserRole", "/DeleteStudyUserRole", "/DeleteUser", "/UnLockUser",
             "/pages/admin/listLdapUsers", "/pages/admin/selectLdapUser",
@@ -65,22 +74,13 @@ class LegacyClosedPathsDefaultTest {
             // jobs
             "/ViewAllJobs", "/ViewJob", "/ViewSingleJob", "/PauseJob", "/CreateJobExport", "/UpdateJobExport",
             "/pages/listCurrentScheduledJobs", "/pages/listCurrentScheduledJobsData", "/pages/cancelScheduledJob",
-            // CRF library (D5 implemented: the SPA admits Data Manager, CRC and Administrator)
+            // CRF library
             "/ListCRF", "/CreateCRF", "/CreateCRFVersion", "/InitCreateCRFVersion", "/RemoveCRF", "/RestoreCRF",
             "/InitUpdateCRF", "/UpdateCRF", "/RemoveCRFVersion", "/RestoreCRFVersion",
             "/DownloadVersionSpreadSheet", "/BatchCRFMigration",
-            // study audit log (director, coordinator, sysadmin in legacy; the SPA adds the monitor)
+            // study audit log
             "/AuditLogStudy",
             "/DeleteCRFVersion");
-
-    /**
-     * Administration screens wave 1 leaves open, each with its reason (see the
-     * retirement log): /ViewCRF (its "run all rules for this CRF" link has no
-     * SPA counterpart), /ViewStudy (read by other roles from open pages) and
-     * the study-scoped user screens (W3).
-     */
-    private static final List<String> WAVE_1_HELD_OPEN = List.of(
-            "/ViewCRF", "/ViewStudy", "/ListStudyUser");
 
     private static final Pattern DEFAULT =
             Pattern.compile("(?m)^\\s*closedPaths:\\s*\\$\\{LIBRECLINICA_LEGACY_CLOSED_PATHS:([^}]*)}\\s*$");
@@ -107,48 +107,44 @@ class LegacyClosedPathsDefaultTest {
     }
 
     @Test
-    void waveZeroStaysClosed() {
+    void theDeletedWavesAreGoneFromTheCatalogueAndTheDefault() {
         List<String> closed = defaultClosedPaths();
-        for (String path : WAVE_0) {
-            assertTrue(closed.contains(path), "wave 0 screen reopened: " + path);
+        List<String> left = new ArrayList<>();
+        for (String path : DELETED) {
+            if (catalog.entry(path).isPresent() || closed.contains(path)) {
+                left.add(path);
+            }
         }
+        assertEquals(List.of(), left, "deleted screens still in the catalogue or the closed-paths default");
     }
 
+    /**
+     * Wave 2 (2026-11-13, DR-018 amendment): everything but the shell and the
+     * public forms, in one wave. The legacy-access log showed no request for
+     * any of these screens by anyone but a system administrator since
+     * telemetry began, so the per-area waves W2 to W4 were folded into one.
+     */
     @Test
-    void waveOneIsClosed() {
+    void waveTwoClosesEverythingButTheShell() {
         List<String> closed = defaultClosedPaths();
         List<String> open = new ArrayList<>();
-        for (String path : WAVE_1) {
-            if (!closed.contains(path)) {
-                open.add(path);
+        for (LegacyServletDeprecationCatalog.Entry entry : catalog.all().values()) {
+            if (!OPEN_AREAS.contains(entry.bucket()) && !closed.contains(entry.legacyPath())) {
+                open.add(entry.legacyPath());
             }
         }
-        assertEquals(List.of(), open, "wave 1 screens that are still open");
+        assertEquals(List.of(), open, "screens outside the shell that are still open");
     }
 
     @Test
-    void waveOneHoldsBackTheScreensOtherRolesStillUse() {
-        List<String> closed = defaultClosedPaths();
-        List<String> shut = new ArrayList<>();
-        for (String path : WAVE_1_HELD_OPEN) {
-            if (closed.contains(path)) {
-                shut.add(path);
+    void theShellIsExactlyWhatStaysOpen() {
+        Set<String> shell = new java.util.TreeSet<>();
+        for (LegacyServletDeprecationCatalog.Entry entry : catalog.all().values()) {
+            if (OPEN_AREAS.contains(entry.bucket()) && !defaultClosedPaths().contains(entry.legacyPath())) {
+                shell.add(entry.legacyPath());
             }
         }
-        assertEquals(List.of(), shut, "screens held open for the legacy Data Manager and other roles were closed");
-    }
-
-    @Test
-    void everyClosedScreenNamesAnSpaReplacementOrIsRecordedAsNotNeeded() {
-        // Not needed, by decision (plan R1.5: LDAP, replaced by SSO): no route to name.
-        Set<String> notNeeded = Set.of("/pages/admin/listLdapUsers", "/pages/admin/selectLdapUser");
-        List<String> unnamed = new ArrayList<>();
-        for (String path : WAVE_1) {
-            if (!notNeeded.contains(path) && !catalog.entry(path).orElseThrow().hasSpaRoute()) {
-                unnamed.add(path);
-            }
-        }
-        assertEquals(List.of(), unnamed, "wave 1 screens whose 410 names no SPA route");
+        assertEquals(new java.util.TreeSet<>(MUST_STAY_OPEN), shell);
     }
 
     /** The default of {@code libreclinica.legacy.closedPaths}, read from the one line that sets it. */

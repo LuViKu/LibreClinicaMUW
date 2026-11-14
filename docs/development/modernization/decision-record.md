@@ -876,7 +876,7 @@ The second problem is the one that decided the shape. A camera that sits in the 
 ## DR-018 — The legacy JSP layer is retired in full, admin screens included
 
 **Date:** 2026-09-30
-**Status:** Accepted (2026-09-30), when the owner directed the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) to be implemented in full. DR-004's scoping clause is superseded from that date.
+**Status:** Accepted (2026-09-30), when the owner directed the [JSP retirement plan](jsp-retirement-plan-2026-09-30.md) to be implemented in full. Amended 2026-11-13: the remaining waves but the shell close as one, and the bake-in is four weeks ([amendment](#amendment-2026-11-13--one-wave-and-a-four-week-bake-in)). DR-004's scoping clause is superseded from that date.
 **Owner:** Lead Developer (Lukas Kuchernig)
 **Supersedes:** the scoping clause of [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes) — *"only the high-traffic SPA screens are within scope; admin screens remain on JSP."* DR-004's decision on clinical-use timing is untouched.
 **Related:** [DR-008](#dr-008--ui-framework-for-phase-e-vue-3) (Vue 3), [DR-019](#dr-019--phase-e-usability-acceptance-bar) (usability bar), Phase E execution playbook §E.11 (which reserved this number for the retirement strategy); the feature-parity catalogue in `docs/development/modernization/phase-e/` (`investigator-features.md`, `monitor-features.md`, `data-manager-features.md`).
@@ -911,6 +911,20 @@ A static coverage survey (2026-09-30) mapped the 421 JSPs to 97 screens: **31 co
 - Six live screens are rendered by Spring MVC controllers rather than servlets (the CRF-version change pages, `studymodule.jsp`, `extract.jsp`, `listCurrentScheduledJobs.jsp` and the SDV pages). A retirement pass that traces only `Page` constants will miss them; they are counted as live in the survey.
 
 **Reversible.** Steps 1 and 2 are reversed by restoring the files or reopening the route. Deletion after step 4 is reversed only by restoring from history, which is why it waits for the bake-in and the log.
+
+### Amendment 2026-11-13 — one wave and a four-week bake-in
+
+**Decided by** the owner, 2026-11-13, on the evidence of the `legacy-hit` log.
+
+**Evidence.** Five weeks of the `legacy-hit` log (since telemetry began on 2026-10-08) and seven weeks of Tomcat's access logs (since 2026-09-28) show no request for a legacy screen by anyone but a system administrator, and the administrator's requests were workarounds for SPA gaps since closed. No request for a closed screen at all. The study team works only in the SPA, and the platform is in its test phase.
+
+**Changes to the decision above:**
+
+1. **Waves W2 to W4 close as one wave** (W2, 2026-11-13): every screen but the shell and the public forms. The per-screen parity record (point 4) and, for data entry, the E.10 usability panel ([DR-019](#dr-019--phase-e-usability-acceptance-bar)) are replaced by the log evidence; the monthly log review stays, and a hit by a non-administrator still reopens that screen. A system administrator keeps every closed screen under `/legacy/<path>`.
+2. **The bake-in is four weeks, not six months** (point 4), counted from the closure reaching production. Waves W0 and W1 reached production on 2026-10-08, so their deletion is due from 2026-11-05.
+3. **The shell wave (W5) is unchanged:** it closes once the couplings to `/MainMenu` are removed.
+
+**Why the shorter bake-in is acceptable here.** The six months protected users who might still depend on a legacy screen; the log shows there are none. Deletion is reversed by restoring from history, and every deleted screen removes code that can carry an undetected vulnerability, which is the aim of this decision. Revisit before clinical use starts in earnest, when real users could again depend on something the log has not yet seen.
 
 ---
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiDelete as _apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   CreateEventDefinitionInput,
   EventDefinition,
@@ -10,11 +10,6 @@ import type {
   ImagingPlanEntryWrite,
   UpdateEventDefinitionInput,
 } from '@/types/eventDefinition'
-
-// Suppress unused import warning — apiDelete is part of the public
-// client surface; we intentionally don't use DELETE here (disable
-// is a POST flip), but importing keeps future imports terse.
-void _apiDelete
 
 /**
  * Phase E A8.2 — event-definition CRUD store.

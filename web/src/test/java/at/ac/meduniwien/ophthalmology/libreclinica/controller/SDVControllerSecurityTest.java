@@ -265,14 +265,16 @@ class SDVControllerSecurityTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"viewAllSubjectSDVtmp", "viewAllSubjectSDV", "viewAllSubjectSDVform",
-            "viewSubjectAggregate", "listCurrentScheduledJobs"})
+            "viewSubjectAggregate"})
     void knownViewsAreHonoured(String view) {
         assertEquals("/pages/" + view, SDVUtil.returnViewPath(view, SDVUtil.VIEW_SDV_BY_EVENT_CRF));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"../WEB-INF/jsp/admin/listUserAccounts.jsp", "ListUserAccounts",
-            "viewAllSubjectSDVtmp/../../MainMenu", "", " viewSubjectAggregate"})
+            "viewAllSubjectSDVtmp/../../MainMenu", "", " viewSubjectAggregate",
+            // the scheduled-jobs page was deleted with DR-018 wave 1
+            "listCurrentScheduledJobs"})
     void anythingElseLandsOnTheFallback(String view) {
         assertEquals("/pages/viewSubjectAggregate", SDVUtil.returnViewPath(view, SDVUtil.VIEW_SDV_BY_SUBJECT));
         assertEquals("/pages/viewSubjectAggregate", SDVUtil.returnViewPath(null, SDVUtil.VIEW_SDV_BY_SUBJECT));

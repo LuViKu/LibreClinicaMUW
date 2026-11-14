@@ -121,7 +121,7 @@ jobs:
       # the Maven plugin's sandbox).
       - name: SPA vitest suite
         working-directory: web/src/spa
-        run: node_modules/.bin/vitest run --reporter=basic
+        run: node_modules/.bin/vitest run
 
       - name: Upload WAR artifacts
         if: matrix.java == '25' && success()
@@ -457,13 +457,13 @@ jobs:
       # backend contract — any new/changed REST endpoint forces an
       # accompanying api.ts refresh in the same PR.
       #
-      # Node 20 (matches the frontend-maven-plugin nodeVersion in
+      # Node 22 (matches the frontend-maven-plugin nodeVersion in
       # web/pom.xml). pnpm via corepack — same toolchain the
       # Maven SPA build uses, so install behaviour is identical.
       - name: Set up Node.js for OpenAPI codegen
         uses: actions/setup-node@v5
         with:
-          node-version: '20.17.0'
+          node-version: '22.23.4'
 
       - name: Enable pnpm via corepack
         run: |

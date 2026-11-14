@@ -100,12 +100,17 @@ public record SubjectListItemDto(
      * "scheduled", "not-scheduled", "in-progress", "complete", "locked",
      * "signed". {@code openQueries} counts open discrepancy notes on
      * {@code item_data} rows under this study event.
+     *
+     * <p>{@code date} is the visit's start date, ISO {@code YYYY-MM-DD}, as the
+     * clinic entered it (the same date "Fällige Visiten" shows); null for a
+     * visit without one. The matrix's "Heute" filter compares it with today.
      */
     @Schema(name = "EventCellDto")
     public record EventCellDto(
             String eventDefinitionOid,
             String label,
             String status,
-            int openQueries
+            int openQueries,
+            String date
     ) {}
 }

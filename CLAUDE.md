@@ -14,13 +14,13 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 |-------|-----|----|
 | Java | **25** (build + runtime, per Dockerfile; 21→25 bump 2026-07) | (achieved — exceeds the original Java 21 target) |
 | Framework | **Spring Boot 4.1.1** + Java config (Spring 7.0.x + Security 7.1.x; Jackson 3 / `tools.jackson`, one shared mapper in `core.util.Json`; residual security XML). Boot 4 was merged via PR #413 (DR-037) | (achieved — Phase C, then Phase F) |
-| Web | JSP + Spring MVC + 214 servlet registrations; Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
+| Web | JSP + Spring MVC + 155 legacy servlet registrations (all but the shell closed, DR-018); Vue 3 SPA live for several workspaces (Phase E); jmesa evicted | Phase E ongoing: listing-page SPA conversion (per-table) |
 | Persistence | Hibernate 7.4.x (jakarta, Boot-managed; `save`/`saveOrUpdate` replaced by `SessionSaveSupport`, see [the call-site review](docs/development/modernization/spring-boot-4-hibernate-7-call-sites.md)) + Liquibase 4.31.1 (pinned; LAX parsing + serial shims) + PostgreSQL 14 in production, 17 in dev/test/CI | (Liquibase 4 achieved — Phase D-Libs, 2026-10) + PostgreSQL 17 (runbook: docs/operations/postgresql-17-upgrade.md) |
 | Packaging | WAR in Tomcat 11 (Jakarta EE 11, jakarta servlet 6.1; the Docker base image is a Tomcat 11 image) | executable JAR (optional follow-up — WAR retained) |
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.5.0-beta.20-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.21-muw` | continues with `-muw` suffix |
 
 ## Build & run
 
@@ -55,7 +55,7 @@ cd /build && mvn "$@"
 
 mounting the worktree read-only at `/src` and `.m2-cache` at `/root/.m2`.
 
-Unit tests run by default (`mvn test`). As of 1.5.0-beta.20-muw (2026-10-20): **core 593, web 1541**. To skip: `mvn -DskipTests=true …` for fast iteration.
+Unit tests run by default (`mvn test`). As of 1.5.0-beta.21-muw (2026-11-14): **core 599, web 1440** (web fell with the deleted legacy screens). To skip: `mvn -DskipTests=true …` for fast iteration.
 
 Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
@@ -104,7 +104,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | Path | Contents |
 |------|----------|
 | [`core/`](core/) | Domain entities, services, DAOs, Hibernate mappings, Liquibase migrations (`core/src/main/resources/migration/`) |
-| [`web/`](web/) | Spring MVC controllers, 214 servlet registrations, 413 JSPs, static assets — produces `LibreClinica-web.war` |
+| [`web/`](web/) | Spring MVC controllers, 155 legacy servlet registrations, 321 JSPs, static assets — produces `LibreClinica-web.war` |
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |
@@ -119,7 +119,7 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 
 ## Things to know
 
-- **Test coverage is uneven, not thin** — 2134 unit tests run by default (core 593, web 1541; measured 2026-10-20), plus a Testcontainers database suite in `web/src/test/**/*DatabaseIT.java` (the web integration profile runs 4613 tests). The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
+- **Test coverage is uneven, not thin** — 2039 unit tests run by default (core 599, web 1440; measured 2026-11-14), plus a Testcontainers database suite in `web/src/test/**/*DatabaseIT.java` (the web integration profile runs 4509 tests). The modern SPA-facing controllers are well covered; the heritage servlets and JSPs are largely not. Check before assuming a legacy path is tested.
 - **`@SuppressWarnings("all")` sits on ~1,244 main-source Java files, and javac ignores it; VS Code's compiler (Eclipse JDT) honours it.** "all" is not a javac lint key, so the annotation hides warnings only in the IDE, never from `javac -Xlint`. Removing it therefore cannot change javac's output, and doing so proves nothing (an earlier note here drew the opposite conclusion from exactly that test). Do not add more; remove it from a file when you work on it.
 - **A default build hides deprecations.** It prints only "Some input files use or override a deprecated API". To measure, compile with `-Xlint:deprecation` and raise `-Xmaxwarns` (javac prints at most 100 by default). Measured on Hibernate 6.4.10, 2026-09-30: core has 128 deprecation warnings. They include exactly the 49 Hibernate calls CodeQL flags (`createNativeQuery(String)` 30, `Session.createQuery(String)` 15, `save` 2, `saveOrUpdate` 2) and 61 uses of `@GenericGenerator`'s `strategy()`. So the 49 are present-day deprecations, not forward-looking; the Hibernate 6.6 move (`chore/muw-libs-openpdf-boot-bom`) retires 47 of them.
 - **The `pages` dispatcher has no `String` and no `Resource` message converter** (its list is `[ByteArray, Marshalling (JAXB), Jackson]`, `WebMvcConfig.apiMessageConverters`). A controller there must not take a text `@RequestPart`, nor return a `String` with a non-JSON content type or a `Resource`: those answer 500/415. Read multipart text fields with `@RequestParam`, write `byte[]`. Tests build MockMvc on the production list (`ProductionMvc` / `PagesDispatcherMvc`), not on MockMvc's defaults, which hide this. Do not add a global `StringHttpMessageConverter`: it changes how every `@ResponseBody String` is written.

@@ -126,8 +126,12 @@ export type EventStatus =
   | 'removed'
 
 export type EventCellSnapshot =
-  Omit<Required<components['schemas']['EventCellDto']>, 'status'>
-  & { status: EventStatus }
+  Omit<Required<components['schemas']['EventCellDto']>, 'status' | 'date'>
+  & {
+    status: EventStatus
+    /** The visit's start date, ISO `YYYY-MM-DD`; null or absent when it has none. */
+    date?: string | null
+  }
 
 export type Subject =
   Omit<Required<components['schemas']['SubjectListItemDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye'>

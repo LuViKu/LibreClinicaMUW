@@ -6,9 +6,9 @@ The record [DR-018](decision-record.md) point 6 requires. Every retirement of a 
 
 1. **Dead code** (nothing reaches it) is deleted directly; there is no bake-in.
 2. **A covered or not-needed screen** is first **closed**. Its URL goes on the closed-paths list (`libreclinica.legacy.closedPaths`). After that, anyone who is not an administrator gets 410 with a pointer to the SPA route, and an administrator can still reach the screen through `/legacy/<path>`. Every hit is logged under the `legacy-access` logger.
-3. **Six months after closing**, and only if the log shows no legitimate use, it is **deleted**.
+3. **Four weeks after closing**, and only if the log shows no legitimate use, it is **deleted**. (Six months until the [DR-018 amendment of 2026-11-13](decision-record.md#amendment-2026-11-13--one-wave-and-a-four-week-bake-in), for the test phase.)
 
-The six-month clock starts when the closure reaches **production**, not when it merges.
+The clock starts when the closure reaches **production**, not when it merges.
 
 ---
 
@@ -18,22 +18,55 @@ The six-month clock starts when the closure reaches **production**, not when it 
 |---|---|---|---|---|
 | 2026-09-30 | **36 JSPs** unreachable from any servlet, controller or page: `403.jsp`, `404.jsp`, `access_confirmation.jsp`, `admin/auditLogStudyOld.jsp`, `admin/createCRFConfirm.jsp`, `admin/createCRFVersionConfirmSQL.jsp`, `admin/showAuditEventStudyRow.jsp`, `admin/showSubjectRow.jsp`, `admin/systemStatus.jsp`, `admin/uploadCRFVersionFile.jsp`, `admin/viewScheduler.jsp`, `allSdvResult.jsp`, `extract/createDatasetApplyFilter.jsp`, `extract/createFilterConfirm.jsp`, `extract/selectDiscrepancyAttributes.jsp`, `extract/viewEmptyDatasets.jsp`, `include/breadcrumb.jsp`, `include/showEntities.jsp`, `include/showMessages.jsp`, `include/showPanel.jsp`, `include/showPresetValueText.jsp`, `include/showTableWithTabForDNotes.jsp`, `include/showTerms.jsp`, `include/showTextInput.jsp`, `include/userbox.jsp`, `login-include/footer.jsp`, `login-include/login-sidebar.jsp`, `login/contactPop.jsp`, `managestudy/listSubject.jsp`, `managestudy/showSectionWithoutComments.jsp`, `managestudy/showSubjectDiscNote.jsp`, `submit/initialDataEntry.jsp`, `submit/listEventsForSubjects.jsp`, `submit/showSection.jsp`, `viewSubjectAggregateSDV.jsp`, `viewSubjectSDV.jsp`; plus six `Page` constants that pointed only at them | No `Page` forward, no controller view name, and no include or link by path or by bare filename. A before/after crawl of 176 legacy URLs as two roles gave identical status codes, and the server log showed no missing JSP | #363 | pending (Lukas) |
 | 2026-09-30 | `/pages/user` (`UserController`, `user.jsp`), the upstream Spring MVC demo page with four hard-coded names | nothing links to it; no feature | #369 | pending (Lukas) |
+| 2026-11-13 | `BreadcrumbTrail`, `BreadcrumbBean` (the legacy breadcrumb builder) | its only call sites in `SecureController` and `CoreSecureController` are commented out, and the JSP that rendered a trail went with the 36 dead JSPs | #445 | pending (Lukas) |
 
 ## Closed (in bake-in)
 
 | Wave | Closed in code | Reached production | Paths | SPA replacement | Delete not before | Signed off |
 |---|---|---|---|---|---|---|
-| W0 — not needed | 2026-09-30 (#371) | 2026-10-08 (1.5.0-beta.16-muw) | `/Enterprise`, `/TechAdmin`, `/AdminSystem`, `/AuditDatabase`, `/ListSubject`, `/ListSubjectData`, `/ViewSubject`, `/UpdateSubject`, `/RemoveSubject`, `/RestoreSubject`, `/CreateJobImport`, `/UpdateJobImport`, `/ViewImportJob`, `/ViewLogMessage`, `/PrintoutCertificate`, `/DeleteEventCRF`, `/ConfigurePasswordRequirements` | none needed: SPA home; patient model (`/patients`) and the SPA subject page; imports and two-factor dropped (2026-09-30); `/admin/password-policy` | 2027-04-08 | pending (Lukas) |
-| W0 — heritage REST API (bucket HERITAGE_API) | 2026-09-30 (#371) | 2026-10-08 (1.5.0-beta.16-muw) | `/pages/auth` (seven OpenClinica 3.x controllers; API-key only, no caller in the app, the SPA or the deployment; reversible through `LIBRECLINICA_LEGACY_CLOSED_PATHS`) | none needed | 2027-04-08 | pending (Lukas) |
-| W1 — administration | 2026-10-02 (#396) | 2026-10-08 (1.5.0-beta.16-muw) | 43 paths, per screen in the [W1 parity record](#w1-parity-record): `/ListUserAccounts`, `/CreateUserAccount`, `/ViewUserAccount`, `/EditUserAccount`, `/SetUserRole`, `/EditStudyUserRole`, `/DeleteStudyUserRole`, `/DeleteUser`, `/UnLockUser`, `/pages/admin/listLdapUsers`, `/pages/admin/selectLdapUser`, `/Configure`, `/SendTestEmail`, `/AuditUserActivity`, `/AuditUserActivityData`, `/AuditLogUser`, `/ListStudy`, `/RemoveStudy`, `/RestoreStudy`, `/DownloadStudyMetadata`, `/ViewAllJobs`, `/ViewJob`, `/ViewSingleJob`, `/PauseJob`, `/CreateJobExport`, `/UpdateJobExport`, `/pages/listCurrentScheduledJobs`, `/pages/listCurrentScheduledJobsData`, `/pages/cancelScheduledJob`, `/DeleteCRFVersion`, `/ListCRF`, `/CreateCRF`, `/CreateCRFVersion`, `/InitCreateCRFVersion`, `/RemoveCRF`, `/RestoreCRF`, `/InitUpdateCRF`, `/UpdateCRF`, `/RemoveCRFVersion`, `/RestoreCRFVersion`, `/DownloadVersionSpreadSheet`, `/BatchCRFMigration`, `/AuditLogStudy`. Held open: `/ViewCRF`, `/ViewStudy` | `/manage-users`, `/admin/password-policy`, `/admin/system-status`, `/admin/login-history`, `/system/audit-log`, `/admin/studies`, SPA home (metadata card), `/admin/jobs`, `/export`, `/crf-library`; LDAP pickers: none needed | 2027-04-08 | pending (Lukas) |
+| W2 — everything but the shell (one wave, folding the planned W2–W4) | 2026-11-13 | next release | 164 paths: every catalogue key outside the shell and the public forms — participants and visits, data entry and double data entry, notes, SDV, print, extract and export, the rest of the study build (event definitions, sites, groups, rules, `/ViewCRF`, `/ViewStudy`), study-user roles and the audit pages; see the [W2 record](#w2-record) | per screen where the catalogue names one; otherwise none (log evidence instead of a parity record) | four weeks after it reaches production | pending (Lukas) |
 
 ## Deleted after bake-in
 
 | Wave | Deleted | Paths | Log review (hits by non-admins during bake-in) | PR | Signed off |
 |---|---|---|---|---|---|
-| — | | | | | |
+| W0 — not needed (the screens) | 2026-11-13 | the 17 paths closed in #371: `/Enterprise`, `/TechAdmin`, `/AdminSystem`, `/AuditDatabase`, `/ListSubject`, `/ListSubjectData`, `/ViewSubject`, `/UpdateSubject`, `/RemoveSubject`, `/RestoreSubject`, `/CreateJobImport`, `/UpdateJobImport`, `/ViewImportJob`, `/ViewLogMessage`, `/PrintoutCertificate`, `/DeleteEventCRF`, `/ConfigurePasswordRequirements` | none: the `legacy-hit` log from 2026-10-08 (the start of the bake-in) to 2026-11-13 holds 16 lines, all by `root` or before a login, none on a W0 or W1 path | #445 | pending (Lukas) |
+| W1 — administration | 2026-11-13 | the 43 paths closed in #396, listed in the [W1 parity record](#w1-parity-record) | none (same log review) | #445 | pending (Lukas) |
+| W0 — heritage REST API | 2026-11-13 | `/pages/auth`: the seven OpenClinica 3.x controllers (studies, user accounts, clinical data, notes, system information, the item-data table, and the two batch-migration methods under `/auth`), the API-key filter that authenticated them, and their public and internet-facing path entries | none: no `legacy-hit` line under `/pages/auth` in the whole bake-in | #447 | pending (Lukas) |
 
 ---
+
+## W0 and W1 deletion record
+
+Deleted 2026-11-13, four weeks after both waves reached production (1.5.0-beta.16-muw, 2026-10-08), under the [DR-018 amendment](decision-record.md#amendment-2026-11-13--one-wave-and-a-four-week-bake-in).
+
+**What went.** The 55 servlets behind the 55 servlet paths, with their `LegacyServletRegistry` entries (210 registrations → 155); the two Spring MVC controllers behind the five `/pages` routes (`ScheduledJobController`, `LdapUserController`); 60 JSPs, the ones only these screens rendered or included; 57 `Page` constants; the 60 catalogue keys and their `closedPaths` entries (234 keys → 174; the startup line now reads 165 of 174 closed); the CRF template spreadsheet that only `/DownloadVersionSpreadSheet` served, and its copy at startup; three row beans (`AuditEventRow`, `AuditEventStudyRow`, `TriggerRow`) whose last users were the deleted pages; and the tests of the deleted code. `LockCRFVersionServlet` (W2) now holds the default-version helper it used to call on `RemoveCRFVersionServlet`, with that helper's tests.
+
+**What a request gets now.** A deleted path is no longer a catalogue key, so the telemetry filter neither logs nor closes it, and no servlet answers it: the container answers 404, for administrators too, also under `/legacy/`.
+
+**The heritage REST API** (#447) went in a PR of its own because it reaches into the security configuration: the six controllers under `/pages/auth`, the two `/auth` methods of `BatchCRFMigrationController` (the SPA's `/api/v1/forms/migrate` methods stay), `ApiSecurityFilter` with its bean and filter registrations, the seven DTO classes only the study API used, the public-path entries that let API-key calls past the login, and the internet-facing deny entry. A request below `/pages/auth` now needs a login like any other path and then answers 404. The `HERITAGE_API` log bucket stays: the telemetry filter still files uncatalogued `/pages` paths closed by the internet-facing mode under it. The SPA's user creation still stores an API key on each new account; nothing reads it any more.
+
+**Left in place.**
+- The study metadata API test no longer compares its document with the deleted servlet's; the comparison passed at every run until the servlet went.
+- The shell's task menu (`include/navBar.jsp`, served on the open `/MainMenu`) linked the deleted administration screens and the CRF list. Those links now point at the SPA routes the parity record names (`/app/admin/studies`, `/app/manage-users`, `/app/crf-library`, `/app/admin/jobs`); the link to the global subject registry is gone (W0: not needed).
+- Closed W2 servlets that ended by forwarding to a deleted screen (`/ListCRF`, `/ListStudy`, `/CreateCRFVersion`, `/UpdateSubject`; 26 call sites through four `Page` constants) now end on `/MainMenu`. The four constants point there until the W2 deletion; a before/after crawl showed those forwards failing mid-response otherwise. Links on closed W2 pages to deleted screens answer 404 to the administrator using them under `/legacy/`. Both go with the W2 deletion.
+- `ImportSpringJob` still writes a `/ViewLogMessage` link into its e-mail, but scheduled imports were dropped in W0 and can no longer be created.
+
+**Verified on a running build** (compose, fresh database, `manual_dm` and `manual_admin`), against lc-develop at the branch point: 233 catalogue keys requested directly by both roles and under `/legacy/` by the administrator. The only status changes are the 60 deleted paths (410 or 307 → 404; under `/legacy/` 200 → 404) and `/legacy/pages/studymodule` (200 → 302), which depends on the order of the crawl, not on this change: a fresh administrator session gets 200 on both builds. The server logged 42 request errors against 62 on the base, none on a request that did not also fail there. No 5xx, no JSP compilation error.
+
+## W2 record
+
+Closed 2026-11-13 by the [DR-018 amendment](decision-record.md#amendment-2026-11-13--one-wave-and-a-four-week-bake-in): everything but the shell, in one wave, instead of the per-area waves W2 (export), W3 (study build) and W4 (data entry and review).
+
+**Evidence instead of a per-screen parity record.** The `legacy-hit` log on the production VM, read 2026-11-13, holds 16 requests since telemetry began on 2026-10-08, on five screens, all by `root` or before a login: `/ReassignStudySubject` and `/FindSubjectsData` (2026-10-14, the HAE-005 reassign investigation), `/UpdateProfile` and `/ResetPassword` (2026-10-20, the password workaround before 1.5.0-beta.20-muw), and `/MainMenu`. Tomcat's access logs since 2026-09-28 add only `/Logout` (2026-09-28/29). No request for a closed screen (`action=closed`) at all. The study team works only in the SPA, and no device, uploader or sidecar calls a legacy path.
+
+**Still open (the shell wave, W5):** `/MainMenu`, `/ChangeStudy`, `/Logout`, `/UpdateProfile`, `/ResetPassword`, `/MatchPassword`, `/RequestStudy`, and the public forms `/RequestAccount`, `/Contact`. They close once the four couplings in the plan (R1.3) are removed: logins, SSO and an expired session land on `/MainMenu`, and e-mail links use `sysURL`.
+
+**What an administrator keeps.** Every closed screen stays reachable to a system administrator under `/legacy/<path>`. That covers the one function the SPA lacks, moving a participant to another site (`/ReassignStudySubject`): an edge case at a single site, worth an SPA feature for the multi-site setup (DR-040). Note that the legacy page does not offer the parent study as a target when the participant sits at a site.
+
+**Also closed by this wave:** the legacy signature paths (`/SignStudySubject`, and signing through `/UpdateStudyEvent`), which admitted the director, the coordinator and any system administrator; the SPA admits the investigator only.
+
+**Known leftovers:** a legacy scheduled extract job (created on the W1-closed `/CreateJobExport`) still e-mails a `/AccessFile` link, which now answers 410 to anyone but an administrator; no such download appears in the logs. `/SystemStatus` no longer answers an unauthenticated probe; nothing in the deployment or CI calls it (the health check is `/actuator/health`).
 
 ## W1 parity record
 

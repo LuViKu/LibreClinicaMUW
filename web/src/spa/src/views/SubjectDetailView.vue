@@ -554,8 +554,7 @@ function onMenuCancel(ev: { eventId: string; label: string }): void {
 }
 
 /**
- * 2026-06-21 round 7 — per-visit sign action. Investigators (and any
- * other writer role per EventEditAuthorization.roleMayEdit) can attest
+ * 2026-06-21 round 7 — per-visit sign action. The investigator can attest
  * a single completed visit without committing the whole subject. The
  * inline dialog collects the password + attestation; the result feeds
  * back into the modal as an inline error on 401 / 412 (preflight).
@@ -565,15 +564,14 @@ const signDialogSubmitting = ref(false)
 const signDialogError = ref<string | null>(null)
 
 function canSignEv(status: EventStatus): boolean {
-  // Mirror EventEditAuthorization.roleMayEdit on the client +
-  // the backend's "must be at least data-entry-started" check.
-  // Show the menu entry only for visits actually attestable.
-  const role = auth.user?.role ?? null
-  if (!role) return false
-  if (!(role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator')) {
-    return false
-  }
-  return status === 'in-progress' || status === 'complete'
+  // A visit signature follows the subject's signature rule on the server
+  // (the investigator only, since 2026-11), which /me reports as
+  // permissions.signSubject; plus the backend's "must be at least
+  // data-entry-started" check, so the entry shows only for attestable visits.
+  if (!(status === 'in-progress' || status === 'complete')) return false
+  const permitted = auth.permits('signSubject')
+  if (permitted !== null) return permitted
+  return auth.user?.role === 'Investigator'
 }
 
 function onMenuSign(ev: { eventId: string; label: string }): void {
