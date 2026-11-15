@@ -14,7 +14,8 @@ For older releases see [release-notes-1.5.0-beta.20-muw.md](release-notes-1.5.0-
 
 **Deployment-breaking:** nothing has to be set.
 - **No migrations:** the changelog count stays at 1206.
-- **Nothing to configure, no change to the host setup or nginx.** Retinal-inference and dicom-scp get the same tag as usual. Retinal-inference is unchanged; dicom-scp moves to Pillow 13.0.0 (#450).
+- **Nothing to configure, no change to the host setup or nginx.** Retinal-inference and dicom-scp get the same tag as usual. Retinal-inference changes how it runs RetInSight fluid on the GPU cluster (#441); dicom-scp moves to Pillow 13.0.0 (#450).
+- **The GPU cluster (on3, cn6) is updated too:** move its retinal-inference checkout to this tag and restart the sidecar on both nodes ([below](#the-gpu-cluster)).
 
 Two things change for users the day it is installed:
 1. **Signing.** A Data Manager (Study Director) who signed casebooks or visits until now, or a Koordinator who signed visits, can no longer sign. Whoever signs must hold the **Investigator** role (Prüfarzt/Prüfärztin), and only that role on the study (see [Signing goes by the active role](#signing-goes-by-the-active-role)).
@@ -88,10 +89,21 @@ The DR-018 plan was to close the old screens area by area over several months, e
 - **Deleted (#447): the OpenClinica 3.x REST API** under `/pages/auth`, with the API-key filter that authenticated it. The log showed no call to it. A request there now needs a sign-in and then answers 404.
 - **The legacy-access log** lists 164 of 173 screens as closed at startup (it was 225 of 234).
 
+### RetInSight fluid on the GPU cluster (#441)
+
+Found when a colleague's fluid job hung on cn6 right after `loading model - unetmitb2_trainval`. Three problems in how the sidecar starts the vendor container:
+
+- **Hang under SLURM.** The vendor default (`--num_threads 0`, one thread per core) hangs or crashes onnxruntime inside a SLURM job. Fluid now always runs with `--num_threads 1`, as the vendor's help says for SLURM.
+- **The GPU never reached the container.** Every `.sif` task ran on GPU 0, in direct and SLURM mode alike, often on a card busy with another user's job. The container drops `CUDA_VISIBLE_DEVICES`, and Singularity 3.8 (the cluster's version) forwards only `SINGULARITYENV_*`. Direct mode now sets both prefixes. SLURM mode re-exports the GPU SLURM allocated, from inside the job.
+- **A few PED voxels were lost.** `--optima_spacing` was always passed, but it reverses `PixelSpacing` for `[lateral, axial]` files, and our own B-scan DICOM is `[axial, lateral]`. Fluid sizes its narrow-PED filter from the lateral value, so some real PEDs wider than 300 µm were removed. The flag now follows the spacing order of the file: our files run without it, the vendor's OPTIMA reference files keep it. On the vendor test scan the old behaviour lost 786 of 1,166,488 PED voxels; IRF and SRF were identical. Existing fluid results are not recomputed.
+
+Verified end to end through `srun` on the cluster with the production settings: no hang (86–102 s), identical masks for the vendor file and the same scan in our order, and `CUDA_VISIBLE_DEVICES` set inside the container.
+
 ---
 
 ## Smaller items
 
+- **The compose smoke test runs on Ubuntu 24.04 (#451).** GitHub's `ubuntu-latest` moved to 26.04, where the SPA's Playwright cannot install Chromium, so that CI job failed on every run. It is pinned until Playwright is upgraded.
 - **Security updates (#450).** Guava 33.4.8 → 33.7.2 in the app (one high-severity advisory). Pillow 12.3.0 → 13.0.0 in the dicom-scp sidecar (five critical, 24 high: heap overflows in image decoders). The security scan's Trivy check, red since early November, passes again. Nothing changes in what the app or the sidecar does.
 - **SPA dependencies (#440).** The open Dependabot alerts on the SPA's toolchain are fixed: vue-i18n 11, Vite 6, Vitest 4, and patched versions of shell-quote, launch-editor and markdown-it. The SPA builds on Node 22.23.4. Nothing changes in what the app does.
 - **Unused code went with wave 1:** the old breadcrumb builder, which nothing called, and the CRF template spreadsheet behind the deleted template download.
@@ -122,7 +134,17 @@ Do this outside clinic hours. The restart takes the app down for a few minutes, 
    sudo systemctl restart libreclinica
    ```
 
-5. **Smoke test** (runbook §4) and the checks below. **If anything is wrong, roll back** by running the same two commands with `1.5.0-beta.20-muw`. No data changes need undoing.
+5. <a id="the-gpu-cluster"></a>**The GPU cluster.** In the sidecar's shared clone on on3, fetch the tag from GitHub (the clone's origin, the internal mirror, carries no release tags), check it out and reinstall the package as for beta.17. Then restart the sidecar on on3 and on cn6:
+   ```sh
+   # in the shared clone, on on3 (git 1.8 there: no `git -C`)
+   git fetch https://github.com/LuViKu/LibreClinicaMUW.git refs/tags/1.5.0-beta.21-muw:refs/tags/1.5.0-beta.21-muw
+   git checkout 1.5.0-beta.21-muw
+   # then on each node, on3 and cn6:
+   set -a; . ~/.config/retinal-inference/env; set +a; start-cluster-server.sh
+   ```
+   Both nodes share the home directory, so one checkout serves both; each node's server needs its own restart. `/health` should list the seven tasks with their devices.
+
+6. **Smoke test** (runbook §4) and the checks below. **If anything is wrong, roll back** by running the same two commands with `1.5.0-beta.20-muw`. No data changes need undoing.
    - A rollback reopens the screens closed here.
    - It also brings back the wipe of study-level Administrator roles (#446).
 
@@ -151,6 +173,7 @@ Do this outside clinic hours. The restart takes the app down for a few minutes, 
   - sees no sign button.
 - **An Investigator** signs a test visit and a test casebook.
 - **Heute** lists only participants with an open visit dated today.
+- **The GPU cluster.** A fluid job on a test volume finishes under SLURM, on the card SLURM assigned, not on GPU 0.
 - **The administrator** picks a study and still holds the study-level role it had afterwards (*Nutzer verwalten* → the account's roles).
 
 ---
@@ -163,10 +186,18 @@ Do this outside clinic hours. The restart takes the app down for a few minutes, 
   - The compose smoke test: `api.ts` matches the live spec; E2E smoke 28, accessibility 17, DICOM 4.
   - The SPA: 2,619 vitest tests, 4 skipped.
   - The three Python sidecar suites: muw-e2e-converter 83, dicom-scp 107, retinal-inference 338.
+
+  Three PRs merged after that run, each with its own CI:
+  - **#450** (Guava, Pillow) passed the build and the security scan;
+  - **#441** (cluster fluid) passed every job but the compose smoke test, which failed on the runner image (see #451); its sidecar suite passed, 344 tests with the 6 new ones;
+  - **#451** passed the compose smoke test on `ubuntu-24.04`.
+
+  The run on the release head is linked in the release PR (#449).
 - **Wave 2 is deleted four weeks after this release reaches production,** if the legacy-access log still shows no use by anyone but an administrator. Read it monthly; a hit by anyone else reopens that screen.
 - **The shell wave (W5)** needs four things changed first: the sign-in and single-sign-on landing on `/MainMenu`, the expired-session redirect, the `sysURL` links in e-mails, and the old logout's target.
 - **Moving a participant to another site** exists only on the old screen, for administrators (`/legacy/ReassignStudySubject`). The old screen does not offer the parent study when the participant sits at a site. A screen in the new interface is planned for the multi-site setup (DR-040).
 - **A legacy scheduled extract job** still e-mails a `/AccessFile` link, which now answers 410 to anyone but an administrator. No such download appears in the logs.
 - **New accounts still get an API key,** which nothing reads any more since the REST API is gone.
+- **Playwright on Ubuntu 26.04.** The compose smoke test is pinned to `ubuntu-24.04` (#451). Moving back needs a Playwright that supports 26.04.
 - **Histoire,** the SPA's component catalogue (a development tool), does not build on Vite 6 yet. The app is not affected.
 - **Carried over from beta.20 and still open:** see the [beta.20 notes](release-notes-1.5.0-beta.20-muw.md#still-open-at-this-release).
