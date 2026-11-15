@@ -316,7 +316,7 @@
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
-			<version>33.4.8-jre</version>
+			<version>33.7.2-jre</version>
 		</dependency>
 		<!-- Phase E.5 #5: mockito-all (legacy 1.x umbrella artifact) replaced
 		     with mockito-core; version managed by spring-boot-dependencies BOM
