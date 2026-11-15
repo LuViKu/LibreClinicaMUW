@@ -23,8 +23,15 @@ Cluster caveats encoded here:
   * ``apptainer_use_slurm`` wraps every GPU call (the .sif tasks and the
     host-native bm venv) in a blocking ``srun`` -- one SLURM job per task, with a
     typed ``--gres`` so it only lands on Turing nodes. The dispatcher pins no GPU
-    in that mode. The host-native IOWA step (ga / layers) is CPU-only and still
-    runs on the dispatcher host. See docs/cluster-deployment.md section 4.
+    in that mode; the GPU SLURM allocated is forwarded into the container
+    (``_FORWARD_SLURM_GPU``). The host-native IOWA step (ga / layers) is CPU-only
+    and still runs on the dispatcher host. See docs/cluster-deployment.md
+    section 4.
+  * ``-e`` keeps the host environment out of every container, including
+    ``CUDA_VISIBLE_DEVICES``. Only ``SINGULARITYENV_*`` (Singularity 3.x, what
+    the cluster runs) and ``APPTAINERENV_*`` (Apptainer) get through, so the
+    GPU choice is passed under both prefixes; otherwise the model silently runs
+    on GPU 0, which other users' jobs often occupy.
 
 Every command + parse below mirrors the vendor wrapper invocations and is
 flagged "confirm on the cluster" — not runnable without the .sif images + GPUs.
@@ -55,6 +62,15 @@ _TIMEOUT_S = 3600
 # cancel its SLURM job before it is SIGKILLed.
 _TERM_GRACE_S = 15
 _POLL_S = 1.0
+# Runs inside the SLURM job, between srun and the container: srun sets
+# CUDA_VISIBLE_DEVICES to the GPU it allocated only there, so the value can't be
+# passed from the dispatcher. Left alone when SLURM set none (an empty value
+# would hide every GPU).
+_FORWARD_SLURM_GPU = (
+    'if [ -n "${CUDA_VISIBLE_DEVICES+x}" ]; then '
+    'export SINGULARITYENV_CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES" '
+    'APPTAINERENV_CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES"; fi; exec "$@"'
+)
 
 def _terminate(proc: subprocess.Popen) -> None:
     """SIGTERM first, SIGKILL after a grace period.
@@ -150,6 +166,24 @@ def _spacing_mm(dcm_file: Path) -> tuple[float, float, float]:
     return axial, lateral, slice_mm
 
 
+def _pixel_spacing_order(dcm_file: Path) -> str:
+    """How the bscan.dcm stores PixelSpacing, resolved as in :func:`_spacing_mm`.
+
+    ``standard`` ([axial, lateral], what our own writer produces), ``swapped``
+    ([lateral, axial], e.g. the vendor's OPTIMA reference DICOMs) or
+    ``standard-assumed`` (non-Heidelberg; DICOM order taken).
+    """
+    import pydicom
+
+    from retinal_inference.dicom_geometry import SpacingUnavailable, pixel_spacing_mm
+
+    ds = pydicom.dcmread(str(dcm_file), stop_before_pixels=True)
+    try:
+        return pixel_spacing_mm(ds, trust_own_writer=True)[3]
+    except SpacingUnavailable as e:
+        raise ValueError(f"{Path(dcm_file).name}: cannot read PixelSpacing: {e}") from e
+
+
 class ApptainerAdapter(RetinalInferenceAdapter):
     """Dispatch each task to its model ``.sif`` via apptainer on the GPU cluster."""
 
@@ -207,8 +241,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         dev = s.apptainer_pr_gpu_device if task == "pr" else s.apptainer_gpu_device
         if dev is None:
             return {}
-        # Apptainer forwards APPTAINERENV_* into the container.
-        return {"CUDA_VISIBLE_DEVICES": dev, "APPTAINERENV_CUDA_VISIBLE_DEVICES": dev}
+        # -e drops CUDA_VISIBLE_DEVICES itself; Singularity 3.x forwards only
+        # SINGULARITYENV_*, Apptainer APPTAINERENV_*.
+        return {"CUDA_VISIBLE_DEVICES": dev, "SINGULARITYENV_CUDA_VISIBLE_DEVICES": dev,
+                "APPTAINERENV_CUDA_VISIBLE_DEVICES": dev}
 
     @staticmethod
     def _srun(task: str, gpu: bool = True) -> list[str]:
@@ -265,7 +301,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         if s.apptainer_use_slurm:
             # One blocking SLURM job per scan (cluster caps walltime at 2d, so no
             # persistent GPU service). srun allocates a GPU and runs to completion.
-            cmd = self._srun(task) + cmd
+            cmd = self._srun(task) + ["/bin/sh", "-c", _FORWARD_SLURM_GPU, "ri-gpu"] + cmd
         return cmd
 
     # --- per-task handlers (return the generic result fields) ----------------
@@ -273,13 +309,23 @@ class ApptainerAdapter(RetinalInferenceAdapter):
     def _fluid(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         out = work / "out"
         out.mkdir(parents=True, exist_ok=True)
+        # fluidseg reads PixelSpacing in DICOM order ([axial, lateral]) unless
+        # --optima_spacing, which reverses it for [lateral, axial] files. The
+        # lateral value sizes its narrow-PED (drusen) filter, so the flag has to
+        # match the file: our own bscan.dcm is standard, the vendor's reference
+        # DICOMs are swapped.
+        spacing = (["--optima_spacing"]
+                   if _pixel_spacing_order(dcm_dir / "bscan.dcm") == "swapped" else [])
         # v2.5.0 .sif: run_inference.py reads /workdir/input-data, writes fluidseg.npz.
+        # --num_threads 1: with the default (0, a thread per core) onnxruntime
+        # hangs or segfaults creating its session inside a SLURM job (reproduced
+        # on cn6, 2026-11-12); the vendor's help says to use 1 under SLURM.
         cmd = self._apptainer(
             "run",
             _config.settings.fluid_sif or "",
             [f"{dcm_dir}:/workdir/input-data", f"{out}:/workdir/output"],
             ["/workdir/AWS/run_inference.py", "--input_folder", "/workdir/input-data",
-             "--optima_spacing", "--run_local"],
+             *spacing, "--run_local", "--num_threads", "1"],
             task="fluid",
         )
         _exec(cmd, self._gpu_env("fluid"))
