@@ -76,7 +76,7 @@ class LegacyRetirementEndToEndTest {
     private static final String CONTEXT = "/LibreClinica";
 
     /** The configured closed list: one servlet screen and one Spring MVC screen. */
-    private static final String CLOSED_PATHS = "/ListUserAccounts, /pages/studymodule";
+    private static final String CLOSED_PATHS = "/ListStudyUser, /pages/studymodule";
 
     private static Tomcat tomcat;
     private static String baseUrl;
@@ -236,10 +236,10 @@ class LegacyRetirementEndToEndTest {
     void closedScreenIsGoneForANonAdministrator() throws Exception {
         HttpClient dataManager = signedIn("user");
 
-        HttpResponse<String> page = get(dataManager, CONTEXT + "/ListUserAccounts", HTML);
-        HttpResponse<String> json = get(dataManager, CONTEXT + "/ListUserAccounts", "application/json");
+        HttpResponse<String> page = get(dataManager, CONTEXT + "/ListStudyUser", HTML);
+        HttpResponse<String> json = get(dataManager, CONTEXT + "/ListStudyUser", "application/json");
         HttpResponse<String> post = postForm(dataManager, CONTEXT + "/pages/studymodule/S_DEFAULTS1/deactivate", "x=1");
-        HttpResponse<String> anonymous = get(browser(), CONTEXT + "/ListUserAccounts", HTML);
+        HttpResponse<String> anonymous = get(browser(), CONTEXT + "/ListStudyUser", HTML);
 
         assertEquals(410, page.statusCode());
         assertTrue(page.body().contains("href=\"/LibreClinica/app/manage-users\""), page.body());
@@ -257,15 +257,15 @@ class LegacyRetirementEndToEndTest {
     void administratorIsSentToTheAliasAndServedThere() throws Exception {
         HttpClient admin = signedIn("admin");
 
-        HttpResponse<String> redirect = get(admin, CONTEXT + "/ListUserAccounts?module=admin", HTML);
+        HttpResponse<String> redirect = get(admin, CONTEXT + "/ListStudyUser?module=admin", HTML);
         assertEquals(307, redirect.statusCode());
         String location = redirect.headers().firstValue("Location").orElseThrow();
-        assertEquals("/LibreClinica/legacy/ListUserAccounts?module=admin", location);
+        assertEquals("/LibreClinica/legacy/ListStudyUser?module=admin", location);
 
         HttpResponse<String> served = get(admin, location, HTML);
         assertEquals(200, served.statusCode());
         assertTrue(served.body().contains(
-                "servletPath=/ListUserAccounts pathInfo=null dispatcher=FORWARD method=GET query=module=admin"),
+                "servletPath=/ListStudyUser pathInfo=null dispatcher=FORWARD method=GET query=module=admin"),
                 served.body());
 
         // A form posted to a closed screen: the 307 is repeated as a POST with its body.
@@ -281,9 +281,9 @@ class LegacyRetirementEndToEndTest {
         assertTrue(posted.body().endsWith("body=reason=done&confirm=yes"), posted.body());
 
         assertEquals(List.of(
-                "legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
+                "legacy-hit path=/ListStudyUser bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
                         + " user=root alias=false action=redirect",
-                "legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
+                "legacy-hit path=/ListStudyUser bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
                         + " user=root alias=true action=forward",
                 "legacy-hit path=/pages/studymodule bucket=STUDY_ADMIN_AND_BUILD spaRoute=/app/build-study"
                         + " method=POST user=root alias=false action=redirect",
@@ -295,14 +295,14 @@ class LegacyRetirementEndToEndTest {
     void relativeLinksFromAnAliasedPageStayServedUnderTheAlias() throws Exception {
         HttpClient admin = signedIn("admin");
 
-        // From /legacy/ListUserAccounts the page's links resolve under /legacy/:
+        // From /legacy/ListStudyUser the page's links resolve under /legacy/:
         // an open screen, an image, and nothing outside the legacy surface.
-        HttpResponse<String> openScreen = get(admin, CONTEXT + "/legacy/ViewUserAccount?userId=1", HTML);
+        HttpResponse<String> openScreen = get(admin, CONTEXT + "/legacy/SetStudyUserRole?userId=1", HTML);
         HttpResponse<String> image = get(admin, CONTEXT + "/legacy/images/probe.gif", "image/*");
         HttpResponse<String> webInf = get(admin, CONTEXT + "/legacy/WEB-INF/secret.txt", HTML);
 
         assertEquals(200, openScreen.statusCode());
-        assertTrue(openScreen.body().contains("servletPath=/ViewUserAccount pathInfo=null dispatcher=FORWARD"),
+        assertTrue(openScreen.body().contains("servletPath=/SetStudyUserRole pathInfo=null dispatcher=FORWARD"),
                 openScreen.body());
         assertEquals(200, image.statusCode());
         assertEquals("GIF-PROBE", image.body());
@@ -314,10 +314,10 @@ class LegacyRetirementEndToEndTest {
     void nonAdministratorIsRefusedOnTheAlias() throws Exception {
         HttpClient dataManager = signedIn("user");
 
-        HttpResponse<String> closed = get(dataManager, CONTEXT + "/legacy/ListUserAccounts", HTML);
-        HttpResponse<String> open = get(dataManager, CONTEXT + "/legacy/ViewUserAccount", HTML);
+        HttpResponse<String> closed = get(dataManager, CONTEXT + "/legacy/ListStudyUser", HTML);
+        HttpResponse<String> open = get(dataManager, CONTEXT + "/legacy/SetStudyUserRole", HTML);
         HttpResponse<String> image = get(dataManager, CONTEXT + "/legacy/images/probe.gif", "image/*");
-        HttpResponse<String> anonymous = get(browser(), CONTEXT + "/legacy/ListUserAccounts", HTML);
+        HttpResponse<String> anonymous = get(browser(), CONTEXT + "/legacy/ListStudyUser", HTML);
 
         for (HttpResponse<String> resp : List.of(closed, open, image, anonymous)) {
             assertEquals(404, resp.statusCode(), resp.uri().toString());
@@ -325,11 +325,11 @@ class LegacyRetirementEndToEndTest {
             assertFalse(resp.body().contains("GIF-PROBE"), resp.uri().toString());
         }
         assertEquals(List.of(
-                "legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
+                "legacy-hit path=/ListStudyUser bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
                         + " user=manual_dm alias=true action=refuse",
-                "legacy-hit path=/ViewUserAccount bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
+                "legacy-hit path=/SetStudyUserRole bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
                         + " user=manual_dm alias=true action=refuse",
-                "legacy-hit path=/ListUserAccounts bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
+                "legacy-hit path=/ListStudyUser bucket=USER_ACCOUNTS spaRoute=/app/manage-users method=GET"
                         + " user=anonymous alias=true action=refuse"), hits());
     }
 

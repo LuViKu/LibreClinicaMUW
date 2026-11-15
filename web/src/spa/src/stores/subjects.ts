@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import { localIsoToday } from '@/lib/dateFormat'
 import type {
   EventCellSnapshot,
   EventStatus,
@@ -50,7 +51,11 @@ export type SubjectStatusFilter =
  * links into the matrix with the same chip pre-selected, so the number on the
  * card is exactly the number of rows the operator lands on.
  */
-export function matchesStatusFilter(subject: Subject, filter: SubjectStatusFilter): boolean {
+export function matchesStatusFilter(
+  subject: Subject,
+  filter: SubjectStatusFilter,
+  today: string = localIsoToday(),
+): boolean {
   switch (filter) {
     case 'open-events':
       return subject.events.some((e) => e.status === 'scheduled' || e.status === 'in-progress' || e.status === 'not-scheduled')
@@ -64,13 +69,11 @@ export function matchesStatusFilter(subject: Subject, filter: SubjectStatusFilte
     case 'signed':
       return subject.signed
     case 'today':
-      // The matrix list endpoint's EventCellDto carries status + label +
-      // open-query count but no per-event date (only the detail endpoint
-      // surfaces dateStart). Until the list endpoint grows a
-      // `dateScheduled` column, "today" is interpreted as "actively on the
-      // operator's plate": any event in 'scheduled' or 'in-progress' state.
-      // `not-scheduled` is excluded — those have no date and can't be "today".
-      return subject.events.some((e) => e.status === 'scheduled' || e.status === 'in-progress')
+      // An open visit (scheduled or in progress) dated today. Open visits
+      // from earlier days are overdue: "Fällige Visiten" lists those, and
+      // "Offene Visiten" shows every open visit whatever its date.
+      return subject.events.some((e) =>
+        (e.status === 'scheduled' || e.status === 'in-progress') && e.date === today)
     case 'ready-to-sign':
       // Mirrors all-events-complete but additionally requires the subject
       // not be signed yet — the Investigator sign-queue use case.
@@ -195,6 +198,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
       label: e.label,
       status: e.status as EventStatus,
       openQueries: e.openQueries,
+      date: e.dateStart,
     }))
     rows.value[idx] = {
       id: detail.id,

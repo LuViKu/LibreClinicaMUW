@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 /**
@@ -111,6 +111,12 @@ describe('useRulesStore.dryRunRuleSet', () => {
 describe('useRulesStore.exportRulesXml', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+  })
+
+  // Since vitest 3, spying on an already-spied method returns the same spy,
+  // so its calls would carry over from the previous test.
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('returns false when the id list is empty', () => {

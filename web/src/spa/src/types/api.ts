@@ -6280,6 +6280,7 @@ export interface components {
             status?: string;
             /** Format: int32 */
             openQueries?: number;
+            date?: string;
         };
         SubjectListItemDto: {
             id?: string;

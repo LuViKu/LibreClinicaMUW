@@ -57,7 +57,6 @@ import org.slf4j.LoggerFactory;
  * mutations, parameter-name parsing, CRF-name lookups, and an
  * allow-listed forward back to a table view).
  */
-@SuppressWarnings("all")
 public class SDVUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(SDVUtil.class);
@@ -76,9 +75,6 @@ public class SDVUtil {
     /** View a handler returns to after an SDV change on the per-subject table. */
     public static final String VIEW_SDV_BY_SUBJECT = "viewSubjectAggregate";
 
-    /** View the cancel-job handler returns to. */
-    public static final String VIEW_SCHEDULED_JOBS = "listCurrentScheduledJobs";
-
     /**
      * The pages a handler may return the operator to, keyed by the value the
      * forms send in their {@code redirection} field. The forward target is
@@ -88,8 +84,7 @@ public class SDVUtil {
             VIEW_SDV_BY_EVENT_CRF, "/pages/viewAllSubjectSDVtmp",
             "viewAllSubjectSDV", "/pages/viewAllSubjectSDV",
             "viewAllSubjectSDVform", "/pages/viewAllSubjectSDVform",
-            VIEW_SDV_BY_SUBJECT, "/pages/viewSubjectAggregate",
-            VIEW_SCHEDULED_JOBS, "/pages/listCurrentScheduledJobs");
+            VIEW_SDV_BY_SUBJECT, "/pages/viewSubjectAggregate");
 
     private DataSource dataSource;
 

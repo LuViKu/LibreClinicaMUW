@@ -68,9 +68,6 @@ class SecurityConfigInternetFacingTest {
             "/pages/v3/api-docs.yaml",
             "/pages/swagger-ui.html",
             "/pages/swagger-ui/index.html",
-            "/pages/auth/api/v1/system/systemstatus",
-            "/pages/auth/api/v1/studies/",
-            "/pages/auth/api/v1/discrepancynote/dnote",
             "/SystemStatus",
             "/pages/sso/reauth");
 

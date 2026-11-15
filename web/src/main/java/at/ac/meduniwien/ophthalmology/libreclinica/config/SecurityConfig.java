@@ -100,7 +100,6 @@ public class SecurityConfig {
             "/Contact",
             "/includes/**",
             "/images/**",
-            "/pages/auth/api/v1/studies/**",
             // Phase E.8 Slice L2 (2026-06-20): SPA replacement
             // for the legacy /pages/Contact JSP. Unauthenticated
             // by design — same audience as the legacy form.
@@ -150,10 +149,6 @@ public class SecurityConfig {
             // (404) with core.uploaderHealth.heartbeat.enabled=false.
             // See UploaderHeartbeatApiController.
             "/pages/api/v1/device/uploader/**",
-            "/pages/auth/api/v1/discrepancynote/**",
-            "/pages/auth/api/v1/forms/migrate/**",
-            "/pages/auth/api/**",
-            "/pages/auth/api/v1/system/**",
             // Phase C.15 (2026-05-30): unauthenticated probes for
             // k8s/load-balancer liveness + info. /actuator/health/*
             // sub-paths show details only `when-authorized` per
@@ -267,11 +262,7 @@ public class SecurityConfig {
      *       APIs ({@code /pages/api/v1/public|internal|device});</li>
      *   <li>information-leaking operational endpoints: actuator info and
      *       prometheus, springdoc and swagger (pages and bare twins);</li>
-     *   <li>the heritage API-key REST API under {@code /pages/auth}, closed
-     *       (410) by default in {@code libreclinica.legacy.closedPaths} but
-     *       reopenable by that setting, so the public-path entries behind it
-     *       are denied here as well; and the anonymous {@code /SystemStatus}
-     *       page.</li>
+     *   <li>the anonymous {@code /SystemStatus} page.</li>
      * </ul>
      * {@code /pages/sso/reauth} is added by {@link #internetFacingDeniedPaths}
      * only when SSO is off; with SSO on the proxy-mediated re-authentication
@@ -293,7 +284,6 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/swagger-ui*",
             "/swagger-ui/**",
-            "/pages/auth/**",
             "/SystemStatus",
             "/SystemStatus/**",
     };

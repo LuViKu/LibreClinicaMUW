@@ -274,7 +274,7 @@ session.setAttribute("coreResources", coreResources);
             </c:when>
             <c:otherwise>
                 <div class="taskLink"><a href="${urlPrefix}ListSubjectGroupClass?read=true"><fmt:message key="nav_groups" bundle="${resword}"/></a></div>
-                <div class="taskLink"><a href="${urlPrefix}ListCRF?module=manage"><fmt:message key="nav_crfs" bundle="${resword}"/></a></div>
+                <div class="taskLink"><a href="${pageContext.request.contextPath}/app/crf-library"><fmt:message key="nav_crfs" bundle="${resword}"/></a></div>
             </c:otherwise>
         </c:choose>
         </div>
@@ -328,13 +328,12 @@ session.setAttribute("coreResources", coreResources);
         <c:if test="${userBean.sysAdmin || userBean.techAdmin}">
         <div class="taskGroup"><fmt:message key="nav_administration" bundle="${resword}"/></div>
         <div class="taskLeftColumn">
-            <div class="taskLink"><a href="${urlPrefix}ListStudy"><fmt:message key="nav_studies" bundle="${resword}"/></a></div>
-            <div class="taskLink"><a href="${urlPrefix}ListUserAccounts"><fmt:message key="nav_users" bundle="${resword}"/></a></div>
-            <div class="taskLink"><a href="${urlPrefix}ListCRF?module=admin"><fmt:message key="nav_crfs" bundle="${resword}"/></a></div>
+            <div class="taskLink"><a href="${pageContext.request.contextPath}/app/admin/studies"><fmt:message key="nav_studies" bundle="${resword}"/></a></div>
+            <div class="taskLink"><a href="${pageContext.request.contextPath}/app/manage-users"><fmt:message key="nav_users" bundle="${resword}"/></a></div>
+            <div class="taskLink"><a href="${pageContext.request.contextPath}/app/crf-library"><fmt:message key="nav_crfs" bundle="${resword}"/></a></div>
         </div>
         <div class="taskRightColumn">
-            <div class="taskLink"><a href="${urlPrefix}ViewAllJobs"><fmt:message key="nav_jobs" bundle="${resword}"/></a></div>
-            <div class="taskLink"><a href="${urlPrefix}ListSubject"><fmt:message key="nav_subjects" bundle="${resword}"/></a></div>
+            <div class="taskLink"><a href="${pageContext.request.contextPath}/app/admin/jobs"><fmt:message key="nav_jobs" bundle="${resword}"/></a></div>
         </div>
         <br clear="all">
         </c:if>

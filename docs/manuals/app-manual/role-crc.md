@@ -47,6 +47,9 @@ complete, or signed.
    **Alle**, **Heute** (today), **Bereit zum Signieren** (ready to sign),
    **Offene Visiten** (open events), **Alle abgeschlossen** (all complete) and
    **Signiert** (signed).
+   **Heute** shows participants with an open visit dated today. An open visit
+   from an earlier day is overdue: it appears under **Fällige Visiten**, not
+   under **Heute**.
 3. Read the row: the **Eye** column shows the study eye (OD / OS / OU), and each
    visit column shows a status pill, with a red count when that visit has open
    queries.

@@ -530,16 +530,18 @@ public class SubjectsApiController {
     }
 
     /**
-     * May the session's binding sign a subject? Investigator and study
-     * director: the preflight's {@code user-role-can-sign} check, which
-     * blocks the sign endpoint for every other binding. {@code GET /me}
-     * reports it as {@code activeStudy.permissions.signSubject}.
+     * May the session's binding sign a subject? The Investigator only: the
+     * casebook signature is the investigator's attestation that the record
+     * is complete and accurate. The study director (the SPA's Data Manager)
+     * enters and corrects data but does not attest it; until 2026-11 it
+     * could sign too. This is the preflight's {@code user-role-can-sign}
+     * check, which blocks the sign endpoint for every other binding.
+     * {@code GET /me} reports it as {@code activeStudy.permissions.signSubject}.
      *
      * @param roleId legacy {@link Role} id; 0 for no role (refused)
      */
     static boolean roleMaySignSubject(int roleId) {
-        return roleId == Role.INVESTIGATOR.getId()
-                || roleId == Role.STUDYDIRECTOR.getId();
+        return roleId == Role.INVESTIGATOR.getId();
     }
 
     /**
@@ -792,8 +794,8 @@ public class SubjectsApiController {
                     ? msg(locale, "No study-scoped role bound — pick a study first.",
                             "Keine studienbezogene Rolle — bitte zuerst eine Studie wählen.")
                     : msg(locale,
-                            "Your role (" + legacyRoleName + ") cannot sign subjects. Only Investigator and Study Director may sign.",
-                            "Ihre Rolle (" + legacyRoleName + ") darf keine Teilnehmer signieren. Nur Prüfarzt/Prüfärztin und Studienleitung dürfen signieren.");
+                            "Your role (" + legacyRoleName + ") cannot sign subjects. Only an Investigator may sign.",
+                            "Ihre Rolle (" + legacyRoleName + ") darf keine Teilnehmer signieren. Nur Prüfarzt/Prüfärztin darf signieren.");
             roleCheck = new SignPreflightDto.CheckRow(
                     "user-role-can-sign", "fail",
                     msg(locale, "Your role does not allow signing", "Ihre Rolle erlaubt das Signieren nicht"),
@@ -1627,12 +1629,12 @@ public class SubjectsApiController {
         if (currentUser == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        // Signing is an attest action: the rule that governs signing a
-        // visit, narrowed further by the preflight (roleMaySignSubject).
-        // No system-administrator short-circuit, unlike the legacy
-        // SignStudySubjectServlet: the signature attests as the binding
-        // (see ClinicalWriteAuthorization).
-        if (!EventEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
+        // Signing is the investigator's attestation (roleMaySignSubject), the
+        // rule for signing a visit too; the preflight repeats it as its
+        // user-role-can-sign check. No system-administrator short-circuit,
+        // unlike the legacy SignStudySubjectServlet: the signature attests as
+        // the binding (see ClinicalWriteAuthorization).
+        if (!roleMaySignSubject(ClinicalWriteAuthorization.roleIdOf(session))) {
             return ClinicalWriteAuthorization.forbidden("signing subjects");
         }
 
@@ -3315,7 +3317,8 @@ public class SubjectsApiController {
                     def == null ? null : def.getOid(),
                     def == null ? null : def.getName(),
                     status,
-                    eventOpenQueries
+                    eventOpenQueries,
+                    formatIsoDate(ev.getDateStarted())
             ));
         }
         // Order by the definition's ordinal so the matrix columns line up

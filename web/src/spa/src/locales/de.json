@@ -94,7 +94,7 @@
       "signQueueTitle": "Signatur ausstehend",
       "signQueueDesc": "Abgeschlossene Visiten prüfen und elektronisch signieren.",
       "todaysCrfsTitle": "Heutige offene CRFs",
-      "todaysCrfsDesc": "Visiten, die heute anstehen oder gerade in der Eingabe sind.",
+      "todaysCrfsDesc": "Offene Visiten mit heutigem Datum: geplant oder in der Eingabe.",
       "openQueriesTitle": "Meine Rückfragen",
       "openQueriesDesc": "Mir zugewiesene Rückfragen. Antwort aus der CRF-Eingabe heraus.",
       "todaysCrfsCountAria": "{n} Visiten heute offen",

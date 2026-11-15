@@ -23,10 +23,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -75,6 +78,13 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
             // An ordinary user whose only binding is on a removed study.
             insertUser(c, "pick_user_removed", 2);
             insertRole(c, "pick_user_removed", removed, "Investigator");
+            // Two administrators holding the study-level Administrator role on the
+            // study beside the study-less 'admin' row that marks the account type.
+            for (String name : new String[] {"pick_study_admin", "pick_demoted_admin"}) {
+                insertUser(c, name, 1);
+                insertRole(c, name, study, "admin");
+                insertMarker(c, name);
+            }
         }
     }
 
@@ -146,6 +156,33 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
         assertNull(user.getAttribute("study"));
     }
 
+    /**
+     * Picking a study saves the account, and saving a system administrator's
+     * account rewrites the study-less 'admin' row that marks the account type.
+     * It must leave the Administrator role the account holds on a study alone:
+     * that row has the same role name.
+     */
+    @Test
+    void pickingAStudyKeepsTheAdministratorsStudyLevelAdministratorRole() throws Exception {
+        mockMvc().perform(post("/api/v1/me/activeStudy").contentType("application/json")
+                        .content("{\"oid\":\"S_PICK_IT\"}").session(sessionOf("pick_study_admin")))
+                .andExpect(status().isOk());
+
+        assertEquals(List.of(String.valueOf(study), "none"), adminRowsOf("pick_study_admin"));
+    }
+
+    /** Taking the account type away removes the marker, not the study role. */
+    @Test
+    void demotingAnAdministratorKeepsTheStudyLevelAdministratorRole() throws Exception {
+        UserAccountDAO dao = new UserAccountDAO(DATA_SOURCE);
+        UserAccountBean ub = dao.findByUserName("pick_demoted_admin");
+        ub.addUserType(UserType.USER);
+        ub.setUpdater(ub);
+        dao.update(ub);
+
+        assertEquals(List.of(String.valueOf(study)), adminRowsOf("pick_demoted_admin"));
+    }
+
     @Test
     void meReportsTheAccountType() throws Exception {
         mockMvc().perform(get("/api/v1/me").session(sessionOf("root")))
@@ -174,6 +211,20 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("userBean", ub);
         return session;
+    }
+
+    /** The study of each 'admin' row the account holds, "none" for the study-less marker, in that order. */
+    private static List<String> adminRowsOf(String username) throws SQLException {
+        List<String> rows = new ArrayList<>();
+        try (Connection c = DATA_SOURCE.getConnection(); Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery("SELECT coalesce(study_id::text, 'none') FROM study_user_role"
+                     + " WHERE role_name = 'admin' AND user_name = '" + username + "'"
+                     + " ORDER BY study_id NULLS LAST")) {
+            while (rs.next()) {
+                rows.add(rs.getString(1));
+            }
+        }
+        return rows;
     }
 
     private static int activeStudyOf(String username) throws SQLException {
@@ -211,6 +262,14 @@ class MeApiControllerActiveStudyDatabaseIT extends AbstractApiControllerDatabase
                     + "enabled, account_non_locked, lock_counter, run_webservices, authtype, enable_api_key) "
                     + "VALUES ('" + name + "', 'x', 'F', 'L', '" + name + "@example.invalid', 'MUW', 1, 1, "
                     + "now(), " + userTypeId + ", true, true, 0, false, 'STANDARD', false)");
+        }
+    }
+
+    /** The row that marks a system administrator: role 'admin' with no study, as addSysAdminRole writes it. */
+    private static void insertMarker(Connection c, String user) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate("INSERT INTO study_user_role (role_name, status_id, owner_id, date_created, user_name)"
+                    + " VALUES ('admin', 1, 1, now(), '" + user + "')");
         }
     }
 

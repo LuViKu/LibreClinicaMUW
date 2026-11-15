@@ -1461,10 +1461,11 @@ public class EventsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        // Signing is an attest action — reuse the edit role gate
-        // (Investigator / CRC / DM / Admin). Monitor / RA can read /
-        // verify; they cannot attest.
-        if (!EventEditAuthorization.roleMayEdit(roleId)) {
+        // Signing is the investigator's attestation, for one visit as for the
+        // whole casebook: the same rule as signing a subject. Until 2026-11
+        // this reused the edit gate, which also let the coordinator, the
+        // director and the admin binding sign.
+        if (!SubjectsApiController.roleMaySignSubject(roleId)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit signing study events"));
         }

@@ -167,6 +167,8 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int SYS_ADMIN_REMOVED_STUDY = 30127;
     /** A site's IT contact: the Standort-Admin right at a location and no study role at all. */
     private static final int SITE_IT = 30128;
+    /** Study Director, Koordinator and, granted last, Monitor on the same study. */
+    private static final int MULTI_ROLE = 30129;
 
     /** S_DEFAULTS1, the study every other account here is bound to. */
     private static final int DEFAULT_STUDY = 1;
@@ -226,6 +228,10 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
         seedAccount(SITE_IT, "spa-site-it", "NULL");
         sql("INSERT INTO user_location (user_account_id, location_id, can_manage_sources) "
                 + "SELECT " + SITE_IT + ", location_id, true FROM location WHERE code = 'MUW-AUGEN'");
+        seedAccount(MULTI_ROLE, "spa-multi-role", String.valueOf(DEFAULT_STUDY));
+        grant("spa-multi-role", "director", DEFAULT_STUDY);
+        grant("spa-multi-role", "coordinator", DEFAULT_STUDY);
+        grant("spa-multi-role", "monitor", DEFAULT_STUDY);
         seedAccount(SYS_ADMIN, "spa-sys-admin", String.valueOf(DEFAULT_STUDY));
         sql("UPDATE user_account SET user_type_id = 1 WHERE user_id = " + SYS_ADMIN);
         seedAccount(SYS_ADMIN_REMOVED_STUDY, "spa-sys-admin-removed-study", String.valueOf(REMOVED_STUDY));
@@ -575,6 +581,23 @@ class SpaLoginLogoutDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$.activeStudy.oid").value("S_DEFAULTS1"))
                 .andExpect(jsonPath("$.role").value("Data Manager"))
                 .andExpect(jsonPath("$.mustChangePassword").value(false));
+    }
+
+    /**
+     * An account with several roles on its study is signed in with the
+     * strongest, as the study picker binds it, not with whichever row the
+     * database returns last. Found in production (2026-11-13): adding Monitor
+     * to a Study Director signed it in as a Monitor, whose list holds only the
+     * sites it is granted on, so the participant list came up empty.
+     */
+    @Test
+    void anSpaLoginWithSeveralRolesOnTheStudyBindsTheStrongest() throws Exception {
+        assertEquals(204, login("spa-multi-role", PASSWORD, JSON).getStatus());
+
+        MockHttpSession session = session();
+        assertEquals(DEFAULT_STUDY, study(session).getId());
+        assertEquals(Role.STUDYDIRECTOR, role(session).getRole());
+        me(session).andExpect(jsonPath("$.role").value("Data Manager"));
     }
 
     @Test

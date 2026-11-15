@@ -57,6 +57,11 @@ describe('primaryNavFor', () => {
     expect(paths.length).toBeLessThanOrEqual(PRIMARY_NAV_MAX)
   })
 
+  it('links the Data Manager and the Administrator to the participant list, where a participant is removed', () => {
+    expect(primaryNavFor(['Data Manager']).map((i) => i.to)).toContain('/subjects')
+    expect(primaryNavFor(['Administrator']).map((i) => i.to)).toContain('/subjects')
+  })
+
   it('is empty while the roles are unknown', () => {
     expect(primaryNavFor([])).toEqual([])
   })

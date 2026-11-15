@@ -15,14 +15,12 @@ import org.springframework.orm.jpa.support.OpenEntityManagerInViewFilter;
 import org.springframework.security.web.session.ConcurrentSessionFilter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CharacterEncodingFilter;
-import org.springframework.web.filter.DelegatingFilterProxy;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.control.OCServletContextListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.OCServletFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.IngestSourceService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.UploaderTokenFilter;
-import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.CrossSiteRequestFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.UnparseablePathFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
@@ -55,17 +53,16 @@ import org.springframework.beans.factory.annotation.Value;
  * (auto-registered by Boot's {@code SecurityFilterAutoConfiguration} once
  * {@link SecurityConfig} provides the {@code SecurityFilterChain} bean) →
  * {@code hibernateFilter} ({@link OpenEntityManagerInViewFilter}) →
- * {@code logFilter} ({@link OCServletFilter}) →
- * {@code apiSecurityFilter} ({@link DelegatingFilterProxy} → {@code apiSecurityFilter}
- * bean, scoped to {@code /pages/auth/api/*}).
+ * {@code logFilter} ({@link OCServletFilter}). The {@code apiSecurityFilter}
+ * that sat last, for the OpenClinica 3.x REST API under {@code /pages/auth},
+ * went with that API (DR-018).
  * <p>
  * <strong>Opt-out registrations:</strong> Boot's
  * {@code ServletContextInitializerBeans} auto-creates a
  * {@code FilterRegistrationBean} (URL pattern {@code /*}, enabled) for every
- * {@link Filter} bean in the context. {@code myFilter}, {@code concurrencyFilter},
- * and {@code apiSecurityFilter} are XML-defined {@code Filter} beans consumed
- * via {@link SecurityConfig#securityFilterChain(...)} ({@code addFilterAt})
- * or via {@code DelegatingFilterProxy} above. Explicit
+ * {@link Filter} bean in the context. {@code myFilter} and {@code concurrencyFilter}
+ * are XML-defined {@code Filter} beans consumed via
+ * {@link SecurityConfig#securityFilterChain(...)} ({@code addFilterAt}). Explicit
  * {@code FilterRegistrationBean.setEnabled(false)} entries below tell Boot
  * to skip the auto-registration for those beans.
  */
@@ -272,17 +269,6 @@ public class ServletInfraConfig {
         return reg;
     }
 
-    @Bean
-    public FilterRegistrationBean<Filter> apiSecurityFilterProxy() {
-        DelegatingFilterProxy proxy = new DelegatingFilterProxy("apiSecurityFilter");
-        FilterRegistrationBean<Filter> reg = new FilterRegistrationBean<>(proxy);
-        reg.addUrlPatterns("/pages/auth/api/*");
-        reg.setName("apiSecurityFilterProxy");
-        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 40);
-        reg.setAsyncSupported(true);
-        return reg;
-    }
-
     // --- Opt-out registrations for XML-defined Filter beans ---
 
     @Bean
@@ -307,21 +293,6 @@ public class ServletInfraConfig {
             @Qualifier("concurrencyFilter") ConcurrentSessionFilter concurrencyFilter) {
         FilterRegistrationBean<ConcurrentSessionFilter> reg =
                 new FilterRegistrationBean<>(concurrencyFilter);
-        reg.setEnabled(false);
-        // 2026-06-19 — even disabled, the registration metadata is
-        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
-        // async-supported avoids poisoning request.isAsyncSupported()
-        // on any chain that happens to include the bean. See class
-        // Javadoc's SSE fix note for full context.
-        reg.setAsyncSupported(true);
-        return reg;
-    }
-
-    @Bean
-    public FilterRegistrationBean<ApiSecurityFilter> apiSecurityFilterAutoRegOptOut(
-            @Qualifier("apiSecurityFilter") ApiSecurityFilter apiSecurityFilter) {
-        FilterRegistrationBean<ApiSecurityFilter> reg =
-                new FilterRegistrationBean<>(apiSecurityFilter);
         reg.setEnabled(false);
         // 2026-06-19 — even disabled, the registration metadata is
         // surfaced to Tomcat's filter-chain bookkeeping. Marking it

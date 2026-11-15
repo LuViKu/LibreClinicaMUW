@@ -15,17 +15,17 @@ for the sub-phase sequencing.
 |---|---|
 | Framework | Vue 3.4+ with `<script setup>` Composition API |
 | Language | TypeScript 5.x (strict) |
-| Build | Vite 5 |
+| Build | Vite 6 |
 | Styling | Tailwind v4 with `@theme` directive |
 | State | Pinia 2 |
 | Routing | vue-router 4 |
-| i18n | vue-i18n 9 (Composition API) — `de-AT` primary, `en` secondary |
+| i18n | vue-i18n 11 (Composition API) — `de-AT` primary, `en` secondary |
 | Forms | Native v-model + Zod validation |
-| Unit tests | Vitest + Vue Test Utils |
+| Unit tests | Vitest 4 + Vue Test Utils |
 | E2E tests | Playwright (integrates with the existing `web/src/test/.../SmokeIT` harness) |
-| Component catalogue | Histoire 0.17 |
+| Component catalogue | Histoire 0.17 — does not start on Vite 6; `pnpm stories` is broken until Histoire 1.0 (needs Vite 7) |
 | Package manager | pnpm 9 |
-| Node | 20.x LTS |
+| Node | 22.x LTS |
 
 ## Local dev loop
 

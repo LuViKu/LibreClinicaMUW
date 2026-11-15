@@ -16,6 +16,9 @@
 import { describe, expect, it } from 'vitest'
 
 import router, { roleSatisfies } from '../index'
+import type { UserRole } from '@/types/auth'
+import { canEnterData } from '@/types/event'
+import { canManageSubjectLifecycle } from '@/types/subject'
 
 const ROUTES_THAT_MUST_INCLUDE_ADMINISTRATOR = [
   'subject-new',
@@ -101,7 +104,7 @@ const ROUTES_THAT_MUST_REFUSE_CRC = [
   'manage-users',
 ] as const
 
-function admits(routeName: string, role: 'CRC'): boolean {
+function admits(routeName: string, role: UserRole): boolean {
   const route = router.getRoutes().find((r) => r.name === routeName)
   expect(route, `route '${routeName}' is not registered`).toBeDefined()
   const required = route!.meta.role
@@ -116,5 +119,51 @@ describe('router role gates — CRC (coordinator) follows the backend, D5', () =
 
   it.each(ROUTES_THAT_MUST_REFUSE_CRC)('route %s still refuses CRC', (routeName) => {
     expect(admits(routeName, 'CRC'), `route '${routeName}' admits a CRC but the backend refuses a coordinator`).toBe(false)
+  })
+})
+
+/**
+ * Removing a participant happens on the participant page. Its button is for
+ * the roles canManageSubjectLifecycle names, and the page bounced the Data
+ * Manager to home, so the role meant to remove participants never saw the
+ * button (found in production, 2026-11-13).
+ */
+describe('router role gates — whoever may remove a participant reaches the button', () => {
+  const LIFECYCLE_ROLES = (['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'] as const)
+    .filter((role) => canManageSubjectLifecycle(role))
+
+  it('names at least the Data Manager', () => {
+    expect(LIFECYCLE_ROLES).toContain('Data Manager')
+  })
+
+  it.each(LIFECYCLE_ROLES)('%s enters the participant list and the participant page', (role) => {
+    expect(admits('subject-matrix', role)).toBe(true)
+    expect(admits('subject-detail', role)).toBe(true)
+  })
+})
+
+/**
+ * The SPA offers enrolment and data entry to every role canEnterData names
+ * (the participant list's add button, the visit page's start button). Each
+ * of them must get past the route, or the button bounces to home: the Data
+ * Manager did (2026-11-13), although the server lets it enter data.
+ */
+describe('router role gates — whoever may enter data reaches enrolment and the CRF', () => {
+  const DATA_ENTRY_ROLES = (['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'] as const)
+    .filter((role) => canEnterData(role))
+
+  it('names the Data Manager and not the Monitor', () => {
+    expect(DATA_ENTRY_ROLES).toContain('Data Manager')
+    expect(DATA_ENTRY_ROLES).not.toContain('Monitor')
+  })
+
+  it.each(DATA_ENTRY_ROLES)('%s enters enrolment and data entry', (role) => {
+    expect(admits('subject-new', role)).toBe(true)
+    expect(admits('crf-entry', role)).toBe(true)
+  })
+
+  it('keeps the Monitor out of both', () => {
+    expect(admits('subject-new', 'Monitor')).toBe(false)
+    expect(admits('crf-entry', 'Monitor')).toBe(false)
   })
 })

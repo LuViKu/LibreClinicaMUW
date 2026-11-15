@@ -41,3 +41,12 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!/^\d{2}:\d{2}$/.test(timePart)) return datePart
   return `${datePart} ${timePart}`
 }
+
+/**
+ * Today's date on this computer as ISO {@code YYYY-MM-DD}: the clinic's
+ * calendar day, since the SPA runs on the clinic's machines.
+ */
+export function localIsoToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}

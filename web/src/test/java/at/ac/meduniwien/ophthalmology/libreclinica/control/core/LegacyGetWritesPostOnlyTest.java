@@ -43,31 +43,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ConfigurePasswordRequirementsServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.ConfigureServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobExportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateJobImportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.CreateUserAccountServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.DeleteEventCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.EditStudyUserRoleServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.EditUserAccountServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.LegacyServletHarness;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RemoveSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreCRFVersionServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreStudyServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.RestoreSubjectServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SetUserRoleServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateCRFServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateJobExportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateJobImportServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.admin.UpdateSubjectServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.CreateDatasetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.CreateFiltersThreeServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.extract.EditFilterServlet;
@@ -213,19 +189,6 @@ class LegacyGetWritesPostOnlyTest {
         return Stream.of(
                 // Remove, restore, lock, delete and role actions: every request but
                 // action=confirm (the confirmation page) commits.
-                get(RemoveCRFServlet.class, "/RemoveCRF", "action", "submit", "id", "1"),
-                get(RemoveCRFServlet.class, "/RemoveCRF", "id", "1"),
-                get(RemoveCRFServlet.class, "/RemoveCRF", "action", "confirm ", "id", "1"),
-                get(RestoreCRFServlet.class, "/RestoreCRF", "action", "submit", "id", "1"),
-                get(RemoveCRFVersionServlet.class, "/RemoveCRFVersion", "action", "submit", "id", "1"),
-                get(RestoreCRFVersionServlet.class, "/RestoreCRFVersion", "action", "submit", "id", "1"),
-                get(DeleteCRFVersionServlet.class, "/DeleteCRFVersion", "action", "submit", "verId", "1"),
-                get(DeleteEventCRFServlet.class, "/DeleteEventCRF", "action", "submit", "ecId", "1", "ssId", "1"),
-                get(RemoveStudyServlet.class, "/RemoveStudy", "action", "submit", "id", "1"),
-                get(RestoreStudyServlet.class, "/RestoreStudy", "action", "submit", "id", "1"),
-                get(RemoveSubjectServlet.class, "/RemoveSubject", "action", "submit", "id", "1"),
-                get(RestoreSubjectServlet.class, "/RestoreSubject", "action", "submit", "id", "1"),
-                get(SetUserRoleServlet.class, "/SetUserRole", "userId", "2", "studyId", "1", "roleId", "4", "name", "physician"),
                 get(RemoveEventCRFServlet.class, "/RemoveEventCRF", "action", "submit", "id", "1", "studySubId", "1"),
                 get(RestoreEventCRFServlet.class, "/RestoreEventCRF", "action", "submit", "id", "1", "studySubId", "1"),
                 get(RemoveEventDefinitionServlet.class, "/RemoveEventDefinition", "action", "submit", "id", "1"),
@@ -284,20 +247,6 @@ class LegacyGetWritesPostOnlyTest {
                 get(ChangeStudyServlet.class, "/ChangeStudy", "action", "confirm", "studyId", "1"),
                 get(SignStudySubjectServlet.class, "/SignStudySubject", "action", "confirm", "id", "1", "j_user", "root", "j_pass", "x"),
                 // Forms whose commit step was also accepted as a GET.
-                get(ConfigureServlet.class, "/Configure", "submitted", "1", "lockswitch", "true", "lockcount", "3"),
-                get(ConfigurePasswordRequirementsServlet.class, "/ConfigurePasswordRequirements", "submitted", "1"),
-                get(CreateCRFServlet.class, "/CreateCRF", "action", "confirm", "name", "x"),
-                get(UpdateCRFServlet.class, "/UpdateCRF", "action", "submit"),
-                get(CreateCRFVersionServlet.class, "/CreateCRFVersion", "action", "confirmsql"),
-                get(CreateJobExportServlet.class, "/CreateJobExport", "action", "confirmall"),
-                get(CreateJobImportServlet.class, "/CreateJobImport", "action", "confirmall"),
-                get(UpdateJobExportServlet.class, "/UpdateJobExport", "action", "confirmall", "tname", "nightly"),
-                get(UpdateJobImportServlet.class, "/UpdateJobImport", "action", "confirmall", "tname", "nightly"),
-                get(CreateUserAccountServlet.class, "/CreateUserAccount", "submitted", "1", "userName", "x"),
-                get(EditUserAccountServlet.class, "/EditUserAccount", "submitted", "1", "userId", "2"),
-                get(EditStudyUserRoleServlet.class, "/EditStudyUserRole", "submitted", "1", "studyId", "1", "userName", "physician"),
-                get(UpdateSubjectServlet.class, "/UpdateSubject", "action", "submit", "id", "1"),
-                get(UpdateSubjectServlet.class, "/UpdateSubject", "id", "1"),
                 get(ContactServlet.class, "/Contact", "action", "submit", "name", "x", "email", "x@example.invalid",
                         "subject", "x", "message", "x"),
                 get(RequestAccountServlet.class, "/RequestAccount", "action", "submit"),
@@ -353,12 +302,9 @@ class LegacyGetWritesPostOnlyTest {
     /** Requests that only render a page: they keep answering GET. */
     static Stream<Arguments> renderingGets() {
         return Stream.of(
-                get(RemoveCRFServlet.class, "/RemoveCRF", "action", "confirm", "id", "1"),
                 get(RemoveStudySubjectServlet.class, "/RemoveStudySubject", "action", "confirm", "id", "1"),
                 get(RemoveEventDefinitionServlet.class, "/RemoveEventDefinition", "action", "CONFIRM", "id", "1"),
                 get(RemoveRuleSetServlet.class, "/RemoveRuleSet", "action", "confirm", "ruleSetId", "1"),
-                get(SetUserRoleServlet.class, "/SetUserRole", "action", "confirm", "userId", "2"),
-                get(SetUserRoleServlet.class, "/SetUserRole", "changeRoles", "true", "userId", "2"),
                 get(LockCRFVersionServlet.class, "/LockCRFVersion", "id", "1"),
                 get(UnlockCRFVersionServlet.class, "/UnlockCRFVersion", "id", "1"),
                 get(RunRuleSetServlet.class, "/RunRuleSet", "ruleSetId", "1"),
@@ -373,11 +319,6 @@ class LegacyGetWritesPostOnlyTest {
                 get(UpdateProfileServlet.class, "/UpdateProfile"),
                 get(ChangeStudyServlet.class, "/ChangeStudy"),
                 get(SignStudySubjectServlet.class, "/SignStudySubject", "id", "1"),
-                get(ConfigureServlet.class, "/Configure"),
-                get(CreateCRFVersionServlet.class, "/CreateCRFVersion", "action", "delete"),
-                get(CreateUserAccountServlet.class, "/CreateUserAccount", "submitted", "1", "changeRoles", "true"),
-                get(UpdateJobExportServlet.class, "/UpdateJobExport", "tname", "nightly"),
-                get(UpdateSubjectServlet.class, "/UpdateSubject", "action", "show", "id", "1"),
                 get(ContactServlet.class, "/Contact"),
                 get(AssignUserToStudyServlet.class, "/AssignUserToStudy", "action", "submit", "next_list_page", "true"),
                 get(ReassignStudySubjectServlet.class, "/ReassignStudySubject", "action", "confirm", "id", "1"),

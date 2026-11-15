@@ -51,7 +51,6 @@ import org.slf4j.LoggerFactory;
  * @author thickerson
  *
  */
-@SuppressWarnings("all")
 public class StudyInfoPanel {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
@@ -305,8 +304,6 @@ public class StudyInfoPanel {
 
             } else if (page.equals(Page.CREATE_FILTER_SCREEN_5)) {
                 // blank here to prevent data reset, tbh
-            } else if (page.equals(Page.ADMIN_SYSTEM)) {
-                // blank here , info set in servlet itself
             } else if (page.equals(Page.VIEW_STUDY_SUBJECT) || page.equals(Page.LIST_EVENTS_FOR_SUBJECT)) {
                 // special case, unlocks study name, subject name, and
                 // visits

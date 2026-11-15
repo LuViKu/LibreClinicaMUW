@@ -6,7 +6,7 @@
  * copyright (C) 2026 Department of Ophthalmology and Optometry,
  *                     Medical University of Vienna
  */
-package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
+package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,7 +23,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import org.junit.jupiter.api.Test;
 
-class RemoveCRFVersionServletTest {
+/**
+ * The default-version helper that moved here from {@code RemoveCRFVersionServlet}
+ * when that servlet was deleted (DR-018, waves 0 and 1); the cases are the ones
+ * its test carried.
+ */
+class LockCRFVersionServletTest {
 
     private static CRFVersionBean version(int id) {
         CRFVersionBean v = new CRFVersionBean();
@@ -33,9 +38,9 @@ class RemoveCRFVersionServletTest {
 
     @Test
     void parseIdsSkipsBlankAndMalformedTokens() {
-        assertEquals(Arrays.asList(3, 7, 9), RemoveCRFVersionServlet.parseIds("3, 7,,x, 9 ,"));
-        assertTrue(RemoveCRFVersionServlet.parseIds(null).isEmpty());
-        assertTrue(RemoveCRFVersionServlet.parseIds("").isEmpty());
+        assertEquals(Arrays.asList(3, 7, 9), LockCRFVersionServlet.parseIds("3, 7,,x, 9 ,"));
+        assertTrue(LockCRFVersionServlet.parseIds(null).isEmpty());
+        assertTrue(LockCRFVersionServlet.parseIds("").isEmpty());
     }
 
     @Test
@@ -45,10 +50,17 @@ class RemoveCRFVersionServletTest {
         EventDefinitionCRFDAO dao = mock(EventDefinitionCRFDAO.class);
         ArrayList<CRFVersionBean> versions = new ArrayList<>(Arrays.asList(version(5), version(2)));
 
-        RemoveCRFVersionServlet.updateEventDef(edc, dao, versions);
+        LockCRFVersionServlet.updateEventDef(edc, dao, versions, 99);
         assertEquals(2, edc.getDefaultVersionId());
+    }
 
-        RemoveCRFVersionServlet.updateEventDef(edc, dao, versions, 99);
+    @Test
+    void lockingTheDefaultVersionMakesTheNextOneTheDefault() {
+        EventDefinitionCRFBean edc = new EventDefinitionCRFBean();
+        EventDefinitionCRFDAO dao = mock(EventDefinitionCRFDAO.class);
+        ArrayList<CRFVersionBean> versions = new ArrayList<>(Arrays.asList(version(5), version(2)));
+
+        LockCRFVersionServlet.updateEventDef(edc, dao, versions, 5);
         assertEquals(2, edc.getDefaultVersionId());
     }
 
@@ -57,8 +69,8 @@ class RemoveCRFVersionServletTest {
         EventDefinitionCRFBean edc = new EventDefinitionCRFBean();
         EventDefinitionCRFDAO dao = mock(EventDefinitionCRFDAO.class);
 
-        RemoveCRFVersionServlet.updateEventDef(edc, dao, new ArrayList<>());
-        RemoveCRFVersionServlet.updateEventDef(edc, dao, null, 1);
+        LockCRFVersionServlet.updateEventDef(edc, dao, null, 1);
+        LockCRFVersionServlet.updateEventDef(edc, dao, new ArrayList<>(), 1);
 
         verify(dao, never()).update(any(EventDefinitionCRFBean.class));
     }

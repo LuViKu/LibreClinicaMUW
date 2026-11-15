@@ -55,13 +55,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
  * ({@code @Configuration}, {@code ServletContextInitializer}), 209 of them with
  * a URL; the {@code pages} DispatcherServlet serves the Spring MVC controllers
  * under {@code /pages}. {@code libreclinica.legacy.closedPaths}
- * ({@code application.yml}) answers 410 for 17 servlets and everything below
- * {@code /pages/auth} to anyone but a system administrator (Enterprise,
- * TechAdmin, AdminSystem, AuditDatabase, ListSubject, ListSubjectData,
- * ViewSubject, UpdateSubject, RemoveSubject, RestoreSubject, CreateJobImport,
- * UpdateJobImport, ViewImportJob, ViewLogMessage, PrintoutCertificate,
- * DeleteEventCRF, ConfigurePasswordRequirements, /pages/auth); those are out of
- * scope here. The rest either refuse non-administrators in {@code mayProceed()}
+ * ({@code application.yml}) answered 410 for the 17 wave-0 servlets and
+ * everything below {@code /pages/auth} to anyone but a system administrator;
+ * those were deleted after their bake-in (DR-018) and are out of scope here. The rest either refuse non-administrators in {@code mayProceed()}
  * (user, role, job, CRF-library, study-creation and system screens) or are
  * reachable by the site roles, which is what the probes cover; see
  * {@link IsolationProbes}.

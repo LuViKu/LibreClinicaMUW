@@ -225,7 +225,10 @@ describe('HomeView role-aware catalogue', () => {
     expect(ids).toContain('import-crf-data')
     expect(ids).toContain('rules')
     expect(ids).toContain('data-export')
-    expect(ids).not.toContain('subject-new')
+    // The participant list, where a Data Manager removes a participant.
+    expect(ids).toContain('subject-matrix')
+    // Study management transcribes paper records, enrolment included.
+    expect(ids).toContain('subject-new')
     expect(ids).not.toContain('manage-users')
   })
 
@@ -241,6 +244,7 @@ describe('HomeView role-aware catalogue', () => {
     expect(ids).toContain('data-export')
     // study-edit only when activeStudyOid is set; our mount sets it.
     expect(ids).toContain('study-edit')
+    expect(ids).toContain('subject-matrix')
     expect(ids).not.toContain('build-study')
     expect(ids).not.toContain('import-crf-data')
   })

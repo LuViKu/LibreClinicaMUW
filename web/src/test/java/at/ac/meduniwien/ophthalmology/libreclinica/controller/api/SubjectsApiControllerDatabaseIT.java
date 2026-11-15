@@ -11,10 +11,16 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Timestamp;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -53,6 +59,48 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$[?(@.id == 'M-006')]").exists())
                 .andExpect(jsonPath("$[?(@.signed == true)].id")
                         .value(containsInAnyOrder("M-003", "M-006")));
+    }
+
+    /**
+     * Each visit cell carries the visit's start date as the clinic entered it
+     * (the wall-clock date, as "Fällige Visiten" reads it), so the matrix's
+     * "Heute" filter can keep only the open visits dated today. A late
+     * evening time must not roll the date over.
+     */
+    @Test
+    void listCellsCarryTheVisitsStartDate() throws Exception {
+        int eventId;
+        Timestamp previous;
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT se.study_event_id, se.date_start FROM study_event se "
+                             + "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                             + "WHERE ss.label = 'M-001' ORDER BY se.study_event_id LIMIT 1")) {
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                eventId = rs.getInt(1);
+                previous = rs.getTimestamp(2);
+            }
+        }
+        setDateStart(eventId, Timestamp.valueOf("2026-11-10 23:30:00"));
+        try {
+            MockMvc mockMvc = ProductionMvc.standalone(buildSubjectsController()).build();
+            mockMvc.perform(get("/api/v1/subjects").session(authenticatedSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.id == 'M-001')].events[*].date").value(hasItem("2026-11-10")));
+        } finally {
+            setDateStart(eventId, previous);
+        }
+    }
+
+    private static void setDateStart(int eventId, Timestamp start) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE study_event SET date_start = ? WHERE study_event_id = ?")) {
+            ps.setTimestamp(1, start);
+            ps.setInt(2, eventId);
+            ps.executeUpdate();
+        }
     }
 
     /* ====================================================================== */
