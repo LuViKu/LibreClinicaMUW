@@ -657,7 +657,7 @@ public class ImportApiController {
      * 401 / 400 / 403 preflight for upload + commit + rows. Mirrors
      * {@link BulkImportAuthorization#roleMayImport}.
      */
-    private static ResponseEntity<?> preflightWrite(HttpSession session) {
+    private ResponseEntity<?> preflightWrite(HttpSession session) {
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
@@ -668,7 +668,8 @@ public class ImportApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!BulkImportAuthorization.roleMayImport(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> BulkImportAuthorization.roleMayImport(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit importing CRF data — sysadmin or Director/Coordinator/Investigator/RA on the active study only"));
         }

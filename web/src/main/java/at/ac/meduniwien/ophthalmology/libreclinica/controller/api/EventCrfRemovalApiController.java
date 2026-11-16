@@ -365,8 +365,8 @@ public class EventCrfRemovalApiController {
         if (subject == null || subject.getId() == 0 || !visible.contains(subject.getStudyId())) {
             return Target.refused(403, "event_crf " + eventCrfId + " belongs to a different study");
         }
-        int roleId = role != null && role.getRole() != null ? role.getRole().getId() : 0;
-        if (!EventCrfRemoveAuthorization.roleMayRemove(user, roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                id -> EventCrfRemoveAuthorization.roleMayRemove(user, id))) {
             return Target.refused(403, "Your role does not permit removing a CRF");
         }
 

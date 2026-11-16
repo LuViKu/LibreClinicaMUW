@@ -1219,6 +1219,28 @@ Consequences, replacing the one above:
 - Converting uses one series' worth of memory instead of the whole file decoded (a real 600 MB export: 0.4 GB resident against 2.1 GB for one `read_oct_volume()`), and uses each series' own B-scan geometry, which the old path took from the file's first volume.
 - The split commit and preflight answer with typed DTOs, so the SPA's `api.ts` is generated from them.
 
+## DR-042 — An account may do what any of its roles on a study allows, and Monitor is held alone
+
+**Status:** Accepted (2026-11-16).
+
+**Context.** Legacy OpenClinica gave an account one role per study. The SPA's user management lets an account hold several, but most write checks read only the role the session is bound to, and login and the study picker bind the highest-ranked one (#442). So an account holding Investigator and Data Manager on a study was bound as Data Manager and could not sign, although it is that study's Investigator. Two rules already counted every role: source-data verification, because an Investigator who was also the Monitor was refused on the SDV page, and AI-arm blinding, where any treating role blinds.
+
+**Decision.**
+
+- **Permissions are the union of the roles.** A check admits the caller when any of its active roles on the active study allows the action, or on the parent study when the active study is a site (`ClinicalWriteAuthorization.anyRoleOnTheStudyMay` and `anyBindingOnTheStudyMay`). The bound role is tried first. The other roles are read from the database only when it refuses, and a failed read refuses.
+- **Restrictions are the union too.** Any treating role blinds the account to the AI output of hidden-arm participants (`AiArmPolicy.isTreatingRole`, unchanged).
+- **The SPA sees the same rule.** `GET /me` computes `activeStudy.permissions` the same way, and the signing preflight names the role the caller signs as.
+- **Monitor is held alone on a study.** The Monitor verifies source data and closes queries. Every other role enters data, so a Monitor beside one would verify, and close the queries on, data it entered itself. User management refuses the combination with 409, both when a role is added and when a study's role list is saved, with kept legacy roles counted. The role dialog explains why before anything is sent.
+
+**Consequences.**
+
+- An Investigator who is also the Data Manager signs, as the Investigator.
+- Rows that already combine Monitor with another role are not changed. They work under the union until an administrator edits the account, and the role dialog shows the hint on them.
+- The bound role still decides what is not a permission: which sites' participants the lists show (`SiteVisibilityFilter`) and the role shown in the top bar. For visibility the highest-ranked role is also the one that sees the most, so the union would change nothing there.
+- The AI-cohort gate is unchanged. It admits only Administrator and Data Manager, the two highest-ranked roles, so the bound role decides it exactly as the union would. Whether a Data Manager who is also a treating Investigator may change a participant's AI cohort is left open.
+- The legacy screens keep their single-role checks; since the legacy retirement (DR-018) only administrators reach them. So do the heritage controllers outside `controller/api` that the SPA does not call (CRF version migration, the rule designer's API).
+- A role removed by an administrator stops counting at once. The bound role stays until the next study pick or login, as before.
+
 ## Future decisions (open)
 
 *Removed from this list on 2026-09-30: DR-009 (obsolete — DR-014's reverse-proxy SSO replaced it) and DR-012 (done in Phase B.10; no Joda-Time import remains), and DR-007 (decided: OpenPDF 2.0.x, above).*

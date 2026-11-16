@@ -10,8 +10,11 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.IntPredicate;
@@ -67,6 +70,33 @@ class ClinicalWriteAuthorizationTest {
         MockHttpSession session = new MockHttpSession();
         assertFalse(ClinicalWriteAuthorization.anyRoleOnTheStudyMay(
                 session, Mockito.mock(DataSource.class), ClinicalWriteAuthorization::roleMayVerifySdv));
+    }
+
+    @Test
+    void aRuleOverTheBindingIsAskedEvenWhenNoRoleIsBound() {
+        // A rule that admits a system administrator whatever the binding is
+        // given null when the session has none, and still admits.
+        MockHttpSession session = new MockHttpSession();
+        DataSource untouched = Mockito.mock(DataSource.class);
+        assertTrue(ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, untouched,
+                binding -> binding == null));
+        Mockito.verifyNoInteractions(untouched);
+    }
+
+    @Test
+    void theRolesOnTheStudyStartWithTheSessionsAndRefuseNothingTheyCannotRead() {
+        assertEquals(List.of(Role.STUDYDIRECTOR.getId()), ClinicalWriteAuthorization.roleIdsOnTheStudy(
+                sessionBoundAs(Role.STUDYDIRECTOR), Mockito.mock(DataSource.class)));
+        assertEquals(List.of(0), ClinicalWriteAuthorization.roleIdsOnTheStudy(
+                new MockHttpSession(), Mockito.mock(DataSource.class)));
+    }
+
+    @Test
+    void theDataEntryGateRefusesTheMonitorAndAdmitsTheInvestigator() {
+        assertNotNull(ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                sessionBoundAs(Role.MONITOR), Mockito.mock(DataSource.class), "entering CRF data"));
+        assertNull(ClinicalWriteAuthorization.refuseUnlessMayEnterData(
+                sessionBoundAs(Role.INVESTIGATOR), Mockito.mock(DataSource.class), "entering CRF data"));
     }
 
     /** The role ids 0 to 7 the rule admits. */

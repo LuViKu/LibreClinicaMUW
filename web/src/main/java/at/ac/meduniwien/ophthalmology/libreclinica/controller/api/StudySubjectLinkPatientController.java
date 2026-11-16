@@ -142,9 +142,8 @@ public class StudySubjectLinkPatientController {
                     "message", "No active study bound to the session."));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
-        if (!SubjectLifecycleAuthorization.roleMayManageLifecycle(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectLifecycleAuthorization::roleMayManageLifecycle)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit link-patient on study subjects"));
         }

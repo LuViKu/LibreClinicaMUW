@@ -45,7 +45,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
@@ -428,9 +427,8 @@ public class IngestUploadApiController {
     private ResponseEntity<?> guards(HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
-        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (role != null && role.getRole() != null) ? role.getRole().getId() : 0;
-        if (!IngestBindAuthorization.roleMayReconcile(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                IngestBindAuthorization::roleMayReconcile)) {
             return ResponseEntity.status(403).body(Map.of("message", "Your role may not upload files"));
         }
         return null;

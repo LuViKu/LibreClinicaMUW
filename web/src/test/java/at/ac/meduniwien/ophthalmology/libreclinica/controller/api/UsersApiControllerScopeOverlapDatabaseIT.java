@@ -219,13 +219,13 @@ class UsersApiControllerScopeOverlapDatabaseIT extends AbstractApiControllerData
     void changingTheRolesOfAnExistingBindingStaysAllowed() throws Exception {
         // A further role on the study the user is already bound to.
         mockMvc().perform(post("/api/v1/users/ovl_parent/roles").contentType("application/json")
-                        .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Monitor\"}")
+                        .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"CRC\"}")
                         .session(sysadminSession()))
                 .andExpect(status().isCreated());
         // ovl_both overlaps from before the rule: both its bindings may
         // still be changed, and neither is touched by the other's change.
         mockMvc().perform(put("/api/v1/users/ovl_both/roles/" + SITE_OID).contentType("application/json")
-                        .content("{\"roles\":[\"Investigator\",\"Monitor\"]}")
+                        .content("{\"roles\":[\"Investigator\",\"Administrator\"]}")
                         .session(sysadminSession()))
                 .andExpect(status().isOk());
         mockMvc().perform(put("/api/v1/users/ovl_both/roles/S_DEFAULTS1").contentType("application/json")

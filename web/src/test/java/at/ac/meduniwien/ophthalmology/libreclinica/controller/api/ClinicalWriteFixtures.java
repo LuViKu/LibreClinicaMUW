@@ -63,18 +63,53 @@ final class ClinicalWriteFixtures {
     }
 
     /**
-     * {@code userName}'s session, holding {@code role} instead of the
-     * account's own. There is no ra or ra2 demo account.
+     * The session of an account that holds {@code role}, and only that, on
+     * Default Study: a copy of {@code userName} named
+     * {@code userName + "-as-" + role name}, made on first use. There is no
+     * ra or ra2 demo account.
+     *
+     * <p>The copy holds the role in the database as well as on the session.
+     * An account may do what any of its roles allows (DR-042), and the write
+     * rules read its other bindings, so a session that only carried another
+     * role on {@code userName} would still be {@code userName}'s own role too.
      */
     static MockHttpSession sessionHolding(DataSource dataSource, String userName, Role role) {
-        MockHttpSession session = sessionAs(dataSource, userName);
-        StudyUserRoleBean binding = new StudyUserRoleBean();
-        binding.setRole(role);
-        binding.setStudyId(1);
-        binding.setUserName(userName);
-        session.setAttribute("userRole", binding);
-        return session;
+        String rawRole = RAW_ROLE_NAMES[role.getId()];
+        String copy = userName + "-as-" + rawRole.toLowerCase(java.util.Locale.ROOT);
+        try {
+            try (Connection c = dataSource.getConnection();
+                 PreparedStatement account = c.prepareStatement(
+                         "INSERT INTO user_account (user_name, passwd, first_name, last_name, email, "
+                                 + "active_study, institutional_affiliation, status_id, owner_id, date_created, "
+                                 + "user_type_id, enabled, account_non_locked, lock_counter, run_webservices, "
+                                 + "authtype, enable_api_key) "
+                                 + "SELECT ?, passwd, first_name, last_name, email, active_study, "
+                                 + "institutional_affiliation, status_id, owner_id, now(), user_type_id, enabled, "
+                                 + "account_non_locked, lock_counter, run_webservices, authtype, enable_api_key "
+                                 + "FROM user_account WHERE user_name = ? "
+                                 + "AND NOT EXISTS (SELECT 1 FROM user_account WHERE user_name = ?)");
+                 PreparedStatement binding = c.prepareStatement(
+                         "INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, "
+                                 + "date_created, user_name) SELECT ?, 1, 1, 1, now(), ? "
+                                 + "WHERE NOT EXISTS (SELECT 1 FROM study_user_role WHERE user_name = ?)")) {
+                account.setString(1, copy);
+                account.setString(2, userName);
+                account.setString(3, copy);
+                account.executeUpdate();
+                binding.setString(1, rawRole);
+                binding.setString(2, copy);
+                binding.setString(3, copy);
+                binding.executeUpdate();
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not seed " + copy, e);
+        }
+        return sessionAs(dataSource, copy);
     }
+
+    /** The {@code role_name} a role is stored under, by legacy role id. */
+    private static final String[] RAW_ROLE_NAMES = {
+            "invalid", "admin", "coordinator", "director", "Investigator", "ra", "monitor", "ra2"};
 
     static int userId(DataSource dataSource, String userName) {
         return new UserAccountDAO(dataSource).findByUserName(userName).getId();

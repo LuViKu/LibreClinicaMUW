@@ -230,6 +230,15 @@ function sameRoles(a: readonly string[], b: readonly string[]): boolean {
   return x.every((r, i) => r === y[i])
 }
 
+/**
+ * Monitor verifies what the other roles enter, so it is held alone on a
+ * study (DR-042): an account may do what any of its roles allows. The
+ * server refuses the combination too.
+ */
+function monitorBesideOthers(roles: readonly string[], legacy: readonly string[] = []): boolean {
+  return roles.includes('Monitor') && roles.length + legacy.length > 1
+}
+
 function isRowDirty(group: StudyGroup): boolean {
   const edit = localEdits.value[group.studyOid]
   const legacyEdit = legacyEdits.value[group.studyOid]
@@ -443,12 +452,19 @@ function close() {
               <p v-if="group.legacyRoles.length > 0" class="mt-1 text-xs text-slate-500">
                 {{ t('manageUsers.roles.legacyHint') }}
               </p>
+              <p
+                v-if="monitorBesideOthers(selectedRolesFor(group), keptLegacyFor(group))"
+                class="mt-1 text-xs text-amber-700"
+                :data-testid="`monitor-alone-${group.studyOid}`"
+              >
+                {{ t('manageUsers.roles.monitorAlone') }}
+              </p>
             </fieldset>
             <div v-if="isRowDirty(group)" class="mt-2 flex items-center gap-2">
               <button
                 type="button"
                 class="px-3 py-1 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || monitorBesideOthers(selectedRolesFor(group), keptLegacyFor(group))"
                 @click="onSaveRow(group)"
               >
                 {{ t('common.save') }}
@@ -511,12 +527,19 @@ function close() {
                 <span>{{ roleLabel(r) }}</span>
               </label>
             </div>
+            <p
+              v-if="monitorBesideOthers(addStudyDraft)"
+              class="mt-1 text-xs text-amber-700"
+              data-testid="monitor-alone-new"
+            >
+              {{ t('manageUsers.roles.monitorAlone') }}
+            </p>
           </fieldset>
           <div class="flex items-center gap-2">
             <button
               type="button"
               class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
-              :disabled="addStudyOid === '' || addStudyDraft.length === 0 || isSubmitting"
+              :disabled="addStudyOid === '' || addStudyDraft.length === 0 || monitorBesideOthers(addStudyDraft) || isSubmitting"
               @click="onAddStudy"
             >
               {{ t('manageUsers.roles.addStudy') }}

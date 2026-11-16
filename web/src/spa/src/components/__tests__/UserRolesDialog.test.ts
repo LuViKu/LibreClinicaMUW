@@ -169,23 +169,20 @@ describe('UserRolesDialog — per-study multi-select', () => {
   })
 
   it('ticking an additional role then Save calls setStudyRoles with the union', async () => {
+    const CRC = { ...BINDING_S1_INV, role: 'CRC' as const }
     vi.mocked(apiGet)
       .mockResolvedValueOnce([BINDING_S1_INV, BINDING_S1_DM])
-      .mockResolvedValueOnce([BINDING_S1_INV, BINDING_S1_DM, { ...BINDING_S1_INV, role: 'Monitor' }])
-    vi.mocked(apiPut).mockResolvedValueOnce([
-      BINDING_S1_INV,
-      BINDING_S1_DM,
-      { ...BINDING_S1_INV, role: 'Monitor' },
-    ])
+      .mockResolvedValueOnce([BINDING_S1_INV, BINDING_S1_DM, CRC])
+    vi.mocked(apiPut).mockResolvedValueOnce([BINDING_S1_INV, BINDING_S1_DM, CRC])
 
     const wrapper = mountDialog()
     await flushPromises()
     await nextTick()
 
-    const monitorBox = checkboxFor('Monitor')!
-    expect(monitorBox.checked).toBe(false)
-    monitorBox.checked = true
-    monitorBox.dispatchEvent(new Event('change', { bubbles: true }))
+    const crcBox = checkboxFor('Coordinator')!
+    expect(crcBox.checked).toBe(false)
+    crcBox.checked = true
+    crcBox.dispatchEvent(new Event('change', { bubbles: true }))
     await nextTick()
 
     clickSaveOnFirstRow()
@@ -194,7 +191,7 @@ describe('UserRolesDialog — per-study multi-select', () => {
     expect(apiPut).toHaveBeenCalledTimes(1)
     const [path, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[] }]
     expect(path).toBe('/pages/api/v1/users/alice/roles/S1')
-    expect(payload.roles.sort()).toEqual(['Data Manager', 'Investigator', 'Monitor'])
+    expect(payload.roles.sort()).toEqual(['CRC', 'Data Manager', 'Investigator'])
     wrapper.unmount()
   })
 
@@ -469,7 +466,8 @@ describe('UserRolesDialog — no overlapping study and site roles', () => {
 describe('UserRolesDialog — legacy data entry roles', () => {
   const RA: RoleBinding = { ...BINDING_S1_INV, legacyRole: 'ra' }
   const RA2: RoleBinding = { ...BINDING_S1_INV, legacyRole: 'ra2' }
-  const MONITOR: RoleBinding = { ...BINDING_S1_INV, role: 'Monitor', legacyRole: null }
+  // Not Monitor: Monitor is held alone on a study (DR-042).
+  const DM: RoleBinding = { ...BINDING_S1_INV, role: 'Data Manager', legacyRole: null }
 
   let wrapper: ReturnType<typeof mountDialog> | null = null
   afterEach(() => {
@@ -486,20 +484,20 @@ describe('UserRolesDialog — legacy data entry roles', () => {
   })
 
   it('shows the legacy role under its own name and not as Investigator', async () => {
-    vi.mocked(apiGet).mockResolvedValueOnce([RA, MONITOR])
+    vi.mocked(apiGet).mockResolvedValueOnce([RA, DM])
     wrapper = mountDialog()
     await flushPromises()
     await nextTick()
 
     expect(checkboxFor('Data Entry Person (legacy)')?.checked).toBe(true)
     expect(checkboxFor('Investigator')?.checked).toBe(false)
-    expect(checkboxFor('Monitor')?.checked).toBe(true)
+    expect(checkboxFor('Study Director')?.checked).toBe(true)
     const dots = document.body.querySelector('[data-testid="role-dots"]')?.getAttribute('data-roles')
-    expect(dots).toBe('Monitor')
+    expect(dots).toBe('Data Manager')
   })
 
   it('saving the row keeps the legacy role and does not send Investigator', async () => {
-    vi.mocked(apiGet).mockResolvedValueOnce([RA, MONITOR]).mockResolvedValueOnce([RA, MONITOR])
+    vi.mocked(apiGet).mockResolvedValueOnce([RA, DM]).mockResolvedValueOnce([RA, DM])
     vi.mocked(apiPut).mockResolvedValueOnce([])
     wrapper = mountDialog()
     await flushPromises()
@@ -514,7 +512,7 @@ describe('UserRolesDialog — legacy data entry roles', () => {
 
     expect(apiPut).toHaveBeenCalledTimes(1)
     const [, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[]; legacyRoles: string[] }]
-    expect([...payload.roles].sort()).toEqual(['CRC', 'Monitor'])
+    expect([...payload.roles].sort()).toEqual(['CRC', 'Data Manager'])
     expect(payload.legacyRoles).toEqual(['ra'])
   })
 
@@ -557,13 +555,13 @@ describe('UserRolesDialog — legacy data entry roles', () => {
   })
 
   it('a row saved with nothing left asks first, as Remove study does', async () => {
-    vi.mocked(apiGet).mockResolvedValueOnce([RA, MONITOR])
+    vi.mocked(apiGet).mockResolvedValueOnce([RA, DM])
     confirmMock.mockResolvedValueOnce(false)
     wrapper = mountDialog()
     await flushPromises()
     await nextTick()
 
-    for (const label of ['Data Entry Person (legacy)', 'Monitor']) {
+    for (const label of ['Data Entry Person (legacy)', 'Study Director']) {
       const box = checkboxFor(label)!
       box.checked = false
       box.dispatchEvent(new Event('change', { bubbles: true }))
@@ -574,5 +572,103 @@ describe('UserRolesDialog — legacy data entry roles', () => {
 
     expect(confirmMock).toHaveBeenCalled()
     expect(apiPut).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Monitor verifies what the other roles enter, so it is held alone on a
+ * study (DR-042). The dialog says so and does not send the combination;
+ * the server refuses it as well.
+ */
+describe('UserRolesDialog — Monitor is held alone on a study', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedAuth()
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPut).mockReset()
+  })
+
+  const saveButton = () =>
+    (Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[])
+      .find((b) => b.textContent?.trim() === 'Save')
+
+  it('ticking Monitor beside another role explains why and keeps Save disabled', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([BINDING_S1_INV])
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    expect(document.body.querySelector('[data-testid="monitor-alone-S1"]')).toBeNull()
+    const monitorBox = checkboxFor('Monitor')!
+    monitorBox.checked = true
+    monitorBox.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+
+    expect(document.body.querySelector('[data-testid="monitor-alone-S1"]')?.textContent)
+      .toContain('held alone on a study')
+    expect(saveButton()?.disabled).toBe(true)
+    saveButton()?.click()
+    await flushPromises()
+    expect(apiPut).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('saving Monitor alone is allowed', async () => {
+    const MON = { ...BINDING_S1_INV, role: 'Monitor' as const }
+    vi.mocked(apiGet).mockResolvedValueOnce([BINDING_S1_INV]).mockResolvedValueOnce([MON])
+    vi.mocked(apiPut).mockResolvedValueOnce([MON])
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const invBox = checkboxFor('Investigator')!
+    invBox.checked = false
+    invBox.dispatchEvent(new Event('change', { bubbles: true }))
+    const monitorBox = checkboxFor('Monitor')!
+    monitorBox.checked = true
+    monitorBox.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+
+    expect(document.body.querySelector('[data-testid="monitor-alone-S1"]')).toBeNull()
+    expect(saveButton()?.disabled).toBe(false)
+    saveButton()?.click()
+    await flushPromises()
+    const [, payload] = vi.mocked(apiPut).mock.calls[0] as [string, { roles: string[] }]
+    expect(payload.roles).toEqual(['Monitor'])
+    wrapper.unmount()
+  })
+
+  it('an account that already holds Monitor beside another role is shown the hint', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([BINDING_S1_DM, { ...BINDING_S1_INV, role: 'Monitor' }])
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    expect(document.body.querySelector('[data-testid="monitor-alone-S1"]')).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  it('a new study cannot be added with Monitor and another role', async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce([])
+    const wrapper = mountDialog()
+    await flushPromises()
+    await nextTick()
+
+    const studyPicker = document.body.querySelector('#add-role-study') as HTMLSelectElement
+    studyPicker.value = 'S1'
+    studyPicker.dispatchEvent(new Event('change', { bubbles: true }))
+    await nextTick()
+    for (const label of ['Monitor', 'Investigator']) {
+      const box = checkboxFor(label)!
+      box.checked = true
+      box.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await nextTick()
+
+    expect(document.body.querySelector('[data-testid="monitor-alone-new"]')).not.toBeNull()
+    const addBtn = (Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[])
+      .find((b) => b.textContent?.trim() === 'Add study')!
+    expect(addBtn.disabled).toBe(true)
+    wrapper.unmount()
   })
 })
