@@ -456,7 +456,7 @@ public class NamdClinicalApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "entering CRF data");
+                session, dataSource, "entering CRF data");
         if (roleRefusal != null) return roleRefusal;
 
         try (Connection c = dataSource.getConnection()) {

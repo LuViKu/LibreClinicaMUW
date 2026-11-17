@@ -126,10 +126,13 @@ class ModalitiesApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT 
         String body = "{\"code\":\"TEST_NEW1\",\"labelEn\":\"Test\",\"labelDe\":\"Test\","
                 + "\"ordinal\":100,\"itemOidOd\":\"I_IOP_OD\","
                 + "\"dataType\":\"numeric\",\"unit\":\"mmHg\"}";
+        // An account that holds the role alone: the root session this suite
+        // uses elsewhere also holds Administrator, which counts (DR-042).
         mockMvc().perform(post("/api/v1/modalities")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
-                .session(investigatorSession()))
+                .session(ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_investigator",
+                        Role.INVESTIGATOR)))
                 .andExpect(status().isForbidden());
     }
 

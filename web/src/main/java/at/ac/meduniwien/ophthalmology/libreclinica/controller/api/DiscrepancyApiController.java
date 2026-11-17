@@ -541,9 +541,9 @@ public class DiscrepancyApiController {
         // typeName + typeId resolved earlier; role gate runs here so
         // it can read currentRole (which was loaded for the visibility
         // filter above).
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
-        if (!NoteTransitionMatrix.canCreateType(typeId, roleId)) {
+        final int noteTypeId = typeId;
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                roleId -> NoteTransitionMatrix.canCreateType(noteTypeId, roleId))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit creating notes of type '" + typeName + "'"));
         }
@@ -735,10 +735,19 @@ public class DiscrepancyApiController {
                     "Parent note " + parentId + " is not in your visible study set"));
         }
 
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
+        // The transition is the caller's to make when one of its roles on
+        // the study may make it (DR-042); whether it is legal at all does
+        // not depend on the role.
+        final int fromStatusId = parent.getResolutionStatusId();
+        final int toStatusId = newStatusId;
         NoteTransitionMatrix.Decision decision = NoteTransitionMatrix.check(
-                parent.getResolutionStatusId(), newStatusId, roleId);
+                fromStatusId, toStatusId, ClinicalWriteAuthorization.roleIdOf(session));
+        if (decision == NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE
+                && ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                        roleId -> NoteTransitionMatrix.check(fromStatusId, toStatusId, roleId)
+                                == NoteTransitionMatrix.Decision.OK)) {
+            decision = NoteTransitionMatrix.Decision.OK;
+        }
         switch (decision) {
             case ILLEGAL_TRANSITION:
                 return ResponseEntity.badRequest().body(Map.of("message",
@@ -806,7 +815,7 @@ public class DiscrepancyApiController {
         }
 
         LOG.info("Appended thread entry to discrepancy_note id={} status={} by user={} role={}",
-                parent.getId(), body.newStatus(), ub.getName(), roleId);
+                parent.getId(), body.newStatus(), ub.getName(), ClinicalWriteAuthorization.roleIdOf(session));
 
         // Phase E.6 — fire emails on state change + reassignment. Use the
         // parent's study (not the session's currentStudy — may differ for
@@ -1142,7 +1151,8 @@ public class DiscrepancyApiController {
      * CRF whose values may change ({@link ClinicalRecordGuard}). Null otherwise.
      */
     private ItemBean itemAwaitingRow(List<ItemBean> candidates, int eventCrfId, HttpSession session) {
-        if (!ClinicalWriteAuthorization.roleMayEnterData(ClinicalWriteAuthorization.roleIdOf(session))
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                ClinicalWriteAuthorization::roleMayEnterData)
                 || ClinicalRecordGuard.refuseUnlessWritable(dataSource, eventCrfId, "starting a row") != null) {
             return null;
         }
