@@ -2227,8 +2227,6 @@ public class SubjectsApiController {
                     "message", "No active study bound to the session."));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
         if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
                 SubjectEditAuthorization::roleMayEdit)) {
             return ResponseEntity.status(403).body(Map.of("message",
@@ -2305,7 +2303,7 @@ public class SubjectsApiController {
         // AFTER the generic roleMayEdit gate so non-AI group edits are
         // unaffected.
         ResponseEntity<?> cohortDenied = guardAiCohortChange(
-                assignmentStudy, ss.getId(), desired, roleId);
+                assignmentStudy, ss.getId(), desired, session);
         if (cohortDenied != null) return cohortDenied;
 
         int touched;
@@ -2358,6 +2356,13 @@ public class SubjectsApiController {
      *       {@link Role#COORDINATOR}) may never change the cohort.</li>
      * </ul>
      *
+     * <p>Every role the caller holds on the study counts (DR-042). A
+     * treating role refuses whatever else the account holds, as it blinds
+     * whatever else the account holds ({@link AiArmPolicy#isTreatingRole}):
+     * a treating clinician who could move a patient out of the hidden arm
+     * would see the AI output after all. Administrator and Data Manager
+     * allow the change when any of the caller's roles is one of them.
+     *
      * <p>Returns a populated {@link ResponseEntity} (403 / 409 / 500)
      * when the request would change the AI cohort and the actor is not
      * permitted; returns {@code null} when the request does not touch
@@ -2370,11 +2375,11 @@ public class SubjectsApiController {
      *        classes (already resolved by the caller for multi-site).
      * @param studySubjectId  the subject being edited.
      * @param desired         the requested final assignment list.
-     * @param roleId          the actor's role id in the active study.
+     * @param session         the caller's session, for its roles on the study.
      */
     private ResponseEntity<?> guardAiCohortChange(
             StudyBean assignmentStudy, int studySubjectId,
-            List<UpdateSubjectGroupsRequest.Assignment> desired, int roleId) {
+            List<UpdateSubjectGroupsRequest.Assignment> desired, HttpSession session) {
         try (Connection c = dataSource.getConnection()) {
             // 1. Which group class carries the AI arms? P3.0 — the arm names
             //    live in AiArmPolicy, so this guard and the retinal blinding
@@ -2415,11 +2420,25 @@ public class SubjectsApiController {
                     : currentAiGroupId != 0;
             if (!changed) return null; // AI cohort untouched — defer to the generic gate.
 
-            // 4. Role / visit gate on the cohort change.
-            if (roleId == Role.ADMIN.getId()) return null; // admin may always change.
-
-            if (roleId != Role.STUDYDIRECTOR.getId()) {
-                // Treating roles (Investigator / CRC) and everyone else.
+            // 4. Role / visit gate on the cohort change. Every role the
+            //    caller holds counts (DR-042). A treating role refuses,
+            //    whatever else is held; it is read from the account the
+            //    session carries and from the database, so a role granted
+            //    since login counts too.
+            if (AiArmPolicy.isTreatingRole(session)
+                    || ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                            AiArmPolicy::isTreatingRoleId)) {
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "A treating role (Investigator or CRC) may not change a subject's AI cohort, "
+                        + "whatever other role the account holds; the study manager or an "
+                        + "administrator changes it."));
+            }
+            if (ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                    id -> id == Role.ADMIN.getId())) {
+                return null; // admin may always change.
+            }
+            if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                    id -> id == Role.STUDYDIRECTOR.getId())) {
                 return ResponseEntity.status(403).body(Map.of("message",
                         "Only the study manager may change a subject's AI cohort; "
                         + "an administrator can override after the first completed visit."));
