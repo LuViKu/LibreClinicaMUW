@@ -536,6 +536,24 @@
          <artifactId>hibernate-core</artifactId>
       </dependency>
 	</dependencies>
+	<repositories>
+		<!-- Artifacts not on Maven Central, vendored with flat POMs and their
+		     checksums (web/lib/maven/README.md): dcm4che for the export's
+		     DICOM de-identification. A file repository needs no network, and a
+		     jar that does not match its checksum fails the build. -->
+		<repository>
+			<id>muw-vendored</id>
+			<name>Vendored artifacts (web/lib/maven)</name>
+			<url>file://${project.basedir}/lib/maven</url>
+			<releases>
+				<enabled>true</enabled>
+				<checksumPolicy>fail</checksumPolicy>
+			</releases>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
 	<build>
 		<plugins>
 			<plugin>

@@ -1595,20 +1595,6 @@
 			<url>https://openclinica.jfrog.io/openclinica/libs-release</url>
 		</repository>
 		<repository>
-			<!-- dcm4che publishes to its own repository only, not to Maven
-			     Central. Releases only, never re-checked once cached. -->
-			<id>dcm4che</id>
-			<name>dcm4che</name>
-			<url>https://www.dcm4che.org/maven2/</url>
-			<releases>
-				<enabled>true</enabled>
-				<updatePolicy>never</updatePolicy>
-			</releases>
-			<snapshots>
-				<enabled>false</enabled>
-			</snapshots>
-		</repository>
-		<repository>
 			<id>jboss-public-repository-group</id>
 			<name>JBoss Public Repository Group</name>
 			<url>https://repository.jboss.org/nexus/content/groups/public/</url>

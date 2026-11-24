@@ -706,7 +706,7 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 - **The pipeline's companions** (`bscan.dcm`, `fundus.png`) are scrubbed like acquisitions; what it computed (geometry, masks in their own formats) names no one and is copied.
 - `images.csv` and the manifest say how each file was treated (`deidentified`: `dicom-basic-profile-retain-full-dates` or `metadata-stripped`), and the checksum is that of the scrubbed file.
 
-Consequences: dcm4che is resolved from its own repository (`https://www.dcm4che.org/maven2/`, releases only), not from Maven Central. Dates are kept in the files as in the casebook and the bundle's tables, so the two agree; free-text descriptions (study and series description, image comments, protocol name) and patient characteristics (age, size, weight) are removed, as the profile says.
+Consequences: dcm4che is not on Maven Central. Its jars are vendored in `web/lib/maven` with flat POMs and checksums (see the README there): declaring dcm4che's own repository, and the further repositories its parent POM declares, made dependency resolution on GitHub's runners hang for hours and Trivy's POM analysis time out. Dates are kept in the files as in the casebook and the bundle's tables, so the two agree; free-text descriptions (study and series description, image comments, protocol name) and patient characteristics (age, size, weight) are removed, as the profile says.
 
 ## DR-029 — One front door for every file a device exports
 
