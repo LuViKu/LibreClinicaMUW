@@ -245,6 +245,19 @@ describe('useDatasetsStore.testFilter (Phase 3)', () => {
     expect(datasets.previewError).toBeNull()
   })
 
+  it('sends the draft selection with the filters when given', async () => {
+    const datasets = useDatasetsStore()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FILTER_RESULT)
+
+    await datasets.testFilter('42', FILTERS, 0, { eventDefinitionOids: ['SE_V1'], itemIds: [7] })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/datasets/42:test-filter',
+      { filters: FILTERS, eventDefinitionOids: ['SE_V1'], itemIds: [7] },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+  })
+
   it('debounces — only the latest call hits the network', async () => {
     const datasets = useDatasetsStore()
     ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValue(FILTER_RESULT)
@@ -419,6 +432,21 @@ describe('useDatasetsStore (Phase 2 wizard)', () => {
     expect(ds.draft!.editingDatasetId).toBe(88)
     expect(ds.draft!.itemIds).toEqual([5001, 5002])
     expect(ds.isEditing).toBe(true)
+  })
+
+  it('startEditDraft() brings back the saved filters, so saving does not delete them', () => {
+    const ds = useDatasetsStore()
+    ds.startEditDraft({
+      ...WIZARD_ROW,
+      filters: [
+        { itemOid: '', field: 'participantId', operator: 'starts-with', value: 'HAE-05' },
+        { itemOid: 'I_AGE', operator: 'in', values: ['40', '41'] },
+      ],
+    })
+    expect(ds.draft!.filters).toEqual([
+      { itemOid: '', field: 'participantId', operator: 'starts-with', value: 'HAE-05', values: undefined },
+      { itemOid: 'I_AGE', operator: 'in', values: ['40', '41'] },
+    ])
   })
 
   it('patchDraft() shallow-merges into the current draft', () => {

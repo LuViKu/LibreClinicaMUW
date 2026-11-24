@@ -308,7 +308,12 @@ Administrator's and wider than a Monitor's. Common entry points:
 2. For a quick full export, use **Schnell-ODM** (Quick ODM) in the header — it
    generates an ODM file and downloads it.
 3. For a saved dataset, **Export now** opens a format picker — **ODM**, **CSV**,
-   **TSV**, **Excel**, **SAS**, or **SPSS** — and downloads the result.
+   **TSV**, **Excel**, **SAS**, or **SPSS**, and **Bundle** where the study has
+   the multimodal bundle switched on (*Studieneinstellungen*) — and downloads the
+   result. The picker says how many participants, visits, images and CRF values
+   the dataset holds. When it holds no CRF value, it warns that the text formats
+   would contain only their headers: a study whose data so far is images exports
+   them only as a bundle.
 4. **View files** expands a sub-row listing every generated file with size,
    timestamp, and a **download** link.
 5. **Remove** soft-deletes a dataset; tick **show removed** to **restore** it.
@@ -330,6 +335,20 @@ Administrator's and wider than a Monitor's. Common entry points:
   extract); create a new one instead.
 - Export is available to Data Managers, Monitors, and Administrators.
 - A schedule's exports run as the user who created it.
+- The **bundle** is a zip with one folder per participant (casebook, images,
+  CRF attachments, AI results) and, at the top, `participants.csv`,
+  `visits.csv`, `images.csv` (one row per image: visit, device, modality, eye,
+  path in the zip, checksum) and `data_dictionary.csv` (the selected items, their
+  types, units and answer options). `manifest.json` comes last and lists what
+  was left out and why.
+- Images leave the platform **scrubbed**: DICOM files under the DICOM Basic
+  Profile with full dates retained (patient name and ID become the study label;
+  birth date, age, device and institution details, free-text descriptions,
+  private tags and UIDs are removed or replaced; dates, pixel spacing,
+  laterality and the other acquisition attributes stay), JPEG and PNG files
+  without their metadata. A file that cannot be scrubbed — an E2E, a
+  PDF or scanned form attached to a CRF, a DICOM with burned-in annotation — is
+  not exported and is listed as withheld in the manifest.
 
 ---
 
@@ -342,8 +361,15 @@ Administrator's and wider than a Monitor's. Common entry points:
 1. From **Datasets**, click **Neues Dataset** (new) to open the create wizard at
    `/datasets/new`.
 2. Step through the wizard to name the dataset and choose its scope — the events,
-   CRFs, and items to include, plus any date/status filters.
-3. Save the dataset; it then appears in the Datasets table, where you run it in
+   CRFs, and items to include — and the inclusion flags.
+3. **Filters** (optional) restrict the export to the participants they match. A
+   filter can sit on a CRF item, or on the participant: **Teilnehmer-ID** (equals,
+   does not equal, is one of, starts with; case does not matter) or
+   **Einschlussdatum**. Numeric items compare as numbers. The count beside the
+   filters is the one the export will use.
+4. **Review** says how many participants, visits, images and CRF values the
+   export will carry, and warns when the text formats would be empty.
+5. Save the dataset; it then appears in the Datasets table, where you run it in
    whichever format you need (see §10).
 
 ![Create Dataset wizard](screenshots/data-manager/10-create-dataset.png)
@@ -352,7 +378,9 @@ Administrator's and wider than a Monitor's. Common entry points:
 
 - A saved dataset is reusable — define the scope once, export it repeatedly as the
   study accrues data.
-- Editing is only possible before the dataset's first run.
+- Editing is only possible before the dataset's first run. Reopened for editing,
+  a dataset shows its saved scope, inclusion flags and filters; saving it keeps
+  the filters unless you change them.
 
 ---
 

@@ -309,7 +309,7 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
         BundleExportWriter.Result written;
         try (OutputStream out = new BufferedOutputStream(new FileOutputStream(zip))) {
             written = BundleExportWriter.writeDataset(out, dataSource, subjects, study.getOid(),
-                    submittedBy.getName(), false);
+                    submittedBy.getName(), false, selectedItemIds(dataset));
         } catch (JobInterruptedException cancelled) {
             // The job was cancelled between two subjects. Half a bundle is
             // no export and can be gigabytes of imaging; nothing is
@@ -341,6 +341,27 @@ public class SynchronousExportMaterializer implements ExportFileMaterializer {
         ArchivedDatasetFileBean created =
                 (ArchivedDatasetFileBean) new ArchivedDatasetFileDAO(dataSource).create(fb);
         return created == null ? 0 : created.getId();
+    }
+
+    /**
+     * The items the dataset selects, read back from its stored SQL, for the
+     * bundle's data dictionary. Empty when they cannot be read: the bundle is
+     * still written, with a dictionary that has its header only.
+     */
+    private List<Integer> selectedItemIds(DatasetBean dataset) {
+        if (dataset.getItemIds() != null && !dataset.getItemIds().isEmpty()) {
+            return new ArrayList<>(dataset.getItemIds());
+        }
+        try {
+            DatasetBean hydrated = new DatasetDAO(dataSource).initialDatasetData(dataset.getId());
+            if (hydrated != null && hydrated.getItemIds() != null) {
+                return new ArrayList<>(hydrated.getItemIds());
+            }
+        } catch (RuntimeException e) {
+            LOG.warn("Dataset bundle: could not read the item selection of dataset_id={}: {}",
+                    dataset.getId(), e.getMessage());
+        }
+        return List.of();
     }
 
     /** Every live subject of the study and its sites, in label order. */

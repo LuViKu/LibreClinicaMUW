@@ -183,6 +183,9 @@ public final class IngestBindService {
             // DR-041 - a series of a split .e2e reaches its catalogue entry by the
             // entry's e2e_series token, in the study the visit belongs to.
             resolveSeriesModality(c, ingestItemId, studyEventId, eventCrfId);
+            // Any other file reaches its entry by its device, so the visit plan,
+            // the performed tick and the export all know what it is.
+            resolveDeviceModality(c, ingestItemId, studyEventId, eventCrfId);
 
             writeBindAudit(ingestItemId,
                     studyEventId != null ? studyEventId : visitOfCrf(c, eventCrfId),
@@ -445,6 +448,111 @@ public final class IngestBindService {
      * The visit a BOUND file is filed against, or null: its own visit, else
      * the visit of the CRF it is filed to.
      */
+    /**
+     * Sets {@code imaging_modality_id} of a file that has none from its device
+     * ({@link VisitImagingPlan#modalityByDevice}). No match, or several, leaves
+     * it as it was. Never fails the bind.
+     */
+    static void resolveDeviceModality(Connection c, long ingestItemId, Integer studyEventId,
+                                      Integer eventCrfId) {
+        try {
+            String kind;
+            String deviceKey;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT kind, COALESCE(device, source_ae_title) FROM ingest_item "
+                            + " WHERE ingest_item_id = ? AND imaging_modality_id IS NULL")) {
+                ps.setLong(1, ingestItemId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return;
+                    kind = rs.getString(1);
+                    deviceKey = rs.getString(2);
+                }
+            }
+            if (deviceKey == null || deviceKey.isBlank()) return;
+            Integer studyId = VisitImagingPlan.studyOfBinding(c, eventCrfId, studyEventId);
+            if (studyId == null) return;
+            Integer modality = VisitImagingPlan.modalityByDevice(c, studyId, kind, deviceKey);
+            if (modality == null) return;
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE ingest_item SET imaging_modality_id = ? "
+                            + " WHERE ingest_item_id = ? AND imaging_modality_id IS NULL")) {
+                ps.setInt(1, modality);
+                ps.setLong(2, ingestItemId);
+                ps.executeUpdate();
+            }
+        } catch (SQLException | RuntimeException e) {
+            LOG.warn("ingest_item {}: could not resolve the device's catalogue entry: {}",
+                    ingestItemId, e.getMessage());
+        }
+    }
+
+    /** What a catch-up over a study's filed files did. */
+    public record CatchUpResult(int files, java.util.Map<String, Integer> outcomes) {}
+
+    /**
+     * Apply the performed tick to files that were filed before their binding
+     * existed: every BOUND file of the study and its sites that sits on a
+     * visit gets its catalogue entry from its device where it has none, and
+     * then the tick a bind would have written.
+     *
+     * <p>Attributed to the {@code system} account, like a machine bind, and
+     * audited per tick by the ticker. Idempotent: a tick already there, a
+     * value an operator entered and a value from another source are kept
+     * (DR-034); a removed, locked or signed CRF is not written.
+     *
+     * @param studyId the study whose filed files to go through
+     * @return the number of files gone through and the ticker's outcomes,
+     *         counted by name; null when the system account is missing
+     */
+    public CatchUpResult applyPerformedToFiled(int studyId) throws SQLException {
+        int actor = systemActorId();
+        if (actor <= 0) return null;
+        record Filed(long id, int studySubjectId, int subjectStudyId, Integer visit, Integer eventCrf,
+                     String sourceKind, String deviceKey, String laterality) {}
+        java.util.List<Filed> filed = new java.util.ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT ii.ingest_item_id, ii.bound_study_subject_id, ss.study_id, "
+                             + "       COALESCE(ii.bound_study_event_id, ec.study_event_id), ii.bound_event_crf_id, "
+                             + "       ii.source_kind, COALESCE(ii.device, ii.source_ae_title), ii.laterality "
+                             + "  FROM ingest_item ii "
+                             + "  JOIN study_subject ss ON ss.study_subject_id = ii.bound_study_subject_id "
+                             + "  JOIN study s ON s.study_id = ss.study_id "
+                             + "  LEFT JOIN event_crf ec ON ec.event_crf_id = ii.bound_event_crf_id "
+                             + " WHERE ii.status = 'BOUND' AND (s.study_id = ? OR s.parent_study_id = ?) "
+                             + " ORDER BY ii.ingest_item_id")) {
+            ps.setInt(1, studyId);
+            ps.setInt(2, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int visit = rs.getInt(4);
+                    Integer visitOrNull = rs.wasNull() ? null : visit;
+                    int ecrf = rs.getInt(5);
+                    Integer ecrfOrNull = rs.wasNull() ? null : ecrf;
+                    filed.add(new Filed(rs.getLong(1), rs.getInt(2), rs.getInt(3), visitOrNull, ecrfOrNull,
+                            rs.getString(6), rs.getString(7), rs.getString(8)));
+                }
+            }
+        }
+        java.util.Map<String, Integer> outcomes = new java.util.TreeMap<>();
+        PerformedItemAutoTicker ticker = new PerformedItemAutoTicker(dataSource);
+        for (Filed f : filed) {
+            String outcome;
+            if (f.visit() == null) {
+                outcome = "NO_VISIT";
+            } else {
+                try (Connection c = dataSource.getConnection()) {
+                    resolveDeviceModality(c, f.id(), f.visit(), f.eventCrf());
+                }
+                outcome = ticker.markPerformed(f.id(), f.eventCrf(), f.visit(), f.sourceKind(),
+                        f.deviceKey(), f.laterality(), f.subjectStudyId(), actor).name();
+            }
+            outcomes.merge(outcome, 1, Integer::sum);
+        }
+        LOG.info("performed catch-up over study {}: {} file(s), {}", studyId, filed.size(), outcomes);
+        return new CatchUpResult(filed.size(), outcomes);
+    }
+
     /**
      * Sets {@code imaging_modality_id} of a split-.e2e series that has none,
      * from the {@code e2e_series} token of the bound study's catalogue. No match

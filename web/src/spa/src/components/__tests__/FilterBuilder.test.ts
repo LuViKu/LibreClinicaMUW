@@ -101,12 +101,47 @@ describe('FilterBuilder — row model', () => {
     wrapper.unmount()
   })
 
-  it('disables the add button when no items are picked', async () => {
+  it('offers the participant ID when no items are picked', async () => {
+    // A study with images but no CRF item selected can still be filtered by
+    // participant.
     const wrapper = mountBuilder([])
     await flushPromises()
 
     const button = wrapper.get('[data-testid="filter-add"]')
-    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+    expect((button.element as HTMLButtonElement).disabled).toBe(false)
+    await button.trigger('click')
+    const emitted = wrapper.emitted('update:modelValue')
+    expect(emitted?.at(-1)?.[0]).toEqual([
+      { itemOid: '', field: 'participantId', operator: '=', value: '', values: undefined },
+    ])
+
+    wrapper.unmount()
+  })
+
+  it('switches a row to the participant ID and offers its operators', async () => {
+    const wrapper = mountBuilder([NUMERIC_ITEM], [
+      { itemOid: NUMERIC_ITEM.oid, operator: '>=', value: '18' },
+    ])
+    await flushPromises()
+
+    await wrapper.get('#filter-item-0').setValue('@participantId')
+    const emitted = wrapper.emitted('update:modelValue')
+    expect(emitted?.at(-1)?.[0]).toEqual([
+      { itemOid: '', field: 'participantId', operator: '=', value: '', values: undefined },
+    ])
+    const ops = wrapper.findAll('#filter-op-0 option').map((o) => o.attributes('value'))
+    expect(ops).toEqual(['=', '!=', 'in', 'starts-with'])
+
+    wrapper.unmount()
+  })
+
+  it('takes the enrolment date as a date', async () => {
+    const wrapper = mountBuilder([], [
+      { itemOid: '', field: 'enrollmentDate', operator: '>=', value: '2026-11-01' },
+    ])
+    await flushPromises()
+
+    expect(wrapper.get('#filter-value-0').attributes('type')).toBe('date')
 
     wrapper.unmount()
   })

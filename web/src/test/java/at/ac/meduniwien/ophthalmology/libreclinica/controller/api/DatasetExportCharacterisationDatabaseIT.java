@@ -619,6 +619,100 @@ class DatasetExportCharacterisationDatabaseIT extends AbstractApiControllerDatab
         }
     }
 
+    /** Save one filter row (its stored JSON) on a dataset, as the controller does. */
+    private void saveFilter(DatasetBean ds, String name, String json) {
+        var owner = new UserAccountDAO(DATA_SOURCE).findByPK(1);
+        new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetFilterDAO(DATA_SOURCE)
+                .replaceAll(ds.getId(), owner, java.util.List.of(
+                        new at.ac.meduniwien.ophthalmology.libreclinica.dao.extract
+                                .DatasetFilterDAO.PersistableFilter(name, "", json)));
+    }
+
+    /**
+     * A participant ID is not CRF data, so a study whose data so far is images
+     * could not be filtered by participant at all. The participant filter
+     * restricts the export like any other, and ignores case.
+     */
+    @Test
+    void aParticipantIdFilterRestrictsTheExport() throws Exception {
+        DatasetBean ds = persistDataset("IT_PARTICIPANT_" + System.nanoTime(), java.util.List.of(1, 2, 3, 5));
+        saveFilter(ds, "participantId =",
+                "{\"itemOid\":\"\",\"field\":\"participantId\",\"operator\":\"=\",\"value\":\"m-002\",\"values\":[]}");
+
+        String text = readArchive(archivePathFor(idFromResult(materializer().materialize(ds, "tab", 1))));
+        assertTrue(text.contains("M-002"), "the participant the filter names is exported");
+        assertTrue(!text.contains("M-001"), "every other participant is left out");
+    }
+
+    /**
+     * "Does not equal" is what the wizard sends as != and SQL spells <>. The
+     * export used to know only the second: it ignored the row as unusable, and
+     * with no other filter exported everyone, though the preview had counted
+     * the restricted set.
+     */
+    @Test
+    void aNotEqualFilterIsAppliedRatherThanIgnored() throws Exception {
+        DatasetBean ds = persistDataset("IT_NOTEQUAL_" + System.nanoTime(), java.util.List.of(1, 2, 3, 5));
+        saveFilter(ds, "participantId !=",
+                "{\"itemOid\":\"\",\"field\":\"participantId\",\"operator\":\"!=\",\"value\":\"M-001\",\"values\":[]}");
+
+        java.util.List<Integer> ids = new at.ac.meduniwien.ophthalmology.libreclinica.service.extract
+                .DatasetFilterSubjectResolver(DATA_SOURCE).resolve(ds.getId(), 1);
+        assertTrue(ids != null, "the filter is applied, not ignored");
+        assertTrue(!ids.contains(1) && ids.contains(2), "M-001 is excluded, M-002 is not: " + ids);
+    }
+
+    /**
+     * A numeric item compares as a number: as text, "95" is greater than
+     * "100", and a "> 100" filter on height kept the wrong participant.
+     */
+    @Test
+    void aNumericItemComparesAsANumber() throws Exception {
+        // Every height of two participants: a participant can have one per visit.
+        java.util.Map<Integer, String> original = new java.util.LinkedHashMap<>();
+        java.util.Map<Integer, Integer> subjectOf = new java.util.LinkedHashMap<>();
+        try (var c = DATA_SOURCE.getConnection();
+             var ps = c.prepareStatement(
+                     "SELECT id.item_data_id, se.study_subject_id, id.value "
+                             + "FROM item_data id JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id "
+                             + "JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                             + "WHERE id.item_id = 3 ORDER BY se.study_subject_id, id.item_data_id");
+             var rs = ps.executeQuery()) {
+            while (rs.next()) {
+                original.put(rs.getInt(1), rs.getString(3));
+                subjectOf.put(rs.getInt(1), rs.getInt(2));
+            }
+        }
+        java.util.List<Integer> subjects = subjectOf.values().stream().distinct().limit(2).toList();
+        assertEquals(2, subjects.size(), "fixture assumption: two participants have a height");
+        int shorter = subjects.get(0);
+        int taller = subjects.get(1);
+        try {
+            for (var e : subjectOf.entrySet()) {
+                if (e.getValue() == shorter) setValue(e.getKey(), "95");
+                else if (e.getValue() == taller) setValue(e.getKey(), "180");
+            }
+            var resolver = new at.ac.meduniwien.ophthalmology.libreclinica.service.extract
+                    .DatasetFilterSubjectResolver(DATA_SOURCE);
+            java.util.List<Integer> ids = resolver.subjectsMatching(1, java.util.List.of(
+                    new at.ac.meduniwien.ophthalmology.libreclinica.service.extract.DatasetFilterSubjectResolver
+                            .Row(null, "I_HEIGHT_CM", ">", "100", java.util.List.of())), "IT");
+            assertTrue(ids.contains(taller), "180 is greater than 100: " + ids);
+            assertTrue(!ids.contains(shorter), "95 is not, though \"95\" > \"100\" as text: " + ids);
+        } finally {
+            for (var e : original.entrySet()) setValue(e.getKey(), e.getValue());
+        }
+    }
+
+    private void setValue(int itemDataId, String value) throws Exception {
+        try (var c = DATA_SOURCE.getConnection();
+             var ps = c.prepareStatement("UPDATE item_data SET value = ? WHERE item_data_id = ?")) {
+            ps.setString(1, value);
+            ps.setInt(2, itemDataId);
+            ps.executeUpdate();
+        }
+    }
+
     /**
      * SAS export produces the three artefacts SAS needs, not an empty file.
      *

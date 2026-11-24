@@ -44,9 +44,9 @@
 		  SHOW_CRF_INT_NAME,SHOW_CRF_INT_DATE,
 		  SHOW_GROUP_INFO,SHOW_DISC_INFO,
 		  odm_metadataversion_name, odm_metadataversion_oid,
-		  odm_prior_study_oid, odm_prior_metadataversion_oid, show_secondary_id, dataset_item_status_id)
+		  odm_prior_study_oid, odm_prior_metadataversion_oid, show_secondary_id, dataset_item_status_id, show_crf_completion_date)
 		  VALUES (?,?,?,?,?,?,NOW(),NOW(),?,NOW(),'2005-11-15',
-		  ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		  ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		</sql>
 	</query>
 	<query>
@@ -124,7 +124,7 @@
 		SHOW_GROUP_INFO=?,SHOW_DISC_INFO=?,
 		odm_metadataversion_name=?, odm_metadataversion_oid=?,
 		odm_prior_study_oid=?, odm_prior_metadataversion_oid=?,
-		show_secondary_id=?, dataset_item_status_id=?
+		show_secondary_id=?, dataset_item_status_id=?, show_crf_completion_date=?
 		WHERE DATASET_ID=?</sql>
 	</query>
 </queries>

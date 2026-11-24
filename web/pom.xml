@@ -125,6 +125,13 @@
 			<artifactId>LibreClinica-core</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+		<!-- The Basic Application Level Confidentiality Profile (DICOM PS3.15
+		     Annex E) for images leaving the platform in an export. -->
+		<dependency>
+			<groupId>org.dcm4che</groupId>
+			<artifactId>dcm4che-deident</artifactId>
+			<version>${dcm4che.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>LibreClinica-docs</artifactId>
@@ -602,7 +609,8 @@
                              autoconfig exclusion classes; all come via the
                              starter-web transitive graph. -->
                         <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot</ignoredUsedUndeclaredDependency>
-                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
+
                         <!-- 2026-10-09: ApiExceptionHandlerLiveWiringTest builds the root context like Boot's
                              (DefaultErrorAttributes lives in spring-boot-webmvc in Boot 4); the module
                              arrives through spring-boot-starter-web and is runtime-needed, so it must not

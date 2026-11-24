@@ -23,7 +23,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiGet } from '@/api/client'
+import { apiGet, apiPost } from '@/api/client'
 import CreateDatasetWizard from '@/components/CreateDatasetWizard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
@@ -159,6 +159,33 @@ describe('CreateDatasetWizard', () => {
     expect(datasets.draft?.itemIds).toEqual([100])
     // Defaults still applied.
     expect(datasets.draft?.includeFlags.gender).toBe(FLAG_DEFAULTS.gender)
+  })
+
+  it('says on the review step when the selection holds no CRF value, and points to the bundle', async () => {
+    vi.mocked(apiPost).mockResolvedValue({
+      matchingSubjects: 59, matchingCrfs: 4, totalSubjects: 59, totalCrfs: 4,
+      matchingVisits: 59, matchingImages: 176, matchingValues: 0,
+    })
+    const wrapper = await mountWizard()
+    const datasets = useDatasetsStore()
+    datasets.patchDraft({
+      name: 'Images only',
+      eventDefinitionOids: ['SE_BASELINE'],
+      crfVersionIds: [10],
+      itemIds: [100],
+    })
+    await flushPromises()
+    const nextBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Next')
+    for (let i = 0; i < 3; i++) await nextBtn!.trigger('click')
+    await flushPromises()
+
+    expect(vi.mocked(apiPost)).toHaveBeenCalledWith('/pages/api/v1/datasets/0:test-filter',
+      { filters: [], eventDefinitionOids: ['SE_BASELINE'], itemIds: [100] }, expect.anything())
+    expect(wrapper.get('[data-testid="review-counts"]').text()).toContain('176 image(s)')
+    const warning = wrapper.get('[data-testid="review-no-crf-values"]').text()
+    expect(warning).toContain(enMessages.createDataset.review.noCrfValues)
+    // The study has not switched the bundle on: the warning says who can.
+    expect(warning).toContain('study settings')
   })
 
   it('Back button decrements the step', async () => {

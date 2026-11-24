@@ -440,7 +440,9 @@ export const useDatasetsStore = defineStore('datasets', () => {
       itemIds: [...(dataset.itemIds ?? [])],
       includeFlags: { ...FLAG_DEFAULTS, ...(dataset.includeFlags ?? {}) },
       selectedItemOids: [],
-      filters: [],
+      // The saved filters come back with the dataset. Starting the edit with
+      // none, and saving that, used to delete them.
+      filters: (dataset.filters ?? []).map((f) => ({ ...f, values: f.values ? [...f.values] : undefined })),
     }
   }
 
@@ -617,6 +619,9 @@ export const useDatasetsStore = defineStore('datasets', () => {
    *                       verbatim to the backend.
    * @param debounceMs    Override the default 300 ms debounce. Tests
    *                       pass 0 to skip the timer.
+   * @param selection     The draft's visits and items; with them the
+   *                       answer also counts the CRF values a text export
+   *                       would carry.
    * @returns A promise that resolves to the latest {@link FilterTestResult},
    *          or {@code null} if the call was cancelled / aborted.
    */
@@ -624,6 +629,7 @@ export const useDatasetsStore = defineStore('datasets', () => {
     datasetId: string,
     filters: DatasetFilterDto[],
     debounceMs = 300,
+    selection?: { eventDefinitionOids: string[]; itemIds: number[] },
   ): Promise<FilterTestResult | null> {
     if (debounceHandle !== null) {
       clearTimeout(debounceHandle)
@@ -649,7 +655,9 @@ export const useDatasetsStore = defineStore('datasets', () => {
         try {
           const result = await apiPost<FilterTestResult>(
             `/pages/api/v1/datasets/${encodeURIComponent(datasetId)}:test-filter`,
-            { filters },
+            selection
+              ? { filters, eventDefinitionOids: selection.eventDefinitionOids, itemIds: selection.itemIds }
+              : { filters },
             { signal: controller.signal },
           )
           if (controller.signal.aborted) {

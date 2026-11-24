@@ -23,6 +23,7 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 
@@ -373,6 +374,59 @@ public class ImagingModalitiesApiController {
 
     /* ------------------------------------------------------------------ */
     /* guards                                                              */
+    // ----- POST /apply-performed -----
+
+    /**
+     * Tick "performed" for the files already filed against the study's
+     * visits, as a bind would have. For a binding added after files arrived:
+     * the tick is written when a file is bound, so files bound before their
+     * modality had a binding were never ticked.
+     *
+     * <p>Writes CRF values, as the {@code system} account and audited per
+     * tick. Never overwrites a value an operator entered, nor one another
+     * source wrote, and leaves removed, locked or signed CRFs alone. The same
+     * guard as a catalogue change, for the active study (or its parent) only.
+     *
+     * @return the files gone through and what happened to each, by outcome
+     */
+    @PostMapping(value = "/apply-performed", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> applyPerformed(@PathVariable("studyOid") String studyOid, HttpSession session) {
+        ResponseEntity<?> guard = guardWrite(session);
+        if (guard != null) return guard;
+        Integer studyId;
+        try (Connection c = dataSource.getConnection()) {
+            studyId = studyIdOf(c, studyOid);
+        } catch (SQLException e) {
+            LOG.error("performed catch-up: study lookup failed for {}: {}", studyOid, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not resolve the study"));
+        }
+        if (studyId == null) {
+            return ResponseEntity.status(404).body(Map.of("message", "no study " + studyOid));
+        }
+        StudyBean active = (StudyBean) session.getAttribute("study");
+        boolean ownStudy = active != null && (active.getId() == studyId
+                || (active.getParentStudyId() > 0 && active.getParentStudyId() == studyId));
+        if (!ownStudy) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Pick the study first; the catch-up runs for the active study only."));
+        }
+        try {
+            IngestBindService.CatchUpResult result =
+                    new IngestBindService(dataSource).applyPerformedToFiled(studyId);
+            if (result == null) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "There is no system account to attribute the ticks to."));
+            }
+            UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
+            LOG.info("performed catch-up for {} run by user {}: {} file(s), {}",
+                    studyOid, user == null ? "?" : user.getName(), result.files(), result.outcomes());
+            return ResponseEntity.ok(Map.of("files", result.files(), "outcomes", result.outcomes()));
+        } catch (SQLException e) {
+            LOG.error("performed catch-up failed for {}: {}", studyOid, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "the catch-up failed"));
+        }
+    }
+
     /* ------------------------------------------------------------------ */
 
     /** Anyone signed in may read the catalogue; it names no patient. */

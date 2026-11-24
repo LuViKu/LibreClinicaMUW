@@ -20,6 +20,7 @@ const create = vi.fn()
 const retire = vi.fn()
 const putBinding = vi.fn()
 const removeBinding = vi.fn()
+const applyPerformed = vi.fn()
 const list = { value: [] as unknown[] }
 
 vi.mock('@/stores/imagingModalities', () => ({
@@ -34,6 +35,7 @@ vi.mock('@/stores/imagingModalities', () => ({
     retire,
     putBinding,
     removeBinding,
+    applyPerformed,
   }),
 }))
 
@@ -134,6 +136,29 @@ describe('ImagingModalitiesPanel', () => {
     await flushPromises()
     expect(confirmMock).toHaveBeenCalled()
     expect(retire).not.toHaveBeenCalled()
+  })
+
+  it('asks before ticking "performed" for images already filed, and does nothing on no', async () => {
+    confirmMock.mockResolvedValue(false)
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="apply-performed"]').trigger('click')
+    await flushPromises()
+    expect(confirmMock).toHaveBeenCalled()
+    expect(applyPerformed).not.toHaveBeenCalled()
+  })
+
+  it('reports what the catch-up over the filed images did', async () => {
+    applyPerformed.mockResolvedValue({ files: 176, outcomes: { WRITTEN: 160, ALREADY_SET: 10, NOT_APPLICABLE: 6 } })
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="apply-performed"]').trigger('click')
+    await flushPromises()
+    expect(applyPerformed).toHaveBeenCalledWith('S_HAE')
+    const line = w.get('[data-testid="apply-performed-result"]').text()
+    expect(line).toContain('176')
+    expect(line).toContain('160')
+    expect(line).toContain('10')
   })
 
   it('adds an acquisition with the file kinds that were ticked', async () => {

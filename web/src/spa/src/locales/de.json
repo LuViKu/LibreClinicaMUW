@@ -3400,7 +3400,11 @@
       "scope": "Scope",
       "scopeSummary": "{events} Visite(n) · {versions} CRF-Version(en) · {items} Item(s)",
       "flagsTitle": "Inklusionsflags",
-      "noFlagsInSection": "(keines ausgewählt)"
+      "noFlagsInSection": "(keines ausgewählt)",
+      "counts": "Der Export enthält {participants} Teilnehmer/-innen, {visits} Visite(n), {images} Bild(er) und {values} CRF-Wert(e) der ausgewählten Items.",
+      "noCrfValues": "Diese Auswahl enthält noch keine CRF-Werte; die Textformate (CSV, TSV, Excel, SPSS, SAS, ODM) enthielten nur ihre Kopfzeilen.",
+      "useBundle": "Die {images} Bild(er) sind im multimodalen Bundle enthalten: exportieren Sie diesen Datensatz als „Bundle“.",
+      "enableBundle": "Die {images} Bild(er) lassen sich als multimodales Bundle exportieren, sobald die Studienleitung es in den Studieneinstellungen einschaltet."
     },
     "fields": {
       "name": "Dataset-Name",
@@ -3632,8 +3636,16 @@
       "in": "ist eines von",
       "between": "zwischen",
       "is-null": "ist leer",
-      "not-null": "ist nicht leer"
-    }
+      "not-null": "ist nicht leer",
+      "starts-with": "beginnt mit"
+    },
+    "participantGroup": "Teilnehmer/-in",
+    "itemGroup": "CRF-Items",
+    "participantFields": {
+      "participantId": "Teilnehmer-ID",
+      "enrollmentDate": "Einschlussdatum"
+    },
+    "previewImages": "{images} Bilder"
   },
   "exportWizard": {
     "back": "Zurück",
@@ -3792,7 +3804,13 @@
       "initials": "Kürzel"
     },
     "octMarker": "OCT-Volumen auswerten",
-    "octMarkerHint": "Als OCT-Modalität markiert: hier abgelegte OCT-Volumen (.e2e oder DICOM) werden ausgewertet, und der Visitenplan kann Auswertungen festlegen. Braucht E2E oder DICOM."
+    "octMarkerHint": "Als OCT-Modalität markiert: hier abgelegte OCT-Volumen (.e2e oder DICOM) werden ausgewertet, und der Visitenplan kann Auswertungen festlegen. Braucht E2E oder DICOM.",
+    "applyPerformed": {
+      "button": "Auf bereits zugeordnete Bilder anwenden",
+      "confirm": "„Durchgeführt“ für die Visiten aller bereits zugeordneten Bilder dieser Studie setzen, wie es beim Zuordnen geschehen wäre? Wird als Systemkonto geschrieben und protokolliert; eingegebene Werte bleiben, entfernte, gesperrte oder signierte CRFs werden nicht verändert.",
+      "result": "{files} Bild(er) geprüft: {written} gesetzt, {kept} bereits gesetzt oder beibehalten.",
+      "failed": "Das Nachtragen ist fehlgeschlagen."
+    }
   },
   "studySettings": {
     "title": "Plattform-Einstellungen",
