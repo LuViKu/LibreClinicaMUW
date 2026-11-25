@@ -1018,6 +1018,20 @@ public class UsersApiController {
             }
         }
 
+        // Monitor is held alone on a study (DR-042).
+        try {
+            Set<Role> wouldHold = new HashSet<>();
+            for (String raw : activeRawRoles(username, study.getId())) wouldHold.add(roleOfStoredName(raw));
+            wouldHold.add(legacyRole);
+            ResponseEntity<?> monitorBeside = monitorAloneRefusal(username, body.studyOid(), wouldHold);
+            if (monitorBeside != null) return monitorBeside;
+        } catch (SQLException e) {
+            LOG.warn("Failed to read current grants for (study={}, user={}): {}",
+                    study.getId(), target.getName(), e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load current role grants"));
+        }
+
         // Multi-role idempotency: refuse only when an ACTIVE row already
         // exists for the EXACT (user, study, role) triple. Other active
         // grants for the same (user, study) — e.g. user already has CRC,
@@ -1188,6 +1202,26 @@ public class UsersApiController {
         StudyUserRoleBean probe = new StudyUserRoleBean();
         probe.setRoleName(roleName);
         return probe.getRole();
+    }
+
+    /**
+     * Monitor is held alone on a study (DR-042). An account may do what any
+     * of its roles on a study allows, and every other role enters data: a
+     * Monitor beside one would verify, and close the queries on, data it
+     * entered itself.
+     *
+     * @param wouldHold the roles the user holds on the study once the
+     *        request is written
+     * @return a 409 when they include Monitor and another role;
+     *         {@code null} otherwise
+     */
+    static ResponseEntity<?> monitorAloneRefusal(String username, String studyOid,
+                                                 Set<Role> wouldHold) {
+        if (!wouldHold.contains(Role.MONITOR) || wouldHold.size() < 2) return null;
+        return ResponseEntity.status(409).body(Map.of("message",
+                "Monitor verifies the data the other roles enter, so it is held alone on a study. "
+                        + "User '" + username + "' would hold Monitor beside another role on study "
+                        + studyOid + "; nothing was changed."));
     }
 
     /**
@@ -1512,6 +1546,13 @@ public class UsersApiController {
         Set<Role> currentRoles = new HashSet<>();
         for (String raw : current) currentRoles.add(roleOfStoredName(raw));
         Set<Role> requestedRoles = new HashSet<>(resolved.values());
+
+        // Monitor is held alone on a study (DR-042): the roles the request
+        // leaves, the kept legacy roles among them.
+        Set<Role> wouldHold = new HashSet<>(requestedRoles);
+        for (String legacy : keepLegacy) wouldHold.add(roleOfStoredName(legacy));
+        ResponseEntity<?> monitorBeside = monitorAloneRefusal(username, studyOid, wouldHold);
+        if (monitorBeside != null) return monitorBeside;
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
         int adds = 0;

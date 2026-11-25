@@ -219,7 +219,10 @@ class IngestInboxApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
     @Test
     void aMonitorMayNotReconcile() throws Exception {
         // Verify-only: a monitor reads data, they do not decide whose it is.
-        mockMvc().perform(get("/api/v1/ingest/inbox").session(sessionAs(Role.MONITOR)))
+        // An account that holds the role alone: the root session this suite
+        // uses elsewhere also holds Administrator, which counts (DR-042).
+        mockMvc().perform(get("/api/v1/ingest/inbox")
+                        .session(ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_monitor", Role.MONITOR)))
                 .andExpect(status().isForbidden());
     }
 

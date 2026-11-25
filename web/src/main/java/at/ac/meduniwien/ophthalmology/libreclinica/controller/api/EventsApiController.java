@@ -402,7 +402,7 @@ public class EventsApiController {
             return noStudyRole;
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "starting data entry");
+                session, dataSource, "starting data entry");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -695,7 +695,7 @@ public class EventsApiController {
             return noStudyRole;
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "scheduling study events");
+                session, dataSource, "scheduling study events");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -931,7 +931,8 @@ public class EventsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!EventEditAuthorization.roleMayEdit(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                EventEditAuthorization::roleMayEdit)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing study events"));
         }
@@ -1222,7 +1223,8 @@ public class EventsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!EventEditAuthorization.roleMayCancel(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                EventEditAuthorization::roleMayCancel)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit cancelling study events"));
         }
@@ -1459,13 +1461,13 @@ public class EventsApiController {
                     "No active study bound to the session — visit /MainMenu after login."));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
         // Signing is the investigator's attestation, for one visit as for the
         // whole casebook: the same rule as signing a subject. Until 2026-11
         // this reused the edit gate, which also let the coordinator, the
-        // director and the admin binding sign.
-        if (!SubjectsApiController.roleMaySignSubject(roleId)) {
+        // director and the admin binding sign. Any of the caller's roles on
+        // the study counts (DR-042).
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectsApiController::roleMaySignSubject)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit signing study events"));
         }
@@ -1664,7 +1666,8 @@ public class EventsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!EventEditAuthorization.roleMayCancel(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                EventEditAuthorization::roleMayCancel)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit restoring study events"));
         }

@@ -796,7 +796,8 @@ public class RetinalResultsApiController {
         if (guard != null) return guard;
         // Filing a scan under a visit is reconciliation, gated like the
         // ingest inbox's bind.
-        if (!IngestBindAuthorization.roleMayReconcile(ClinicalWriteAuthorization.roleIdOf(session))) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                IngestBindAuthorization::roleMayReconcile)) {
             return ClinicalWriteAuthorization.forbidden("binding scans to visits");
         }
 
@@ -925,7 +926,8 @@ public class RetinalResultsApiController {
                                                 HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
-        if (!IngestBindAuthorization.roleMayReconcile(ClinicalWriteAuthorization.roleIdOf(session))) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                IngestBindAuthorization::roleMayReconcile)) {
             return ClinicalWriteAuthorization.forbidden("binding scans to visits");
         }
 
@@ -1208,7 +1210,7 @@ public class RetinalResultsApiController {
         if (guard != null) return guard;
         // A finished job writes its metrics into the visit's CRF.
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "running retinal analyses");
+                session, dataSource, "running retinal analyses");
         if (roleRefusal != null) return roleRefusal;
 
         FailedJob job;
@@ -1369,7 +1371,7 @@ public class RetinalResultsApiController {
         if (guard != null) return guard;
         // A finished job writes its metrics into the visit's CRF.
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "running retinal analyses");
+                session, dataSource, "running retinal analyses");
         if (roleRefusal != null) return roleRefusal;
 
         String newTask = body == null ? null : body.get("task");

@@ -406,7 +406,8 @@ public class RetinalJobArtifactsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!canCorrectSegmentation(currentUser, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> canCorrectSegmentation(currentUser, binding))) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Layer-segmentation corrections require Investigator or Data-Manager role"));
         }
@@ -525,7 +526,8 @@ public class RetinalJobArtifactsApiController {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!canCorrectSegmentation(currentUser, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> canCorrectSegmentation(currentUser, binding))) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Layer-segmentation corrections require Investigator or Data-Manager role"));
         }

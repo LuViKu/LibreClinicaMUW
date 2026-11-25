@@ -519,8 +519,8 @@ public class SubjectsApiController {
             ));
         }
 
-        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole, currentUser,
-                resolveLocale(acceptLanguage));
+        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole,
+                signingRoleOf(session), currentUser, resolveLocale(acceptLanguage));
 
         LOG.debug("Sign-preflight for {} (study {}, user {}): {} blocking, {} warnings",
                 ss.getOid(), currentStudy.getOid(), currentUser.getName(),
@@ -604,8 +604,26 @@ public class SubjectsApiController {
         return locale != null && "de".equalsIgnoreCase(locale.getLanguage()) ? de : en;
     }
 
+    /**
+     * The role the caller signs as: the session's binding when it may sign,
+     * else an investigator role the caller holds on the study beside it
+     * (DR-042); {@code null} when the caller holds none.
+     */
+    private Role signingRoleOf(HttpSession session) {
+        if (session.getAttribute("userRole") instanceof StudyUserRoleBean bound
+                && bound.getRole() != null && roleMaySignSubject(bound.getRole().getId())) {
+            return bound.getRole();
+        }
+        return ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectsApiController::roleMaySignSubject) ? Role.INVESTIGATOR : null;
+    }
+
+    /**
+     * @param signingRole the role the caller signs as ({@link #signingRoleOf}),
+     *        {@code null} when the caller may not sign
+     */
     private SignPreflightDto computePreflight(StudySubjectBean ss, StudyBean currentStudy,
-                                              StudyUserRoleBean currentRole,
+                                              StudyUserRoleBean currentRole, Role signingRole,
                                               UserAccountBean currentUser, Locale locale) {
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
@@ -772,13 +790,13 @@ public class SubjectsApiController {
         }
 
         // ------ Check 5: user-role-can-sign ------
-        boolean canSign = false;
-        String legacyRoleName = null;
-        if (currentRole != null && currentRole.getRole() != null) {
-            Role r = currentRole.getRole();
-            legacyRoleName = r.getName();
-            canSign = roleMaySignSubject(r.getId());
-        }
+        // One of the caller's roles on the study must sign (DR-042): an
+        // investigator who is bound as Data Manager signs as the
+        // investigator, and the check names that role.
+        boolean canSign = signingRole != null;
+        String legacyRoleName = canSign ? signingRole.getName()
+                : (currentRole != null && currentRole.getRole() != null)
+                        ? currentRole.getRole().getName() : null;
         SignPreflightDto.CheckRow roleCheck;
         if (canSign) {
             roleCheck = new SignPreflightDto.CheckRow(
@@ -893,7 +911,7 @@ public class SubjectsApiController {
             return noStudyRole;
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "adding subjects");
+                session, dataSource, "adding subjects");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -1633,8 +1651,10 @@ public class SubjectsApiController {
         // rule for signing a visit too; the preflight repeats it as its
         // user-role-can-sign check. No system-administrator short-circuit,
         // unlike the legacy SignStudySubjectServlet: the signature attests as
-        // the binding (see ClinicalWriteAuthorization).
-        if (!roleMaySignSubject(ClinicalWriteAuthorization.roleIdOf(session))) {
+        // the investigator, a role the caller must hold on the study, bound or
+        // beside the bound one (DR-042, see ClinicalWriteAuthorization).
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectsApiController::roleMaySignSubject)) {
             return ClinicalWriteAuthorization.forbidden("signing subjects");
         }
 
@@ -1703,8 +1723,8 @@ public class SubjectsApiController {
             ));
         }
 
-        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser,
-                resolveLocale(acceptLanguage));
+        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole,
+                signingRoleOf(session), currentUser, resolveLocale(acceptLanguage));
         List<SignPreflightDto.CheckRow> blockingFails = new ArrayList<>();
         for (SignPreflightDto.CheckRow c : preflight.checks()) {
             // subject-not-signed:fail is the converse precondition of a
@@ -1813,7 +1833,8 @@ public class SubjectsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!SubjectEditAuthorization.roleMayEdit(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectEditAuthorization::roleMayEdit)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing study-subject demographics"));
         }
@@ -2206,9 +2227,8 @@ public class SubjectsApiController {
                     "message", "No active study bound to the session."));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
-        if (!SubjectEditAuthorization.roleMayEdit(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectEditAuthorization::roleMayEdit)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing subject group assignments"));
         }
@@ -2283,7 +2303,7 @@ public class SubjectsApiController {
         // AFTER the generic roleMayEdit gate so non-AI group edits are
         // unaffected.
         ResponseEntity<?> cohortDenied = guardAiCohortChange(
-                assignmentStudy, ss.getId(), desired, roleId);
+                assignmentStudy, ss.getId(), desired, session);
         if (cohortDenied != null) return cohortDenied;
 
         int touched;
@@ -2336,6 +2356,13 @@ public class SubjectsApiController {
      *       {@link Role#COORDINATOR}) may never change the cohort.</li>
      * </ul>
      *
+     * <p>Every role the caller holds on the study counts (DR-042). A
+     * treating role refuses whatever else the account holds, as it blinds
+     * whatever else the account holds ({@link AiArmPolicy#isTreatingRole}):
+     * a treating clinician who could move a patient out of the hidden arm
+     * would see the AI output after all. Administrator and Data Manager
+     * allow the change when any of the caller's roles is one of them.
+     *
      * <p>Returns a populated {@link ResponseEntity} (403 / 409 / 500)
      * when the request would change the AI cohort and the actor is not
      * permitted; returns {@code null} when the request does not touch
@@ -2348,11 +2375,11 @@ public class SubjectsApiController {
      *        classes (already resolved by the caller for multi-site).
      * @param studySubjectId  the subject being edited.
      * @param desired         the requested final assignment list.
-     * @param roleId          the actor's role id in the active study.
+     * @param session         the caller's session, for its roles on the study.
      */
     private ResponseEntity<?> guardAiCohortChange(
             StudyBean assignmentStudy, int studySubjectId,
-            List<UpdateSubjectGroupsRequest.Assignment> desired, int roleId) {
+            List<UpdateSubjectGroupsRequest.Assignment> desired, HttpSession session) {
         try (Connection c = dataSource.getConnection()) {
             // 1. Which group class carries the AI arms? P3.0 — the arm names
             //    live in AiArmPolicy, so this guard and the retinal blinding
@@ -2393,11 +2420,25 @@ public class SubjectsApiController {
                     : currentAiGroupId != 0;
             if (!changed) return null; // AI cohort untouched — defer to the generic gate.
 
-            // 4. Role / visit gate on the cohort change.
-            if (roleId == Role.ADMIN.getId()) return null; // admin may always change.
-
-            if (roleId != Role.STUDYDIRECTOR.getId()) {
-                // Treating roles (Investigator / CRC) and everyone else.
+            // 4. Role / visit gate on the cohort change. Every role the
+            //    caller holds counts (DR-042). A treating role refuses,
+            //    whatever else is held; it is read from the account the
+            //    session carries and from the database, so a role granted
+            //    since login counts too.
+            if (AiArmPolicy.isTreatingRole(session)
+                    || ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                            AiArmPolicy::isTreatingRoleId)) {
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "A treating role (Investigator or CRC) may not change a subject's AI cohort, "
+                        + "whatever other role the account holds; the study manager or an "
+                        + "administrator changes it."));
+            }
+            if (ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                    id -> id == Role.ADMIN.getId())) {
+                return null; // admin may always change.
+            }
+            if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                    id -> id == Role.STUDYDIRECTOR.getId())) {
                 return ResponseEntity.status(403).body(Map.of("message",
                         "Only the study manager may change a subject's AI cohort; "
                         + "an administrator can override after the first completed visit."));
@@ -2463,7 +2504,8 @@ public class SubjectsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!SubjectLifecycleAuthorization.roleMayManageLifecycle(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectLifecycleAuthorization::roleMayManageLifecycle)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit " + opName + " on study subjects"));
         }

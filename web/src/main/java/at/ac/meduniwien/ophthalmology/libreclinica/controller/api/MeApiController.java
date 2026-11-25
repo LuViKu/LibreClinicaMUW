@@ -260,7 +260,7 @@ public class MeApiController {
                     protocolTypeKey,
                     enabledModules,
                     studySettings,
-                    permissionsOf(ClinicalWriteAuthorization.roleIdOf(session)),
+                    permissionsOf(ClinicalWriteAuthorization.roleIdsOnTheStudy(session, dataSource)),
                     parentOidOf(currentStudy)
             );
         }
@@ -937,16 +937,21 @@ public class MeApiController {
     }
 
     /**
-     * What the session's binding may write, by the rules of the write
-     * endpoints: data entry ({@link ClinicalWriteAuthorization#roleMayEnterData}),
-     * editing a subject ({@link SubjectEditAuthorization#roleMayEdit}) and
-     * signing one ({@link SubjectsApiController#roleMaySignSubject}).
+     * What the caller's roles on the active study may write, by the rules
+     * of the write endpoints: data entry
+     * ({@link ClinicalWriteAuthorization#roleMayEnterData}), editing a
+     * subject ({@link SubjectEditAuthorization#roleMayEdit}) and signing one
+     * ({@link SubjectsApiController#roleMaySignSubject}). Each holds when
+     * one of the roles allows it, as on the endpoints (DR-042).
+     *
+     * @param roleIds legacy {@link Role} ids, as
+     *        {@link ClinicalWriteAuthorization#roleIdsOnTheStudy} reads them
      */
-    static MeDto.PermissionsDto permissionsOf(int roleId) {
+    static MeDto.PermissionsDto permissionsOf(List<Integer> roleIds) {
         return new MeDto.PermissionsDto(
-                ClinicalWriteAuthorization.roleMayEnterData(roleId),
-                SubjectEditAuthorization.roleMayEdit(roleId),
-                SubjectsApiController.roleMaySignSubject(roleId));
+                roleIds.stream().anyMatch(ClinicalWriteAuthorization::roleMayEnterData),
+                roleIds.stream().anyMatch(SubjectEditAuthorization::roleMayEdit),
+                roleIds.stream().anyMatch(SubjectsApiController::roleMaySignSubject));
     }
 
     private static String blankToNull(String s) {
