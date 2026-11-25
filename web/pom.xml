@@ -132,6 +132,13 @@
 			<artifactId>dcm4che-deident</artifactId>
 			<version>${dcm4che.version}</version>
 		</dependency>
+		<!-- Used directly too (Attributes, the DICOM streams), so declared:
+		     dependency:analyze fails the build on an undeclared one. -->
+		<dependency>
+			<groupId>org.dcm4che</groupId>
+			<artifactId>dcm4che-core</artifactId>
+			<version>${dcm4che.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>LibreClinica-docs</artifactId>
