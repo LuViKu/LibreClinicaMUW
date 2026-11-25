@@ -23,7 +23,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
@@ -311,11 +310,9 @@ public class ModalitiesApiController {
      * tightly gated even when the SPA convenience function lets every
      * authenticated user READ them.
      */
-    private static ResponseEntity<?> refuseIfNotAdmin(HttpSession session) {
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (currentRole != null && currentRole.getRole() != null)
-                ? currentRole.getRole().getId() : 0;
-        if (roleId != Role.ADMIN.getId()) {
+    private ResponseEntity<?> refuseIfNotAdmin(HttpSession session) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                roleId -> roleId == Role.ADMIN.getId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit modifying the modality catalog — sysadmin only."));
         }

@@ -2541,7 +2541,8 @@
       },
       "legacyHint": "Altrolle: Beim Speichern der Zeile bleibt sie erhalten. Zum Entfernen abwählen; hier lässt sie sich nicht neu vergeben.",
       "overlapStudyWide": "Studienweite Rolle vorhanden – gilt für alle Prüfzentren",
-      "overlapSites": "Rollen an Prüfzentren vorhanden – zuerst dort entfernen"
+      "overlapSites": "Rollen an Prüfzentren vorhanden – zuerst dort entfernen",
+      "monitorAlone": "Monitor prüft, was die anderen Rollen eingeben, und steht deshalb allein auf einer Studie. Entfernen Sie Monitor oder die anderen Rollen."
     },
     "userType": {
       "label": "Kontotyp",

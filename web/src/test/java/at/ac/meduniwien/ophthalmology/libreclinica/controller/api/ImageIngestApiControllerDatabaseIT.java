@@ -155,14 +155,6 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
         return s;
     }
 
-    private MockHttpSession monitorSession() {
-        MockHttpSession s = dataManagerSession();
-        StudyUserRoleBean role = new StudyUserRoleBean();
-        role.setRole(Role.MONITOR);
-        s.setAttribute("userRole", role);
-        return s;
-    }
-
     /** Insert an UNBOUND upload row; returns its id. A real PNG is written when {@code withPreview}. */
     private long seedUnbound(String patientId, String studyDate, boolean withPreview) throws Exception {
         String name = "it-" + System.nanoTime() + ".png";
@@ -229,7 +221,10 @@ class ImageIngestApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT
 
     @Test
     void inbox_asMonitor_is403() throws Exception {
-        mockMvc().perform(get("/api/v1/image-ingest/inbox").session(monitorSession()))
+        // An account that holds the role alone: the root session this suite
+        // uses elsewhere also holds Administrator, which counts (DR-042).
+        mockMvc().perform(get("/api/v1/image-ingest/inbox")
+                        .session(ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_monitor", Role.MONITOR)))
                 .andExpect(status().isForbidden());
     }
 

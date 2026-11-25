@@ -8,8 +8,11 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.function.IntPredicate;
+import java.util.function.Predicate;
 
 import javax.sql.DataSource;
 
@@ -28,12 +31,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  * The role matrix for the SPA's clinical-data write APIs, in one place.
  *
  * <p>Every endpoint under {@code controller/api} that creates or changes
- * clinical data, or its status, checks the caller's role on the active
- * study. The role is the session's {@code userRole}:
- * {@code POST /me/activeStudy} binds it together with the study, from the
- * caller's own active bindings on that study, and refuses a study the
- * caller holds no role on. The SDV rules also count the caller's other
- * roles on that study ({@link #anyRoleOnTheStudyMay}). Neither the chain-level
+ * clinical data, or its status, checks the caller's roles on the active
+ * study. An account may hold several there, and it may do what any of them
+ * allows ({@link #anyRoleOnTheStudyMay}, DR-042): the session's
+ * {@code userRole}, which {@code POST /me/activeStudy} binds together with
+ * the study, from the caller's own active bindings on that study, and the
+ * caller's other active bindings there. {@code POST /me/activeStudy}
+ * refuses a study the caller holds no role on. Neither the chain-level
  * {@code hasRole("USER")} rule nor site visibility says what a user may
  * change: the first says the caller is logged in, the second which
  * subjects the caller may see. Without the per-endpoint check a Monitor,
@@ -58,7 +62,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  * <h2>Matrix</h2>
  *
  * <p>SYS is any system administrator, whatever the binding; the other
- * columns are the binding on the active study.
+ * columns are the roles held on the active study. A caller who holds
+ * several may do what any of them allows.
  *
  * <pre>
  *                               SYS ADM CRC DM  INV RA  RA2 MON  rule
@@ -73,8 +78,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *   Remove, restore, lock or
  *     unlock a subject; link
  *     a patient                  .   x   .   x   .   .   .   .   {@link SubjectLifecycleAuthorization}
- *   Verify SDV (any binding)     .   x   x   x   .   .   .   x   {@link #roleMayVerifySdv}
- *   Un-verify SDV (any binding)  .   x   .   x   .   .   .   x   {@link SdvUnverifyAuthorization}
+ *   Verify SDV                   .   x   x   x   .   .   .   x   {@link #roleMayVerifySdv}
+ *   Un-verify SDV                .   x   .   x   .   .   .   x   {@link SdvUnverifyAuthorization}
  *   Raise a query, annotation
  *     or failed check            .   x   x   x   x   .   .   x   {@link NoteTransitionMatrix#canCreateType}
  *   Reason-for-change note       .   x   .   x   .   .   .   .   {@link NoteTransitionMatrix#canCreateType}
@@ -135,32 +140,33 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
  *   <li>Signing a subject or a visit is narrower than
  *       {@code SignStudySubjectServlet} (director, coordinator, investigator
  *       and any system administrator): both endpoints refuse with 403 every
- *       binding but investigator, and the subject's preflight repeats the
- *       rule as its {@code user-role-can-sign} check. A signature attests as
- *       the role held on the study, and the signature is the investigator's
- *       (2026-11: the director, coordinator and admin binding lost it; study
- *       management enters and corrects data, it does not attest it).</li>
+ *       caller who holds no investigator role on the study, and the
+ *       subject's preflight repeats the rule as its {@code user-role-can-sign}
+ *       check. The signature is the investigator's (2026-11: the director,
+ *       coordinator and admin roles lost it; study management enters and
+ *       corrects data, it does not attest it). An investigator who also
+ *       holds one of those roles signs as the investigator.</li>
  * </ul>
  *
- * <p>System administrators: every rule goes by the binding on the active
- * study, which {@code POST /me/activeStudy} takes from the caller's own
- * role rows; a system administrator is usually bound as {@code admin}, and
- * every helper here admits that binding. Only the restore and import gates
+ * <p>System administrators: every rule goes by the roles held on the
+ * active study, which {@code POST /me/activeStudy} takes from the caller's
+ * own role rows; a system administrator usually holds {@code admin}, and
+ * every helper here admits that role. Only the restore and import gates
  * also admit a system administrator whatever the binding
  * ({@code isSysAdmin()}). {@code maySubmitData} and {@code SDVController}
  * have no such short-circuit either. {@code SignStudySubjectServlet},
  * {@code UpdateStudySubjectServlet}, {@code RemoveStudySubjectServlet} and
  * {@code RestoreStudySubjectServlet} do; their rules here deliberately do
- * not, so a system administrator bound as, say, monitor neither signs nor
- * edits, removes or restores a subject through the SPA.
+ * not, so a system administrator who holds only, say, monitor neither signs
+ * nor edits, removes or restores a subject through the SPA.
  *
  * <p>Some older helpers are deliberately narrower than their legacy
  * servlet, and stay so: editing a subject or a visit refuses ra and ra2,
  * signing a subject or a visit refuses the director, the coordinator and the
  * admin binding (above),
  * and un-verifying SDV refuses the coordinator, whom {@code SDVController}
- * admits. {@code GET /me} reports what the session's binding may do
- * ({@code activeStudy.permissions}), so that the SPA offers only what
+ * admits. {@code GET /me} reports what the caller's roles on the study may
+ * do ({@code activeStudy.permissions}), so that the SPA offers only what
  * these rules admit; ra and ra2 share the SPA role "Investigator".
  *
  * <h2>Order of checks</h2>
@@ -180,11 +186,11 @@ final class ClinicalWriteAuthorization {
 
     /** The legacy {@link Role} id of the session's {@code userRole}; 0 when none is bound. */
     static int roleIdOf(HttpSession session) {
-        Object bound = session.getAttribute("userRole");
-        if (!(bound instanceof StudyUserRoleBean role) || role.getRole() == null) {
-            return 0;
-        }
-        return role.getRole().getId();
+        return session.getAttribute("userRole") instanceof StudyUserRoleBean role ? roleIdOf(role) : 0;
+    }
+
+    private static int roleIdOf(StudyUserRoleBean binding) {
+        return binding == null || binding.getRole() == null ? 0 : binding.getRole().getId();
     }
 
     /**
@@ -217,54 +223,107 @@ final class ClinicalWriteAuthorization {
     }
 
     /**
-     * Does {@code rule} admit the session's role, or another role the
-     * caller holds on the active study?
+     * Does {@code rule} admit one of the roles the caller holds on the
+     * active study?
      *
-     * <p>{@code POST /me/activeStudy} binds one role, the caller's
-     * highest-ranked, and ranks the Monitor below every other role, while
-     * the SPA offers a page for any role the caller holds on the study. A
-     * caller who holds Monitor beside Investigator is bound as Investigator,
-     * and the SDV page offered to the Monitor would refuse every request. The
-     * SDV rules therefore count every active binding on the study, as
-     * multi-role authorization does elsewhere
-     * ({@link StudyAdminAuthorization#userMayEditStudy}). The bindings are
-     * read only when the session's role is refused, and a failed read
-     * refuses.
+     * <p>An account may hold several roles on a study, and it may do what
+     * any of them allows (DR-042). {@code POST /me/activeStudy} and the login
+     * bind one of them, the highest-ranked, as the session's
+     * {@code userRole}: a Data Manager who is also the study's Investigator is
+     * bound as Data Manager, and still signs. The rule is tried on that
+     * binding first. The caller's other active bindings are read only when it
+     * refuses: those on the active study and, when the study is a site, those
+     * on its parent, whose roles apply at its sites. A failed read refuses.
      *
-     * @param rule takes a legacy {@link Role} id
+     * <p>Restrictions are counted the same way: any treating role the
+     * caller holds blinds it ({@link AiArmPolicy#isTreatingRole}).
+     *
+     * @param rule takes a legacy {@link Role} id; 0 when the session has no role
      */
     static boolean anyRoleOnTheStudyMay(HttpSession session, DataSource dataSource,
                                         IntPredicate rule) {
-        if (rule.test(roleIdOf(session))) {
+        return anyBindingOnTheStudyMay(session, dataSource, binding -> rule.test(roleIdOf(binding)));
+    }
+
+    /**
+     * {@link #anyRoleOnTheStudyMay} for a rule that reads the binding, not
+     * only its role. The rule is given the session's binding first, or
+     * {@code null} when none is bound, so a rule that admits a system
+     * administrator whatever the binding still does.
+     */
+    static boolean anyBindingOnTheStudyMay(HttpSession session, DataSource dataSource,
+                                           Predicate<StudyUserRoleBean> rule) {
+        StudyUserRoleBean bound = session.getAttribute("userRole") instanceof StudyUserRoleBean b ? b : null;
+        if (rule.test(bound)) {
             return true;
         }
-        if (!(session.getAttribute("userBean") instanceof UserAccountBean user)
-                || !(session.getAttribute("study") instanceof StudyBean study)) {
-            return false;
-        }
-        try {
-            for (StudyUserRoleBean binding
-                    : new UserAccountDAO(dataSource).findAllRolesByUserName(user.getName())) {
-                if (binding != null && binding.getRole() != null
-                        && binding.getStudyId() == study.getId()
-                        && Status.AVAILABLE.equals(binding.getStatus())
-                        && rule.test(binding.getRole().getId())) {
-                    return true;
-                }
+        for (StudyUserRoleBean binding : otherBindingsOnTheStudy(session, dataSource)) {
+            if (rule.test(binding)) {
+                return true;
             }
-        } catch (RuntimeException e) {
-            return false;
         }
         return false;
     }
 
     /**
-     * @param action what is refused, completing "Your role does not permit …"
-     * @return a 403 unless the session's role may enter data; {@code null}
-     *         when it may
+     * The legacy role ids the caller holds on the active study, the
+     * session's first: the roles {@link #anyRoleOnTheStudyMay} counts, read
+     * once, for a caller that asks several rules ({@code GET /me}).
      */
-    static ResponseEntity<?> refuseUnlessMayEnterData(HttpSession session, String action) {
-        return roleMayEnterData(roleIdOf(session)) ? null : forbidden(action);
+    static List<Integer> roleIdsOnTheStudy(HttpSession session, DataSource dataSource) {
+        List<Integer> ids = new ArrayList<>();
+        ids.add(roleIdOf(session));
+        for (StudyUserRoleBean binding : otherBindingsOnTheStudy(session, dataSource)) {
+            int id = roleIdOf(binding);
+            if (!ids.contains(id)) {
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * The caller's active bindings on the active study, or on its parent
+     * when it is a site; empty when there is no caller, no study, or the
+     * bindings cannot be read.
+     */
+    private static List<StudyUserRoleBean> otherBindingsOnTheStudy(HttpSession session,
+                                                                   DataSource dataSource) {
+        if (!(session.getAttribute("userBean") instanceof UserAccountBean user)
+                || !(session.getAttribute("study") instanceof StudyBean study)
+                || study.getId() <= 0) {
+            return List.of();
+        }
+        List<StudyUserRoleBean> bindings = new ArrayList<>();
+        try {
+            for (StudyUserRoleBean binding
+                    : new UserAccountDAO(dataSource).findAllRolesByUserName(user.getName())) {
+                if (binding != null && binding.getRole() != null
+                        && onTheStudyOrItsParent(binding.getStudyId(), study)
+                        && Status.AVAILABLE.equals(binding.getStatus())) {
+                    bindings.add(binding);
+                }
+            }
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+        return bindings;
+    }
+
+    private static boolean onTheStudyOrItsParent(int studyId, StudyBean study) {
+        return studyId == study.getId()
+                || (study.getParentStudyId() > 0 && studyId == study.getParentStudyId());
+    }
+
+    /**
+     * @param action what is refused, completing "Your role does not permit …"
+     * @return a 403 unless one of the caller's roles on the study may enter
+     *         data; {@code null} when one may
+     */
+    static ResponseEntity<?> refuseUnlessMayEnterData(HttpSession session, DataSource dataSource,
+                                                      String action) {
+        return anyRoleOnTheStudyMay(session, dataSource, ClinicalWriteAuthorization::roleMayEnterData)
+                ? null : forbidden(action);
     }
 
     /**

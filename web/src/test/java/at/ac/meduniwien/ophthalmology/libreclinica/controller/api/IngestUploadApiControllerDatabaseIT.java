@@ -178,7 +178,10 @@ class IngestUploadApiControllerDatabaseIT extends AbstractApiControllerDatabaseI
 
     @Test
     void aRoleThatMayNotReconcileMayNotUploadEither() throws Exception {
-        mockMvc().perform(multipart(BASE + "/commit").file(png("a.png")).session(sessionAs(Role.MONITOR)))
+        // An account that holds the role alone: the root session this suite
+        // uses elsewhere also holds Administrator, which counts (DR-042).
+        mockMvc().perform(multipart(BASE + "/commit").file(png("a.png"))
+                        .session(ClinicalWriteFixtures.sessionHolding(DATA_SOURCE, "manual_monitor", Role.MONITOR)))
                 .andExpect(status().isForbidden());
     }
 

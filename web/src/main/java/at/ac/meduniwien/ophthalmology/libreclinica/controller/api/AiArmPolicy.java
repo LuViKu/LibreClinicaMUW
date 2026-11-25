@@ -141,7 +141,12 @@ public final class AiArmPolicy {
     }
 
     private static boolean isTreating(Role role) {
-        return role != null && (role.equals(Role.INVESTIGATOR) || role.equals(Role.COORDINATOR));
+        return role != null && isTreatingRoleId(role.getId());
+    }
+
+    /** Is the legacy role id a treating role: Investigator or coordinator? */
+    static boolean isTreatingRoleId(int roleId) {
+        return roleId == Role.INVESTIGATOR.getId() || roleId == Role.COORDINATOR.getId();
     }
 
     private static boolean onStudyOrItsParent(int studyId, StudyBean study) {

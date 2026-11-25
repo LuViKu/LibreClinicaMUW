@@ -240,7 +240,7 @@ public class RetinalInferenceApiController {
             ));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "uploading scans to a CRF");
+                session, dataSource, "uploading scans to a CRF");
         if (roleRefusal != null) {
             return roleRefusal;
         }

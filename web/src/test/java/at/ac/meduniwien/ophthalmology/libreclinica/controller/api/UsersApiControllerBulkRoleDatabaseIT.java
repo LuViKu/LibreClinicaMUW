@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -63,6 +64,7 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
 
     private static final int BULK_USER_ID = 30001;
     private static final int RESAVE_USER_ID = 30002;
+    private static final int RESAVE_MONITOR_USER_ID = 30003;
 
     @BeforeAll
     static void seedBulkUser() throws Exception {
@@ -99,6 +101,14 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
                     + "VALUES (" + RESAVE_USER_ID + ", 'resave-user', 'x', 'Resave', 'User', "
                     + "'resave@example.invalid', 1, 'MUW (test)', 1, 1, current_timestamp, 2, true, true, "
                     + "0, false, 'STANDARD', false)");
+            stmt.execute(
+                    "INSERT INTO user_account (user_id, user_name, passwd, first_name, last_name, "
+                    + "email, active_study, institutional_affiliation, status_id, owner_id, "
+                    + "date_created, user_type_id, enabled, account_non_locked, lock_counter, "
+                    + "run_webservices, authtype, enable_api_key) "
+                    + "VALUES (" + RESAVE_MONITOR_USER_ID + ", 'resave-monitor', 'x', 'Resave', 'Monitor', "
+                    + "'resave-monitor@example.invalid', 1, 'MUW (test)', 1, 1, current_timestamp, 2, true, "
+                    + "true, 0, false, 'STANDARD', false)");
         }
     }
 
@@ -199,26 +209,26 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
     }
 
     /**
-     * Additive POST: when {@code monitor} already holds a single
-     * grant on the demo study (Monitor, from
+     * Additive POST: when {@code physician} already holds a single
+     * grant on the demo study (Investigator, from
      * lc-muw-2026-06-02-seed-demo-test-users.xml), POSTing a fresh
-     * {@code Investigator} for the same (user, study) returns 201
+     * {@code CRC} for the same (user, study) returns 201
      * (formerly 409 under the legacy single-role guard).
      */
     @Test
     void postAddsSecondRoleToExistingGrant() throws Exception {
-        usersMockMvc().perform(post("/api/v1/users/monitor/roles")
+        usersMockMvc().perform(post("/api/v1/users/physician/roles")
                 .contentType("application/json")
-                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"CRC\"}")
                 .session(sysadminSession()))
                 .andExpect(status().isCreated());
 
-        // monitor now has BOTH Monitor and Investigator active on the
+        // physician now has BOTH Investigator and CRC active on the
         // demo study.
         try (Connection conn = DATA_SOURCE.getConnection();
              PreparedStatement ps = conn.prepareStatement(
                      "SELECT COUNT(*) FROM study_user_role "
-                     + "WHERE user_name = 'monitor' AND study_id = 1 "
+                     + "WHERE user_name = 'physician' AND study_id = 1 "
                      + "  AND status_id = 1")) {
             try (ResultSet rs = ps.executeQuery()) {
                 org.junit.jupiter.api.Assertions.assertTrue(rs.next());
@@ -237,25 +247,91 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
      */
     @Test
     void savingAListThatKeepsTheGrantedRolesKeepsThem() throws Exception {
-        for (String role : new String[] {"Investigator", "Monitor"}) {
-            usersMockMvc().perform(post("/api/v1/users/resave-user/roles")
-                    .contentType("application/json")
-                    .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"" + role + "\"}")
-                    .session(sysadminSession()))
-                    .andExpect(status().isCreated());
-        }
+        usersMockMvc().perform(post("/api/v1/users/resave-user/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
+                .session(sysadminSession()))
+                .andExpect(status().isCreated());
         usersMockMvc().perform(put("/api/v1/users/resave-user/roles/S_DEFAULTS1")
                 .contentType("application/json")
-                .content("{\"roles\":[\"Investigator\",\"Monitor\",\"CRC\"]}")
+                .content("{\"roles\":[\"Investigator\",\"CRC\"]}")
                 .session(sysadminSession()))
                 .andExpect(status().isOk());
 
         usersMockMvc().perform(get("/api/v1/users/resave-user/roles").session(sysadminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.active == true)]", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.active == true)]", hasSize(2)))
                 .andExpect(jsonPath("$[?(@.active == true && @.role == 'Investigator')]", hasSize(1)))
-                .andExpect(jsonPath("$[?(@.active == true && @.role == 'Monitor')]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.active == true && @.role == 'CRC')]", hasSize(1)));
+
+        // Monitor, stored as "Monitor", is held alone on a study (DR-042).
+        usersMockMvc().perform(post("/api/v1/users/resave-monitor/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Monitor\"}")
+                .session(sysadminSession()))
+                .andExpect(status().isCreated());
+        usersMockMvc().perform(put("/api/v1/users/resave-monitor/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"roles\":[\"Monitor\"]}")
+                .session(sysadminSession()))
+                .andExpect(status().isOk());
+        usersMockMvc().perform(get("/api/v1/users/resave-monitor/roles").session(sysadminSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.active == true)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.active == true && @.role == 'Monitor')]", hasSize(1)));
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Monitor is held alone on a study (DR-042)                          */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void monitorIsNotAddedBesideAnotherRole() throws Exception {
+        // manual_crc holds coordinator on the demo study.
+        usersMockMvc().perform(post("/api/v1/users/manual_crc/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Monitor\"}")
+                .session(sysadminSession()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("held alone on a study")));
+        org.junit.jupiter.api.Assertions.assertEquals(1, activeRows("manual_crc"));
+    }
+
+    @Test
+    void noRoleIsAddedBesideMonitor() throws Exception {
+        // monitor holds Monitor on the demo study.
+        usersMockMvc().perform(post("/api/v1/users/monitor/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
+                .session(sysadminSession()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("held alone on a study")));
+        org.junit.jupiter.api.Assertions.assertEquals(1, activeRows("monitor"));
+    }
+
+    @Test
+    void aRoleListWithMonitorAndAnotherRoleIsRefusedAndChangesNothing() throws Exception {
+        usersMockMvc().perform(put("/api/v1/users/manual_dm/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"roles\":[\"Data Manager\",\"Monitor\"]}")
+                .session(sysadminSession()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(containsString("held alone on a study")));
+        org.junit.jupiter.api.Assertions.assertEquals(1, activeRows("manual_dm"));
+    }
+
+    /** Active rows of the user on the demo study. */
+    private static int activeRows(String userName) throws Exception {
+        try (Connection conn = DATA_SOURCE.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT COUNT(*) FROM study_user_role WHERE user_name = ? AND study_id = 1 "
+                     + "AND status_id = 1")) {
+            ps.setString(1, userName);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
     }
 
     /**

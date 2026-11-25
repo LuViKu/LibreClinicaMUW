@@ -316,7 +316,8 @@ public class DatasetsApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
@@ -475,7 +476,8 @@ public class DatasetsApiController {
             return;
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN,
                     "Your role does not permit downloading export files.");
             return;
@@ -579,7 +581,8 @@ public class DatasetsApiController {
                             "No active study bound — call POST /pages/api/v1/me/activeStudy first")));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             return ResolvedContext.error(ResponseEntity.status(403).body(
                     Map.of("message", "Your role does not permit accessing data exports.")));
         }
@@ -908,7 +911,8 @@ public class DatasetsApiController {
         }
 
         StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(ub, role)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(ub, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit accessing data exports."));
         }
@@ -1278,7 +1282,8 @@ public class DatasetsApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit accessing data exports."));
         }
@@ -1424,7 +1429,8 @@ public class DatasetsApiController {
                     "Dataset's parent study no longer exists"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayEditExports(me, currentRole, parentStudy)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayEditExports(me, binding, parentStudy))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing datasets on this study"));
         }
@@ -1549,7 +1555,8 @@ public class DatasetsApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean parentStudy = (StudyBean) studyDao.findByPK(target.getStudyId());
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (parentStudy != null && !roleMayEditExports(me, currentRole, parentStudy)) {
+        if (parentStudy != null && !ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayEditExports(me, binding, parentStudy))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit deleting datasets on this study"));
         }
@@ -1608,7 +1615,8 @@ public class DatasetsApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean parentStudy = (StudyBean) studyDao.findByPK(target.getStudyId());
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (parentStudy != null && !roleMayEditExports(me, currentRole, parentStudy)) {
+        if (parentStudy != null && !ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayEditExports(me, binding, parentStudy))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit restoring datasets on this study"));
         }
@@ -1751,7 +1759,8 @@ public class DatasetsApiController {
         }
         if (mutating) {
             StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-            if (!roleMayEditExports(me, currentRole, study)) {
+            if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                    binding -> roleMayEditExports(me, binding, study))) {
                 return WizardPreflight.error(ResponseEntity.status(403)
                         .body(Map.of("message",
                                 "Your role does not permit managing datasets on this study")));

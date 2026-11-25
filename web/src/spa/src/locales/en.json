@@ -2541,7 +2541,8 @@
       },
       "legacyHint": "Legacy role: saving the row keeps it. Untick it to remove it; it cannot be granted again here.",
       "overlapStudyWide": "Holds a study-wide role – it covers all sites",
-      "overlapSites": "Holds roles at its sites – remove those first"
+      "overlapSites": "Holds roles at its sites – remove those first",
+      "monitorAlone": "Monitor verifies what the other roles enter, so it is held alone on a study. Remove Monitor or the other roles."
     },
     "userType": {
       "label": "Account type",

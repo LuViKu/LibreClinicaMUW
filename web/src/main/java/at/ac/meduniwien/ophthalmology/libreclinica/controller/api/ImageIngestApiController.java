@@ -26,7 +26,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -376,9 +375,8 @@ public class ImageIngestApiController {
 
 
     private ResponseEntity<?> guardReconcileRole(HttpSession session) {
-        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (role != null && role.getRole() != null) ? role.getRole().getId() : 0;
-        if (!IngestBindAuthorization.roleMayReconcile(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                IngestBindAuthorization::roleMayReconcile)) {
             return ResponseEntity.status(403).body(Map.of("message", "Your role may not reconcile fundus images"));
         }
         return null;

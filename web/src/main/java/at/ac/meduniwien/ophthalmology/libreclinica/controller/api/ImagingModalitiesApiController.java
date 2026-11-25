@@ -372,8 +372,6 @@ public class ImagingModalitiesApiController {
         }
     }
 
-    /* ------------------------------------------------------------------ */
-    /* guards                                                              */
     // ----- POST /apply-performed -----
 
     /**
@@ -428,6 +426,7 @@ public class ImagingModalitiesApiController {
     }
 
     /* ------------------------------------------------------------------ */
+    /* guards                                                              */
 
     /** Anyone signed in may read the catalogue; it names no patient. */
     private static ResponseEntity<?> guardRead(HttpSession session) {
@@ -442,16 +441,14 @@ public class ImagingModalitiesApiController {
      * Changing the catalogue changes what the platform writes into CRFs, so it
      * is a data manager's or an administrator's to change.
      */
-    private static ResponseEntity<?> guardWrite(HttpSession session) {
+    private ResponseEntity<?> guardWrite(HttpSession session) {
         ResponseEntity<?> unauthenticated = guardRead(session);
         if (unauthenticated != null) return unauthenticated;
-        var role = (at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean)
-                session.getAttribute("userRole");
         UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
         boolean admin = user != null && user.isSysAdmin();
-        boolean dataManager = role != null && role.getRole() != null
-                && role.getRole().getId()
-                   == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR.getId();
+        boolean dataManager = ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                roleId -> roleId
+                        == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR.getId());
         if (!admin && !dataManager) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Your role may not change a study's imaging catalogue"));

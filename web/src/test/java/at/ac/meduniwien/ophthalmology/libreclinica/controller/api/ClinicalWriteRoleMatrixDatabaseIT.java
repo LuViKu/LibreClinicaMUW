@@ -34,6 +34,7 @@ import java.util.stream.Stream;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -70,7 +71,10 @@ import org.springframework.test.web.servlet.request.AbstractMockHttpServletReque
  * demo account's own role on Default Study. {@code manual_monitor} is a
  * Monitor, {@code manual_investigator} an Investigator, {@code manual_crc} a
  * coordinator and {@code manual_dm} a director. There is no ra or ra2 demo
- * account, so those roles are put on the Investigator's session.
+ * account, so those roles are held by a copy of the Investigator's account
+ * ({@link ClinicalWriteFixtures#sessionHolding}), which holds that role
+ * alone. An account that holds several roles may do what any of them allows
+ * (DR-042); those cases grant a demo account a second role.
  *
  * <p>For every write endpoint, a Monitor is refused with 403 and writes
  * nothing, and a role the matrix admits gets past the check. The SDV and
@@ -529,12 +533,12 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
         grant("manual_investigator", "monitor");
         try {
             mvc().perform(json(post("/api/v1/sdv/verify"), "{\"eventCrfOids\":[\"2\"]}")
-                            .session(investigatorHolding(Role.INVESTIGATOR)))
+                            .session(sessionAs("manual_investigator")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.verified").value(hasItem("2")));
             mvc().perform(json(post("/api/v1/sdv/unverify"),
                             "{\"eventCrfOids\":[\"2\"],\"reason\":\"compared with the wrong source\"}")
-                            .session(investigatorHolding(Role.INVESTIGATOR)))
+                            .session(sessionAs("manual_investigator")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.unverified").value(hasItem("2")));
         } finally {
@@ -591,6 +595,85 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
     }
 
     /* ------------------------------------------------------------------ */
+    /* An account may do what any of its roles allows (DR-042)            */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * The Data Manager who is also the study's Investigator. The session is
+     * bound as Data Manager, the higher-ranked role, and the account signs
+     * as the Investigator: {@code /me} says so, the preflight passes and
+     * names the role, and both sign endpoints get past the role rule.
+     */
+    @Test
+    void aDataManagerWhoIsAlsoTheInvestigatorSigns() throws Exception {
+        grant("manual_dm", "Investigator");
+        try {
+            MockHttpSession session = boundAs("manual_dm", Role.STUDYDIRECTOR);
+
+            mvc().perform(get("/api/v1/me").session(session))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.activeStudy.permissions.enterData").value(true))
+                    .andExpect(jsonPath("$.activeStudy.permissions.editSubject").value(true))
+                    .andExpect(jsonPath("$.activeStudy.permissions.signSubject").value(true));
+            mvc().perform(get("/api/v1/subjects/SS_M001/preflightForSign").session(session))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.checks[?(@.id == 'user-role-can-sign')].status").value(hasItem("pass")))
+                    .andExpect(jsonPath("$.checks[?(@.id == 'user-role-can-sign')].detail")
+                            .value(hasItem(containsString(Role.INVESTIGATOR.getName()))));
+
+            MvcResult subject = mvc().perform(json(post("/api/v1/subjects/SS_M001/sign"),
+                            "{\"password\":\"wrong\",\"attestation\":true}").session(session))
+                    .andReturn();
+            MvcResult visit = mvc().perform(json(post("/api/v1/events/1/sign"),
+                            "{\"password\":\"wrong\",\"attestation\":true}").session(session))
+                    .andReturn();
+            assertTrue(subject.getResponse().getStatus() != 403, "subject sign: " + subject.getResponse().getStatus());
+            assertTrue(visit.getResponse().getStatus() != 403, "visit sign: " + visit.getResponse().getStatus());
+        } finally {
+            revoke("manual_dm", "Investigator");
+        }
+    }
+
+    /** A removed role allows nothing: only the account's active roles count. */
+    @Test
+    void aRemovedInvestigatorRoleDoesNotSign() throws Exception {
+        ClinicalWriteFixtures.execute(DATA_SOURCE,
+                "INSERT INTO study_user_role (role_name, study_id, status_id, owner_id, date_created, "
+                        + "user_name) VALUES ('Investigator', 1, 5, 1, now(), 'manual_dm')");
+        try {
+            mvc().perform(json(post("/api/v1/subjects/SS_M001/sign"), "{\"password\":\"x\",\"attestation\":true}")
+                            .session(boundAs("manual_dm", Role.STUDYDIRECTOR)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.message").value(containsString(REFUSAL)));
+            mvc().perform(get("/api/v1/me").session(boundAs("manual_dm", Role.STUDYDIRECTOR)))
+                    .andExpect(jsonPath("$.activeStudy.permissions.signSubject").value(false));
+        } finally {
+            revoke("manual_dm", "Investigator");
+        }
+    }
+
+    /**
+     * The bound role is not the only one that counts: a session bound as
+     * Monitor, whose account also holds a data entry role on the study (one
+     * granted after the session was bound, say), enters data with it.
+     */
+    @Test
+    void aSessionBoundAsMonitorEntersDataWithTheAccountsDataEntryRole() throws Exception {
+        MockHttpSession session = boundAs("manual_monitor", Role.MONITOR);
+        mvc().perform(json(post("/api/v1/eventCrfs/9/items"), "{\"values\":{\"I_HEIGHT_CM\":\"175\"}}")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        grant("manual_monitor", "ra");
+        try {
+            mvc().perform(json(post("/api/v1/eventCrfs/9/items"), "{\"values\":{\"I_HEIGHT_CM\":\"175\"}}")
+                            .session(session))
+                    .andExpect(status().isOk());
+        } finally {
+            revoke("manual_monitor", "ra");
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Helpers                                                            */
     /* ------------------------------------------------------------------ */
 
@@ -634,6 +717,20 @@ class ClinicalWriteRoleMatrixDatabaseIT extends AbstractApiControllerDatabaseIT 
 
     private static MockHttpSession sessionAs(String userName) {
         return ClinicalWriteFixtures.sessionAs(DATA_SOURCE, userName);
+    }
+
+    /**
+     * {@code userName}'s session bound as {@code role}, as
+     * {@code POST /me/activeStudy} binds the highest-ranked of its roles.
+     */
+    private static MockHttpSession boundAs(String userName, Role role) {
+        MockHttpSession session = sessionAs(userName);
+        StudyUserRoleBean binding = new StudyUserRoleBean();
+        binding.setRole(role);
+        binding.setStudyId(1);
+        binding.setUserName(userName);
+        session.setAttribute("userRole", binding);
+        return session;
     }
 
     private static MockHttpSession investigatorHolding(Role role) {

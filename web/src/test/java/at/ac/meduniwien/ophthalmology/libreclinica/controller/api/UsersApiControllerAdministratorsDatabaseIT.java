@@ -171,7 +171,7 @@ class UsersApiControllerAdministratorsDatabaseIT extends AbstractApiControllerDa
                         .content("{\"roles\":[\"Investigator\"]}").session(sessionOf("manual_admin")))
                 .andExpect(status().isOk());
         mockMvc().perform(post("/api/v1/users/ua_plain/roles").contentType("application/json")
-                        .content("{\"studyOid\":\"S_UA_OTHER\",\"role\":\"Monitor\"}")
+                        .content("{\"studyOid\":\"S_UA_OTHER\",\"role\":\"CRC\"}")
                         .session(sessionOf("manual_admin")))
                 .andExpect(status().isCreated());
         assertEquals(2, intQuery("SELECT count(*) FROM study_user_role sur JOIN study s ON s.study_id = sur.study_id "

@@ -179,7 +179,8 @@ public class ExportJobsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> DatasetsApiController.roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
@@ -390,7 +391,8 @@ public class ExportJobsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> DatasetsApiController.roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit accessing data exports."));
         }
@@ -429,7 +431,8 @@ public class ExportJobsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> DatasetsApiController.roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
@@ -491,7 +494,8 @@ public class ExportJobsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> DatasetsApiController.roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
@@ -533,7 +537,8 @@ public class ExportJobsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> DatasetsApiController.roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
@@ -611,7 +616,8 @@ public class ExportJobsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!DatasetsApiController.roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> DatasetsApiController.roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
