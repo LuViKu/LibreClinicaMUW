@@ -62,6 +62,9 @@ class ImagingModalitiesApiControllerDatabaseIT extends AbstractApiControllerData
     /** An item the demo seed really has, so a binding can be accepted. */
     private static final String REAL_ITEM_OID = "I_BLOOD_PRESSURE_SYS";
 
+    /** The demo seed's single-select, coded Y (Yes) / N (No). */
+    private static final String CODED_ITEM_OID = "I_CONSENT_SIGNED";
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @AfterEach
@@ -192,10 +195,103 @@ class ImagingModalitiesApiControllerDatabaseIT extends AbstractApiControllerData
         // An admin fixing a typo should not have to delete the old one first.
         mockMvc().perform(put(BASE + "/" + id + "/bindings")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body + "I_CONSENT_SIGNED\"}").session(dm()))
+                .content(body + CODED_ITEM_OID + "\",\"performedValue\":\"Y\"}").session(dm()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.bindings.length()").value(1))
-                .andExpect(jsonPath("$.bindings[0].itemOid").value("I_CONSENT_SIGNED"));
+                .andExpect(jsonPath("$.bindings[0].itemOid").value(CODED_ITEM_OID))
+                .andExpect(jsonPath("$.bindings[0].performedValue").value("Y"));
+    }
+
+    /* ---------------- what a binding may write ---------------- */
+
+    /**
+     * HealthAEye's "performed" items are single-selects coded Y/N; its
+     * bindings were saved with the default {@code 1}, a code the items lack.
+     */
+    @Test
+    void aCodedItemTakesOnlyOneOfItsOwnAnswers() throws Exception {
+        int id = createModality("IT_CAM");
+        String body = "{\"role\":\"performed\",\"laterality\":\"OU\",\"itemOid\":\"" + CODED_ITEM_OID + "\"";
+
+        mockMvc().perform(put(BASE + "/" + id + "/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body + ",\"performedValue\":\"1\"}").session(dm()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Y (Yes), N (No)")))
+                .andExpect(jsonPath("$.answers[0]").value("Y"))
+                .andExpect(jsonPath("$.answers[1]").value("N"));
+        mockMvc().perform(put(BASE + "/" + id + "/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body + "}").session(dm()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("required")));
+
+        mockMvc().perform(put(BASE + "/" + id + "/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body + ",\"performedValue\":\"Y\"}").session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bindings[0].performedValue").value("Y"))
+                .andExpect(jsonPath("$.bindings[0].valueValid").value(true));
+    }
+
+    @Test
+    void aFreeTextItemKeepsTheOldDefault() throws Exception {
+        int id = createModality("IT_CAM");
+        mockMvc().perform(put(BASE + "/" + id + "/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"performed\",\"itemOid\":\"" + REAL_ITEM_OID + "\"}")
+                        .session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bindings[0].performedValue").value("1"))
+                .andExpect(jsonPath("$.bindings[0].valueValid").value(true));
+    }
+
+    /** A reason binding writes nothing, so its value is not checked. */
+    @Test
+    void aReasonBindingIsNotChecked() throws Exception {
+        int id = createModality("IT_CAM");
+        mockMvc().perform(put(BASE + "/" + id + "/bindings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"not_performed_reason\",\"itemOid\":\"" + CODED_ITEM_OID + "\"}")
+                        .session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bindings[0].role").value("not_performed_reason"))
+                .andExpect(jsonPath("$.bindings[0].valueValid").doesNotExist());
+    }
+
+    /** A binding saved before the check, as on HealthAEye, is flagged in the list. */
+    @Test
+    void theListFlagsABindingSavedBeforeTheCheck() throws Exception {
+        int id = createModality("IT_CAM");
+        exec("INSERT INTO imaging_modality_item_binding "
+                + "(imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id) "
+                + "VALUES (" + id + ", 'performed', 'OU', '" + CODED_ITEM_OID + "', '1', 1)");
+
+        mockMvc().perform(get(BASE).session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.modalities[?(@.code=='IT_CAM')].bindings[0].valueValid").value(false));
+    }
+
+    @Test
+    void theFormCanAskWhatAnItemAccepts() throws Exception {
+        mockMvc().perform(get(BASE + "/item-answers").param("itemOid", CODED_ITEM_OID).session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.coded").value(true))
+                .andExpect(jsonPath("$.responseType").value("single-select"))
+                .andExpect(jsonPath("$.answers[0].value").value("Y"))
+                .andExpect(jsonPath("$.answers[0].text").value("Yes"))
+                .andExpect(jsonPath("$.answers[1].value").value("N"));
+        mockMvc().perform(get(BASE + "/item-answers").param("itemOid", REAL_ITEM_OID).session(dm()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.coded").value(false))
+                .andExpect(jsonPath("$.answers.length()").value(0));
+        mockMvc().perform(get(BASE + "/item-answers").param("itemOid", "I_NOT_THERE").session(dm()))
+                .andExpect(status().isNotFound());
+        mockMvc().perform(get(BASE + "/item-answers").session(dm()))
+                .andExpect(status().isBadRequest());
+        mockMvc().perform(get(BASE + "/item-answers").param("itemOid", CODED_ITEM_OID)
+                        .session(new MockHttpSession()))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

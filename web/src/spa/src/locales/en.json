@@ -3796,6 +3796,10 @@
     "itemOid": "Item OID",
     "itemOidPlaceholder": "e.g. I_HEALT_OCT_PERFORMED",
     "codedYes": "Coded yes",
+    "chooseAnswer": "Choose the yes value from the item's answers.",
+    "chooseAnswerOption": "– choose an answer –",
+    "itemNotFound": "No CRF carries an item with this OID.",
+    "valueInvalid": "yes value is not one of the item's answers – save it again",
     "retire": "Retire",
     "retired": "retired",
     "retireConfirm": "Retire acquisition “{code}”? It will stop ticking its CRF box.",
@@ -3810,6 +3814,7 @@
       "button": "Apply to images already filed",
       "confirm": "Tick “performed” on the visits of every image already filed in this study, as a bind would have? Written as the system account and audited; values someone entered are kept, and removed, locked or signed CRFs are left alone.",
       "result": "{files} image(s) checked: {written} ticked, {kept} already set or kept.",
+      "invalid": "{invalid} not ticked: the binding's yes value is not one of the item's answers.",
       "failed": "The catch-up failed."
     }
   },
