@@ -50,6 +50,8 @@ export interface DatasetDto {
   numRuns?: number
   /** True when {@code numRuns > 0}. Wizard disables structural edits. */
   hasRun?: boolean
+  /** The saved filter rows; empty on the list endpoint. */
+  filters?: DatasetFilterDto[]
 }
 
 export interface ArchivedFileDto {
@@ -156,9 +158,18 @@ export interface ExportTriggerResponse {
  * comparison operators), {@code values} is the list (for
  * {@code in}) or the two-tuple (for {@code between}).
  */
+/**
+ * A field of the participant a filter row can name instead of a CRF item.
+ * The participant ID is not CRF data: a study with images but no CRF values
+ * yet could not otherwise be filtered by participant.
+ */
+export type ParticipantField = 'participantId' | 'enrollmentDate'
+
 export interface DatasetFilterDto {
-  /** OID of the item the predicate sits on. */
+  /** OID of the item the predicate sits on; empty when {@code field} is set. */
   itemOid: string
+  /** Set when the row filters on the participant, not on a CRF item. */
+  field?: ParticipantField
   operator: FilterOperator
   /** Scalar value; only meaningful for the comparison operators. */
   value?: string | null
@@ -187,6 +198,7 @@ export type FilterOperator =
   | 'between'
   | 'is-null'
   | 'not-null'
+  | 'starts-with'
 
 /**
  * Logical groups the SPA filters operators by when rendering the
@@ -214,6 +226,21 @@ export interface FilterTestResult {
   matchingCrfs: number
   totalSubjects: number
   totalCrfs: number
+  /** Visits of the matching participants (in the selected visit definitions). */
+  matchingVisits?: number
+  /** Images bound to the matching participants — what the multimodal bundle carries. */
+  matchingImages?: number
+  /**
+   * CRF values the text formats would carry: non-empty values of the
+   * selected items. Null when the request named no item selection.
+   */
+  matchingValues?: number | null
+}
+
+/** The operators each participant field offers. */
+export const PARTICIPANT_FIELD_OPERATORS: Record<ParticipantField, FilterOperator[]> = {
+  participantId: ['=', '!=', 'in', 'starts-with'],
+  enrollmentDate: ['=', '<', '<=', '>', '>=', 'between'],
 }
 
 /**
@@ -397,8 +424,8 @@ export const FLAG_SECTIONS: FlagSection[] = [
       'eventLocation',
       'eventStartDate',
       'eventEndDate',
-      'eventStartTime',
-      'eventEndTime',
+      // eventStartTime / eventEndTime are not offered: the export has no
+      // separate time columns, so the boxes changed nothing.
       'eventStatus',
     ],
   },
@@ -410,10 +437,8 @@ export const FLAG_SECTIONS: FlagSection[] = [
     id: 'interviewer',
     keys: ['interviewerName', 'interviewerDate', 'completionDate'],
   },
-  {
-    id: 'notes',
-    keys: ['discNotes'],
-  },
+  // discNotes is not offered: no export path writes discrepancy notes,
+  // and the flag was never stored.
 ]
 
 /**

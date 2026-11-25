@@ -292,7 +292,8 @@ public class EyeCohortTransitionsApiController {
         }
         // A transition edits the source subject's study eye and enrols the
         // subject in the target study: the subject-edit rule.
-        if (!SubjectEditAuthorization.roleMayEdit(ClinicalWriteAuthorization.roleIdOf(session))) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                SubjectEditAuthorization::roleMayEdit)) {
             return ClinicalWriteAuthorization.forbidden("moving an eye to another cohort");
         }
         if (body == null) {

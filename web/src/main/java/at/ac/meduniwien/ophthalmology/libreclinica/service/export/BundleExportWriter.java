@@ -112,7 +112,7 @@ public final class BundleExportWriter {
 
         ZipOutputStream zos = dryRun ? null : new ZipOutputStream(out);
         try {
-            Subject s = addSubject(zos, dataSource, studySubjectId, "",
+            Subject s = addSubject(zos, dataSource, studySubjectId, subjectLabel, "",
                     casebookXml, casebookCsv, policy);
 
             Map<String, Object> manifest = manifest(subjectLabel, studyOid, generatedBy,
@@ -173,8 +173,27 @@ public final class BundleExportWriter {
                                       List<DatasetSubject> subjects, String studyOid,
                                       String generatedBy, boolean dryRun)
             throws IOException {
+        return writeDataset(out, dataSource, subjects, studyOid, generatedBy, dryRun, List.of());
+    }
+
+    /**
+     * As above, with the dataset's selected items for the data dictionary.
+     *
+     * <p>The tables of {@link BundleIndexes} sit at the top of the zip, before
+     * the manifest: {@code participants.csv}, {@code visits.csv},
+     * {@code images.csv} and {@code data_dictionary.csv}.
+     *
+     * @param dictionaryItemIds the items the dataset selects; empty writes a
+     *                          dictionary with its header only
+     */
+    public static Result writeDataset(OutputStream out, DataSource dataSource,
+                                      List<DatasetSubject> subjects, String studyOid,
+                                      String generatedBy, boolean dryRun,
+                                      List<Integer> dictionaryItemIds)
+            throws IOException {
 
         List<Omission> omitted = new ArrayList<>();
+        List<BundleIndexes.Visit> visits = new ArrayList<>();
         List<Map<String, Object>> subjectSections = new ArrayList<>();
         int written = 0;
         long bytes = 0;
@@ -191,8 +210,9 @@ public final class BundleExportWriter {
                 // Blinding is per subject, not per bundle: two subjects of the
                 // same dataset can be in different arms, and the requester is
                 // blinded to one and not the other.
-                Subject s = addSubject(zos, dataSource, ds.studySubjectId(),
+                Subject s = addSubject(zos, dataSource, ds.studySubjectId(), ds.label(),
                         prefix, ds.casebookXml(), ds.casebookCsv(), ds.policy());
+                visits.addAll(s.visits());
                 if (ds.policy().maskAi()) masked++;
 
                 Map<String, Object> section = new LinkedHashMap<>();
@@ -211,12 +231,27 @@ public final class BundleExportWriter {
                 bytes += s.bytesWritten();
             }
 
+            if (zos != null) {
+                List<Integer> ids = subjects.stream().map(DatasetSubject::studySubjectId).toList();
+                byte[][] tables = {
+                        BundleIndexes.participants(dataSource, ids),
+                        BundleIndexes.visits(visits),
+                        BundleIndexes.images(subjectSections),
+                        BundleIndexes.dataDictionary(dataSource, dictionaryItemIds)};
+                for (int i = 0; i < tables.length; i++) {
+                    writeBytes(zos, BundleIndexes.FILES.get(i), tables[i]);
+                    written++;
+                    bytes += tables[i].length;
+                }
+            }
+
             Map<String, Object> manifest = new LinkedHashMap<>();
             manifest.put("schemaVersion", 1);
             manifest.put("generatedAt", Instant.now().toString());
             manifest.put("generatedBy", generatedBy);
             manifest.put("study", studyOid);
             manifest.put("scope", "dataset");
+            manifest.put("indexes", BundleIndexes.FILES);
             // "mixed" tells a reader to look at each subject's own line rather
             // than assume one answer for the whole archive.
             manifest.put("masking", masked == 0 ? "none"
@@ -265,7 +300,8 @@ public final class BundleExportWriter {
                    List<Map<String, Object>> crfFiles,
                    List<Map<String, Object>> inference,
                    List<Omission> omitted,
-                   int filesWritten, long bytesWritten) {}
+                   int filesWritten, long bytesWritten,
+                   List<BundleIndexes.Visit> visits) {}
 
     /**
      * Write one subject's casebook and files into a zip the caller owns.
@@ -282,9 +318,10 @@ public final class BundleExportWriter {
      *               reconstruct where a file sits
      */
     static Subject addSubject(ZipOutputStream zos, DataSource dataSource,
-                              int studySubjectId, String prefix,
+                              int studySubjectId, String label, String prefix,
                               byte[] casebookXml, byte[] casebookCsv, Policy policy)
             throws IOException {
+        Map<Integer, BundleIndexes.Visit> visits = BundleIndexes.visitsOf(dataSource, studySubjectId, label);
 
         List<Omission> omitted = new ArrayList<>();
         List<Map<String, Object>> acquisitions = new ArrayList<>();
@@ -304,6 +341,12 @@ public final class BundleExportWriter {
             IngestArtifactStore store = new IngestArtifactStore();
             for (IngestedFile f : ingestedFiles(dataSource, studySubjectId)) {
                 Map<String, Object> entry = describeAcquisition(f);
+                BundleIndexes.Visit visit = f.boundStudyEventId() == null ? null : visits.get(f.boundStudyEventId());
+                if (visit != null) {
+                    entry.put("visitOid", visit.definitionOid());
+                    entry.put("visitName", visit.name());
+                    if (visit.date() != null) entry.put("visitDate", visit.date());
+                }
                 Path resolved = store.resolveConfined(f.storedPath()).orElse(null);
                 if (resolved == null) {
                     // The row says there is a file and the store disagrees.
@@ -311,17 +354,47 @@ public final class BundleExportWriter {
                     // tell "this subject had no scan" from "the scan is gone".
                     omitted.add(new Omission("ingest_item/" + f.id(), "file missing or outside the store"));
                     entry.put("omitted", true);
+                    entry.put("omittedReason", "file missing or outside the store");
                     acquisitions.add(entry);
                     continue;
                 }
+                ExportScrubber.Kind kind = ExportScrubber.kindOf(f.kind(), f.storedPath());
                 String path = prefix + acquisitionEntryName(f);
-                entry.put("path", path);
                 if (zos != null) {
-                    long size = copyInto(zos, path, resolved);
-                    written++;
-                    bytes += size;
-                    entry.put("byteSize", size);
+                    // The header is scrubbed on the way out (DICOM Basic
+                    // Profile; metadata stripped from JPEG and PNG). A file
+                    // that cannot be scrubbed is named, not carried.
+                    ExportScrubber.Scrubbed scrubbed;
+                    try {
+                        scrubbed = ExportScrubber.scrub(resolved, kind, label);
+                    } catch (ExportScrubber.Withheld w) {
+                        omitted.add(new Omission("ingest_item/" + f.id(), w.reason()));
+                        entry.put("omitted", true);
+                        entry.put("omittedReason", w.reason());
+                        acquisitions.add(entry);
+                        continue;
+                    }
+                    try {
+                        Copied copied = copyInto(zos, path, scrubbed.file());
+                        written++;
+                        bytes += copied.size();
+                        entry.put("path", path);
+                        entry.put("byteSize", copied.size());
+                        entry.put("deidentified", scrubbed.method());
+                        // The digest of the bytes in this zip. The row's own
+                        // sha256 is taken on arrival, before any scrubbing: it
+                        // would not match the file, and it is a key to the
+                        // original, identified export.
+                        entry.put("sha256", copied.sha256());
+                    } finally {
+                        Files.deleteIfExists(scrubbed.file());
+                    }
+                } else if (kind == ExportScrubber.Kind.OTHER) {
+                    omitted.add(new Omission("ingest_item/" + f.id(), WITHHELD_TYPE));
+                    entry.put("omitted", true);
+                    entry.put("omittedReason", WITHHELD_TYPE);
                 } else {
+                    entry.put("path", path);
                     entry.put("byteSize", sizeOrNull(resolved));
                 }
                 acquisitions.add(entry);
@@ -338,13 +411,37 @@ public final class BundleExportWriter {
                     continue;
                 }
                 String path = prefix + "crf-files/" + f.itemDataId() + "_" + safeName(resolved);
-                entry.put("path", path);
+                ExportScrubber.Kind kind = ExportScrubber.kindOf(null, resolved.toString());
                 if (zos != null) {
-                    long size = copyInto(zos, path, resolved);
+                    // A CRF attachment leaves only as an image whose header can
+                    // be scrubbed. A scanned form or a PDF carries what is
+                    // written on it, which no header scrub removes.
+                    ExportScrubber.Scrubbed scrubbed;
+                    try {
+                        scrubbed = ExportScrubber.scrub(resolved, kind, label);
+                    } catch (ExportScrubber.Withheld w) {
+                        omitted.add(new Omission("item_data/" + f.itemDataId(), w.reason()));
+                        entry.put("omitted", true);
+                        crfFiles.add(entry);
+                        continue;
+                    }
+                    Copied copied;
+                    try {
+                        copied = copyInto(zos, path, scrubbed.file());
+                    } finally {
+                        Files.deleteIfExists(scrubbed.file());
+                    }
+                    entry.put("path", path);
                     written++;
-                    bytes += size;
-                    entry.put("byteSize", size);
+                    bytes += copied.size();
+                    entry.put("byteSize", copied.size());
+                    entry.put("deidentified", scrubbed.method());
+                    entry.put("sha256", copied.sha256());
+                } else if (kind == ExportScrubber.Kind.OTHER) {
+                    omitted.add(new Omission("item_data/" + f.itemDataId(), WITHHELD_TYPE));
+                    entry.put("omitted", true);
                 } else {
+                    entry.put("path", path);
                     entry.put("byteSize", sizeOrNull(resolved));
                 }
                 crfFiles.add(entry);
@@ -379,17 +476,40 @@ public final class BundleExportWriter {
                 entry.put("aiDerived", a.isAiOutput());
                 entry.put("path", path);
                 if (zos != null) {
-                    long size = copyInto(zos, path, resolved);
-                    written++;
-                    bytes += size;
-                    entry.put("byteSize", size);
+                    // The companions include a DICOM and a picture rendered from
+                    // the scan, which carry its header and metadata: scrubbed
+                    // like an acquisition. What the pipeline computed (geometry,
+                    // masks in their own formats) names no one and is copied.
+                    ExportScrubber.Kind kind = ExportScrubber.kindOf(null, a.name());
+                    Path source = resolved;
+                    ExportScrubber.Scrubbed scrubbed = null;
+                    if (kind != ExportScrubber.Kind.OTHER) {
+                        try {
+                            scrubbed = ExportScrubber.scrub(resolved, kind, label);
+                            source = scrubbed.file();
+                        } catch (ExportScrubber.Withheld w) {
+                            omitted.add(new Omission("retinal_job/" + a.jobId() + "/" + a.name(), w.reason()));
+                            continue;
+                        }
+                    }
+                    try {
+                        Copied copied = copyInto(zos, path, source);
+                        written++;
+                        bytes += copied.size();
+                        entry.put("byteSize", copied.size());
+                        entry.put("sha256", copied.sha256());
+                        if (scrubbed != null) entry.put("deidentified", scrubbed.method());
+                    } finally {
+                        if (scrubbed != null) Files.deleteIfExists(scrubbed.file());
+                    }
                 } else {
                     entry.put("byteSize", sizeOrNull(resolved));
                 }
                 inference.add(entry);
             }
 
-            return new Subject(acquisitions, crfFiles, inference, omitted, written, bytes);
+            return new Subject(acquisitions, crfFiles, inference, omitted, written, bytes,
+                    new ArrayList<>(visits.values()));
         }
     }
 
@@ -401,6 +521,9 @@ public final class BundleExportWriter {
                                 String storedPath, String laterality, String acquisitionDate,
                                 String modalityCode, Integer scanIndex, String sha256,
                                 Integer boundEventCrfId, Integer boundStudyEventId) {}
+
+    /** Why a file of a type the export cannot scrub is not in it. */
+    private static final String WITHHELD_TYPE = "not exported: a file of this type cannot be de-identified";
 
     /** Where a subject's acquisition sits inside the zip. One rule, one place. */
     private static String acquisitionEntryName(IngestedFile f) {
@@ -425,7 +548,11 @@ public final class BundleExportWriter {
         IngestArtifactStore store = new IngestArtifactStore();
         Map<Long, String> out = new LinkedHashMap<>();
         for (IngestedFile f : ingestedFiles(ds, studySubjectId)) {
-            if (store.resolveConfined(f.storedPath()).isPresent()) {
+            // A file the export never carries (a type it cannot scrub) is not
+            // named either: the casebook must not point at a missing entry.
+            Path resolved = store.resolveConfined(f.storedPath()).orElse(null);
+            if (resolved != null
+                    && ExportScrubber.wouldCarry(resolved, ExportScrubber.kindOf(f.kind(), f.storedPath()))) {
                 out.put(f.id(), prefix + acquisitionEntryName(f));
             }
         }
@@ -440,7 +567,9 @@ public final class BundleExportWriter {
                      "SELECT ii.ingest_item_id, ii.kind, ii.source_kind, "
                              + "       COALESCE(ii.device, ii.source_ae_title), ii.stored_path, "
                              + "       ii.laterality, ii.acquisition_date, im.code, ii.scan_index, "
-                             + "       ii.sha256, ii.bound_event_crf_id, ii.bound_study_event_id "
+                             + "       ii.sha256, ii.bound_event_crf_id, "
+                             + "       COALESCE(ii.bound_study_event_id, (SELECT ec.study_event_id FROM event_crf ec "
+                             + "                 WHERE ec.event_crf_id = ii.bound_event_crf_id)) "
                              + "  FROM ingest_item ii "
                              + "  LEFT JOIN imaging_modality im "
                              + "    ON im.imaging_modality_id = ii.imaging_modality_id "
@@ -679,7 +808,6 @@ public final class BundleExportWriter {
         if (f.laterality() != null) e.put("laterality", f.laterality());
         if (f.acquisitionDate() != null) e.put("acquisitionDate", f.acquisitionDate());
         if (f.scanIndex() != null) e.put("scanIndex", f.scanIndex());
-        if (f.sha256() != null) e.put("sha256", f.sha256());
         if (f.boundStudyEventId() != null) e.put("studyEventId", f.boundStudyEventId());
         if (f.boundEventCrfId() != null) e.put("eventCrfId", f.boundEventCrfId());
         return e;
@@ -703,8 +831,11 @@ public final class BundleExportWriter {
         zos.closeEntry();
     }
 
-    /** Streams a file in without it ever being a byte[]. */
-    private static long copyInto(ZipOutputStream zos, String name, Path source) throws IOException {
+    /** What one copy into the zip wrote: its size and the SHA-256 of its bytes. */
+    record Copied(long size, String sha256) {}
+
+    /** Streams a file in without it ever being a byte[], digesting it on the way. */
+    private static Copied copyInto(ZipOutputStream zos, String name, Path source) throws IOException {
         ZipEntry entry = new ZipEntry(name);
         if (storeAsIs(name)) {
             long size = Files.size(source);
@@ -714,9 +845,18 @@ public final class BundleExportWriter {
             entry.setCrc(crc32(source));
         }
         zos.putNextEntry(entry);
-        long copied = Files.copy(source, zos);
+        java.security.MessageDigest sha;
+        try {
+            sha = java.security.MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IOException("SHA-256 is not available", e);
+        }
+        long copied;
+        try (var in = new java.security.DigestInputStream(Files.newInputStream(source), sha)) {
+            copied = in.transferTo(zos);
+        }
         zos.closeEntry();
-        return copied;
+        return new Copied(copied, java.util.HexFormat.of().formatHex(sha.digest()));
     }
 
     private static boolean storeAsIs(String name) {

@@ -25,7 +25,7 @@ import { useAuthStore } from '@/stores/auth'
 import { mayEditExports } from '@/lib/studyBuildAccess'
 import { useDatasetsStore } from '@/stores/datasets'
 import { useConfirm } from '@/composables/useConfirm'
-import type { ExportFormat } from '@/types/export'
+import type { ExportFormat, FilterTestResult } from '@/types/export'
 import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
@@ -145,6 +145,8 @@ interface ExportModalState {
   datasetName: string
   format: ExportFormat
   error: string | null
+  /** What the dataset would carry, counted when the dialog opens. */
+  counts: FilterTestResult | null
 }
 const exportModal = ref<ExportModalState | null>(null)
 
@@ -154,8 +156,34 @@ function openExportModal(datasetId: number, datasetName: string) {
     datasetName,
     format: 'odm',
     error: null,
+    counts: null,
+  }
+  void countExport(datasetId)
+}
+
+/**
+ * Count what the dataset would carry, with its own saved selection and
+ * filters, so the dialog can say when a text format would be empty — a study
+ * whose data so far is images has no CRF value for those formats to write.
+ */
+async function countExport(datasetId: number): Promise<void> {
+  try {
+    const ds = await datasets.loadOne(datasetId)
+    if (!ds) return
+    const counts = await datasets.testFilter(String(datasetId), ds.filters ?? [], 0, {
+      eventDefinitionOids: ds.eventDefinitionOids ?? [],
+      itemIds: ds.itemIds ?? [],
+    })
+    if (counts && exportModal.value?.datasetId === datasetId) exportModal.value.counts = counts
+  } catch {
+    // The counts are a hint; the export itself does not depend on them.
   }
 }
+
+const exportWouldBeEmpty = computed(() => {
+  const m = exportModal.value
+  return Boolean(m?.counts && m.counts.matchingValues === 0 && m.format !== 'bundle')
+})
 
 /**
  * P3.8 — the multimodal bundle is offered only where the study turns it on.
@@ -581,6 +609,27 @@ function formatBytes(n: number): string {
             <span class="text-sm text-slate-700">{{ t('dataExport.format.' + f) }}</span>
           </label>
         </fieldset>
+        <p v-if="exportModal.counts" class="text-xs text-slate-600 mb-3" data-testid="export-counts">
+          {{ t('createDataset.review.counts', {
+            participants: exportModal.counts.matchingSubjects,
+            visits: exportModal.counts.matchingVisits ?? 0,
+            images: exportModal.counts.matchingImages ?? 0,
+            values: exportModal.counts.matchingValues ?? 0,
+          }) }}
+        </p>
+        <div
+          v-if="exportWouldBeEmpty"
+          class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-3"
+          role="status"
+          data-testid="export-empty-warning"
+        >
+          {{ t('createDataset.review.noCrfValues') }}
+          <template v-if="(exportModal.counts?.matchingImages ?? 0) > 0">
+            {{ bundleEnabled
+              ? t('createDataset.review.useBundle', { images: exportModal.counts?.matchingImages })
+              : t('createDataset.review.enableBundle', { images: exportModal.counts?.matchingImages }) }}
+          </template>
+        </div>
         <p v-if="exportModal.error" class="text-rose-700 text-xs mb-3">{{ exportModal.error }}</p>
         <div class="flex items-center justify-end gap-2">
           <button

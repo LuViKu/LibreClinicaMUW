@@ -12,6 +12,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.testsupport.ProductionMvc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -81,6 +82,12 @@ class DatasetBundleExportDatabaseIT extends AbstractApiControllerDatabaseIT {
     @TempDir
     static Path FILE_ROOT;
 
+    /** Where the fixture's acquisition lives; the bundle reads files only from the store. */
+    @TempDir
+    static Path STORE_ROOT;
+
+    private static final String MARKER = "dataset-bundle-it-";
+
     private static final int STUDY_ID = 1;
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -93,6 +100,7 @@ class DatasetBundleExportDatabaseIT extends AbstractApiControllerDatabaseIT {
         java.util.Properties live = (java.util.Properties) f.get(null);
         assertNotNull(live, "DATAINFO must be set by AbstractApiControllerDatabaseIT");
         live.setProperty("filePath", FILE_ROOT.toString() + File.separator);
+        live.setProperty("core.ingest.storePath", STORE_ROOT.toString());
     }
 
     @AfterEach
@@ -104,6 +112,7 @@ class DatasetBundleExportDatabaseIT extends AbstractApiControllerDatabaseIT {
             datasetId = null;
         }
         exec("DELETE FROM study_setting WHERE study_id = " + STUDY_ID);
+        exec("DELETE FROM ingest_item WHERE original_filename LIKE '" + MARKER + "%'");
         exec("DELETE FROM audit_log_event WHERE audit_table = 'study_setting'");
     }
 
@@ -220,6 +229,117 @@ class DatasetBundleExportDatabaseIT extends AbstractApiControllerDatabaseIT {
         String firstCasebook = new String(entries.get("subjects/M-001/casebook.xml"), StandardCharsets.UTF_8);
         assertTrue(firstCasebook.contains("SubjectKey=\"SS_M001\""),
                 "each folder holds that subject's own casebook");
+    }
+
+    /**
+     * The tables at the top of the bundle: what a recipient opens first.
+     *
+     * <p>A study whose data so far is images still exports something to open:
+     * the participants, their visits, every image with its visit, device and
+     * eye, and the data dictionary of the selected items. The image's checksum
+     * is that of the bytes in the zip; the row's own is taken on arrival,
+     * before an upload's header is pseudonymised, and must not travel.
+     */
+    @Test
+    void theBundleOpensWithItsParticipantsVisitsImagesAndDictionary() throws Exception {
+        enableBundles();
+        DatasetBean ds = persistDataset();
+        int visit;
+        String visitOid;
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT se.study_event_id, sed.oc_oid FROM study_event se "
+                             + "JOIN study_event_definition sed "
+                             + "  ON sed.study_event_definition_id = se.study_event_definition_id "
+                             + "WHERE se.study_subject_id = 1 ORDER BY se.study_event_id LIMIT 1");
+             ResultSet rs = ps.executeQuery()) {
+            assertTrue(rs.next(), "fixture assumption: M-001 has a visit");
+            visit = rs.getInt(1);
+            visitOid = rs.getString(2);
+        }
+        byte[] body = at.ac.meduniwien.ophthalmology.libreclinica.service.export.TestImages.jpegWithExif();
+        Path dir = Files.createDirectories(STORE_ROOT.resolve("image"));
+        Path file = dir.resolve(MARKER + System.nanoTime() + ".jpg");
+        Files.write(file, body);
+        long ingestId;
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO ingest_item (kind, source_kind, device, stored_path, original_filename, "
+                             + "laterality, received_at, status, bound_study_subject_id, bound_study_event_id, sha256) "
+                             + "VALUES ('image', 'remidio', 'remidio', ?, ?, 'OS', now(), 'BOUND', 1, ?, "
+                             + "'0000000000000000000000000000000000000000000000000000000000000000') "
+                             + "RETURNING ingest_item_id")) {
+            ps.setString(1, file.toString());
+            ps.setString(2, file.getFileName().toString());
+            ps.setInt(3, visit);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                ingestId = rs.getLong(1);
+            }
+        }
+
+        ExportFileMaterializer.Result r = materializer().materialize(ds, "bundle", 1);
+        int archivedId = Integer.parseInt(r.fileReference().substring("existing:".length()));
+        String reference;
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT file_reference FROM archived_dataset_file WHERE archived_dataset_file_id = ?")) {
+            ps.setInt(1, archivedId);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                reference = rs.getString(1);
+            }
+        }
+        Map<String, byte[]> entries = unzip(Path.of(reference));
+        List<String> names = new ArrayList<>(entries.keySet());
+        for (String table : List.of("participants.csv", "visits.csv", "images.csv", "data_dictionary.csv")) {
+            assertTrue(entries.containsKey(table), table + " is at the top of the bundle: " + names);
+        }
+        assertEquals("manifest.json", names.get(names.size() - 1), "the manifest is still last");
+
+        String path = "subjects/M-001/acquisitions/" + ingestId + ".jpg";
+        assertTrue(entries.containsKey(path), "the image is in the bundle: " + names);
+        // Scrubbed on the way out, so the checksum is that of the scrubbed file.
+        String sha = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(entries.get(path)));
+        String original = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(body));
+        assertNotEquals(original, sha, "the device's metadata did not leave with it");
+
+        List<String> participants = lines(entries.get("participants.csv"));
+        assertEquals("participantId,studyOid,studyName,enrollmentDate,status", participants.get(0));
+        assertEquals(8, participants.size(), "a header and the seven participants: " + participants);
+
+        List<String> images = lines(entries.get("images.csv"));
+        String row = images.stream().filter(l -> l.contains(path)).findFirst().orElse("");
+        assertTrue(row.startsWith("M-001," + visitOid + ","), "the image row names its visit: " + row);
+        assertTrue(row.contains(",remidio,") && row.contains(",OS,"), row);
+        assertTrue(row.contains("," + sha + ",metadata-stripped,"),
+                "the checksum is that of the bundled bytes, and the row says how it was scrubbed: " + row);
+        assertFalse(row.contains("0000000000000000"), "the row's arrival checksum does not travel: " + row);
+
+        assertTrue(lines(entries.get("visits.csv")).stream().anyMatch(l -> l.startsWith("M-001," + visitOid + ",")),
+                "the visit is listed");
+        List<String> dictionary = lines(entries.get("data_dictionary.csv"));
+        assertTrue(dictionary.get(0).startsWith("crfName,crfVersion,crfVersionOid,itemGroup,itemOid,"), dictionary.get(0));
+        assertTrue(dictionary.stream().anyMatch(l -> l.contains("I_HEIGHT_CM")),
+                "the selected items are described: " + dictionary);
+
+        JsonNode m = JSON.readTree(entries.get("manifest.json"));
+        assertEquals(4, m.get("indexes").size());
+        JsonNode acquisition = null;
+        for (JsonNode subject : m.get("subjects")) {
+            for (JsonNode a : subject.get("acquisitions")) {
+                if (a.get("ingestItemId").asLong() == ingestId) acquisition = a;
+            }
+        }
+        assertNotNull(acquisition, "the image is in the manifest");
+        assertEquals(visitOid, acquisition.get("visitOid").asText());
+        assertEquals(sha, acquisition.get("sha256").asText());
+    }
+
+    private static List<String> lines(byte[] csv) {
+        return List.of(new String(csv, StandardCharsets.UTF_8).split("\r\n"));
     }
 
     /* ---------------- the queue ---------------- */

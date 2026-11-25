@@ -12,6 +12,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.core.util.Json;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.DatasetFilterPredicates;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.DatasetFilterSubjectResolver;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -240,7 +243,8 @@ public class DatasetsApiController {
                     Collections.emptyList(),
                     Collections.emptyMap(),
                     db.getNumRuns(),
-                    db.getNumRuns() > 0));
+                    db.getNumRuns() > 0,
+                    Collections.emptyList()));
         }
         return ResponseEntity.ok(out);
     }
@@ -312,7 +316,8 @@ public class DatasetsApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit exporting data."));
         }
@@ -471,7 +476,8 @@ public class DatasetsApiController {
             return;
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN,
                     "Your role does not permit downloading export files.");
             return;
@@ -575,7 +581,8 @@ public class DatasetsApiController {
                             "No active study bound — call POST /pages/api/v1/me/activeStudy first")));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             return ResolvedContext.error(ResponseEntity.status(403).body(
                     Map.of("message", "Your role does not permit accessing data exports.")));
         }
@@ -844,7 +851,7 @@ public class DatasetsApiController {
      * scalar comparison.
      */
     static final Set<String> KNOWN_OPS = Set.of(
-            "=", "!=", "<", "<=", ">", ">=", "in", "between", "is-null", "not-null");
+            "=", "!=", "<", "<=", ">", ">=", "in", "between", "is-null", "not-null", "starts-with");
 
     private static final Set<String> NUMERIC_ONLY_OPS = Set.of("<", "<=", ">", ">=", "between");
     private static final Set<String> UNARY_OPS = Set.of("is-null", "not-null");
@@ -904,7 +911,8 @@ public class DatasetsApiController {
         }
 
         StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(ub, role)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(ub, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit accessing data exports."));
         }
@@ -925,8 +933,20 @@ public class DatasetsApiController {
             }
         }
 
+        List<Integer> eventDefinitionIds = null;
+        if (body.eventDefinitionOids() != null && !body.eventDefinitionOids().isEmpty()) {
+            eventDefinitionIds = new ArrayList<>();
+            StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+            int ownerStudy = currentStudy.getParentStudyId() > 0
+                    ? currentStudy.getParentStudyId() : currentStudy.getId();
+            for (String oid : body.eventDefinitionOids()) {
+                StudyEventDefinitionBean sed = sedDao.findByOidAndStudy(oid, ownerStudy, 0);
+                if (sed != null && sed.getId() != 0) eventDefinitionIds.add(sed.getId());
+            }
+        }
         try {
-            FilterTestResult result = runCounts(currentStudy.getId(), body.filters(), resolvedItems);
+            FilterTestResult result = runCounts(currentStudy.getId(), body.filters(),
+                    eventDefinitionIds, body.itemIds());
             return ResponseEntity.ok(result);
         } catch (SQLException e) {
             LOG.warn("Failed to run :test-filter count for datasetId={} studyId={}",
@@ -945,6 +965,19 @@ public class DatasetsApiController {
     private ResponseEntity<?> validateFilterRow(DatasetFilterDto row, int index,
                                                 ItemDAO itemDao,
                                                 Map<String, ItemBean> resolvedItems) {
+        if (row != null && row.row().onParticipant()) {
+            if (!DatasetFilterPredicates.PARTICIPANT_FIELDS.contains(row.field())) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "filters[" + index + "].field '" + row.field() + "' is not a participant field"));
+            }
+            try {
+                DatasetFilterPredicates.renderParticipant(row.field(), row.operator(), row.value(), row.values());
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "filters[" + index + "]: " + e.getMessage()));
+            }
+            return null;
+        }
         if (row == null || row.itemOid() == null || row.itemOid().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "filters[" + index + "].itemOid is required"));
@@ -999,119 +1032,155 @@ public class DatasetsApiController {
                         "filters[" + index + "].value is required for '" + op + "'"));
             }
         }
+        if ("starts-with".equals(op)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "].operator 'starts-with' applies to the participant ID only"));
+        }
+        // The export renders the row the same way; a value it cannot use (a
+        // number filter on "abc") is refused here rather than ignored there.
+        try {
+            DatasetFilterPredicates.render(op, row.value(), row.values(), isNumeric(item));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "]: " + e.getMessage()));
+        }
         return null;
     }
 
-    private FilterTestResult runCounts(int studyId, List<DatasetFilterDto> filters,
-                                       Map<String, ItemBean> resolvedItems) throws SQLException {
-        int totalSubjects = countTotalSubjects(studyId);
-        int totalCrfs = countTotalCrfs(studyId);
-
-        // No filters → match-all.
-        if (filters.isEmpty()) {
-            return new FilterTestResult(totalSubjects, totalCrfs, totalSubjects, totalCrfs);
-        }
-
-        StringBuilder subjectSql = new StringBuilder(
-                "SELECT COUNT(DISTINCT ss.study_subject_id) " +
-                "FROM study_subject ss WHERE ss.study_id = ? ");
-        StringBuilder crfSql = new StringBuilder(
-                "SELECT COUNT(DISTINCT ec.event_crf_id) " +
-                "FROM event_crf ec " +
-                "JOIN study_event se ON se.study_event_id = ec.study_event_id " +
-                "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id " +
-                "WHERE ss.study_id = ? ");
-
-        // Each filter row appends an EXISTS clause to both queries
-        // and contributes (item_id, ...value params...) — collect
-        // both parameter lists in lock-step.
-        List<Object> subjectParams = new ArrayList<>();
-        List<Object> crfParams = new ArrayList<>();
-        subjectParams.add(studyId);
-        crfParams.add(studyId);
-
-        for (DatasetFilterDto row : filters) {
-            ItemBean item = resolvedItems.get(row.itemOid());
-            PredicateFragment pf = renderPredicate(row);
-            subjectSql.append(" AND EXISTS (SELECT 1 FROM item_data id " +
-                    "JOIN event_crf ec2 ON ec2.event_crf_id = id.event_crf_id " +
-                    "JOIN study_event se2 ON se2.study_event_id = ec2.study_event_id " +
-                    "WHERE se2.study_subject_id = ss.study_subject_id " +
-                    "  AND id.item_id = ? AND " + pf.sqlFragment() + ") ");
-            crfSql.append(" AND EXISTS (SELECT 1 FROM item_data id " +
-                    "WHERE id.event_crf_id = ec.event_crf_id " +
-                    "  AND id.item_id = ? AND " + pf.sqlFragment() + ") ");
-            subjectParams.add(item.getId());
-            subjectParams.addAll(pf.params());
-            crfParams.add(item.getId());
-            crfParams.addAll(pf.params());
-        }
-
-        int matchingSubjects = runCount(subjectSql.toString(), subjectParams);
-        int matchingCrfs = runCount(crfSql.toString(), crfParams);
-        return new FilterTestResult(matchingSubjects, matchingCrfs, totalSubjects, totalCrfs);
-    }
-
-    private int countTotalSubjects(int studyId) throws SQLException {
-        return runCount(
-                "SELECT COUNT(*) FROM study_subject WHERE study_id = ?",
-                List.of(studyId));
-    }
-
-    private int countTotalCrfs(int studyId) throws SQLException {
-        return runCount(
-                "SELECT COUNT(*) FROM event_crf ec " +
-                "JOIN study_event se ON se.study_event_id = ec.study_event_id " +
-                "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id " +
-                "WHERE ss.study_id = ?",
-                List.of(studyId));
-    }
-
-    private int runCount(String sql, List<Object> params) throws SQLException {
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (int i = 0; i < params.size(); i++) {
-                ps.setObject(i + 1, params.get(i));
-            }
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt(1);
-            }
-        }
-        return 0;
+    private static boolean isNumeric(ItemBean item) {
+        if (item == null || item.getDataType() == null) return false;
+        String type = item.getDataType().getName();
+        return ItemDataType.INTEGER.getName().equals(type) || ItemDataType.REAL.getName().equals(type);
     }
 
     /**
-     * Renders the predicate fragment for one filter row. The result
-     * is a {@code (sqlFragment, params)} pair that gets spliced into
-     * the EXISTS clause downstream. The operator is whitelisted
-     * upstream by {@link #validateFilterRow}, so the raw splice into
-     * the SQL string is safe.
+     * Validate every filter row of a save. A row the export could not apply
+     * is refused here: stored, it would be ignored at export time, and the
+     * export would carry more participants than the operator asked for.
+     *
+     * @return a 400, or null when every row is usable
      */
-    private PredicateFragment renderPredicate(DatasetFilterDto row) {
-        String op = row.operator();
-        if ("is-null".equals(op)) {
-            return new PredicateFragment(
-                    "(id.value IS NULL OR id.value = '')", Collections.emptyList());
+    private ResponseEntity<?> validateFilters(List<DatasetFilterDto> filters) {
+        if (filters == null || filters.isEmpty()) return null;
+        ItemDAO itemDao = new ItemDAO(dataSource);
+        Map<String, ItemBean> resolved = new HashMap<>();
+        for (int i = 0; i < filters.size(); i++) {
+            ResponseEntity<?> err = validateFilterRow(filters.get(i), i, itemDao, resolved);
+            if (err != null) return err;
         }
-        if ("not-null".equals(op)) {
-            return new PredicateFragment(
-                    "(id.value IS NOT NULL AND id.value <> '')", Collections.emptyList());
+        return null;
+    }
+
+    /**
+     * The preview's counts, over the participants the export would carry.
+     *
+     * <p>The participants come from {@link DatasetFilterSubjectResolver}, the
+     * code the export restricts with, so the preview cannot promise one set
+     * and the export deliver another. Every other count is over those
+     * participants: their visits and CRFs, the images bound to them (the
+     * multimodal bundle carries all of them), and, when the request names the
+     * selection, the CRF values the text formats would contain.
+     *
+     * @param eventDefinitionIds the selected visit definitions, or null
+     * @param itemIds            the selected items, or null
+     */
+    private FilterTestResult runCounts(int studyId, List<DatasetFilterDto> filters,
+                                       List<Integer> eventDefinitionIds,
+                                       List<Integer> itemIds) throws SQLException {
+        List<Integer> everyone = liveSubjectIds(studyId);
+        List<Integer> matching = everyone;
+        if (!filters.isEmpty()) {
+            List<DatasetFilterSubjectResolver.Row> rows = new ArrayList<>();
+            for (DatasetFilterDto f : filters) rows.add(f.row());
+            List<Integer> resolved = new DatasetFilterSubjectResolver(dataSource)
+                    .subjectsMatching(studyId, rows, "filter preview");
+            if (resolved != null) {
+                Set<Integer> keep = new HashSet<>(resolved);
+                matching = everyone.stream().filter(keep::contains).toList();
+            }
         }
-        if ("in".equals(op)) {
-            String placeholders = String.join(",",
-                    Collections.nCopies(row.values().size(), "?"));
-            return new PredicateFragment(
-                    "id.value IN (" + placeholders + ")",
-                    new ArrayList<>(row.values()));
+
+        int totalCrfs = countOver(everyone,
+                "SELECT COUNT(*) FROM event_crf ec "
+                        + "JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                        + "WHERE se.study_subject_id = ANY (?) AND ec.status_id NOT IN (5, 7)", List.of());
+        int matchingCrfs = countOver(matching,
+                "SELECT COUNT(*) FROM event_crf ec "
+                        + "JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                        + "WHERE se.study_subject_id = ANY (?) AND ec.status_id NOT IN (5, 7)"
+                        + inIds(" AND se.study_event_definition_id", eventDefinitionIds),
+                idsOrEmpty(eventDefinitionIds));
+        int matchingVisits = countOver(matching,
+                "SELECT COUNT(*) FROM study_event se WHERE se.study_subject_id = ANY (?) "
+                        + "AND se.status_id NOT IN (5, 7)"
+                        + inIds(" AND se.study_event_definition_id", eventDefinitionIds),
+                idsOrEmpty(eventDefinitionIds));
+        int matchingImages = countOver(matching,
+                "SELECT COUNT(*) FROM ingest_item ii "
+                        + "WHERE ii.bound_study_subject_id = ANY (?) AND ii.status = 'BOUND'", List.of());
+        Integer matchingValues = null;
+        if (itemIds != null && !itemIds.isEmpty()) {
+            List<Object> params = new ArrayList<>(idsOrEmpty(eventDefinitionIds));
+            params.addAll(itemIds);
+            matchingValues = countOver(matching,
+                    "SELECT COUNT(*) FROM item_data id "
+                            + "JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id "
+                            + "JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                            + "WHERE se.study_subject_id = ANY (?) "
+                            + "  AND ec.status_id NOT IN (5, 7) AND id.status_id NOT IN (5, 7) "
+                            + "  AND id.value IS NOT NULL AND id.value <> ''"
+                            + inIds(" AND se.study_event_definition_id", eventDefinitionIds)
+                            + inIds(" AND id.item_id", itemIds),
+                    params);
         }
-        if ("between".equals(op)) {
-            return new PredicateFragment(
-                    "id.value BETWEEN ? AND ?",
-                    List.of(row.values().get(0), row.values().get(1)));
+        return new FilterTestResult(matching.size(), matchingCrfs, everyone.size(), totalCrfs,
+                matchingVisits, matchingImages, matchingValues);
+    }
+
+    /** The live (not removed) participants of the study and its sites. */
+    private List<Integer> liveSubjectIds(int studyId) throws SQLException {
+        List<Integer> out = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT ss.study_subject_id FROM study_subject ss "
+                             + "JOIN study s ON s.study_id = ss.study_id "
+                             + "WHERE (s.study_id = ? OR s.parent_study_id = ?) "
+                             + "  AND ss.status_id NOT IN (5, 7)")) {
+            ps.setInt(1, studyId);
+            ps.setInt(2, studyId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getInt(1));
+            }
         }
-        return new PredicateFragment(
-                "id.value " + op + " ?",
-                List.of(row.value()));
+        return out;
+    }
+
+    /**
+     * Run a COUNT whose first parameter is the participant id array, followed
+     * by {@code more}. Zero participants count nothing, without a query.
+     */
+    private int countOver(List<Integer> subjectIds, String sql, List<Object> more) throws SQLException {
+        if (subjectIds.isEmpty()) return 0;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setArray(1, conn.createArrayOf("integer", subjectIds.toArray()));
+            for (int i = 0; i < more.size(); i++) {
+                ps.setObject(i + 2, more.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    /** {@code " AND col IN (?, ?)"} for a non-empty id list, else nothing. */
+    private static String inIds(String column, List<Integer> ids) {
+        if (ids == null || ids.isEmpty()) return "";
+        return column + " IN (" + String.join(",", Collections.nCopies(ids.size(), "?")) + ")";
+    }
+
+    private static List<Object> idsOrEmpty(List<Integer> ids) {
+        return ids == null ? List.of() : new ArrayList<>(ids);
     }
 
     /* ---- Phase 3 records ---- */
@@ -1126,10 +1195,29 @@ public class DatasetsApiController {
      * the operator.
      */
     public record DatasetFilterDto(String itemOid, String operator,
-                                   String value, List<String> values) {}
+                                   String value, List<String> values,
+                                   @JsonInclude(JsonInclude.Include.NON_NULL) String field) {
 
-    /** Request body for {@code POST /datasets/{id}:test-filter}. */
-    public record TestFilterRequest(List<DatasetFilterDto> filters) {}
+        /** A row on a CRF item, the shape every saved filter had before the participant fields. */
+        public DatasetFilterDto(String itemOid, String operator, String value, List<String> values) {
+            this(itemOid, operator, value, values, null);
+        }
+
+        /** The row as the resolver reads it. */
+        DatasetFilterSubjectResolver.Row row() {
+            return new DatasetFilterSubjectResolver.Row(field, itemOid, operator, value,
+                    values == null ? List.of() : values);
+        }
+    }
+
+    /**
+     * Request body for {@code POST /datasets/{id}:test-filter}. The selection
+     * is optional: with it, the answer also counts the CRF values the export
+     * would carry, so the wizard can say when a text export would be empty.
+     */
+    public record TestFilterRequest(List<DatasetFilterDto> filters,
+                                    List<String> eventDefinitionOids,
+                                    List<Integer> itemIds) {}
 
     /**
      * Response body for {@code POST /datasets/{id}:test-filter}.
@@ -1139,13 +1227,9 @@ public class DatasetsApiController {
      * ratio.
      */
     public record FilterTestResult(int matchingSubjects, int matchingCrfs,
-                                   int totalSubjects, int totalCrfs) {}
-
-    /**
-     * Internal pair of rendered SQL fragment + the JDBC parameters
-     * it needs (in order). Not part of the public wire vocabulary.
-     */
-    private record PredicateFragment(String sqlFragment, List<Object> params) {}
+                                   int totalSubjects, int totalCrfs,
+                                   int matchingVisits, int matchingImages,
+                                   Integer matchingValues) {}
 
     /**
      * Stable lowercase canonicalization for operator strings — used
@@ -1198,7 +1282,8 @@ public class DatasetsApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayExportData(me, currentRole)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayExportData(me, binding))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit accessing data exports."));
         }
@@ -1210,15 +1295,7 @@ public class DatasetsApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No dataset with id " + datasetId));
         }
-        // Hydrate item / event selection from the legacy SQL fragment.
-        // Older datasets created before the algorithm settled may not
-        // parse cleanly; log + return what we have so the SPA can at
-        // least render metadata + the inclusion flags.
-        try {
-            datasetDao.initialDatasetData(bean.getId());
-        } catch (Exception e) {
-            LOG.warn("initialDatasetData failed for id={} — returning partial bean", datasetId, e);
-        }
+        // toWizardDto hydrates the selection from the stored SQL.
         return ResponseEntity.ok(toWizardDto(bean));
     }
 
@@ -1249,6 +1326,8 @@ public class DatasetsApiController {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
+        ResponseEntity<?> badFilter = validateFilters(body.filters());
+        if (badFilter != null) return badFilter;
 
         DatasetBean toCreate = new DatasetBean();
         toCreate.setStudyId(pf.study.getId());
@@ -1350,7 +1429,8 @@ public class DatasetsApiController {
                     "Dataset's parent study no longer exists"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayEditExports(me, currentRole, parentStudy)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayEditExports(me, binding, parentStudy))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing datasets on this study"));
         }
@@ -1366,6 +1446,8 @@ public class DatasetsApiController {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
+        ResponseEntity<?> badFilter = validateFilters(body.filters());
+        if (badFilter != null) return badFilter;
 
         target.setName(body.name().trim());
         target.setDescription(body.description() == null ? "" : body.description().trim());
@@ -1388,7 +1470,12 @@ public class DatasetsApiController {
         if (target.getStatus() == null) target.setStatus(Status.AVAILABLE);
 
         datasetDao.updateAll(target);
-        persistFilters(target.getId(), body.filters(), me);
+        // A save that does not send the filter step leaves the saved filters
+        // as they are. Replacing them with nothing would silently widen every
+        // later export of the dataset to all participants.
+        if (body.filters() != null) {
+            persistFilters(target.getId(), body.filters(), me);
+        }
 
         LOG.info("Update dataset: id={} name={} study={} by user={}",
                 target.getId(), target.getName(), parentStudy.getOid(), me.getName());
@@ -1420,9 +1507,11 @@ public class DatasetsApiController {
             List<DatasetFilterDAO.PersistableFilter> rows = new ArrayList<>();
             if (filters != null) {
                 for (DatasetFilterDto f : filters) {
-                    if (f == null || f.itemOid() == null || f.operator() == null) continue;
+                    if (f == null || f.operator() == null) continue;
+                    boolean participant = f.row().onParticipant();
+                    if (!participant && f.itemOid() == null) continue;
                     rows.add(new DatasetFilterDAO.PersistableFilter(
-                            f.itemOid() + " " + f.operator(),
+                            (participant ? f.field() : f.itemOid()) + " " + f.operator(),
                             "",
                             filterJson(f)));
                 }
@@ -1466,7 +1555,8 @@ public class DatasetsApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean parentStudy = (StudyBean) studyDao.findByPK(target.getStudyId());
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (parentStudy != null && !roleMayEditExports(me, currentRole, parentStudy)) {
+        if (parentStudy != null && !ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayEditExports(me, binding, parentStudy))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit deleting datasets on this study"));
         }
@@ -1525,7 +1615,8 @@ public class DatasetsApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean parentStudy = (StudyBean) studyDao.findByPK(target.getStudyId());
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (parentStudy != null && !roleMayEditExports(me, currentRole, parentStudy)) {
+        if (parentStudy != null && !ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                binding -> roleMayEditExports(me, binding, parentStudy))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit restoring datasets on this study"));
         }
@@ -1668,7 +1759,8 @@ public class DatasetsApiController {
         }
         if (mutating) {
             StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-            if (!roleMayEditExports(me, currentRole, study)) {
+            if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                    binding -> roleMayEditExports(me, binding, study))) {
                 return WizardPreflight.error(ResponseEntity.status(403)
                         .body(Map.of("message",
                                 "Your role does not permit managing datasets on this study")));
@@ -1743,7 +1835,45 @@ public class DatasetsApiController {
      * echo paths. Populates BOTH the Phase 1 (list) fields AND the
      * Phase 2 (wizard) fields off the bean.
      */
+    /**
+     * The dataset with its visit and item selection read back from the stored
+     * SQL. A bean straight from {@code findByPK} carries neither, and the
+     * wizard then reopened every saved dataset with nothing selected — and,
+     * since the first step needs a selection, with no way past it.
+     */
+    private DatasetBean withSelection(DatasetBean bean) {
+        boolean hasSelection = bean.getEventIds() != null && !bean.getEventIds().isEmpty()
+                && bean.getItemIds() != null && !bean.getItemIds().isEmpty();
+        if (hasSelection || bean.getId() <= 0) return bean;
+        try {
+            DatasetBean hydrated = new DatasetDAO(dataSource).initialDatasetData(bean.getId());
+            if (hydrated != null && hydrated.getId() == bean.getId()) return hydrated;
+        } catch (Exception e) {
+            // Older datasets created before the algorithm settled may not
+            // parse cleanly; the SPA can still render metadata + flags.
+            LOG.warn("initialDatasetData failed for id={} — returning partial bean", bean.getId(), e);
+        }
+        return bean;
+    }
+
+    /** The dataset's saved filter rows, as the wizard edits them. */
+    private List<DatasetFilterDto> savedFilters(int datasetId) {
+        if (datasetId <= 0) return List.of();
+        List<DatasetFilterSubjectResolver.Row> rows =
+                new DatasetFilterSubjectResolver(dataSource).savedRows(datasetId);
+        if (rows == null) return List.of();
+        List<DatasetFilterDto> out = new ArrayList<>();
+        for (DatasetFilterSubjectResolver.Row r : rows) {
+            if (r.operator() == null) continue; // unreadable, see the resolver
+            out.add(new DatasetFilterDto(r.itemOid(), r.operator(), r.value(),
+                    r.values() == null || r.values().isEmpty() ? null : r.values(),
+                    r.onParticipant() ? r.field() : null));
+        }
+        return out;
+    }
+
     private DatasetDto toWizardDto(DatasetBean bean) {
+        bean = withSelection(bean);
         // Resolve event-definition ids → OIDs + items → CRF-versions.
         List<String> eventDefinitionOids = new ArrayList<>();
         List<Integer> crfVersionIds = new ArrayList<>();
@@ -1822,7 +1952,8 @@ public class DatasetsApiController {
                 itemIds,
                 includeFlags,
                 bean.getNumRuns(),
-                bean.getNumRuns() > 0);
+                bean.getNumRuns() > 0,
+                savedFilters(bean.getId()));
     }
 
     /* ---------------- Wizard validation ---------------- */

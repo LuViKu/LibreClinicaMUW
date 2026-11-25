@@ -36,6 +36,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleExportWriter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.BundleIndexes;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.export.TestImages;
 
 /**
  * P3.7 — a subject's whole record, files included.
@@ -147,9 +149,9 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
         Path dir = ARTIFACT_ROOT.resolve("job-" + JOB_ID);
         Files.createDirectories(dir);
         // A rendering of the eye — kept even under blinding.
-        Files.write(dir.resolve("fundus.png"), "fundus".getBytes(StandardCharsets.UTF_8));
+        Files.write(dir.resolve("fundus.png"), TestImages.pngWithText());
         // The model's reading of it — withheld under blinding.
-        Files.write(dir.resolve("irf_mask.png"), "mask".getBytes(StandardCharsets.UTF_8));
+        Files.write(dir.resolve("irf_mask.png"), TestImages.pngWithText());
 
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
@@ -194,7 +196,7 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void theCasebookAndEveryFileAreInTheZip() throws Exception {
-        long id = seedBoundFile("image", "fundus-bytes".getBytes(StandardCharsets.UTF_8));
+        long id = seedBoundFile("image", TestImages.jpegWithExif());
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
         writeBundle(false, sink);
 
@@ -204,8 +206,10 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
         assertTrue(entries.containsKey("manifest.json"));
         assertTrue(entries.containsKey("acquisitions/" + id + ".jpg"),
                 "the subject's image has to be in the bundle — that is the point");
-        assertEquals("fundus-bytes",
-                new String(entries.get("acquisitions/" + id + ".jpg"), StandardCharsets.UTF_8));
+        byte[] image = entries.get("acquisitions/" + id + ".jpg");
+        assertTrue((image[0] & 0xff) == 0xff && (image[1] & 0xff) == 0xd8, "still a JPEG");
+        assertFalse(new String(image, StandardCharsets.ISO_8859_1).contains(TestImages.SECRET),
+                "without the metadata the device wrote into it");
     }
 
     /**
@@ -214,7 +218,7 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
      */
     @Test
     void theManifestIsTheLastEntry() throws Exception {
-        seedBoundFile("image", "x".getBytes(StandardCharsets.UTF_8));
+        seedBoundFile("image", TestImages.jpegWithExif());
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
         writeBundle(false, sink);
 
@@ -229,11 +233,12 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
 
     @Test
     void theManifestDescribesWhatIsInside() throws Exception {
-        long id = seedBoundFile("e2e", new byte[2048]);
+        long id = seedBoundFile("image", TestImages.jpegWithExif());
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
         writeBundle(false, sink);
 
-        JsonNode m = JSON.readTree(unzip(sink.toByteArray()).get("manifest.json"));
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        JsonNode m = JSON.readTree(entries.get("manifest.json"));
         assertEquals(1, m.get("schemaVersion").asInt());
         assertEquals("M-001", m.get("subject").asText());
         assertEquals("none", m.get("masking").asText());
@@ -243,12 +248,41 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
         for (JsonNode a : acq) {
             if (a.get("ingestItemId").asLong() == id) {
                 found = true;
-                assertEquals("e2e", a.get("kind").asText());
-                assertEquals(2048, a.get("byteSize").asLong());
-                assertEquals("acquisitions/" + id + ".e2e", a.get("path").asText());
+                assertEquals("image", a.get("kind").asText());
+                assertEquals("acquisitions/" + id + ".jpg", a.get("path").asText());
+                assertEquals("metadata-stripped", a.get("deidentified").asText());
+                assertEquals(entries.get("acquisitions/" + id + ".jpg").length, a.get("byteSize").asLong(),
+                        "the size of the scrubbed file in the zip");
             }
         }
         assertTrue(found, "every file written has to appear in the manifest");
+    }
+
+    /**
+     * A file whose header the export cannot scrub does not leave. An E2E holds
+     * the patient's identity in its own format; it is named in the manifest
+     * and in omitted[], and the casebook does not point at it.
+     */
+    @Test
+    void aFileThatCannotBeScrubbedIsNamedNotCarried() throws Exception {
+        long id = seedBoundFile("e2e", new byte[2048]);
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        BundleExportWriter.Result r = writeBundle(false, sink);
+
+        Map<String, byte[]> entries = unzip(sink.toByteArray());
+        assertFalse(entries.containsKey("acquisitions/" + id + ".e2e"), "the E2E stays on the platform");
+        assertTrue(r.omitted().stream().anyMatch(o -> o.ref().equals("ingest_item/" + id)
+                        && o.reason().contains("cannot be de-identified")),
+                "and the bundle says so");
+        JsonNode m = JSON.readTree(entries.get("manifest.json"));
+        for (JsonNode a : m.get("acquisitions")) {
+            if (a.get("ingestItemId").asLong() == id) {
+                assertTrue(a.get("omitted").asBoolean());
+                assertFalse(a.has("path"), "no path to an entry that is not there");
+            }
+        }
+        assertFalse(BundleExportWriter.acquisitionPaths(DATA_SOURCE, STUDY_SUBJECT_ID).containsKey(id),
+                "the casebook names no file the bundle does not carry");
     }
 
     /**
@@ -268,8 +302,9 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
                 "the mask the model produced has to be in the bundle");
         assertTrue(entries.containsKey("inference/" + JOB_ID + "/fundus.png"),
                 "so does the companion rendered from the volume");
-        assertEquals("mask",
-                new String(entries.get("inference/" + JOB_ID + "/irf_mask.png"), StandardCharsets.UTF_8));
+        assertFalse(new String(entries.get("inference/" + JOB_ID + "/irf_mask.png"), StandardCharsets.ISO_8859_1)
+                        .contains(TestImages.SECRET),
+                "a picture leaves without its text chunks");
 
         JsonNode inference = JSON.readTree(entries.get("manifest.json")).get("inference");
         assertTrue(inference.isArray() && inference.size() >= 2,
@@ -330,7 +365,7 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
      */
     @Test
     void aBlindedExportSaysWhatItWithheld() throws Exception {
-        seedBoundFile("image", "x".getBytes(StandardCharsets.UTF_8));
+        seedBoundFile("image", TestImages.jpegWithExif());
         seedFinishedJob();
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
         BundleExportWriter.Result r = writeBundle(true, sink);
@@ -411,7 +446,7 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
      */
     @Test
     void aDatasetBundleGivesEachSubjectAFolderUnderOneManifest() throws Exception {
-        long id = seedBoundFile("image", "fundus-bytes".getBytes(StandardCharsets.UTF_8));
+        long id = seedBoundFile("image", TestImages.jpegWithExif());
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
 
         BundleExportWriter.Result r = BundleExportWriter.writeDataset(
@@ -513,8 +548,14 @@ class SubjectExportBundleDatabaseIT extends AbstractApiControllerDatabaseIT {
             assertFalse(folder.equals("..") || folder.equals("."), k);
             assertFalse(folder.startsWith("."), "no hidden folder: " + k);
         }
-        assertEquals(3, entries.size(),
-                "casebook.xml, casebook.csv and the manifest — and nothing at the root");
+        // Outside subjects/, only the manifest and the index tables
+        // (participants, visits, images, data dictionary).
+        java.util.Set<String> root = new java.util.TreeSet<>();
+        for (String k : entries.keySet()) if (!k.startsWith("subjects/")) root.add(k);
+        java.util.Set<String> expected = new java.util.TreeSet<>(BundleIndexes.FILES);
+        expected.add("manifest.json");
+        assertEquals(expected, root, "nothing else at the root");
+        assertEquals(7, entries.size(), "the subject's casebook.xml and casebook.csv, and the root's five");
         assertTrue(entries.keySet().stream().anyMatch(k -> k.startsWith("subjects/")),
                 "the subject is still exported, under a name that is safe");
     }

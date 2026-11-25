@@ -57,6 +57,7 @@ class UsersApiControllerLegacyRolesDatabaseIT extends AbstractApiControllerDatab
         try (Connection c = DATA_SOURCE.getConnection()) {
             user(c, "legacy-ra", "ra");
             user(c, "legacy-ra-mon", "ra", "monitor");
+            user(c, "legacy-ra-dm", "ra", "director");
             user(c, "legacy-ra2", "ra2");
             user(c, "legacy-ra-single", "ra");
             user(c, "legacy-ra-post", "ra");
@@ -115,12 +116,22 @@ class UsersApiControllerLegacyRolesDatabaseIT extends AbstractApiControllerDatab
 
     @Test
     void keepingTheLegacyRoleLeavesItAsItIs() throws Exception {
-        mockMvc().perform(put("/api/v1/users/legacy-ra-mon/roles/S_DEFAULTS1").session(sysadmin())
+        mockMvc().perform(put("/api/v1/users/legacy-ra-dm/roles/S_DEFAULTS1").session(sysadmin())
                         .contentType("application/json")
-                        .content("{\"roles\":[\"Monitor\",\"CRC\"],\"legacyRoles\":[\"ra\"]}"))
+                        .content("{\"roles\":[\"Data Manager\",\"CRC\"],\"legacyRoles\":[\"ra\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.legacyRole == 'ra' && @.active == true)]", hasSize(1)));
-        assertEquals(List.of("coordinator:1", "monitor:1", "ra:1"), rows("legacy-ra-mon"));
+        assertEquals(List.of("coordinator:1", "director:1", "ra:1"), rows("legacy-ra-dm"));
+    }
+
+    /** Monitor is held alone on a study (DR-042), a kept legacy role counting. */
+    @Test
+    void keepingALegacyRoleBesideMonitorIsRefused() throws Exception {
+        mockMvc().perform(put("/api/v1/users/legacy-ra-mon/roles/S_DEFAULTS1").session(sysadmin())
+                        .contentType("application/json")
+                        .content("{\"roles\":[\"Monitor\"],\"legacyRoles\":[\"ra\"]}"))
+                .andExpect(status().isConflict());
+        assertEquals(List.of("monitor:1", "ra:1"), rows("legacy-ra-mon"));
     }
 
     @Test
@@ -172,12 +183,17 @@ class UsersApiControllerLegacyRolesDatabaseIT extends AbstractApiControllerDatab
                         .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}"))
                 .andExpect(status().isConflict());
         assertEquals(List.of("ra:1"), rows("legacy-ra-post"));
-        // Any other role is added next to it, as before.
+        // Any other role is added next to it, as before; Monitor is held
+        // alone on a study (DR-042).
         mockMvc().perform(post("/api/v1/users/legacy-ra-post/roles").session(sysadmin())
                         .contentType("application/json")
                         .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Monitor\"}"))
+                .andExpect(status().isConflict());
+        mockMvc().perform(post("/api/v1/users/legacy-ra-post/roles").session(sysadmin())
+                        .contentType("application/json")
+                        .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"CRC\"}"))
                 .andExpect(status().isCreated());
-        assertEquals(List.of("monitor:1", "ra:1"), rows("legacy-ra-post"));
+        assertEquals(List.of("coordinator:1", "ra:1"), rows("legacy-ra-post"));
     }
 
     @Test

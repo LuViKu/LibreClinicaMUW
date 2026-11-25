@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Flattened POM for a vendored dcm4che artifact (see web/lib/maven/README.md).
+  The jar is dcm4che's own release, byte for byte; this POM replaces the
+  upstream one only to drop its parent and the repositories that parent
+  declares, so that resolving it needs no network.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.dcm4che</groupId>
+  <artifactId>dcm4che-dcmr</artifactId>
+  <version>5.35.2</version>
+  <packaging>jar</packaging>
+  <url>https://github.com/dcm4che/dcm4che</url>
+  <licenses>
+    <license><name>Mozilla Public License 1.1</name><url>https://www.mozilla.org/en-US/MPL/1.1/</url></license>
+    <license><name>GNU General Public License 2.0 or later</name><url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url></license>
+    <license><name>GNU Lesser General Public License 2.1 or later</name><url>https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html</url></license>
+  </licenses>
+  <dependencies>
+    <dependency>
+      <groupId>org.dcm4che</groupId>
+      <artifactId>dcm4che-core</artifactId>
+      <version>5.35.2</version>
+    </dependency>
+  </dependencies>
+</project>

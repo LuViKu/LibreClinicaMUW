@@ -28,7 +28,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
@@ -859,7 +858,7 @@ public class IngestInboxApiController {
         if (guard != null) return guard;
         // A finished job writes its metrics into the visit's CRF, as for a re-run.
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "running retinal analyses");
+                session, dataSource, "running retinal analyses");
         if (roleRefusal != null) return roleRefusal;
 
         String task = req == null || req.task() == null ? null : req.task().trim().toLowerCase(Locale.ROOT);
@@ -967,9 +966,8 @@ public class IngestInboxApiController {
     private ResponseEntity<?> guards(HttpSession session) {
         ResponseEntity<?> guard = access().guardSession(session);
         if (guard != null) return guard;
-        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        int roleId = (role != null && role.getRole() != null) ? role.getRole().getId() : 0;
-        if (!IngestBindAuthorization.roleMayReconcile(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                IngestBindAuthorization::roleMayReconcile)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Your role may not reconcile inbound files"));
         }

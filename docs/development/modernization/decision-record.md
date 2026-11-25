@@ -691,6 +691,23 @@ The cluster posture is verified by the runbook's smoke step: after starting uvic
 - **Addendum 2026-09-24 — blinding is a per-study setting.** The rule above was written for nAMD, where a treating physician seeing fluid volumes would influence the decision the trial measures. HealthAEye is a screening study: no treatment arm, no such decision, and the physician *is* the reader of the AI output — yet the metrics link on a visit bounced them to the home page. `ai.blinding.enabled` (default **on**, so no existing study changes) now says which kind of study this is. Off, the arm lookups in `AiArmPolicy` resolve to "no arm" for every subject — the one answer masking never triggers on — so the seven server-side masking sites follow without being touched, and the SPA's route guard lifts the treating roles' exclusion on the two metrics routes through the same setting as `/me` reports it. Nothing else the setting is not named on changes; the default stays fail-closed.
 - **The four nAMD flag bindings hold OIDs**, like every other `study_item_binding` row. They had been seeded with item *names* because the query that read them matched on `item.name`; the code matches on `oc_oid` now, and an additive changeset (`lc-muw-2026-12-01-namd-flag-bindings-oid.xml`) corrects the seeded rows without touching the deployed seed.
 
+**Amendment 2026-11-24 — the bundle opens with tables, and its checksums are the bundle's own.** A HealthAEye test export carried nothing: 59 participants, 176 filed images and no CRF value yet, and the text formats carry only CRF values. The bundle is the export for such a study, and is now one a recipient can open without parsing the manifest:
+
+- **Four tables at the top of a dataset bundle,** before the manifest: `participants.csv`, `visits.csv`, `images.csv` (one row per acquisition, with its visit, device, modality, eye and path in the zip, or why it is missing) and `data_dictionary.csv` (the selected items with their labels, types, units and answer options). They are written even when empty, so "none" reads differently from "not exported", and in the dialect of `casebook.csv`. The manifest names them under `indexes` and gives every acquisition its visit (`visitOid`, `visitName`, `visitDate`).
+- **A checksum describes the bytes in the zip.** The `sha256` of `ingest_item` is taken on arrival, before an upload's header is pseudonymised. It did not match the bundled file, and it identifies the original, identified export. The bundle now digests each file as it copies it and carries that digest only.
+- **The wizard says what an export will carry** — participants, visits, images and CRF values, counted by the code the export restricts with — and warns, in the wizard and in the format picker, when a text format would hold headers only.
+
+**Decided 2026-11-24 — images are scrubbed on export.** The stores keep what arrived: an uploaded DICOM has its patient name and ID replaced by the study label and a list of identity fields emptied, but kept sex, dates, device serial number, station name, UIDs, private tags and anything inside a nested sequence; a C-STORE file keeps what the camera wrote; a Remidio JPEG keeps whatever metadata it carries. On the way into an export (`ExportScrubber`):
+
+- **DICOM: the Basic Application Level Confidentiality Profile** (PS3.15 Annex E) with the **Retain Longitudinal Temporal Information with Full Dates Option**, as dcm4che's `DeIdentifier` (`dcm4che-deident`) implements it. The study, series, acquisition and content dates and times stay, because a longitudinal study needs them; birth date and age are removed. What analysing an image needs is not on the profile's list and is kept as it is: pixel spacing, laterality, slice thickness, orientation, the ophthalmic acquisition attributes, and the pixel measures and frame laterality inside functional groups. Otherwise the profile's attributes are removed, emptied or replaced in every nested sequence; private attributes, curves and overlays removed; UIDs remapped deterministically, so a study's files still belong together; `PatientIdentityRemoved` and `DeidentificationMethodCodeSequence` set. Patient name and ID take the study label as their dummy value, which keeps a file attributable within the study and nothing beyond. A fresh file meta information is written. Pixel data is streamed, never held in memory.
+- **A DICOM that declares burned-in annotation is withheld**: the Basic Profile does not clean pixel data. So is a deflated one (rare; its bulk data cannot be streamed).
+- **JPEG and PNG: metadata stripped** — every APPn but JFIF, the ICC profile and Adobe's, and every comment; in PNG every chunk but the image and its colour information. The image data is copied unchanged.
+- **Anything else is withheld and named in `omitted[]`**: an E2E, a PDF, a scanned form attached to a CRF, a file whose bytes do not match the type it is recorded as. A file that cannot be scrubbed does not leave, and the casebook does not point at it.
+- **The pipeline's companions** (`bscan.dcm`, `fundus.png`) are scrubbed like acquisitions; what it computed (geometry, masks in their own formats) names no one and is copied.
+- `images.csv` and the manifest say how each file was treated (`deidentified`: `dicom-basic-profile-retain-full-dates` or `metadata-stripped`), and the checksum is that of the scrubbed file.
+
+Consequences: dcm4che is not on Maven Central. Its jars are vendored in `web/lib/maven` with flat POMs and checksums (see the README there): declaring dcm4che's own repository, and the further repositories its parent POM declares, made dependency resolution on GitHub's runners hang for hours and Trivy's POM analysis time out. Dates are kept in the files as in the casebook and the bundle's tables, so the two agree; free-text descriptions (study and series description, image comments, protocol name) and patient characteristics (age, size, weight) are removed, as the profile says.
+
 ## DR-029 — One front door for every file a device exports
 
 **Status:** Accepted (2026-09-20). Lands with the combined uploader (`/app/upload`, `/app/ingest-inbox/upload`).
@@ -1218,6 +1235,28 @@ Consequences, replacing the one above:
 - The DICOMs carry the study label as `PatientID`/`PatientName` and nothing else about the person (the E2E's first-name and patient-ID slots are never read); the DICOM sidecar then replaces even that with the matched subject's label, or blanks it while the file is parked.
 - Converting uses one series' worth of memory instead of the whole file decoded (a real 600 MB export: 0.4 GB resident against 2.1 GB for one `read_oct_volume()`), and uses each series' own B-scan geometry, which the old path took from the file's first volume.
 - The split commit and preflight answer with typed DTOs, so the SPA's `api.ts` is generated from them.
+
+## DR-042 — An account may do what any of its roles on a study allows, and Monitor is held alone
+
+**Status:** Accepted (2026-11-16).
+
+**Context.** Legacy OpenClinica gave an account one role per study. The SPA's user management lets an account hold several, but most write checks read only the role the session is bound to, and login and the study picker bind the highest-ranked one (#442). So an account holding Investigator and Data Manager on a study was bound as Data Manager and could not sign, although it is that study's Investigator. Two rules already counted every role: source-data verification, because an Investigator who was also the Monitor was refused on the SDV page, and AI-arm blinding, where any treating role blinds.
+
+**Decision.**
+
+- **Permissions are the union of the roles.** A check admits the caller when any of its active roles on the active study allows the action, or on the parent study when the active study is a site (`ClinicalWriteAuthorization.anyRoleOnTheStudyMay` and `anyBindingOnTheStudyMay`). The bound role is tried first. The other roles are read from the database only when it refuses, and a failed read refuses.
+- **Restrictions are the union too.** Any treating role blinds the account to the AI output of hidden-arm participants (`AiArmPolicy.isTreatingRole`, unchanged), and refuses a change of a participant's AI arm.
+- **The SPA sees the same rule.** `GET /me` computes `activeStudy.permissions` the same way, and the signing preflight names the role the caller signs as.
+- **Monitor is held alone on a study.** The Monitor verifies source data and closes queries. Every other role enters data, so a Monitor beside one would verify, and close the queries on, data it entered itself. User management refuses the combination with 409, both when a role is added and when a study's role list is saved, with kept legacy roles counted. The role dialog explains why before anything is sent.
+
+**Consequences.**
+
+- An Investigator who is also the Data Manager signs, as the Investigator.
+- Rows that already combine Monitor with another role are not changed. They work under the union until an administrator edits the account, and the role dialog shows the hint on them.
+- The bound role still decides what is not a permission: which sites' participants the lists show (`SiteVisibilityFilter`) and the role shown in the top bar. For visibility the highest-ranked role is also the one that sees the most, so the union would change nothing there.
+- **The AI-cohort gate counts every role as well.** A treating role refuses a change of a participant's AI arm whatever else the account holds, as it blinds whatever else the account holds. A treating clinician who could move a patient out of the hidden arm would see the AI output after all. Administrator and Data Manager allow the change when any of the caller's roles is one of them; the rule on completed visits is unchanged.
+- The legacy screens keep their single-role checks; since the legacy retirement (DR-018) only administrators reach them. So do the heritage controllers outside `controller/api` that the SPA does not call (CRF version migration, the rule designer's API).
+- A role removed by an administrator stops counting at once. The bound role stays until the next study pick or login, as before.
 
 ## Future decisions (open)
 

@@ -509,7 +509,7 @@ public class EventCrfsApiController {
             return noStudyRole;
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "entering CRF data");
+                session, dataSource, "entering CRF data");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -1028,7 +1028,7 @@ public class EventCrfsApiController {
             return noStudyRole;
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "completing CRFs");
+                session, dataSource, "completing CRFs");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -1212,7 +1212,8 @@ public class EventCrfsApiController {
 
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!CrfReopenAuthorization.roleMayReopen(roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                CrfReopenAuthorization::roleMayReopen)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit reopening completed CRFs"));
         }
@@ -1835,7 +1836,8 @@ public class EventCrfsApiController {
         }
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
-        if (!EventCrfRestoreAuthorization.roleMayRestore(currentUser, roleId)) {
+        if (!ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                id -> EventCrfRestoreAuthorization.roleMayRestore(currentUser, id))) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit restoring event_crf rows"));
         }
@@ -2590,7 +2592,7 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "adding repeating-group rows");
+                session, dataSource, "adding repeating-group rows");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -2679,7 +2681,7 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "deleting repeating-group rows");
+                session, dataSource, "deleting repeating-group rows");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -2854,7 +2856,7 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "uploading CRF files");
+                session, dataSource, "uploading CRF files");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -3080,7 +3082,7 @@ public class EventCrfsApiController {
             return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "deleting CRF files");
+                session, dataSource, "deleting CRF files");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -3231,7 +3233,7 @@ public class EventCrfsApiController {
                     "message", "No active study bound to the session."));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "entering CRF data");
+                session, dataSource, "entering CRF data");
         if (roleRefusal != null) {
             return roleRefusal;
         }
@@ -3316,7 +3318,8 @@ public class EventCrfsApiController {
                     "message", "No active study bound to the session."));
         }
         StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayReconcile(role)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                EventCrfsApiController::roleMayReconcile)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Your role does not permit DDE reconciliation"));
         }
@@ -3358,7 +3361,8 @@ public class EventCrfsApiController {
                     "message", "No active study bound to the session."));
         }
         StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!roleMayReconcile(role)) {
+        if (!ClinicalWriteAuthorization.anyBindingOnTheStudyMay(session, dataSource,
+                EventCrfsApiController::roleMayReconcile)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Your role does not permit DDE reconciliation"));
         }
@@ -3538,7 +3542,7 @@ public class EventCrfsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         ResponseEntity<?> roleRefusal = ClinicalWriteAuthorization.refuseUnlessMayEnterData(
-                session, "entering CRF data");
+                session, dataSource, "entering CRF data");
         if (roleRefusal != null) {
             return roleRefusal;
         }

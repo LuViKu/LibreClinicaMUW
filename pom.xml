@@ -5,7 +5,7 @@
 	<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 	<artifactId>LibreClinica</artifactId>
 	<packaging>pom</packaging>
-	<version>1.5.0-beta.21-muw</version>
+	<version>1.5.0-beta.22-muw</version>
 	<name>LibreClinica MUW Ophthalmology</name>
 	<description>Electronic Data Capture (EDC) for clinical trials — institutional build of LibreClinica for the Department of Ophthalmology and Optometry, Medical University of Vienna.</description>
 	<organization>
@@ -86,6 +86,9 @@
 		     silently lose its logLocation branches. -->
 		<logback.version>1.5.34</logback.version>
 		<slf4j.version>2.0.16</slf4j.version>
+		<!-- DICOM toolkit, for the Basic Application Level Confidentiality
+		     Profile applied to images on export (dcm4che-deident). -->
+		<dcm4che.version>5.35.2</dcm4che.version>
 		<!-- Selenium 4.x (test scope) drives the smoke-tests profile.
 		     4.20+ supports Java 21 + the Selenium-managed driver download. -->
 		<selenium.version>4.25.0</selenium.version>

@@ -20,7 +20,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -214,14 +213,13 @@ public class StudySettingsApiController {
      * an automatic write lands, so it is an administrator's or a data
      * manager's.
      */
-    private static ResponseEntity<?> guardWrite(HttpSession session) {
+    private ResponseEntity<?> guardWrite(HttpSession session) {
         ResponseEntity<?> unauthenticated = guardRead(session);
         if (unauthenticated != null) return unauthenticated;
         UserAccountBean user = (UserAccountBean) session.getAttribute("userBean");
-        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
         boolean admin = user != null && user.isSysAdmin();
-        boolean dataManager = role != null && role.getRole() != null
-                && role.getRole().getId() == Role.STUDYDIRECTOR.getId();
+        boolean dataManager = ClinicalWriteAuthorization.anyRoleOnTheStudyMay(session, dataSource,
+                roleId -> roleId == Role.STUDYDIRECTOR.getId());
         if (!admin && !dataManager) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Your role may not change a study's settings"));

@@ -173,13 +173,39 @@ const filters = computed<DatasetFilterDto[]>({
 
 const datasetIdForPreview = computed(() => String(datasets.draft?.editingDatasetId ?? '0'))
 
+/** The draft's visits and items, so the counts cover what the export selects. */
+function previewSelection() {
+  const d = draft.value
+  return d ? { eventDefinitionOids: d.eventDefinitionOids, itemIds: d.itemIds } : undefined
+}
+
 function onPreviewRequested(next: DatasetFilterDto[]): void {
   if (next.length === 0) {
     datasets.preview = null
     return
   }
-  void datasets.testFilter(datasetIdForPreview.value, next)
+  void datasets.testFilter(datasetIdForPreview.value, next, undefined, previewSelection())
 }
+
+/**
+ * The review step counts what the export will carry, filters or not:
+ * participants, visits, images, and the CRF values of the selected items.
+ * A study whose data so far is images exports nothing in the text formats,
+ * and the operator should learn that here rather than from an empty file.
+ */
+watch(step, (next) => {
+  if (next === 3 && draft.value) {
+    void datasets.testFilter(datasetIdForPreview.value, draft.value.filters ?? [], 0, previewSelection())
+  }
+})
+
+const bundleEnabled = computed(
+  () => auth.user?.activeStudy?.settings?.['export.bundle.enabled'] === 'true',
+)
+
+const reviewCounts = computed(() => (step.value === 3 ? datasets.preview : null))
+
+const noCrfValues = computed(() => reviewCounts.value?.matchingValues === 0)
 
 function goNext() {
   const idx = step.value
@@ -391,6 +417,38 @@ const reviewLines = computed(() => {
               </dd>
             </div>
           </dl>
+
+          <div
+            v-if="reviewCounts"
+            class="rounded-md border border-slate-200 px-4 py-3 text-sm space-y-2"
+            data-testid="review-counts"
+            aria-live="polite"
+          >
+            <div class="text-slate-700">
+              {{ t('createDataset.review.counts', {
+                participants: reviewCounts.matchingSubjects,
+                visits: reviewCounts.matchingVisits ?? 0,
+                images: reviewCounts.matchingImages ?? 0,
+                values: reviewCounts.matchingValues ?? 0,
+              }) }}
+            </div>
+            <div
+              v-if="noCrfValues"
+              class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800"
+              data-testid="review-no-crf-values"
+              role="status"
+            >
+              {{ t('createDataset.review.noCrfValues') }}
+              <template v-if="(reviewCounts.matchingImages ?? 0) > 0">
+                {{ bundleEnabled
+                  ? t('createDataset.review.useBundle', { images: reviewCounts.matchingImages })
+                  : t('createDataset.review.enableBundle', { images: reviewCounts.matchingImages }) }}
+              </template>
+            </div>
+          </div>
+          <div v-else-if="datasets.isLoadingPreview" class="text-xs text-slate-500">
+            {{ t('filters.previewLoading') }}
+          </div>
 
           <div class="border border-slate-200 rounded-md">
             <header class="px-3 py-2 bg-slate-50 text-sm font-semibold text-slate-800 border-b border-slate-200">
