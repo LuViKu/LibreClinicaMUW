@@ -116,6 +116,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         this.setTypeExpected(34, TypeNames.STRING);// odm_prior_metadataversion_oid
         this.setTypeExpected(35, TypeNames.BOOL);// show_secondary_id
         this.setTypeExpected(36, TypeNames.INT);// dataset_item_status_id
+        this.setTypeExpected(37, TypeNames.BOOL);// show_crf_completion_date (2026-11)
     }
 
     public void setDefinitionCrfItemTypesExpected() {
@@ -227,6 +228,7 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         variables.put(Integer.valueOf(26), db.getODMPriorMetaDataVersionOid());
         variables.put(Integer.valueOf(27), db.isShowSubjectSecondaryId());
         variables.put(Integer.valueOf(28), db.getDatasetItemStatus().getId());
+        variables.put(Integer.valueOf(29), Boolean.valueOf(db.isShowCRFcompletionDate()));
 
         this.executeUpdateWithPK(digester.getQuery("create"), variables, nullVars);
 
@@ -290,6 +292,9 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         eb.setODMPriorStudyOid((String) hm.get("odm_prior_study_oid"));
         eb.setODMPriorMetaDataVersionOid((String) hm.get("odm_prior_metadataversion_oid"));
         eb.setShowSubjectSecondaryId((Boolean) hm.get("show_secondary_id"));
+        // Stored since 2026-11; until then the flag was offered and never kept.
+        Object completionDate = hm.get("show_crf_completion_date");
+        eb.setShowCRFcompletionDate(completionDate instanceof Boolean b && b);
         int isId = ((Integer) hm.get("dataset_item_status_id")).intValue();
         isId = isId > 0 ? isId : 1;
         DatasetItemStatus dis = DatasetItemStatus.get(isId);
@@ -625,7 +630,8 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
         variables.put(Integer.valueOf(30), db.getODMPriorMetaDataVersionOid());
         variables.put(Integer.valueOf(31), Boolean.valueOf(db.isShowSubjectSecondaryId()));
         variables.put(Integer.valueOf(32), Integer.valueOf(db.getDatasetItemStatus().getId()));
-        variables.put(Integer.valueOf(33), Integer.valueOf(db.getId()));
+        variables.put(Integer.valueOf(33), Boolean.valueOf(db.isShowCRFcompletionDate()));
+        variables.put(Integer.valueOf(34), Integer.valueOf(db.getId()));
 
         this.executeUpdate(digester.getQuery("updateAll"), variables, nullVars);
         if (isQuerySuccessful()) {

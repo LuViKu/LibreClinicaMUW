@@ -205,8 +205,20 @@ describe('DatasetListView — bundle export (P3.8)', () => {
     archivedDatasetFileId: null, errorMessage: null, downloadUrl: null,
   }
 
+  /**
+   * The export dialog counts the dataset when it opens (a :test-filter call),
+   * so a POST is answered by its URL rather than by call order.
+   */
+  const COUNTS = { matchingSubjects: 1, matchingCrfs: 0, totalSubjects: 1, totalCrfs: 0,
+    matchingVisits: 1, matchingImages: 2, matchingValues: 0 }
+  function answerPosts(): void {
+    ;(apiPost as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) =>
+      url.endsWith(':test-filter') ? COUNTS : url.endsWith('/exports') ? JOB : {})
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue({})
   })
 
   it('does not offer the bundle for a study that has not enabled it', async () => {
@@ -216,7 +228,7 @@ describe('DatasetListView — bundle export (P3.8)', () => {
   })
 
   it('offers the bundle where the study enables it and queues a job on submit', async () => {
-    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JOB)
+    answerPosts()
     const wrapper = await mountView({ rows: [ROW], settings: { 'export.bundle.enabled': 'true' } })
     await wrapper.get('[data-testid="dataset-export-now"]').trigger('click')
     await wrapper.get('input[type="radio"][value="bundle"]').setValue()
@@ -233,10 +245,29 @@ describe('DatasetListView — bundle export (P3.8)', () => {
     expect((wrapper.get('[data-testid="dataset-export-now"]').element as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('warns that a text format would be empty when the dataset has no CRF values', async () => {
+    answerPosts()
+    ;(apiGet as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) =>
+      url === '/pages/api/v1/datasets/11'
+        ? { ...ROW, eventDefinitionOids: ['SE_BASE'], itemIds: [30], filters: [] }
+        : [])
+    const wrapper = await mountView({ rows: [ROW], settings: { 'export.bundle.enabled': 'true' } })
+    await wrapper.get('[data-testid="dataset-export-now"]').trigger('click')
+    await flushPromises()
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/datasets/11:test-filter',
+      { filters: [], eventDefinitionOids: ['SE_BASE'], itemIds: [30] }, expect.anything())
+    expect(wrapper.get('[data-testid="export-empty-warning"]').text())
+      .toContain(enMessages.createDataset.review.noCrfValues)
+    // The bundle carries the images: no warning for it.
+    await wrapper.get('input[type="radio"][value="bundle"]').setValue()
+    expect(wrapper.find('[data-testid="export-empty-warning"]').exists()).toBe(false)
+  })
+
   it('polls the job and shows the download link once it is done', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     try {
-      ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JOB)
+      answerPosts()
       const wrapper = await mountView({ rows: [ROW], settings: { 'export.bundle.enabled': 'true' } })
       await wrapper.get('[data-testid="dataset-export-now"]').trigger('click')
       await wrapper.get('input[type="radio"][value="bundle"]').setValue()

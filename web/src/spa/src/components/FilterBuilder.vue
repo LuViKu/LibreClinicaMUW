@@ -12,6 +12,8 @@ import {
   LIST_OPERATORS,
   UNARY_OPERATORS,
   operatorsForDataType,
+  PARTICIPANT_FIELD_OPERATORS,
+  type ParticipantField,
 } from '@/types/export'
 
 /**
@@ -97,12 +99,28 @@ watch(
 )
 
 function cloneRows(src: DatasetFilterDto[]): DatasetFilterDto[] {
-  return src.map((r) => ({
-    itemOid: r.itemOid,
-    operator: r.operator,
-    value: r.value ?? null,
-    values: r.values ? [...r.values] : undefined,
-  }))
+  return src.map((r) => {
+    const row: DatasetFilterDto = {
+      itemOid: r.itemOid ?? '',
+      operator: r.operator,
+      value: r.value ?? null,
+      values: r.values ? [...r.values] : undefined,
+    }
+    if (r.field) row.field = r.field
+    return row
+  })
+}
+
+/**
+ * The participant fields come first in the field picker, under keys no item
+ * OID can have. A participant ID is not CRF data, and a study with images
+ * but no CRF values yet could not otherwise be filtered by participant.
+ */
+const PARTICIPANT_FIELDS: ParticipantField[] = ['participantId', 'enrollmentDate']
+const FIELD_PREFIX = '@'
+
+function rowKey(row: DatasetFilterDto): string {
+  return row.field ? FIELD_PREFIX + row.field : row.itemOid
 }
 
 function sameRows(a: DatasetFilterDto[], b: DatasetFilterDto[]): boolean {
@@ -111,6 +129,7 @@ function sameRows(a: DatasetFilterDto[], b: DatasetFilterDto[]): boolean {
     const x = a[i]
     const y = b[i]
     if (x.itemOid !== y.itemOid) return false
+    if ((x.field ?? null) !== (y.field ?? null)) return false
     if (x.operator !== y.operator) return false
     if ((x.value ?? null) !== (y.value ?? null)) return false
     const xv = x.values ?? []
@@ -134,10 +153,14 @@ function lookupItem(oid: string): FilterItemDto | undefined {
 function defaultRow(): DatasetFilterDto {
   // Default to the first selected item + an equality predicate so the
   // operator selector + value input render immediately when the
-  // operator clicks "Add filter".
+  // operator clicks "Add filter". With no item selected, the participant
+  // ID, which every participant has.
   const first = props.selectedItems[0]
+  if (!first) {
+    return { itemOid: '', field: 'participantId', operator: '=', value: '', values: undefined }
+  }
   return {
-    itemOid: first?.oid ?? '',
+    itemOid: first.oid,
     operator: '=' as FilterOperator,
     value: '',
     values: undefined,
@@ -159,18 +182,33 @@ function removeRow(index: number): void {
   emitUpdate()
 }
 
-function onItemChange(index: number, oid: string): void {
+function onItemChange(index: number, key: string): void {
   const row = rows.value[index]
+  if (key.startsWith(FIELD_PREFIX)) {
+    const field = key.slice(FIELD_PREFIX.length) as ParticipantField
+    const ops = PARTICIPANT_FIELD_OPERATORS[field]
+    rows.value[index] = {
+      itemOid: '',
+      field,
+      operator: row.field === field && ops.includes(row.operator) ? row.operator : '=',
+      value: row.field === field ? row.value ?? '' : '',
+      values: row.field === field ? row.values : undefined,
+    }
+    emitUpdate()
+    return
+  }
+  const oid = key
   const newItem = lookupItem(oid)
   const previousItem = lookupItem(row.itemOid)
+  const { field: _wasField, ...rest } = row
   rows.value[index] = {
-    ...row,
+    ...rest,
     itemOid: oid,
     // If the new item's type doesn't support the current operator,
     // reset to '=' so the SPA + the backend agree the row is valid.
+    // Coming from a participant field, the operator is checked too.
     operator: newItem
-      && previousItem
-      && newItem.dataType !== previousItem.dataType
+      && ((previousItem && newItem.dataType !== previousItem.dataType) || _wasField)
       && !operatorsForDataType(newItem.dataType).includes(row.operator)
       ? '='
       : row.operator,
@@ -237,12 +275,15 @@ function onBetweenHighChange(index: number, high: string): void {
 }
 
 function operatorsFor(row: DatasetFilterDto): FilterOperator[] {
+  if (row.field) return PARTICIPANT_FIELD_OPERATORS[row.field]
   const item = lookupItem(row.itemOid)
   if (!item) return ['=', '!=', 'in', 'is-null', 'not-null']
   return operatorsForDataType(item.dataType)
 }
 
 function valueInputType(row: DatasetFilterDto): 'text' | 'date' | 'number' {
+  if (row.field === 'enrollmentDate') return 'date'
+  if (row.field) return 'text'
   const item = lookupItem(row.itemOid)
   if (!item) return 'text'
   const t = item.dataType.toLowerCase()
@@ -266,12 +307,19 @@ function valueInputType(row: DatasetFilterDto): 'text' | 'date' | 'number' {
         <FieldLabel :for="`filter-item-${index}`">{{ t('filters.itemLabel') }}</FieldLabel>
         <SelectInput
           :id="`filter-item-${index}`"
-          :model-value="row.itemOid"
+          :model-value="rowKey(row)"
           @update:model-value="(v) => onItemChange(index, String(v))"
         >
-          <option v-for="item in selectedItems" :key="item.oid" :value="item.oid">
-            {{ item.label || item.oid }}
-          </option>
+          <optgroup :label="t('filters.participantGroup')">
+            <option v-for="f in PARTICIPANT_FIELDS" :key="f" :value="FIELD_PREFIX + f">
+              {{ t(`filters.participantFields.${f}`) }}
+            </option>
+          </optgroup>
+          <optgroup v-if="selectedItems.length > 0" :label="t('filters.itemGroup')">
+            <option v-for="item in selectedItems" :key="item.oid" :value="item.oid">
+              {{ item.label || item.oid }}
+            </option>
+          </optgroup>
         </SelectInput>
       </div>
 
@@ -360,7 +408,6 @@ function valueInputType(row: DatasetFilterDto): 'text' | 'date' | 'number' {
         type="button"
         class="px-3 py-1.5 text-sm rounded-md border border-muw-blue text-muw-blue hover:bg-muw-blue-50 muw-focus"
         data-testid="filter-add"
-        :disabled="selectedItems.length === 0"
         @click="addRow"
       >
         {{ t('filters.addRow') }}
@@ -385,6 +432,9 @@ function valueInputType(row: DatasetFilterDto): 'text' | 'date' | 'number' {
               totalCrfs: preview.totalCrfs,
             })
           }}
+          <template v-if="preview.matchingImages !== undefined">
+            · {{ t('filters.previewImages', { images: preview.matchingImages }) }}
+          </template>
         </template>
       </div>
     </div>

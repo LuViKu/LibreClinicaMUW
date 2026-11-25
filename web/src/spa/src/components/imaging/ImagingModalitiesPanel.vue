@@ -115,6 +115,33 @@ function removeBinding(m: ImagingModality, bindingId: number): void {
   void run(() => store.removeBinding(props.studyOid as string, m.id, bindingId))
 }
 
+/** Result line of the last catch-up, or null. */
+const applyResult = ref<string | null>(null)
+const applying = ref(false)
+
+/**
+ * Tick "performed" for images filed before their modality had a binding.
+ * Writes CRF values (as the system account), so it is confirmed first.
+ */
+async function applyToFiled(): Promise<void> {
+  if (!props.studyOid) return
+  if (!(await confirm({ message: t('imagingModalities.applyPerformed.confirm') }))) return
+  applying.value = true
+  applyResult.value = null
+  error.value = null
+  try {
+    const res = await store.applyPerformed(props.studyOid)
+    const written = res.outcomes.WRITTEN ?? 0
+    const kept = (res.outcomes.ALREADY_SET ?? 0) + (res.outcomes.OPERATOR_VALUE_KEPT ?? 0)
+      + (res.outcomes.OTHER_SOURCE_KEPT ?? 0)
+    applyResult.value = t('imagingModalities.applyPerformed.result', { files: res.files, written, kept })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : t('imagingModalities.applyPerformed.failed')
+  } finally {
+    applying.value = false
+  }
+}
+
 function kindsLabel(m: ImagingModality): string {
   // An empty list is meaningful: the modality is on the checklist but no file
   // ever arrives for it (BCVA is the example).
@@ -316,6 +343,19 @@ function kindsLabel(m: ImagingModality): string {
           data-testid="add-modality"
         >{{ t('imagingModalities.add') }}</button>
       </form>
+
+      <div class="mt-6 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          class="px-3 py-1.5 text-[12px] font-medium rounded-lg border border-muw-blue text-muw-blue hover:bg-muw-blue-50 disabled:opacity-50"
+          data-testid="apply-performed"
+          :disabled="applying"
+          @click="applyToFiled"
+        >{{ t('imagingModalities.applyPerformed.button') }}</button>
+        <p v-if="applyResult" class="text-[13px] text-slate-600" role="status" data-testid="apply-performed-result">
+          {{ applyResult }}
+        </p>
+      </div>
     </template>
   </section>
 </template>

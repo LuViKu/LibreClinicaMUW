@@ -307,6 +307,47 @@ public final class VisitImagingPlan {
     }
 
     /**
+     * The catalogue entry a file reaches by its device, or null when that
+     * cannot be said without guessing.
+     *
+     * <p>The file's device key (its {@code device}, else the DICOM calling AE
+     * title) matches an entry's {@code device} or its
+     * {@code auto_match_ae_title}, and the entry must accept the file's kind
+     * (an empty list accepts any). Exactly one entry must match: the
+     * Spectralis rows share their device, and an E2E series reaches its entry
+     * by {@link #modalityByE2eSeries} instead.
+     *
+     * @param studyId the study the file is bound in; its parent's catalogue
+     *                counts too, as for every catalogue lookup
+     */
+    public static Integer modalityByDevice(Connection c, int studyId, String kind, String deviceKey)
+            throws SQLException {
+        if (deviceKey == null || deviceKey.isBlank()) return null;
+        String k = kind == null ? "" : kind.trim().toLowerCase(Locale.ROOT);
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT imaging_modality_id FROM imaging_modality "
+                        + " WHERE study_id IN (?, COALESCE((SELECT parent_study_id FROM study "
+                        + "                                  WHERE study_id = ? AND parent_study_id > 0), -1)) "
+                        + "   AND COALESCE(status_id, 1) = 1 "
+                        + "   AND (lower(trim(COALESCE(device, ''))) = lower(trim(?)) "
+                        + "        OR lower(trim(COALESCE(auto_match_ae_title, ''))) = lower(trim(?))) "
+                        + "   AND (COALESCE(kinds_accepted, '') = '' "
+                        + "        OR (',' || lower(replace(kinds_accepted, ' ', '')) || ',') LIKE ?) "
+                        + " ORDER BY ordinal, code")) {
+            ps.setInt(1, studyId);
+            ps.setInt(2, studyId);
+            ps.setString(3, deviceKey);
+            ps.setString(4, deviceKey);
+            ps.setString(5, "%," + k + ",%");
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int id = rs.getInt(1);
+                return rs.next() ? null : Integer.valueOf(id);
+            }
+        }
+    }
+
+    /**
      * DR-039 — the catalogue entry an unclassified OCT volume is filed under,
      * or null when that cannot be said without guessing.
      *

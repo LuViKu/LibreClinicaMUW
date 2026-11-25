@@ -126,7 +126,8 @@ class SubjectExportProvenanceDatabaseIT extends AbstractApiControllerDatabaseIT 
         Files.createDirectories(dir);
         String name = MARKER + System.nanoTime() + ".jpg";
         Path file = dir.resolve(name);
-        Files.write(file, "fundus-bytes".getBytes(StandardCharsets.UTF_8));
+        // A real image: the bundle carries only files it can scrub.
+        Files.write(file, at.ac.meduniwien.ophthalmology.libreclinica.service.export.TestImages.jpegWithExif());
         return insertIngestRow(file.toString(), name);
     }
 

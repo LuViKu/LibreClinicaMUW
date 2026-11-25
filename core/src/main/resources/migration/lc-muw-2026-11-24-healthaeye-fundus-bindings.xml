@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+      HealthAEye's fundus cameras never ticked their "performed" boxes.
+
+      1. The 2026-11-02 seed binds a modality only to a CRF item that already
+         exists, and ran once. The HealthAEye CRF is authored in the app; where
+         its Clarus, Remidio and Optomed items did not exist yet when the seed
+         ran, those modalities were left without a binding for good, and every
+         bind of their files skipped the tick.
+      2. The Optomed entry names its device OPTOMEDLUMO, the camera's DICOM AE
+         title. Files uploaded by the Optomed bridge carry the device optomed,
+         so they matched no catalogue entry: no tick, no modality on the file,
+         and no match for the visit plan. The AE title stays in
+         auto_match_ae_title, where the C-STORE path reads it.
+
+      Each changeset only fills what is missing, and only for items that
+      exist. Files filed before the fix get their tick from the catalogue's
+      "apply to filed images" action (POST .../imaging-modalities/apply-performed).
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-11-24-healthaeye-optomed-device" dbms="postgresql">
+        <comment>The Optomed entry matches the device name its uploads carry.</comment>
+        <sql splitStatements="false"><![CDATA[
+            UPDATE imaging_modality im
+               SET device = 'optomed',
+                   auto_match_ae_title = COALESCE(NULLIF(im.auto_match_ae_title, ''), im.device)
+              FROM study s
+             WHERE s.study_id = im.study_id
+               AND s.oc_oid = 'S_HAE'
+               AND im.code = 'FUNDUS_OPTOMED'
+               AND lower(COALESCE(im.device, '')) = 'optomedlumo';
+        ]]></sql>
+        <rollback>
+            <sql>
+                UPDATE imaging_modality im SET device = 'OPTOMEDLUMO'
+                  FROM study s
+                 WHERE s.study_id = im.study_id AND s.oc_oid = 'S_HAE'
+                   AND im.code = 'FUNDUS_OPTOMED' AND im.device = 'optomed';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-11-24-healthaeye-missing-performed-bindings" dbms="postgresql">
+        <comment>Performed boxes the 2026-11-02 seed skipped, where the item exists now.</comment>
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO imaging_modality_item_binding
+                (imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id)
+            SELECT im.imaging_modality_id, 'performed', 'OU', v.item_oid, '1', 1
+              FROM imaging_modality im
+              JOIN study s ON s.study_id = im.study_id
+              JOIN (VALUES
+                    ('BCVA',           'I_HEALT_BCVA_PERFORMED'),
+                    ('OCT_SPECTRALIS', 'I_HEALT_OCT_PERFORMED'),
+                    ('FUNDUS_CLARUS',  'I_HEALT_CLARUS_PERFORMED'),
+                    ('FUNDUS_REMIDIO', 'I_HEALT_REMIDIO_PERFORMED'),
+                    ('FUNDUS_OPTOMED', 'I_HEALT_OPTOMED_PERFORMED')
+                   ) AS v(code, item_oid) ON v.code = im.code
+             WHERE s.oc_oid = 'S_HAE'
+               AND EXISTS (SELECT 1 FROM item i WHERE i.oc_oid = v.item_oid)
+               AND NOT EXISTS (SELECT 1 FROM imaging_modality_item_binding b
+                                WHERE b.imaging_modality_id = im.imaging_modality_id
+                                  AND b.role = 'performed' AND b.laterality = 'OU');
+        ]]></sql>
+        <rollback>
+            <!-- Not reversible without knowing which rows it added. -->
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-11-24-healthaeye-missing-reason-bindings" dbms="postgresql">
+        <comment>Reason boxes the 2026-11-02 seed skipped, where the item exists now; never auto-written.</comment>
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO imaging_modality_item_binding
+                (imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id)
+            SELECT im.imaging_modality_id, 'not_performed_reason', 'OU', v.item_oid, '1', 1
+              FROM imaging_modality im
+              JOIN study s ON s.study_id = im.study_id
+              JOIN (VALUES
+                    ('BCVA',           'I_HEALT_BCVA_NOT_PERFORMED_REASON'),
+                    ('OCT_SPECTRALIS', 'I_HEALT_OCT_NOT_PERFORMED_REASON'),
+                    ('FUNDUS_CLARUS',  'I_HEALT_CLARUS_NOT_PERFORMED_REASON'),
+                    ('FUNDUS_REMIDIO', 'I_HEALT_REMIDIO_NOT_PERFORMED_REASO'),
+                    ('FUNDUS_OPTOMED', 'I_HEALT_OPTOMED_NOT_PERFORMED_REASO')
+                   ) AS v(code, item_oid) ON v.code = im.code
+             WHERE s.oc_oid = 'S_HAE'
+               AND EXISTS (SELECT 1 FROM item i WHERE i.oc_oid = v.item_oid)
+               AND NOT EXISTS (SELECT 1 FROM imaging_modality_item_binding b
+                                WHERE b.imaging_modality_id = im.imaging_modality_id
+                                  AND b.role = 'not_performed_reason' AND b.laterality = 'OU');
+        ]]></sql>
+        <rollback>
+            <!-- Not reversible without knowing which rows it added. -->
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

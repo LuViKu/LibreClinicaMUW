@@ -860,6 +860,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/imaging-modalities/apply-performed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applyPerformed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/group-classes": {
         parameters: {
             query?: never;
@@ -4998,6 +5014,7 @@ export interface components {
             operator?: string;
             value?: string;
             values?: string[];
+            field?: string;
         };
         DatasetDto: {
             oid?: string;
@@ -5022,6 +5039,7 @@ export interface components {
             /** Format: int32 */
             numRuns?: number;
             hasRun?: boolean;
+            filters?: components["schemas"]["DatasetFilterDto"][];
         };
         UpdateCrfRequest: {
             name?: string;
@@ -5998,6 +6016,8 @@ export interface components {
         };
         TestFilterRequest: {
             filters?: components["schemas"]["DatasetFilterDto"][];
+            eventDefinitionOids?: string[];
+            itemIds?: number[];
         };
         FilterTestResult: {
             /** Format: int32 */
@@ -6008,6 +6028,12 @@ export interface components {
             totalSubjects?: number;
             /** Format: int32 */
             totalCrfs?: number;
+            /** Format: int32 */
+            matchingVisits?: number;
+            /** Format: int32 */
+            matchingImages?: number;
+            /** Format: int32 */
+            matchingValues?: number;
         };
         ExportTriggerRequest: {
             format?: string;
@@ -8784,6 +8810,28 @@ export interface operations {
                 "application/json": components["schemas"]["ModalityWriteRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    applyPerformed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

@@ -82,5 +82,7 @@ public record DatasetDto(
         List<Integer> itemIds,
         Map<String, Boolean> includeFlags,
         int numRuns,
-        boolean hasRun) {
+        boolean hasRun,
+        /** The saved filter rows; empty on the list endpoint. */
+        List<DatasetsApiController.DatasetFilterDto> filters) {
 }

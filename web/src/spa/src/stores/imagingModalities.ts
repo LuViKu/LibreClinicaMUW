@@ -69,5 +69,14 @@ export const useImagingModalitiesStore = defineStore('imagingModalities', () => 
     await load(oid)
   }
 
-  return { list, isLoading, error, studyOid, load, reload, create, update, retire, putBinding, removeBinding }
+  /**
+   * Tick "performed" for the images already filed in the study, as a bind
+   * would have (POST .../apply-performed). Returns how many images were gone
+   * through and the ticker's outcome counts.
+   */
+  async function applyPerformed(oid: string): Promise<{ files: number; outcomes: Record<string, number> }> {
+    return apiPost<{ files: number; outcomes: Record<string, number> }>(`${base(oid)}/apply-performed`, {})
+  }
+
+  return { list, isLoading, error, studyOid, load, reload, create, update, retire, putBinding, removeBinding, applyPerformed }
 })
