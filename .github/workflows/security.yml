@@ -79,12 +79,23 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up JDK 21
+      # The Maven cache is keyed on this file as well as the POMs, so it
+      # is this job's own. On the POMs alone it shares build.yml's key,
+      # and whichever job finishes first writes it: when this job, run by
+      # hand, beats a build of new POMs, it saves only what
+      # dependency-check resolved, the build job cannot save ("Unable to
+      # reserve cache … another job may be creating this cache"), and the
+      # integration tests and the smoke image's m2seed restore the partial
+      # cache.
+      - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
+          cache-dependency-path: |
+            **/pom.xml
+            .github/workflows/security.yml
 
       - name: Cache OWASP NVD database
         uses: actions/cache@v4
