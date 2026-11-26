@@ -13,6 +13,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.ingest.CodedAnswers;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +42,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -55,7 +58,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * writes into a CRF without anybody typing it — so every change is audited, and
  * a binding's item OID is checked to exist before it is accepted. A binding
  * pointing at nothing does not fail loudly; it simply stops ticking, which
- * looks exactly like a modality that was not performed.
+ * looks exactly like a modality that was not performed. For the same reason a
+ * performed binding's value must be one of a coded item's answers
+ * ({@link CodedAnswers}): HealthAEye codes Yes as {@code Y}, and the old
+ * default {@code 1} would have filled its checklist with a code it lacks.
  *
  * <p>Deleting is a status change, not a DELETE. Files filed under a modality
  * keep naming it, and an audit row explaining a CRF value has to stay
@@ -92,8 +98,24 @@ public class ImagingModalitiesApiController {
 
     // ----- DTOs -----
 
+    /**
+     * @param valueValid for a {@code performed} binding: whether its value is
+     *                   one of the item's answers ({@link CodedAnswers}); a
+     *                   binding saved before the check may hold one that is
+     *                   not. Null for the other roles, which write nothing.
+     */
     public record BindingDto(int id, String role, String laterality, String itemOid,
-                             String performedValue) {}
+                             String performedValue, Boolean valueValid) {}
+
+    /** One answer of a coded item: the stored code and its label. */
+    public record AnswerDto(String value, String text) {}
+
+    /**
+     * What a binding to {@code itemOid} may write: for a coded item, one of
+     * {@code answers}; for a free-text item, anything.
+     */
+    public record ItemAnswersDto(String itemOid, boolean coded, String responseType,
+                                 List<AnswerDto> answers) {}
 
     public record ModalityDto(int id, String code, String labelDe, String labelEn,
                               String device, String kindsAccepted, boolean lateralityRequired,
@@ -124,6 +146,42 @@ public class ImagingModalitiesApiController {
         } catch (SQLException e) {
             LOG.error("imaging-modality list failed for {}: {}", studyOid, e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("message", "could not list modalities"));
+        }
+    }
+
+    /**
+     * The answers a binding to this item may write, so the catalogue panel
+     * can offer them instead of a guess. The newest CRF version's coded set is
+     * shown; a binding must be an answer in every version that carries the
+     * item, which {@link #putBinding} checks.
+     */
+    @GetMapping(value = "/item-answers", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> itemAnswers(@PathVariable("studyOid") String studyOid,
+                                         @RequestParam(value = "itemOid", required = false) String itemOid,
+                                         HttpSession session) {
+        ResponseEntity<?> guard = guardRead(session);
+        if (guard != null) return guard;
+        String oid = trim(itemOid);
+        if (oid.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "itemOid is required."));
+        }
+        try (Connection c = dataSource.getConnection()) {
+            if (studyIdOf(c, studyOid) == null) {
+                return ResponseEntity.status(404).body(Map.of("message", "no study " + studyOid));
+            }
+            List<CodedAnswers.Answers> sets = CodedAnswers.ofItem(c, oid);
+            if (sets.isEmpty()) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No CRF version carries an item with this OID."));
+            }
+            CodedAnswers.Answers coded = CodedAnswers.firstCoded(sets);
+            CodedAnswers.Answers shown = coded != null ? coded : sets.get(0);
+            List<AnswerDto> answers = new ArrayList<>();
+            for (CodedAnswers.Option o : shown.options()) answers.add(new AnswerDto(o.value(), o.text()));
+            return ResponseEntity.ok(new ItemAnswersDto(oid, shown.coded(), shown.responseType(), answers));
+        } catch (SQLException e) {
+            LOG.error("imaging-modality item answers failed for {}: {}", studyOid, e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "could not read the item's answers"));
         }
     }
 
@@ -307,6 +365,22 @@ public class ImagingModalitiesApiController {
             if (studyId == null || !belongsToStudy(c, id, studyId)) {
                 return ResponseEntity.status(404).body(Map.of("message", "no modality " + id + " in " + studyOid));
             }
+            // A performed binding writes its value into the item unasked. On a
+            // coded item only the item's own answers are values: anything else
+            // shows no selection on the form and exports as an unknown code.
+            String value = trim(body.performedValue());
+            if ("performed".equals(role)) {
+                List<CodedAnswers.Answers> sets = CodedAnswers.ofItem(c, itemOid);
+                CodedAnswers.Answers coded = CodedAnswers.firstCoded(sets);
+                if (coded != null && (value.isEmpty() || !CodedAnswers.acceptedEverywhere(sets, value))) {
+                    List<String> codes = coded.options().stream().map(CodedAnswers.Option::value).toList();
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "message", (value.isEmpty() ? "performedValue is required: " : "performedValue is not ")
+                                    + "an answer of " + itemOid + ". Its answers are " + coded.describe() + ".",
+                            "answers", codes));
+                }
+            }
+            if (value.isEmpty()) value = "1";
             String previous = existingBindingOid(c, id, role, laterality);
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO imaging_modality_item_binding "
@@ -319,7 +393,7 @@ public class ImagingModalitiesApiController {
                 ps.setString(2, role);
                 ps.setString(3, laterality);
                 ps.setString(4, itemOid);
-                ps.setString(5, defaultIfBlank(body.performedValue(), "1"));
+                ps.setString(5, value);
                 ps.setInt(6, user.getId());
                 ps.executeUpdate();
             }
@@ -558,6 +632,7 @@ public class ImagingModalitiesApiController {
     private static Map<Integer, List<BindingDto>> loadBindings(Connection c, int studyId)
             throws SQLException {
         Map<Integer, List<BindingDto>> out = new LinkedHashMap<>();
+        Map<String, List<CodedAnswers.Answers>> answersByItem = new HashMap<>();
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT b.imaging_modality_id, b.imaging_modality_item_binding_id, b.role, "
                         + "b.laterality, b.item_oid, b.performed_value "
@@ -568,9 +643,20 @@ public class ImagingModalitiesApiController {
             ps.setInt(1, studyId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
+                    String role = rs.getString(3);
+                    String itemOid = rs.getString(5);
+                    String value = rs.getString(6);
+                    Boolean valid = null;
+                    if ("performed".equals(role)) {
+                        List<CodedAnswers.Answers> sets = answersByItem.get(itemOid);
+                        if (sets == null) {
+                            sets = CodedAnswers.ofItem(c, itemOid);
+                            answersByItem.put(itemOid, sets);
+                        }
+                        valid = CodedAnswers.acceptedEverywhere(sets, value);
+                    }
                     out.computeIfAbsent(rs.getInt(1), _ -> new ArrayList<>())
-                       .add(new BindingDto(rs.getInt(2), rs.getString(3), rs.getString(4),
-                               rs.getString(5), rs.getString(6)));
+                       .add(new BindingDto(rs.getInt(2), role, rs.getString(4), itemOid, value, valid));
                 }
             }
         }
@@ -686,10 +772,5 @@ public class ImagingModalitiesApiController {
     private static String emptyToNull(String s) {
         String t = trim(s);
         return t.isEmpty() ? null : t;
-    }
-
-    private static String defaultIfBlank(String s, String fallback) {
-        String t = trim(s);
-        return t.isEmpty() ? fallback : t;
     }
 }

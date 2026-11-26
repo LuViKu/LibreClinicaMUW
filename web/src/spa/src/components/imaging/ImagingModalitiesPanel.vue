@@ -17,7 +17,7 @@ import { useI18n } from 'vue-i18n'
 import DenseTable from '@/components/DenseTable.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useImagingModalitiesStore } from '@/stores/imagingModalities'
-import type { BindingRole, ImagingModality } from '@/types/imagingModality'
+import type { BindingRole, ImagingModality, ItemAnswer, ItemAnswers } from '@/types/imagingModality'
 
 const props = defineProps<{ studyOid: string | null }>()
 
@@ -43,12 +43,75 @@ const draft = ref({
   ordinal: 0,
 })
 
-const bindingDraft = ref({
-  role: 'performed' as BindingRole,
-  laterality: 'OU' as 'OU' | 'OD' | 'OS',
-  itemOid: '',
-  performedValue: '1',
+function emptyBindingDraft() {
+  return {
+    role: 'performed' as BindingRole,
+    laterality: 'OU' as 'OU' | 'OD' | 'OS',
+    itemOid: '',
+    performedValue: '',
+  }
+}
+const bindingDraft = ref(emptyBindingDraft())
+
+/**
+ * The answers of the item the draft names, so the form offers them instead of
+ * a guess. HealthAEye's "performed" items are coded Y/N, and the old default
+ * `1` filled none of them. Null until loaded, and for a free-text item.
+ */
+const itemAnswers = ref<ItemAnswers | null>(null)
+/** The OID `itemAnswers` (or `itemMissing`) belongs to. */
+const answersFor = ref('')
+const itemMissing = ref(false)
+
+/** The answers to choose from, when the draft is a performed box on a coded item. */
+const codedAnswers = computed<ItemAnswer[] | null>(() => {
+  const a = itemAnswers.value
+  if (bindingDraft.value.role !== 'performed' || !a || !a.coded) return null
+  return answersFor.value === bindingDraft.value.itemOid.trim() ? a.answers : null
 })
+
+/**
+ * The one answer that reads as "yes", if exactly one does. The label decides:
+ * a code alone says nothing (`1` may as well mean "right eye"), so a code
+ * counts only when the answer has no label of its own.
+ */
+function yesAnswer(a: ItemAnswers): string {
+  const hits = a.answers.filter((x) => {
+    const text = x.text.trim()
+    const value = x.value.trim()
+    if (/^(y|j|yes|ja|durchgeführt|performed)$/i.test(text)) return true
+    return text === value && /^(y|j|yes|ja|true)$/i.test(value)
+  })
+  return hits.length === 1 ? hits[0].value : ''
+}
+
+async function loadAnswers(): Promise<void> {
+  const oid = bindingDraft.value.itemOid.trim()
+  if (!props.studyOid || !oid || bindingDraft.value.role !== 'performed') {
+    itemAnswers.value = null
+    answersFor.value = ''
+    itemMissing.value = false
+    return
+  }
+  if (answersFor.value === oid) return
+  try {
+    const a = await store.itemAnswers(props.studyOid, oid)
+    itemAnswers.value = a
+    itemMissing.value = false
+    if (a.coded && !a.answers.some((x) => x.value === bindingDraft.value.performedValue)) {
+      bindingDraft.value.performedValue = yesAnswer(a)
+    }
+  } catch {
+    itemAnswers.value = null
+    itemMissing.value = true
+  }
+  answersFor.value = oid
+}
+watch(() => bindingDraft.value.role, () => { void loadAnswers() })
+
+function answerLabel(a: ItemAnswer): string {
+  return a.value === a.text ? a.value : `${a.value} – ${a.text}`
+}
 
 const active = computed(() => store.list.filter((m) => m.statusId === 1))
 const retired = computed(() => store.list.filter((m) => m.statusId !== 1))
@@ -102,11 +165,29 @@ async function retire(m: ImagingModality): Promise<void> {
   void run(() => store.retire(props.studyOid as string, m.id))
 }
 
-function saveBinding(m: ImagingModality): void {
+async function saveBinding(m: ImagingModality): Promise<void> {
   if (!props.studyOid || !bindingDraft.value.itemOid.trim()) return
+  // The answers may not be loaded yet when Save is the first thing clicked.
+  await loadAnswers()
+  const choices = codedAnswers.value
+  if (choices && !choices.some((a) => a.value === bindingDraft.value.performedValue)) {
+    error.value = t('imagingModalities.chooseAnswer')
+    return
+  }
   void run(async () => {
-    await store.putBinding(props.studyOid as string, m.id, { ...bindingDraft.value })
-    bindingDraft.value = { role: 'performed', laterality: 'OU', itemOid: '', performedValue: '1' }
+    const body = { ...bindingDraft.value }
+    await store.putBinding(props.studyOid as string, m.id, {
+      role: body.role,
+      laterality: body.laterality,
+      itemOid: body.itemOid.trim(),
+      // Only a performed box writes its value; a free-text one may leave it
+      // to the server's default.
+      performedValue: body.role === 'performed' && body.performedValue ? body.performedValue : undefined,
+    })
+    bindingDraft.value = emptyBindingDraft()
+    itemAnswers.value = null
+    answersFor.value = ''
+    itemMissing.value = false
   })
 }
 
@@ -134,7 +215,13 @@ async function applyToFiled(): Promise<void> {
     const written = res.outcomes.WRITTEN ?? 0
     const kept = (res.outcomes.ALREADY_SET ?? 0) + (res.outcomes.OPERATOR_VALUE_KEPT ?? 0)
       + (res.outcomes.OTHER_SOURCE_KEPT ?? 0)
-    applyResult.value = t('imagingModalities.applyPerformed.result', { files: res.files, written, kept })
+    const invalid = res.outcomes.INVALID_VALUE ?? 0
+    const line = t('imagingModalities.applyPerformed.result', { files: res.files, written, kept })
+    // A binding whose value is no answer of its item ticks nothing; saying so
+    // is what tells the administrator which bindings to correct.
+    applyResult.value = invalid > 0
+      ? `${line} ${t('imagingModalities.applyPerformed.invalid', { invalid })}`
+      : line
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('imagingModalities.applyPerformed.failed')
   } finally {
@@ -197,6 +284,12 @@ function kindsLabel(m: ImagingModality): string {
                     <span class="text-slate-500">{{ t(`imagingModalities.role.${b.role}`) }}</span>
                     <span v-if="b.laterality !== 'OU'" class="text-slate-500">{{ b.laterality }}</span>
                     <code class="text-[11px]">{{ b.itemOid }}</code>
+                    <span v-if="b.role === 'performed'" class="text-slate-500">= {{ b.performedValue }}</span>
+                    <span
+                      v-if="b.valueValid === false"
+                      class="text-amber-700"
+                      :data-testid="`binding-invalid-${b.id}`"
+                    >{{ t('imagingModalities.valueInvalid') }}</span>
                     <button
                       type="button"
                       class="text-[11px] text-rose-700 hover:underline"
@@ -248,23 +341,42 @@ function kindsLabel(m: ImagingModality): string {
                       class="w-full px-2 py-1 rounded ring-1 ring-slate-200"
                       :placeholder="t('imagingModalities.itemOidPlaceholder')"
                       :data-testid="`binding-oid-${m.id}`"
+                      @change="loadAnswers"
                     />
                   </label>
-                  <label class="text-[12px]">
+                  <!-- Only a performed box writes its value. On a coded item the
+                       value must be one of its answers, so they are offered. -->
+                  <label v-if="bindingDraft.role === 'performed'" class="text-[12px]">
                     <span class="block text-slate-500">{{ t('imagingModalities.codedYes') }}</span>
+                    <select
+                      v-if="codedAnswers"
+                      v-model="bindingDraft.performedValue"
+                      class="px-2 py-1 rounded ring-1 ring-slate-200"
+                      :data-testid="`binding-value-${m.id}`"
+                    >
+                      <option value="" disabled>{{ t('imagingModalities.chooseAnswerOption') }}</option>
+                      <option v-for="a in codedAnswers" :key="a.value" :value="a.value">{{ answerLabel(a) }}</option>
+                    </select>
                     <input
+                      v-else
                       v-model="bindingDraft.performedValue"
                       type="text"
+                      placeholder="1"
                       class="w-20 px-2 py-1 rounded ring-1 ring-slate-200"
+                      :data-testid="`binding-value-${m.id}`"
                     />
                   </label>
                   <button
                     type="button"
-                    class="px-3 py-1.5 text-[12px] font-medium rounded-lg bg-muw-blue text-white hover:bg-muw-blue-700"
+                    class="px-3 py-1.5 text-[12px] font-medium rounded-lg bg-muw-blue text-white hover:bg-muw-blue-700 disabled:opacity-50"
                     :data-testid="`save-binding-${m.id}`"
+                    :disabled="!!codedAnswers && !bindingDraft.performedValue"
                     @click="saveBinding(m)"
                   >{{ t('common.save') }}</button>
                 </div>
+                <p v-if="itemMissing" class="pb-2 text-[11px] text-amber-700" :data-testid="`binding-item-missing-${m.id}`">
+                  {{ t('imagingModalities.itemNotFound') }}
+                </p>
               </td>
             </tr>
           </template>

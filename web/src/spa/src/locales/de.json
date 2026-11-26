@@ -3796,6 +3796,10 @@
     "itemOid": "Item-OID",
     "itemOidPlaceholder": "z. B. I_HEALT_OCT_PERFORMED",
     "codedYes": "Ja-Wert",
+    "chooseAnswer": "Bitte den Ja-Wert aus den Antworten des Felds wählen.",
+    "chooseAnswerOption": "– Antwort wählen –",
+    "itemNotFound": "Kein CRF enthält ein Feld mit dieser OID.",
+    "valueInvalid": "Ja-Wert ist keine Antwort dieses Felds – neu speichern",
     "retire": "Stilllegen",
     "retired": "stillgelegt",
     "retireConfirm": "Aufnahme „{code}“ wirklich stilllegen? Sie kreuzt danach kein CRF-Feld mehr an.",
@@ -3810,6 +3814,7 @@
       "button": "Auf bereits zugeordnete Bilder anwenden",
       "confirm": "„Durchgeführt“ für die Visiten aller bereits zugeordneten Bilder dieser Studie setzen, wie es beim Zuordnen geschehen wäre? Wird als Systemkonto geschrieben und protokolliert; eingegebene Werte bleiben, entfernte, gesperrte oder signierte CRFs werden nicht verändert.",
       "result": "{files} Bild(er) geprüft: {written} gesetzt, {kept} bereits gesetzt oder beibehalten.",
+      "invalid": "{invalid} nicht gesetzt: Der Ja-Wert der Verknüpfung ist keine Antwort des Felds.",
       "failed": "Das Nachtragen ist fehlgeschlagen."
     }
   },

@@ -103,6 +103,13 @@ public class PerformedItemAutoTicker {
          * nothing was ticked (EventCrfWriteRules).
          */
         REFUSED,
+        /**
+         * The binding's value is not one of the item's answers, so nothing was
+         * written and no form was started ({@link CodedAnswers}). A coded item
+         * holding a code it does not have shows no selection on the form and
+         * exports as a code no codelist knows; the binding needs correcting.
+         */
+        INVALID_VALUE,
         /** The write failed; the bind itself is unaffected. */
         FAILED
     }
@@ -144,7 +151,8 @@ public class PerformedItemAutoTicker {
             // than assuming the filing CRF, and start the owning form when it
             // has not been started — an operator should not have to open a CRF
             // by hand before the platform can record what it already knows.
-            Target target = resolveTarget(c, eventCrfId, studyEventId, binding.itemOid(), actorUserId);
+            Target target = resolveTarget(c, eventCrfId, studyEventId, binding.itemOid(),
+                    binding.performedValue(), actorUserId);
             if (target == null) {
                 // Named deliberately: an operator seeing an un-ticked box needs
                 // to know the platform tried. The OID is configuration, not
@@ -152,6 +160,14 @@ public class PerformedItemAutoTicker {
                 LOG.warn("performed-tick skipped for file {}: item {} is on no CRF of this visit",
                         ingestItemId, binding.itemOid());
                 return Outcome.NOT_APPLICABLE;
+            }
+            if (target.answers() != null && !target.answers().accepts(binding.performedValue())) {
+                // Configuration again, not patient data: the modality, the item
+                // and the codes it accepts.
+                LOG.warn("performed-tick skipped for file {}: the {} binding's value is not an answer of {} "
+                                + "(answers: {})", ingestItemId, binding.modalityCode(), binding.itemOid(),
+                        target.answers().describe());
+                return Outcome.INVALID_VALUE;
             }
 
             // P3.0 — the upsert and the "never overwrite a person" rule are
@@ -438,7 +454,12 @@ public class PerformedItemAutoTicker {
     }
 
     /** Where the box actually is: the form instance, and the item on it. */
-    private record Target(int eventCrfId, int itemId) {}
+    /**
+     * Where the tick goes, and the answers the item accepts there. An
+     * {@code eventCrfId} of 0 means the form was not started, because the
+     * binding's value is not one of those answers.
+     */
+    private record Target(int eventCrfId, int itemId, CodedAnswers.Answers answers) {}
 
     /**
      * Find the item on the visit, starting its form when necessary.
@@ -458,13 +479,20 @@ public class PerformedItemAutoTicker {
      *       the files until an operator notices.</li>
      * </ol>
      *
+     * <p>Each step also reads the answers the item accepts on that form's CRF
+     * version. Step 3 checks them before starting the form: a value the item
+     * does not accept writes nothing, so it must not leave an empty form
+     * behind either.
+     *
      * @return null when no form of this visit carries the item at all
      */
     private static Target resolveTarget(Connection c, Integer eventCrfId, Integer studyEventId,
-                                        String itemOid, int actorUserId) throws SQLException {
+                                        String itemOid, String value, int actorUserId) throws SQLException {
         if (eventCrfId != null && eventCrfId > 0) {
             Integer itemId = resolveItemInCrfVersion(c, eventCrfId, itemOid);
-            if (itemId != null) return new Target(eventCrfId, itemId);
+            if (itemId != null) {
+                return new Target(eventCrfId, itemId, CodedAnswers.onEventCrf(c, eventCrfId, itemId));
+            }
         }
         if (studyEventId == null || studyEventId <= 0) return null;
 
@@ -480,7 +508,11 @@ public class PerformedItemAutoTicker {
             ps.setInt(1, studyEventId);
             ps.setString(2, itemOid);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return new Target(rs.getInt(1), rs.getInt(2));
+                if (rs.next()) {
+                    int startedId = rs.getInt(1);
+                    int itemId = rs.getInt(2);
+                    return new Target(startedId, itemId, CodedAnswers.onEventCrf(c, startedId, itemId));
+                }
             }
         }
 
@@ -503,6 +535,10 @@ public class PerformedItemAutoTicker {
                 if (!rs.next()) return null;
                 int crfVersionId = rs.getInt(1);
                 int itemId = rs.getInt(2);
+                CodedAnswers.Answers answers = CodedAnswers.inVersion(c, crfVersionId, itemId);
+                if (answers != null && !answers.accepts(value)) {
+                    return new Target(0, itemId, answers);
+                }
                 EventCrfEnsurer.Instance instance =
                         EventCrfEnsurer.ensure(c, studyEventId, crfVersionId, actorUserId);
                 if (instance.removed()) {
@@ -512,7 +548,7 @@ public class PerformedItemAutoTicker {
                             itemOid, studyEventId);
                     return null;
                 }
-                return new Target(instance.eventCrfId(), itemId);
+                return new Target(instance.eventCrfId(), itemId, answers);
             }
         }
     }

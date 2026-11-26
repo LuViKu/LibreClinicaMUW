@@ -26,6 +26,28 @@ export interface ImagingModalityBinding {
   itemOid: string
   /** The coded value meaning "yes" in this CRF's response set. */
   performedValue: string
+  /**
+   * For a `performed` binding: whether its value is one of the item's
+   * answers. A binding saved before the server checked may hold one that is
+   * not (HealthAEye's `1` on items coded Y/N), and then ticks nothing. Null
+   * for the other roles, which write nothing.
+   */
+  valueValid?: boolean | null
+}
+
+/** One answer of a coded item: the code stored, and its label. */
+export interface ItemAnswer {
+  value: string
+  text: string
+}
+
+/** What a binding to an item may write (GET .../item-answers). */
+export interface ItemAnswers {
+  itemOid: string
+  /** Coded: the value must be one of `answers`. Free text: anything. */
+  coded: boolean
+  responseType: string
+  answers: ItemAnswer[]
 }
 
 export interface ImagingModality {
