@@ -56,6 +56,9 @@ class PerformedCatchUpDatabaseIT extends AbstractApiControllerDatabaseIT {
     private static final int EVENT_CRF_ID = 3;
     private static final int ITEM_ID = 5;
     private static final String ITEM_OID = "I_BLOOD_PRESSURE_SYS";
+    /** Seeded: a single-select coded Y/N on the same form, empty on event_crf 3. */
+    private static final int CODED_ITEM_ID = 2;
+    private static final String CODED_ITEM_OID = "I_CONSENT_SIGNED";
     private static final String MARKER = "catchup-it-";
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -91,6 +94,8 @@ class PerformedCatchUpDatabaseIT extends AbstractApiControllerDatabaseIT {
         exec("DELETE FROM audit_log_event WHERE audit_log_event_type_id = 129 AND entity_id IN "
                 + "(SELECT ingest_item_id FROM ingest_item WHERE original_filename LIKE '" + MARKER + "%')");
         exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + ITEM_ID);
+        exec("DELETE FROM item_data WHERE event_crf_id = " + EVENT_CRF_ID + " AND item_id = " + CODED_ITEM_ID
+                + " AND source_kind = 'ingest'");
         exec("DELETE FROM ingest_item WHERE original_filename LIKE '" + MARKER + "%'");
         exec("DELETE FROM imaging_modality WHERE code = 'IT_CATCHUP'");
     }
@@ -236,6 +241,44 @@ class PerformedCatchUpDatabaseIT extends AbstractApiControllerDatabaseIT {
         JsonNode result = applyAsDataManager();
         assertTrue(result.get("outcomes").get("OPERATOR_VALUE_KEPT").asInt() >= 1, result.toString());
         assertEquals("0", tick()[0], "the operator's value stays");
+    }
+
+    /** The coded item's value on the form, written by ingest; null when none. */
+    private String codedTick() throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT value FROM item_data WHERE event_crf_id = ? AND item_id = ? "
+                             + "AND source_kind = 'ingest'")) {
+            ps.setInt(1, EVENT_CRF_ID);
+            ps.setInt(2, CODED_ITEM_ID);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        }
+    }
+
+    /**
+     * HealthAEye's "performed" items are coded Y/N, and its bindings said
+     * {@code 1}. A code the item does not have shows no selection on the form
+     * and exports as a code no codelist knows, so the tick is refused and
+     * counted until the binding says {@code Y}.
+     */
+    @Test
+    void aBindingWhoseValueIsNoAnswerOfTheItemTicksNothing() throws Exception {
+        file("it-fundus", true);
+        exec("INSERT INTO imaging_modality_item_binding "
+                + "(imaging_modality_id, role, laterality, item_oid, performed_value, created_by_user_id) "
+                + "VALUES (" + modalityId + ", 'performed', 'OU', '" + CODED_ITEM_OID + "', '1', 1)");
+
+        JsonNode refused = applyAsDataManager();
+        assertTrue(refused.get("outcomes").get("INVALID_VALUE").asInt() >= 1, refused.toString());
+        assertEquals(null, codedTick(), "nothing is written into the Y/N item");
+
+        exec("UPDATE imaging_modality_item_binding SET performed_value = 'Y' "
+                + "WHERE imaging_modality_id = " + modalityId);
+        JsonNode fixed = applyAsDataManager();
+        assertTrue(fixed.get("outcomes").get("WRITTEN").asInt() >= 1, fixed.toString());
+        assertEquals("Y", codedTick());
     }
 
     @Test

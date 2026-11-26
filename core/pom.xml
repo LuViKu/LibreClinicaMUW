@@ -8,7 +8,7 @@
     <parent>
         <groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
         <artifactId>LibreClinica</artifactId>
-  		<version>1.5.0-beta.22-muw</version>
+  		<version>1.5.0-beta.23-muw</version>
     </parent>
 
     <dependencies>
@@ -186,8 +186,8 @@
 			<artifactId>quartz</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>log4jdbc</groupId>
-			<artifactId>log4jdbc4</artifactId>
+			<groupId>com.googlecode.log4jdbc</groupId>
+			<artifactId>log4jdbc</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>net.sf.saxon</groupId>
@@ -390,11 +390,12 @@
 					<ignoredUnusedDeclaredDependencies>
 						<!-- Needed by LOGBACK when conditional statements are used (e.g. in logback.xml) -->
 						<ignoredUnusedDeclaredDependency>org.codehaus.janino</ignoredUnusedDeclaredDependency>
-						<!-- log4jdbc4 is a runtime JDBC interceptor loaded via Class.forName by the
-						     log4jdbc driver wrapper configured in datainfo.properties; static analysis
-						     doesn't see the reference. dependency-plugin 3.1.2 → 3.8.1 (Phase B.1)
-						     made unused-declared-dep failures fatal by default. -->
-						<ignoredUnusedDeclaredDependency>log4jdbc:log4jdbc4</ignoredUnusedDeclaredDependency>
+						<!-- log4jdbc is a runtime JDBC interceptor: CoreResources loads
+						     net.sf.log4jdbc.DriverSpy by name when logLevel is DEBUG or TRACE,
+						     so static analysis doesn't see the reference. dependency-plugin
+						     3.1.2 → 3.8.1 (Phase B.1) made unused-declared-dep failures fatal
+						     by default. -->
+						<ignoredUnusedDeclaredDependency>com.googlecode.log4jdbc:log4jdbc</ignoredUnusedDeclaredDependency>
 						<!-- Phase B.4 cliff: pre-existing transitive-flagged deps. Both
 						     come in via fop / batik but analyze-only sees them in core's
 						     effective classpath. Castor was retired in B.3 so the path

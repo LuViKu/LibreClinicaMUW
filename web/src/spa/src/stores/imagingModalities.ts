@@ -5,6 +5,7 @@ import type {
   BindingWriteRequest,
   ImagingModality,
   ImagingModalityWriteRequest,
+  ItemAnswers,
 } from '@/types/imagingModality'
 
 /**
@@ -64,6 +65,14 @@ export const useImagingModalitiesStore = defineStore('imagingModalities', () => 
     await load(oid)
   }
 
+  /**
+   * The answers a binding to `itemOid` may write, so the form can offer them
+   * instead of a guess. Rejects (404) when no CRF version carries the item.
+   */
+  async function itemAnswers(oid: string, itemOid: string): Promise<ItemAnswers> {
+    return apiGet<ItemAnswers>(`${base(oid)}/item-answers?itemOid=${encodeURIComponent(itemOid)}`)
+  }
+
   async function removeBinding(oid: string, id: number, bindingId: number): Promise<void> {
     await apiDelete(`${base(oid)}/${id}/bindings/${bindingId}`)
     await load(oid)
@@ -78,5 +87,8 @@ export const useImagingModalitiesStore = defineStore('imagingModalities', () => 
     return apiPost<{ files: number; outcomes: Record<string, number> }>(`${base(oid)}/apply-performed`, {})
   }
 
-  return { list, isLoading, error, studyOid, load, reload, create, update, retire, putBinding, removeBinding, applyPerformed }
+  return {
+    list, isLoading, error, studyOid, load, reload, create, update, retire,
+    putBinding, itemAnswers, removeBinding, applyPerformed,
+  }
 })

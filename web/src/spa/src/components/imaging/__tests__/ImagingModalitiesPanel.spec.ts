@@ -21,6 +21,7 @@ const retire = vi.fn()
 const putBinding = vi.fn()
 const removeBinding = vi.fn()
 const applyPerformed = vi.fn()
+const itemAnswers = vi.fn()
 const list = { value: [] as unknown[] }
 
 vi.mock('@/stores/imagingModalities', () => ({
@@ -36,6 +37,7 @@ vi.mock('@/stores/imagingModalities', () => ({
     putBinding,
     removeBinding,
     applyPerformed,
+    itemAnswers,
   }),
 }))
 
@@ -77,6 +79,7 @@ describe('ImagingModalitiesPanel', () => {
     setActivePinia(createPinia())
     list.value = [modality()]
     confirmMock.mockResolvedValue(true)
+    itemAnswers.mockResolvedValue({ itemOid: 'X', coded: false, responseType: 'text', answers: [] })
   })
 
   it('loads the catalogue of the bound study', async () => {
@@ -190,5 +193,100 @@ describe('ImagingModalitiesPanel', () => {
       laterality: 'OU',
       itemOid: 'I_HEALT_OCT_PERFORMED',
     }))
+  })
+
+  /**
+   * HealthAEye's "performed" items are coded Y/N; the form used to propose
+   * `1`, which none of them has. The answers are offered now, and the one
+   * meaning yes is chosen when exactly one does.
+   */
+  it('offers a coded item\'s answers and picks the one meaning yes', async () => {
+    itemAnswers.mockResolvedValue({
+      itemOid: 'I_HEALT_CLA_PERFORMED', coded: true, responseType: 'single-select',
+      answers: [{ value: 'Y', text: 'Yes' }, { value: 'N', text: 'No' }],
+    })
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="edit-bindings-1"]').trigger('click')
+    const oid = w.get('[data-testid="binding-oid-1"]')
+    await oid.setValue('I_HEALT_CLA_PERFORMED')
+    await oid.trigger('change')
+    await flushPromises()
+    expect(itemAnswers).toHaveBeenCalledWith('S_HAE', 'I_HEALT_CLA_PERFORMED')
+    const select = w.get('select[data-testid="binding-value-1"]')
+    expect((select.element as HTMLSelectElement).value).toBe('Y')
+    expect(select.text()).toContain('Y – Yes')
+
+    await w.get('[data-testid="save-binding-1"]').trigger('click')
+    await flushPromises()
+    expect(putBinding).toHaveBeenCalledWith('S_HAE', 1, expect.objectContaining({
+      itemOid: 'I_HEALT_CLA_PERFORMED',
+      performedValue: 'Y',
+    }))
+  })
+
+  it('does not save a coded binding until an answer is chosen', async () => {
+    itemAnswers.mockResolvedValue({
+      itemOid: 'I_EYE', coded: true, responseType: 'radio',
+      answers: [{ value: '1', text: 'Rechts' }, { value: '2', text: 'Links' }, { value: '3', text: 'Beide' }],
+    })
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="edit-bindings-1"]').trigger('click')
+    const oid = w.get('[data-testid="binding-oid-1"]')
+    await oid.setValue('I_EYE')
+    await oid.trigger('change')
+    await flushPromises()
+    const save = w.get('[data-testid="save-binding-1"]')
+    expect(save.attributes('disabled')).toBeDefined()
+    expect(putBinding).not.toHaveBeenCalled()
+
+    await w.get('select[data-testid="binding-value-1"]').setValue('3')
+    expect(save.attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps a text field for a free-text item', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="edit-bindings-1"]').trigger('click')
+    const oid = w.get('[data-testid="binding-oid-1"]')
+    await oid.setValue('I_BLOOD_PRESSURE_SYS')
+    await oid.trigger('change')
+    await flushPromises()
+    expect(w.find('input[data-testid="binding-value-1"]').exists()).toBe(true)
+    expect(w.find('select[data-testid="binding-value-1"]').exists()).toBe(false)
+  })
+
+  it('says so when no CRF carries the item', async () => {
+    itemAnswers.mockRejectedValue(new Error('404'))
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="edit-bindings-1"]').trigger('click')
+    const oid = w.get('[data-testid="binding-oid-1"]')
+    await oid.setValue('I_TYPO')
+    await oid.trigger('change')
+    await flushPromises()
+    expect(w.get('[data-testid="binding-item-missing-1"]').text()).toBe(de.imagingModalities.itemNotFound)
+  })
+
+  it('flags a binding whose value is no answer of its item', async () => {
+    list.value = [modality({
+      bindings: [{ id: 10, role: 'performed', laterality: 'OU', itemOid: 'I_HEALT_OCT_PERFORMED',
+        performedValue: '1', valueValid: false }],
+    })]
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.get('[data-testid="binding-invalid-10"]').text()).toBe(de.imagingModalities.valueInvalid)
+    expect(w.text()).toContain('= 1')
+  })
+
+  it('reports the images a binding with an unusable value could not tick', async () => {
+    applyPerformed.mockResolvedValue({ files: 20, outcomes: { WRITTEN: 5, INVALID_VALUE: 7 } })
+    const w = mountPanel()
+    await flushPromises()
+    await w.get('[data-testid="apply-performed"]').trigger('click')
+    await flushPromises()
+    const line = w.get('[data-testid="apply-performed-result"]').text()
+    expect(line).toContain('7 nicht gesetzt')
   })
 })
