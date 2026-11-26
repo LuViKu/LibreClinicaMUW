@@ -322,6 +322,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # 2026-11-26 — the image build's Maven stage starts with an empty
+      # repository on every run (mode=min below keeps only the final image
+      # layers), so it downloaded every jar from Maven Central. Central
+      # answered those bursts from GitHub's runners with HTTP 429, and the
+      # build failed three times on 2026-11-25 before any smoke check ran.
+      # Restore the Maven cache the build job keeps (same setup-java
+      # settings, so the same cache key) and hand it to the image build as
+      # the Dockerfile's "m2seed" context. Maven reads it as a read-only tail
+      # of its repository and downloads only what is not in it.
+      - name: Restore the Maven repository for the image build
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Point the image build at the restored repository
+        run: |
+          mkdir -p "$HOME/.m2/repository"
+          echo "M2_SEED=$HOME/.m2/repository" >> "$GITHUB_ENV"
+          du -sh "$HOME/.m2/repository"
+
       # Build the libreclinica image via bake with GitHub Actions cache
       # backend.
       #
@@ -356,6 +378,7 @@ jobs:
           set: |
             *.cache-from=type=gha,scope=smoke-${{ github.workflow }}
             *.cache-to=type=gha,scope=smoke-${{ github.workflow }},mode=min
+            libreclinica.contexts.m2seed=${{ env.M2_SEED }}
 
       # DR-025 — the DICOM path needs a shared secret both sides agree on, and
       # the application reads it from datainfo.properties baked into its image.

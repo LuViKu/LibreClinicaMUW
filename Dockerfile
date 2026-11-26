@@ -1,3 +1,13 @@
+# Optional seed for the Maven repository, empty unless a build supplies the
+# named context "m2seed". The smoke job in .github/workflows/build.yml passes
+# the runner's restored Maven cache there, so its image build reads the jars
+# from it instead of downloading every one from Maven Central, which answered
+# such bursts from GitHub's runners with HTTP 429 and failed the build. Both
+# mvn calls below read it as a read-only tail of the local repository
+# (maven.repo.local.tail, Maven 3.9). Local and release builds pass nothing and
+# build as before.
+FROM scratch AS m2seed
+
 FROM docker.io/library/maven:3-eclipse-temurin-25 AS builder
 
 # SKIP_SPA gates the frontend-maven-plugin SPA build (web/pom.xml:23
@@ -28,12 +38,9 @@ WORKDIR /app
 # Copy every pom.xml first, in a separate COPY for each module. As long as
 # none of the poms change, Docker re-uses the next layer (which downloads all
 # Maven dependencies) from cache. The BuildKit cache mount on /root/.m2 also
-# preserves the downloaded jars across runs on the same builder, and the
-# GHA-backed buildx cache (see .github/workflows/build.yml) makes the same
-# /root/.m2 cache survive across GitHub-hosted runners.
-#
-# Result: a no-source-change CI run skips Maven dependency download entirely
-# (~30 seconds vs ~5 minutes from cold).
+# preserves the downloaded jars across runs on the same builder. On
+# GitHub-hosted runners it does not survive (the smoke job caches only the
+# final image layers, mode=min), which is what the m2seed stage above is for.
 COPY pom.xml ./
 COPY core/pom.xml core/
 COPY odm/pom.xml odm/
@@ -41,6 +48,7 @@ COPY docs/pom.xml docs/
 COPY web/pom.xml web/
 
 RUN --mount=type=cache,target=/root/.m2 \
+    --mount=type=bind,from=m2seed,target=/m2seed \
     set -eux; \
     # dependency:go-offline + de.qaware.maven:go-offline-maven-plugin would
     # be the canonical "pre-fetch every dep" combo, but the plugin pulls
@@ -49,14 +57,15 @@ RUN --mount=type=cache,target=/root/.m2 \
     # plugins that report missing-artifact metadata even after a clean
     # download (notably jaxb2 and jrebel) - the actual `mvn package` run
     # below re-resolves them with a working cache.
-    mvn -B -ntp dependency:go-offline -DskipTests=true || true
+    mvn -B -ntp -Dmaven.repo.local.tail=/m2seed dependency:go-offline -DskipTests=true || true
 
 # ----- Build layer -----
 COPY . .
 
 RUN --mount=type=cache,target=/root/.m2 \
+    --mount=type=bind,from=m2seed,target=/m2seed \
     set -eux; \
-    mvn package -DskipSpa=${SKIP_SPA} -DskipTests=true -Dmdep.analyze.skip=true; \
+    mvn package -Dmaven.repo.local.tail=/m2seed -DskipSpa=${SKIP_SPA} -DskipTests=true -Dmdep.analyze.skip=true; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
     # LibreClinica-web-1.5.0-beta.4-muw.war today and will keep changing as the
     # project version moves. Glob it and rename to a stable name for the
