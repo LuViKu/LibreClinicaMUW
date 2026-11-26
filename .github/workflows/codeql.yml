@@ -46,6 +46,16 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+          # Keyed on this file as well as the POMs, so this cache is this
+          # workflow's own. On the POMs alone it shares build.yml's key, and
+          # on a push that changes a POM this job (compile only) finishes
+          # before the build job and saves first: the build job then cannot
+          # save, and the integration tests and the smoke image's m2seed
+          # restore a cache without the test and packaging artifacts. That
+          # happened with the 1.5.0-beta.22 version bump.
+          cache-dependency-path: |
+            **/pom.xml
+            .github/workflows/codeql.yml
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
