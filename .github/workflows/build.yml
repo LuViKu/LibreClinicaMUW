@@ -369,6 +369,10 @@ jobs:
       - name: Build libreclinica + sidecar images (cached)
         uses: docker/bake-action@v7
         with:
+          # The checked-out workspace, not bake-action's default Git context:
+          # with a Git context, a local path in "contexts" (the m2seed below)
+          # is looked up inside the repository and is not found.
+          source: .
           files: compose.yaml
           targets: |
             libreclinica
